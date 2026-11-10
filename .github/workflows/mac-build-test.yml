@@ -4,8 +4,6 @@ name: Mac build test
 # workflow's macos job and smoke tests the .dmg, then keeps it as a workflow artifact. It never tags, pushes or publishes
 # anything.
 on:
-  push:
-    branches: [mac-app]       # while the Mac build is being developed; builds only, never publishes
   workflow_dispatch:
     inputs:
       version:
