@@ -1,0 +1,378 @@
+"""Routes for the Catalog page (/catalog and /api/catalog/*), kept out of server.py.
+
+The server calls handle_get / handle_post with its request handler; `S` is the server module (set by configure), used
+for the shared update state, the board-rebuild queue, the schedule and the rating jobs.
+Every change to the catalog here queues a board rebuild for everyone (S.request_recompute())."""
+import datetime as dt
+import json
+import os
+import re
+import secrets
+import threading
+from urllib.parse import parse_qs
+
+import catalog
+import people
+
+S = None
+FIND = {"thread": None, "stop": None, "run_id": None, "lines": [], "waiting": None}
+_FLOCK = threading.Lock()
+_BOARDS = {}   # pid -> {"mtime", "jobs": {id: (tier, fit, stale, unmet)}, "summary": {...}}
+_BLOCK = threading.Lock()
+IMPORT_DIR = "imports"   # in DATA: uploaded .siftwell files waiting for the Add click (deleted after, or after a day)
+
+
+def configure(server_module):
+    global S
+    S = server_module
+
+
+def find_live():
+    t = FIND["thread"]
+    return bool(t and t.is_alive())
+
+
+# ---------------------------------------------------------------- lists and boards
+def lists():
+    """Every company list: the shared ones, Everyone, and each person's own additions and Near me list."""
+    out = [{"id": k, "label": v.split(" (")[0]} for k, v in people.COMPANY_SETS.items()]
+    out.append({"id": "all", "label": "Everyone (added for the whole household)"})
+    for p in people.load_index():
+        out.append({"id": f"own-{p['id']}", "label": f"Added by {p['name']}"})
+        out.append({"id": f"near-{p['id']}", "label": f"Near me ({p['name']})"})
+    return out
+
+
+def _board(pid):
+    """This person's current board, indexed by listing id (cached until jobs.json changes)."""
+    p = people.pdir("jobs.json", pid=pid)
+    try:
+        mt = os.path.getmtime(p)
+    except OSError:
+        return None
+    with _BLOCK:
+        hit = _BOARDS.get(pid)
+        if hit and hit["mtime"] == mt:
+            return hit
+        try:
+            with open(p, encoding="utf-8") as f:
+                b = json.load(f)
+        except (OSError, ValueError):
+            return hit
+        jobs = {}
+        s = {"passing": 0, "rated": 0, "deep": 0, "opus": 0, "sonnet": 0, "haiku": 0, "stale": 0, "unrated": 0, "unmet": 0}
+        for j in b.get("jobs") or []:
+            tier, fit, stale, unmet = j.get("ai_tier"), j.get("ai_fit"), bool(j.get("ai_stale")), j.get("req_status") == "unmet"
+            jobs[j["id"]] = (tier if fit is not None else None, fit, stale, unmet)
+            s["passing"] += 1
+            if unmet:
+                s["unmet"] += 1
+            if fit is not None:
+                s["rated"] += 1
+                if tier in ("haiku", "sonnet", "opus"):
+                    s[tier] += 1
+                if tier in ("sonnet", "opus"):
+                    s["deep"] += 1
+                if stale:
+                    s["stale"] += 1
+            elif not unmet:
+                s["unrated"] += 1
+        s["backlog"] = s["unrated"] + s["stale"]
+        s["generated"] = b.get("generated")
+        hit = {"mtime": mt, "jobs": jobs, "summary": s}
+        _BOARDS[pid] = hit
+        return hit
+
+
+# ---------------------------------------------------------------- GET
+def handle_get(h, path, pid):
+    q = {k: v[0] for k, v in parse_qs(h.path.partition("?")[2]).items()}
+    if path == "/catalog":
+        import catalog_page
+        return h._send(200, catalog_page.render(pid), "text/html")
+    if path == "/api/catalog/companies":
+        cos = []
+        for c in catalog.companies():
+            f = c["_fetch"]
+            status = "paused" if c["_paused"] else (f["status"] or "new")
+            cos.append({"name": c["name"], "ats": c["ats"], "sets": c.get("sets") or [], "paused": c["_paused"],
+                        "status": status, "fetch_status": f["status"], "reason": f["error"], "last": f["at"], "open": f["open"] or 0,
+                        "raw": f["raw"], "secs": f["secs"], "sector": c.get("sector") or "", "added_by": c.get("added_by")})
+        return h._send(200, {"companies": cos, "lists": lists(), "current": pid, "stats": catalog.stats()})
+    if path == "/api/catalog/listings":
+        ppl = people.load_index()
+        boards = {p["id"]: _board(p["id"]) for p in ppl}
+        who, only = q.get("who", ""), None
+        if who == "any":
+            only = set().union(*[set(b["jobs"]) for b in boards.values() if b]) if any(boards.values()) else set()
+        elif who in boards:
+            only = set(boards[who]["jobs"]) if boards[who] else set()
+        try:
+            rows, total = catalog.find_listings(q.get("q", "")[:200], q.get("state", "open"), q.get("company", "")[:80],
+                                                int(q.get("page") or 1), int(q.get("per") or 50), q.get("sort", "last_seen"), only)
+        except ValueError:
+            return h._send(400, {"error": "bad page"})
+        for r in rows:
+            r["people"] = []
+            for p in ppl:
+                b = boards.get(p["id"])
+                hit = b and b["jobs"].get(r["id"])
+                if hit:
+                    tier, fit, stale, unmet = hit
+                    r["people"].append({"id": p["id"], "name": p["name"], "tier": tier, "fit": fit, "stale": stale, "unmet": unmet})
+        return h._send(200, {"rows": rows, "total": total, "page": int(q.get("page") or 1), "per": int(q.get("per") or 50)})
+    if path == "/api/catalog/runs":
+        runs = catalog.runs(80)
+        job = __import__("joblock").info()
+        for r in runs:
+            d = r.get("details") or {}
+            if r["status"] == "running" and not (job and job["alive"]) and not (r["kind"] == "find" and find_live()):
+                r["status"] = "interrupted"  # its process is gone (e.g. Siftwell was closed mid-run)
+            if r["kind"] == "find":
+                r["details"] = {k: d.get(k) for k in ("location", "label", "radius", "size", "categories", "person", "error")}
+        with S.lock:
+            st = dict(S.state)
+        nr = S.next_run()
+        return h._send(200, {"runs": runs, "schedule": S.schedule(), "next_run": nr.isoformat(timespec="minutes") if nr else None,
+                             "status": st, "job": __import__("joblock").info(), "stats": catalog.stats()})
+    if path == "/api/catalog/rating":
+        out = []
+        for p in people.load_index():
+            b = _board(p["id"])
+            out.append({"id": p["id"], "name": p["name"], "summary": b["summary"] if b else None,
+                        "profile": os.path.exists(people.pdir("profile.json", pid=p["id"])), "rerate": S.rating_status(p["id"])})
+        return h._send(200, {"people": out, "current": pid})
+    if path == "/api/catalog/find":
+        import employer_finder as ef
+        run = ef.latest()
+        live = find_live() and FIND["run_id"] == (run or {}).get("id")
+        if run and run["status"] == "running" and not live:
+            catalog.update_run(run["id"], status="stopped", finished=True)  # the server restarted mid-search: resumable
+            run["status"] = "stopped"
+        out = {"categories": [{"id": c[0], "label": c[1]} for c in ef.CATEGORIES], "sizes": ef.SIZES, "estimate": ef.ESTIMATE,
+               "defaults": ef.defaults(pid), "claude": ef.claude_status(), "live": live, "lines": FIND["lines"][-6:],
+               "waiting": FIND["waiting"] if live else None, "lists": lists(), "current": pid, "run": None}
+        if run:
+            d = run.get("details") or {}
+            out["run"] = {"id": run["id"], "status": run["status"], "started": run["started"], "finished": run["finished"],
+                          "details": d, "counts": ef.counts(run["id"]), "candidates": ef.candidates(run["id"])}
+        return h._send(200, out)
+    return h._send(404, {"error": "not found"})
+
+
+# ---------------------------------------------------------------- POST
+def _start_fetch(only=None):
+    """Start an update (all companies, or a comma-separated list) unless one is running. Returns (started, error)."""
+    with S.lock:
+        if any(v.get("running") for v in S.RERATE.values()):
+            return False, "Re-rating is running. Fetch when it finishes."
+        if S.state["running"]:
+            return False, "An update is already running. Try again when it finishes."
+        S.state["running"] = True
+    threading.Thread(target=S.run_update, args=(only,), daemon=True).start()
+    return True, None
+
+
+def _start_find_thread(run_id):
+    import employer_finder as ef
+    stop = threading.Event()
+
+    def log(m):
+        if not m.startswith("Waiting for"):
+            FIND["waiting"] = None  # (the search has the job lock now)
+        with _FLOCK:
+            FIND["lines"] = (FIND["lines"] + [m])[-30:]
+
+    def waiting(kind):
+        FIND["waiting"] = kind
+        log(f"Waiting for the running {kind} to finish...")
+
+    def work():
+        try:
+            ef.run(run_id, stop, on_wait=waiting, log=log)
+        finally:
+            FIND["waiting"] = None
+            S.flush_recompute()
+    with _FLOCK:
+        if find_live():
+            return False
+        FIND.update(stop=stop, run_id=run_id, lines=[], waiting=None)
+        FIND["thread"] = threading.Thread(target=work, daemon=True, name="find-employers")
+        FIND["thread"].start()
+    return True
+
+
+def _clean_imports():
+    d = os.path.join(S.DATA, IMPORT_DIR)
+    if not os.path.isdir(d):
+        return
+    import time
+    for n in os.listdir(d):
+        p = os.path.join(d, n)
+        try:
+            if time.time() - os.path.getmtime(p) > 86400:
+                os.remove(p)
+        except OSError:
+            pass
+
+
+def handle_import_upload(h, pid):
+    """POST /api/catalog/import/preview with the raw .siftwell file as the body."""
+    import catalog_share
+    n = int(h.headers.get("Content-Length") or 0)
+    if n <= 0:
+        return h._send(400, {"error": "Choose a .siftwell file first."})
+    if n > catalog_share.MAX_FILE:
+        return h._send(413, {"error": "That file is too big."})
+    raw = h.rfile.read(n)
+    try:
+        pv = catalog_share.preview(raw)
+    except ValueError as e:
+        return h._send(400, {"error": str(e)})
+    _clean_imports()
+    os.makedirs(os.path.join(S.DATA, IMPORT_DIR), exist_ok=True)
+    token = secrets.token_hex(8)
+    with open(os.path.join(S.DATA, IMPORT_DIR, token + ".siftwell"), "wb") as f:
+        f.write(raw)
+    return h._send(200, {"ok": True, "token": token, **pv})
+
+
+def handle_post(h, path, body, pid):
+    import company_add
+    if path == "/api/catalog/add":
+        url = str(body.get("url") or "").strip()
+        if not url:
+            return h._send(400, {"error": "Paste a careers page link first."})
+        set_id = str(body.get("list") or f"own-{pid}")
+        if set_id not in {x["id"] for x in lists()}:
+            return h._send(400, {"error": "Pick a list."})
+        try:
+            res = company_add.add(url, str(body.get("name") or "")[:60], target_set=set_id)
+        except ValueError as e:
+            return h._send(400, {"error": str(e)})
+        h._act("company added", pid, res.get("name"))
+        started, _ = _start_fetch(res["name"])
+        if not started:
+            S.request_recompute()
+        return h._send(200, {"ok": True, **res, "fetching": started})
+    if path in ("/api/catalog/pause", "/api/catalog/remove", "/api/catalog/fetch"):
+        name = str(body.get("name") or "")
+        if name not in {c["name"] for c in catalog.companies()}:
+            return h._send(404, {"error": "That company isn't in the catalog."})
+        if path == "/api/catalog/fetch":
+            started, err = _start_fetch(name)
+            if not started:
+                return h._send(409, {"error": err})
+            h._act("update started", pid, "one company")
+            return h._send(202, {"ok": True})
+        if path == "/api/catalog/pause":
+            paused = bool(body.get("paused"))
+            catalog.set_paused(name, paused)
+            h._act("company paused" if paused else "company resumed", pid, name)
+        else:
+            with S.lock:
+                if S.state["running"]:
+                    return h._send(409, {"error": "An update is running. Remove it when that finishes."})
+            catalog.remove_company(name)
+            h._act("company removed", pid, name)
+        S.request_recompute()
+        return h._send(200, {"ok": True})
+    if path == "/api/catalog/find/start":
+        import employer_finder as ef
+        if find_live():
+            return h._send(409, {"error": "A search is already running."})
+        cs = ef.claude_status()
+        if not cs["installed"] or not cs["signed_in"]:
+            return h._send(409, {"error": "Claude Code isn't installed." if not cs["installed"] else "Claude Code is signed out.", "claude": cs})
+        try:
+            rid = ef.start(pid, body.get("location"), body.get("radius"), body.get("focus"), body.get("categories") or [], body.get("size"))
+        except ValueError as e:
+            return h._send(400, {"error": str(e)})
+        h._act("find employers started", pid, f"{body.get('size')} search")
+        _start_find_thread(rid)
+        return h._send(202, {"ok": True, "run_id": rid})
+    if path == "/api/catalog/find/stop":
+        if not find_live():
+            return h._send(409, {"error": "No search is running."})
+        FIND["stop"].set()
+        return h._send(200, {"ok": True})
+    if path == "/api/catalog/find/resume":
+        import employer_finder as ef
+        run = ef.latest()
+        if not run or run["status"] in ("ok",):
+            return h._send(409, {"error": "There's no stopped search to resume."})
+        if find_live():
+            return h._send(409, {"error": "A search is already running."})
+        cs = ef.claude_status()
+        if not cs["installed"] or not cs["signed_in"]:
+            return h._send(409, {"error": "Claude Code isn't installed." if not cs["installed"] else "Claude Code is signed out.", "claude": cs})
+        catalog.update_run(run["id"], status="running")
+        h._act("find employers resumed", pid)
+        _start_find_thread(run["id"])
+        return h._send(202, {"ok": True})
+    if path == "/api/catalog/find/add":
+        import employer_finder as ef
+        set_id = str(body.get("list") or f"near-{pid}")
+        if set_id not in {x["id"] for x in lists()}:
+            return h._send(400, {"error": "Pick a list."})
+        ids = [int(x) for x in (body.get("ids") or []) if str(x).isdigit()]
+        if body.get("all"):
+            run = ef.latest()
+            ids = [c["id"] for c in ef.candidates(run["id"]) if c["status"] == "readable"] if run else []
+        if not ids:
+            return h._send(400, {"error": "Tick at least one employer."})
+        added = ef.add(ids, set_id, pid)
+        h._act("companies added", pid, f"{len(added)} from Find employers")
+        started = False
+        if added:
+            started, _ = _start_fetch(",".join(added))
+            if not started:
+                S.request_recompute()
+        return h._send(200, {"ok": True, "added": added, "fetching": started})
+    if path == "/api/catalog/export":
+        import catalog_share, getting_started
+        names = {str(x) for x in (body.get("names") or [])}
+        want = set(body.get("lists") or [])
+        if want:
+            names |= {c["name"] for c in catalog.companies() if want & set(c.get("sets") or [])}
+        if not names:
+            return h._send(400, {"error": "Pick at least one list or company."})
+        data, man = catalog_share.export(sorted(names), bool(body.get("listings", True)), getting_started.VERSION)
+        h._act("catalog exported", pid, f"{man['companies']} companies, {man['listings']} listings")
+        fn = f"siftwell-companies-{dt.date.today().isoformat()}.siftwell"
+        h.send_response(200)
+        h.send_header("Content-Type", "application/zip")
+        h.send_header("Content-Disposition", f'attachment; filename="{fn}"')
+        h.send_header("X-Siftwell-Counts", f"{man['companies']},{man['listings']}")
+        h.send_header("Content-Length", str(len(data)))
+        h.end_headers()
+        return h.wfile.write(data)
+    if path == "/api/catalog/import":
+        import catalog_share
+        token = str(body.get("token") or "")
+        set_id = str(body.get("list") or f"own-{pid}")
+        if not re.fullmatch(r"[0-9a-f]{16}", token):
+            return h._send(400, {"error": "Choose the file again."})
+        if set_id not in {x["id"] for x in lists()}:
+            return h._send(400, {"error": "Pick a list."})
+        p = os.path.join(S.DATA, IMPORT_DIR, token + ".siftwell")
+        try:
+            with open(p, "rb") as f:
+                raw = f.read()
+        except OSError:
+            return h._send(400, {"error": "Choose the file again."})
+        with S.lock:
+            if S.state["running"]:
+                return h._send(409, {"error": "An update is running. Add these when it finishes."})
+        try:
+            out = catalog_share.apply(raw, set_id, pid)
+        except ValueError as e:
+            return h._send(400, {"error": str(e)})
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+        h._act("catalog imported", pid, f"{out['new_companies']} new companies, {out['new_listings']} new listings")
+        S.request_recompute()
+        return h._send(200, {"ok": True, **out})
+    return h._send(404, {"error": "not found"})

@@ -88,7 +88,8 @@ _RECOMPUTE = {"running": False, "pending": set(), "all": False, "fails": 0}
 RECOMPUTE_RETRIES = 3
 
 def _busy():
-    return state["running"] or any(v.get("running") for v in RERATE.values())
+    import catalog_api
+    return state["running"] or any(v.get("running") for v in RERATE.values()) or catalog_api.find_live()
 
 def request_recompute(pids=None):
     """Rebuild these people's boards (everyone if None) in the background. While an update or re-rate is running,
@@ -882,6 +883,9 @@ class H(BaseHTTPRequestHandler):
         if path == "/settings":
             import settings_page
             return self._send(200, settings_page.render_settings_html(pid), "text/html")
+        if path == "/catalog" or path.startswith("/api/catalog/"):
+            import catalog_api
+            return catalog_api.handle_get(self, path, pid)
         if path == "/api/highlights":
             import highlights
             out = highlights.payload(pid)
@@ -1025,6 +1029,12 @@ class H(BaseHTTPRequestHandler):
         host = self.headers.get("Host") or ""
         if not self._host_ok() or self.headers.get("X-Jobboard") != "1" or (origin and origin != f"http://{host}"):
             return self._send(403, {"error": "forbidden"})
+        if self.path.split("?")[0] == "/api/catalog/import/preview":  # raw .siftwell file as the body (can be large)
+            import catalog_api
+            pid = self._person()
+            if pid is None:
+                return self._send(409, {"error": "Add a person first."})
+            return catalog_api.handle_import_upload(self, pid)
         n = int(self.headers.get("Content-Length") or 0)
         if n > 25 * 1024 * 1024:
             return self._send(413, {"error": "file too large"})
@@ -1041,6 +1051,9 @@ class H(BaseHTTPRequestHandler):
             return self._send(*claude_login(str(body.get("action") or ""), str(body.get("code") or "")))
         if pid is None and path != "/api/people/add":
             return self._send(409, {"error": "Add a person first."})
+        if path.startswith("/api/catalog/"):
+            import catalog_api
+            return catalog_api.handle_post(self, path, body, pid)
         if path == "/api/person":
             new = str(body.get("id", ""))
             if not people.exists(new):
@@ -1383,6 +1396,9 @@ def busy_reason():
             return "A re-rate is running"
     if _RECOMPUTE["running"]:
         return "Boards are being rebuilt"
+    import catalog_api
+    if catalog_api.find_live():
+        return "Find employers near me is running"
     try:
         import joblock
         h = joblock.info()
@@ -1394,6 +1410,9 @@ def busy_reason():
         if any(t.get("running") for t in list(p["tailor"].values())) or p["resume"].get("running") or any(q.get("running") for q in list(p["questions"].values())):
             return "A resume is being tailored or read"
     return ""
+
+import catalog_api
+catalog_api.configure(sys.modules[__name__])
 
 if __name__ == "__main__":
     osdeps.ensure_utf8()

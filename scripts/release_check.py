@@ -31,7 +31,7 @@ REQUIRED_FILES = ["README.md", "LICENSE", "requirements.txt", "server.py", "app_
                   "assets/brand/favicon-48.png", "assets/brand/apple-touch-icon.png", "assets/brand/siftwell.ico",
                   "assets/brand/siftwell.icns"]
 LAUNCHER_FILES = ["Start Siftwell.cmd", "Start Siftwell.command", "tools/launcher.ps1"]  # warning with --local
-PAGE_MODULES = ["report", "settings_page", "setup_page", "welcome_page", "getting_started"]  # missing = skipped
+PAGE_MODULES = ["report", "settings_page", "setup_page", "welcome_page", "getting_started", "catalog_page"]  # missing = skipped
 LEAK_SKIP_PREFIXES = ["assets/geo/"]
 EMAIL_ALLOW = ["noreply@anthropic.com", "@users.noreply.github.com", "@example.com", "@example.org",
                "@example.net", "@test.com", "@localhost"]

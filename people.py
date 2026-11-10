@@ -39,9 +39,10 @@ COMPANY_SETS = {"tech": "Tech & AI", "ops": "Business & corporate (finance, cons
                 "nonprofit": "Nonprofit, associations & mission-driven (aging, health, development, think tanks, foundations, universities)"}
 
 def company_sets(pid=None):
-    """Lists this profile watches, always including its own additions and anything added for everyone."""
+    """Lists this profile watches, always including its own additions, its "Near me" list (Catalog page) and anything
+    added for everyone."""
     pid = pid or current()
-    return set(settings(pid).get("company_sets") or ["tech"]) | {f"own-{pid}", "all"}
+    return set(settings(pid).get("company_sets") or ["tech"]) | {f"own-{pid}", f"near-{pid}", "all"}
 
 # ---- app preferences (per profile). Each entry: default value and the allowed values (or a (min, max) range).
 PREF_SCHEMA = {
