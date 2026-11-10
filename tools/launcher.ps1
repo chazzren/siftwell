@@ -49,6 +49,7 @@ $SetupLog = Join-Path $Rt "setup.log"
 $PortFile = Join-Path $DataDir "port"
 $PidFile  = Join-Path $DataDir "server.pid"
 $WinPidFile = Join-Path $DataDir "window.pid"   # written by app_window.py
+$TrayPidFile = Join-Path $DataDir "tray.pid"    # written by tray.py
 $AppWindow  = Join-Path $App "app_window.py"
 $ErrLog   = Join-Path $DataDir "start-error.log"
 $LegacyPortFile = Join-Path $App ".siftwell\port"        # older launchers kept the port here
@@ -139,43 +140,44 @@ function Test-OwnProcess($p) {
     return ($cl -match ($lead + '"?' + $srv + '"?(\s+\d+)?\s*$') -or $cl -match ($lead + '"?' + $gs + '"?\s+--serve\s*$'))
 }
 
-function Test-PidFileServer($p) {
-    # DATA/server.pid names a Siftwell server of ours when that process is a live Python running a script called
-    # server.py (or getting_started.py --serve), with the path written absolute or relative. Older installs (the
-    # "Job Board server" scheduled task) start "<base python>\pythonw.exe -X utf8 server.py": relative path, base
-    # interpreter, nothing in the command line pointing at this folder. A relative path can't be checked against this
-    # folder (the pid file is ours), but an absolute one that points into another app folder is not ours to stop.
-    # Anything else (an editor, `python -c "...server.py..."`, a non-Python process) is refused.
+function Test-RunsScript($p, $script, $argsRe) {
+    # Is this process a Python running exactly <this app folder>\<script> [args]? A relative path or another folder never
+    # matches, and neither does an editor or `python -c "...server.py..."` that merely mentions the path.
     if (-not $p -or -not $p.CommandLine) { return $false }
     if ([string]$p.Name -notmatch '^pythonw?[\d.]*\.exe$') { return $false }
-    $lead = '^\s*(?:"[^"]*"|\S+)\s+(?:-X\s+\S+\s+|-[BEIOsSuvx]+\s+)*'
-    $m = [regex]::Match($p.CommandLine, $lead + '(?:"([^"]*[\x5c/])?(server\.py)"|(\S*[\x5c/])?(server\.py))(?:\s+\d+)?\s*$')
-    $g = [regex]::Match($p.CommandLine, $lead + '(?:"([^"]*[\x5c/])?(getting_started\.py)"|(\S*[\x5c/])?(getting_started\.py))\s+--serve\s*$')
-    $hit = if ($m.Success) { $m } elseif ($g.Success) { $g } else { $null }
-    if (-not $hit) { return $false }
-    $dir = if ($hit.Groups[1].Success) { $hit.Groups[1].Value } elseif ($hit.Groups[3].Success) { $hit.Groups[3].Value } else { "" }
-    if ($dir -and $dir -match '^(?:[A-Za-z]:|[\x5c/]{2})') {
-        # absolute: must be this app folder
-        return ($dir.TrimEnd('\', '/') -ieq $App)
-    }
-    return $true
+    $lead = '^\s*("[^"]*"|\S+)\s+(?:-X\s+\S+\s+|-[BEIOsSuvx]+\s+)*'
+    return ($p.CommandLine -match ($lead + '"?' + [regex]::Escape($script) + '"?' + $argsRe))
 }
 
-function Stop-AppWindow {
-    # The Siftwell window of this folder (pid in DATA\window.pid), so it doesn't sit there pointing at a stopped server.
-    if (-not (Test-Path $WinPidFile)) { return $false }
-    $stopped = $false
-    $p = (Get-Content $WinPidFile -Raw -ErrorAction SilentlyContinue)
-    if ($p -and $p.Trim() -match '^\d+$') {
-        $w = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $p.Trim()) -ErrorAction SilentlyContinue
-        if ($w -and $w.CommandLine -and ([string]$w.Name -match '^pythonw?[\d.]*\.exe$') -and
-            $w.CommandLine.IndexOf($AppWindow, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            try { cmd.exe /c "taskkill /PID $($p.Trim()) /T /F >nul 2>&1" } catch {}
-            $stopped = $true
-        }
+function Stop-Recorded($kind, $pidFile) {
+    # Stops the process named in THIS data folder's <kind>.pid (and what it started), but only after checking that it is
+    # this app folder's Siftwell and was not created after the pid file was written (a reused pid). It never looks for
+    # "whoever listens on a port". Returns "stopped", "none" (no pid file, or that process is gone: stale file removed)
+    # or "refused" (the pid belongs to something that is not this Siftwell: left alone).
+    if (-not (Test-Path $pidFile)) { return "none" }
+    $raw = (Get-Content $pidFile -Raw -ErrorAction SilentlyContinue)
+    if (-not $raw -or $raw.Trim() -notmatch '^\d+$') { return "none" }
+    $id = [int]$raw.Trim()
+    $pp = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $id) -ErrorAction SilentlyContinue
+    if (-not $pp) { Remove-Item $pidFile -Force -ErrorAction SilentlyContinue; return "none" }
+    $written = (Get-Item $pidFile).LastWriteTime
+    if ($pp.CreationDate -and $pp.CreationDate -gt $written.AddSeconds(2)) { return "refused" }
+    $ok = switch ($kind) {
+        "server" { (Test-RunsScript $pp (Join-Path $App "server.py") '(\s+\d+)?\s*$') -or
+                   (Test-RunsScript $pp (Join-Path $App "getting_started.py") '\s+--serve\s*$') }
+        "window" { Test-RunsScript $pp $AppWindow '(\s+--owns-server)?\s*$' }
+        "tray"   { Test-RunsScript $pp (Join-Path $App "tray.py") '(\s+\d+)?\s*$' }
     }
-    Remove-Item $WinPidFile -Force -ErrorAction SilentlyContinue
-    return $stopped
+    if (-not $ok) { return "refused" }
+    # /T also ends anything it started (for example a running job update).
+    try { cmd.exe /c "taskkill /PID $id /T /F >nul 2>&1" } catch {}
+    for ($i = 0; $i -lt 32; $i++) {
+        if (-not (Get-Process -Id $id -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Milliseconds 250
+    }
+    if (Get-Process -Id $id -ErrorAction SilentlyContinue) { return "stuck" }
+    Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+    return "stopped"
 }
 
 function Get-OwnServers {
@@ -272,31 +274,29 @@ function Get-ReqHash { (Get-FileHash -Algorithm SHA256 -Path $Req).Hash }
 # ---------------------------------------------------------------- stop
 
 if ($Stop) {
-    $hadWindow = Stop-AppWindow
-    $procs = Get-OwnServers
-    $ids = @($procs | ForEach-Object { [int]$_.ProcessId })
-    if (Test-Path $PidFile) {
-        $p = (Get-Content $PidFile -Raw -ErrorAction SilentlyContinue)
-        if ($p -and $p.Trim() -match '^\d+$') {
-            # Only trust the pid file if that process is still a Siftwell server (see Test-PidFileServer).
-            $pp = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $p.Trim()) -ErrorAction SilentlyContinue
-            if ((Test-OwnProcess $pp) -or (Test-PidFileServer $pp)) { $ids += [int]$p.Trim() }
-            elseif (-not $pp) { Remove-Item $PidFile -Force -ErrorAction SilentlyContinue }   # stale
-        }
-    }
-    $ids = @($ids | Sort-Object -Unique)
-    if ($ids.Count -eq 0) {
-        if ($hadWindow) { Say "The Siftwell window was closed." } else { Say "Siftwell isn't running (from this folder)." }
-    } else {
-        foreach ($id in $ids) {
-            # /T also ends anything the server started (for example a running job update).
-            try { cmd.exe /c "taskkill /PID $id /T /F >nul 2>&1" } catch {}
-        }
-        Start-Sleep -Milliseconds 500
-        $left = @($ids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })
-        if ((Get-OwnServers).Count -gt 0 -or $left.Count -gt 0) { Fail "Some Siftwell processes are still running." "Try again, or restart the computer." }
-        Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    # Only the processes recorded in this data folder's tray.pid / window.pid / server.pid are stopped (see
+    # Stop-Recorded). Nothing is ever stopped just because it listens on a port or has a similar command line.
+    $res = @{}
+    foreach ($k in @(@("tray", $TrayPidFile), @("window", $WinPidFile), @("server", $PidFile))) { $res[$k[0]] = Stop-Recorded $k[0] $k[1] }
+    $hint = "If Siftwell was started some other way, restart your computer or sign out and back in."
+    if ($res.Values -contains "stuck") { Fail "Siftwell did not stop." "Try again, or restart the computer." }
+    if ($res["server"] -eq "stopped") {
         Say "Siftwell has stopped. Double-click 'Start Siftwell' to start it again."
+    } elseif ($res.Values -contains "refused") {
+        Say "The program recorded as Siftwell's isn't Siftwell, so it was left alone. $hint"
+    } elseif ($res.Values -contains "stopped") {
+        Say "The Siftwell window was closed."
+    } else {
+        # Nothing recorded. The port is only looked at (never connected to unless one was chosen on purpose) to word the message.
+        $explicit = $null
+        if ($env:SIFTWELL_PORT -match '^\d+$' -or (Test-Path $PortFile)) { $explicit = Read-Port }
+        if ($explicit -and (Test-Siftwell $explicit)) {
+            Say "Siftwell is answering on port $explicit, but it wasn't started from this folder, so Stop can't end it. $hint"
+        } elseif ($explicit -and -not (Test-PortFree $explicit)) {
+            Say "Siftwell isn't running (from this folder); a different program is using port $explicit. $hint"
+        } else {
+            Say "Siftwell isn't running (from this folder). $hint"
+        }
     }
     if (-not $env:SIFTWELL_NO_PAUSE) { Start-Sleep -Seconds 3 }
     exit 0

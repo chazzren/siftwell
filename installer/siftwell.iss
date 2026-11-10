@@ -66,6 +66,8 @@ Name: "{autodesktop}\Siftwell"; Filename: "{app}\Siftwell.exe"; WorkingDir: "{ap
 
 [Run]
 Filename: "{app}\Siftwell.exe"; Description: "Launch Siftwell"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+; The in-app updater runs this installer silently with /RELAUNCH: start Siftwell again when the upgrade is done.
+Filename: "{app}\Siftwell.exe"; WorkingDir: "{app}"; Flags: nowait runasoriginaluser; Check: WantsRelaunch
 
 [Code]
 var
@@ -87,6 +89,11 @@ begin
   for I := 1 to ParamCount do
     if CompareText(ParamStr(I), Name) = 0 then
       Result := True;
+end;
+
+function WantsRelaunch: Boolean;
+begin
+  Result := HasSwitch('/RELAUNCH');
 end;
 
 procedure StopSiftwell(AppDir: String);

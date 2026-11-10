@@ -24,7 +24,7 @@ TOKEN = open(TOKEN_FILE).read().strip()
 sys.path.insert(0, HERE)
 import people
 people.ensure_migrated()
-import catalog, joblock, backup
+import catalog, joblock, backup, appupdate
 try:
     _CATALOG_MIGRATED = catalog.migrate()  # one-time: build DATA/catalog.db from the old file-based data (here, in the server process)
 except Exception as e:
@@ -960,6 +960,8 @@ class H(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         if path.startswith("/api/backup/") and backup.handle_get(self, path):
             return
+        if path.startswith("/api/app-update") and appupdate.handle_get(self, path):
+            return
         pid = self._person()
         import getting_started
         if path in getting_started.GET_PATHS and getting_started.handle_get(self, path, pid, self.path.partition("?")[2]):
@@ -1152,6 +1154,8 @@ class H(BaseHTTPRequestHandler):
         if getting_started.handle_post(self, path, body):
             return
         if path.startswith("/api/backup/") and backup.handle_post(self, path, body):
+            return
+        if path.startswith("/api/app-update/") and appupdate.handle_post(self, path, body):
             return
         if path == "/api/claude/login":  # before the no-profile check: sign-in is part of first-time setup
             return self._send(*claude_login(str(body.get("action") or ""), str(body.get("code") or "")))
@@ -1614,6 +1618,7 @@ if __name__ == "__main__":
         srv = Server((BIND, PORT), H)
         getting_started.configure(PORT, TOKEN, busy_reason)
         backup.configure(jobs_file_lock, busy_reason, after_restore)
+        appupdate.configure(busy_reason, getting_started.exit_soon)
         getting_started.note_started()
     except OSError:
         print(f"Port {PORT} is already in use by another program. Stop it, or run on another port: "
@@ -1623,6 +1628,7 @@ if __name__ == "__main__":
     autoupdate.ensure_initialized()  # first start: write down on/off for good (existing households stay on, new installs off)
     threading.Thread(target=scheduler, daemon=True).start()
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
+    appupdate.start_background()  # looks for a newer Siftwell on GitHub at most once a day (Settings -> About & updates)
     threading.Thread(target=recount_old_boards, daemon=True).start()
     # start-at-sign-in entry still pointing at an old app folder or runtime? rewrite it (see getting_started.heal_startup)
     threading.Thread(target=getting_started.heal_entries, kwargs={"log": lambda m: print(m, flush=True)}, daemon=True).start()

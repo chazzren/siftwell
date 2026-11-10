@@ -22,6 +22,7 @@ Mac code paths are written carefully but untested.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -193,24 +194,6 @@ def kill_tree(pid):
         pass
 
 
-def listener_pid(port):
-    """Who is listening on this TCP port (fallback when the pid file is missing)."""
-    try:
-        if WINDOWS:
-            r = subprocess.run(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True, timeout=20, creationflags=NOWIN)
-            for line in (r.stdout or "").splitlines():
-                p = line.split()
-                if len(p) >= 5 and p[3] == "LISTENING" and p[1].rsplit(":", 1)[-1] == str(port):
-                    return int(p[4])
-        else:
-            r = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"], capture_output=True, text=True, timeout=20)
-            if r.stdout.strip():
-                return int(r.stdout.split()[0])
-    except Exception:
-        pass
-    return 0
-
-
 def server_python():
     """Interpreter for the server: the one running this window (pythonw next to it on Windows, so no console)."""
     return frozen.interpreter(windowed=True)
@@ -237,38 +220,169 @@ def start_server(port):
     return p
 
 
-def stop_server(port, proc=None):
-    """Stop the Siftwell server (and what it started) on `port`: the pid in DATA/server.pid if that is a live Python,
-    else whoever listens on the port if that is a Python running server.py, else the process we started."""
-    pids = []
+def proc_info(pid):
+    """What a live process is: {"exe", "cmd", "created"} (created = epoch seconds), or None if it isn't running. Used to
+    check that a pid from a pid file is really Siftwell before anything is stopped."""
     try:
-        pids.append(int(open(paths.PID_FILE).read().strip()))
-    except (OSError, ValueError):
-        pass
-    lp = listener_pid(port)
-    if lp:
-        pids.append(lp)
-    if proc is not None:
-        pids.append(proc.pid)
-    done = set()
-    for pid in pids:
-        if pid in done or pid == os.getpid():
-            continue
-        done.add(pid)
-        if _pid_alive(pid) and _is_python_proc(pid):
-            log(f"stopping server pid {pid}")
-            kill_tree(pid)
-    end = time.time() + 8
-    while time.time() < end and server_up(port):
-        time.sleep(0.3)
+        if WINDOWS:
+            ps = ("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+                  f"$p=Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}'; "
+                  "if($p){[pscustomobject]@{exe=$p.ExecutablePath;cmd=$p.CommandLine;"
+                  "created=([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds()} | ConvertTo-Json -Compress}")
+            r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps], capture_output=True,
+                               timeout=30, creationflags=NOWIN)
+            out = (r.stdout or b"").decode("utf-8", "replace").strip()
+            if not out:
+                return None
+            d = json.loads(out)
+            return {"exe": d.get("exe") or "", "cmd": d.get("cmd") or "", "created": (d.get("created") or 0) / 1000.0}
+        r = subprocess.run(["ps", "-p", str(int(pid)), "-o", "command="], capture_output=True, text=True, timeout=15)
+        cmd = (r.stdout or "").strip()
+        if not cmd:
+            return None
+        r = subprocess.run(["ps", "-p", str(int(pid)), "-o", "etime="], capture_output=True, text=True, timeout=15)
+        created = 0.0
+        m = re.fullmatch(r"(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)", (r.stdout or "").strip())
+        if m:
+            dd, hh, mm, ss = (int(x or 0) for x in m.groups())
+            created = time.time() - (((dd * 24 + hh) * 60 + mm) * 60 + ss)
+        return {"exe": cmd.split(" ")[0], "cmd": cmd, "created": created}
+    except Exception as e:
+        log(f"couldn't inspect pid {pid}: {e}")
+        return None
+
+
+def _norm_path(s):
+    return os.path.normcase(str(s or "")).replace("/", os.sep)
+
+
+def _runs_script(cmd, script, args_re=r"(\s+\d+)?"):
+    """Does the command line run exactly `script` (an absolute path in this app folder) as
+    `<python> [-X utf8 | -flags] <script> [args]`? Relative paths, other folders, `python -c "..." <script>` and an editor
+    that merely mentions the path never match."""
+    c = str(cmd or "").strip()
+    if c.startswith('"'):
+        end = c.find('"', 1)
+        exe, rest = (c[1:end], c[end + 1:]) if end > 0 else ("", "")
+    else:
+        exe, _, rest = c.partition(" ")
+        rest = " " + rest
+    if not re.match(r"^pythonw?[\d.]*(\.exe)?$", re.split(r"[\\/]", exe)[-1].lower()):
+        return False
+    sc = re.escape(_norm_path(script))
+    pat = r"^\s+(?:-X\s+\S+\s+|-[BEIOsSuvx]+\s+)*\"?" + sc + r"\"?" + args_re + r"\s*$"
+    return re.match(pat, _norm_path(rest), re.I) is not None
+
+
+KIND_SCRIPTS = {"server": (("server.py", r"(\s+\d+)?"), ("getting_started.py", r"\s+--serve")),
+                "window": (("app_window.py", r"(\s+--owns-server)?"),), "tray": (("tray.py", r"(\s+\d+)?"),)}
+KIND_FROZEN_MODES = {"server": ("--server",), "tray": ("--tray",), "window": ("", "--window", "--owns-server")}
+PID_SLACK = 2.0   # seconds a process may be newer than its pid file (the pid is written just after the process starts)
+
+
+def verify_siftwell(pid, kind, pidfile):
+    """Is `pid` (read from this data folder's `pidfile`) really this copy's Siftwell `kind` ("server"/"window"/"tray")?
+    Returns (ok, why). The process must be the same Siftwell.exe (installed) or a Python running this app folder's script
+    (source), and must not have been created after the pid file was written (that would be a reused pid)."""
+    info = proc_info(pid)
+    if not info:
+        return False, "not running"
     try:
-        if not _pid_alive(int(open(paths.PID_FILE).read().strip())):
-            os.remove(paths.PID_FILE)
+        written = os.path.getmtime(pidfile)
+    except OSError:
+        written = 0
+    if written and info["created"] and info["created"] > written + PID_SLACK:
+        return False, "started after the pid file was written (reused pid)"
+    if frozen.FROZEN:
+        if _norm_path(os.path.abspath(info["exe"])) != _norm_path(os.path.abspath(sys.executable)):
+            return False, "not this Siftwell.exe"
+        words = info["cmd"].split()
+        mode = next((w for w in words[1:] if w.startswith("--")), "")
+        return (mode in KIND_FROZEN_MODES[kind]), "different Siftwell mode"
+    for script, args_re in KIND_SCRIPTS[kind]:
+        if _runs_script(info["cmd"], os.path.join(APP, script), args_re):
+            return True, ""
+    return False, "not running this app folder's " + KIND_SCRIPTS[kind][0][0]
+
+
+def read_pid_file(path):
+    try:
+        return int(open(path).read().strip())
     except (OSError, ValueError):
-        pass
-    gone = not server_up(port)
-    log("server stopped" if gone else "server still answering after stop")
-    return gone
+        return 0
+
+
+def stop_recorded(kind, wait=8):
+    """Stop the process recorded in this data folder's <kind>.pid ("server" / "window" / "tray"), and what it started,
+    but only after verify_siftwell(). Never looks anything up by port. Returns "stopped", "none" (no pid file, or the
+    process is gone: a stale file is removed) or "refused" (the pid belongs to something that isn't this Siftwell; left
+    alone)."""
+    pf = paths.PID_FILE if kind == "server" else os.path.join(paths.DATA, kind + ".pid")
+    pid = read_pid_file(pf)
+    if not pid or pid == os.getpid():
+        return "none"
+    ok, why = verify_siftwell(pid, kind, pf)
+    if not ok:
+        if why == "not running":
+            try:
+                os.remove(pf)
+            except OSError:
+                pass
+            return "none"
+        log(f"not stopping pid {pid} from {os.path.basename(pf)}: {why}")
+        return "refused"
+    log(f"stopping {kind} pid {pid}")
+    kill_tree(pid)
+    end = time.time() + wait
+    while time.time() < end and _pid_alive(pid):
+        time.sleep(0.25)
+    if not _pid_alive(pid):
+        try:
+            os.remove(pf)
+        except OSError:
+            pass
+    return "stopped"
+
+
+def _port_in_use(port):
+    """True if something already has this TCP port (a bind test: nothing connects to it)."""
+    import socket
+    sk = socket.socket()
+    try:
+        sk.bind(("0.0.0.0", int(port)))
+        return False
+    except OSError:
+        return True
+    finally:
+        sk.close()
+
+
+NOT_RUNNING_HINT = "If Siftwell was started some other way, restart your computer or sign out and back in."
+
+
+def stop_server_report(port=None):
+    """Stop this data folder's Siftwell server. Returns (ok: bool, message). Only the pid in DATA/server.pid is ever
+    stopped (after verify_siftwell); a missing or stale pid file means "not running" and nothing is touched. `port`
+    (when known) only words the message: it is never used to find a process."""
+    r = stop_recorded("server")
+    if r == "stopped":
+        return True, "Siftwell has stopped."
+    if r == "refused":
+        return False, ("The program recorded as Siftwell's isn't Siftwell, so nothing was stopped. " + NOT_RUNNING_HINT)
+    if port and server_up(port):
+        return False, (f"Siftwell is answering on port {port}, but it wasn't started from this copy, so Stop can't end it. "
+                       + NOT_RUNNING_HINT)
+    if port and _port_in_use(port):
+        return True, f"Siftwell isn't running (from this copy); a different program is using port {port}. " + NOT_RUNNING_HINT
+    return True, "Siftwell isn't running (from this copy). " + NOT_RUNNING_HINT
+
+
+def stop_server(port=None, proc=None):
+    """Stop the Siftwell server recorded in DATA/server.pid (and what it started). `proc` is ignored (kept for older
+    callers): the pid file is the only record. Returns True when nothing of ours is left to stop."""
+    ok, msg = stop_server_report(port)
+    log("stop: " + msg)
+    return ok
 
 
 # ---------------------------------------------------------------- one window per data folder

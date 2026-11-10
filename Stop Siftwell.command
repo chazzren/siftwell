@@ -1,9 +1,12 @@
 #!/bin/bash
 # Siftwell for Mac: double-click to stop the Siftwell started from this folder (no other programs are touched).
+# Only the processes recorded in this data folder's pid files (window.pid, tray.pid, server.pid) are stopped, and only
+# after checking that each really is this folder's Siftwell and was not created after its pid file was written (a reused
+# pid). Nothing is ever stopped because it listens on a port or has a similar command line.
 set -uo pipefail
 
 APP="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-# The server's pid file lives in the data folder (same rules as paths.py and Start Siftwell.command).
+# The pid files live in the data folder (same rules as paths.py and Start Siftwell.command).
 abspath() {
     local p="$1"
     case "$p" in "~") p="$HOME" ;; "~/"*) p="$HOME/${p#\~/}" ;; esac
@@ -15,26 +18,19 @@ elif [ "$(uname -s)" = "Darwin" ]; then DATA="$HOME/Library/Application Support/
 else DATA="${XDG_DATA_HOME:-$HOME/.local/share}/jobboard"
 fi
 PID_FILE="$DATA/server.pid"
-# The launcher's Python runtime (same rules as paths.py and Start Siftwell.command).
-if [ -n "${SIFTWELL_RUNTIME:-}" ]; then RT="$(abspath "$SIFTWELL_RUNTIME")"
-elif [ "$(uname -s)" = "Darwin" ]; then RT="$HOME/Library/Application Support/Siftwell/runtime"
-else RT="${XDG_CACHE_HOME:-$HOME/.cache}/siftwell/runtime"
-fi
+HINT="If Siftwell was started some other way, restart your computer or sign out and back in."
 
-# A Siftwell server from THIS folder, whichever Python runs it (also the start-at-sign-in entry).
-own_cmd() {
-    local c="$1" prefix base
-    case "$c" in
-        "$RT/"*|"$APP/.venv/"*)   # a Python from the runtime folder or this app's .venv
-            case "$c" in *"$APP/server.py"*|*"$APP/getting_started.py"*--serve*) return 0 ;; esac
-            return 1 ;;
+# Does this command line run exactly "<python> [-X utf8] <APP>/<script> [arg]"? Relative paths, other folders, an editor or
+# `python -c "...server.py..."` never match. $1 = command line, $2 = script name, $3 = required last argument ("" = a
+# port number or nothing).
+runs_script() {
+    local c="$1" script="$APP/$2" flag="$3" prefix base
+    case "$flag" in
+        "") if [[ "$c" =~ ^(.*)[[:space:]][0-9]+$ ]]; then c="${BASH_REMATCH[1]}"; fi ;;
+        *)  case "$c" in *" $flag") c="${c% $flag}" ;; *) return 1 ;; esac ;;
     esac
-    # Any other Python: only the exact form "<python> [-X utf8] <app>/server.py [port]" or "... getting_started.py --serve".
-    # An editor or `python -c "...server.py..."` that merely mentions the path never matches.
-    if [[ "$c" =~ ^(.*)[[:space:]][0-9]+$ ]]; then c="${BASH_REMATCH[1]}"; fi
     case "$c" in
-        *" $APP/server.py") prefix="${c% $APP/server.py}" ;;
-        *" $APP/getting_started.py --serve") prefix="${c% $APP/getting_started.py --serve}" ;;
+        *" $script") prefix="${c% $script}" ;;
         *) return 1 ;;
     esac
     prefix="${prefix% -X utf8}"
@@ -43,60 +39,60 @@ own_cmd() {
     return 1
 }
 
-# The pid file is also trusted for a live Python running a script called server.py, whether written with a relative or
-# an absolute path (older installs started it as "<python> -X utf8 server.py"). An absolute path into another app folder,
-# an editor, or `python -c "...server.py..."` is refused.
-pid_cmd_ok() {
-    local c="$1" prefix script base
-    if [[ "$c" =~ ^(.*)[[:space:]][0-9]+$ ]]; then c="${BASH_REMATCH[1]}"; fi
-    case "$c" in
-        *" getting_started.py --serve") script="${c% --serve}" ;;
-        *) script="$c" ;;
-    esac
-    prefix="${script% *}"; script="${script##* }"
-    [ "$prefix" = "$script" ] && return 1
-    case "${script##*/}" in server.py|getting_started.py) ;; *) return 1 ;; esac
-    case "$script" in /*) [ "${script%/*}" = "$APP" ] || return 1 ;; esac
-    prefix="${prefix% -X utf8}"
-    base="$(printf '%s' "${prefix##*/}" | tr 'A-Z' 'a-z')"
-    case "$base" in python|python3|python3.*|pythonw) return 0 ;; esac
-    return 1
+# Seconds since a process started (from ps's elapsed time, [[dd-]hh:]mm:ss), or empty if unknown.
+proc_age() {
+    local e d=0 h=0 m s
+    e="$(ps -p "$1" -o etime= 2>/dev/null | tr -d ' ')"
+    [ -n "$e" ] || return 0
+    case "$e" in *-*) d="${e%%-*}"; e="${e#*-}" ;; esac
+    IFS=: read -r a b c <<< "$e"
+    if [ -n "${c:-}" ]; then h="$a"; m="$b"; s="$c"; else m="$a"; s="$b"; fi
+    echo $(( ((10#$d * 24 + 10#$h) * 60 + 10#$m) * 60 + 10#$s ))
 }
 
-# The Siftwell window of this folder, so it doesn't sit there pointing at a stopped server.
-WIN_PID_FILE="$DATA/window.pid"
-if [ -f "$WIN_PID_FILE" ]; then
-    wpid="$(tr -dc '0-9' < "$WIN_PID_FILE")"
-    if [ -n "$wpid" ] && case "$(ps -p "$wpid" -o command= 2>/dev/null)" in *"$APP/app_window.py"*) true ;; *) false ;; esac; then
-        pkill -TERM -P "$wpid" 2>/dev/null; kill -TERM "$wpid" 2>/dev/null
-    fi
-    rm -f "$WIN_PID_FILE"
-fi
+file_age() {   # seconds since the file was last written
+    local t
+    t="$(stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null)"
+    [ -n "$t" ] && echo $(( $(date +%s) - t ))
+}
 
-pids=""
-if [ -f "$PID_FILE" ]; then
-    pid="$(tr -dc '0-9' < "$PID_FILE")"
-    if [ -n "$pid" ]; then
-        pcmd="$(ps -p "$pid" -o command= 2>/dev/null)"
-        if own_cmd "$pcmd" || pid_cmd_ok "$pcmd"; then pids="$pid"; fi
+# stop_recorded <pid file> <script> <flag>: prints stopped / none / refused.
+stop_recorded() {
+    local pf="$1" pid pcmd page fage
+    [ -f "$pf" ] || { echo none; return; }
+    pid="$(tr -dc '0-9' < "$pf")"
+    [ -n "$pid" ] || { echo none; return; }
+    pcmd="$(ps -p "$pid" -o command= 2>/dev/null)"
+    if [ -z "$pcmd" ]; then rm -f "$pf"; echo none; return; fi
+    page="$(proc_age "$pid")"; fage="$(file_age "$pf")"
+    # A process younger than its pid file was started after the file was written: a reused pid, not ours.
+    if [ -n "$page" ] && [ -n "$fage" ] && [ "$page" -lt $(( fage - 2 )) ]; then echo refused; return; fi
+    if ! runs_script "$pcmd" "$2" "$3"; then
+        if [ "$2" = "server.py" ] && runs_script "$pcmd" "getting_started.py" "--serve"; then :; else echo refused; return; fi
     fi
-fi
-while read -r pid cmd; do
-    if own_cmd "$cmd"; then pids="$pids $pid"; fi
-done < <(ps -axo pid=,command= 2>/dev/null)
+    pkill -TERM -P "$pid" 2>/dev/null   # anything it started, e.g. a running job update
+    kill -TERM "$pid" 2>/dev/null
+    for _ in 1 2 3 4 5 6 7 8; do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done
+    if kill -0 "$pid" 2>/dev/null; then pkill -KILL -P "$pid" 2>/dev/null; kill -KILL "$pid" 2>/dev/null; sleep 0.5; fi
+    if kill -0 "$pid" 2>/dev/null; then echo stuck; return; fi
+    rm -f "$pf"
+    echo stopped
+}
 
-if [ -z "${pids// /}" ]; then
-    echo "Siftwell isn't running (from this folder)."
-else
-    for pid in $pids; do
-        pkill -TERM -P "$pid" 2>/dev/null   # anything it started, e.g. a running job update
-        kill -TERM "$pid" 2>/dev/null
-    done
-    sleep 2
-    for pid in $pids; do
-        if kill -0 "$pid" 2>/dev/null; then pkill -KILL -P "$pid" 2>/dev/null; kill -KILL "$pid" 2>/dev/null; fi
-    done
-    rm -f "$PID_FILE"
+r_tray="$(stop_recorded "$DATA/tray.pid" tray.py "")"
+r_win="$(stop_recorded "$DATA/window.pid" app_window.py "--owns-server")"
+[ "$r_win" = "refused" ] && r_win="$(stop_recorded "$DATA/window.pid" app_window.py "")"
+r_srv="$(stop_recorded "$PID_FILE" server.py "")"
+
+if [ "$r_srv" = "stuck" ] || [ "$r_win" = "stuck" ] || [ "$r_tray" = "stuck" ]; then
+    echo "Siftwell did not stop. Try again, or restart the computer."
+elif [ "$r_srv" = "stopped" ]; then
     echo "Siftwell has stopped. Double-click 'Start Siftwell' to start it again."
+elif [ "$r_srv" = "refused" ] || [ "$r_win" = "refused" ] || [ "$r_tray" = "refused" ]; then
+    echo "The program recorded as Siftwell's isn't Siftwell, so it was left alone. $HINT"
+elif [ "$r_win" = "stopped" ] || [ "$r_tray" = "stopped" ]; then
+    echo "The Siftwell window was closed."
+else
+    echo "Siftwell isn't running (from this folder). $HINT"
 fi
 echo "You can close this window."
