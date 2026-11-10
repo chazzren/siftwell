@@ -335,6 +335,10 @@ a.iconBtn{text-decoration:none}
 @media (max-width:640px){.rrpop{left:0!important;right:0!important;top:auto!important;bottom:0;width:auto;max-height:85vh;border-radius:16px 16px 0 0;padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}}
 .banner.gsbn{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);color:var(--ink)}
 .banner.gsbn span{flex:1 1 220px}
+.updbn .updnotes{flex:1 1 100%;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;margin:4px 0 0;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);font-size:12.5px;line-height:1.45}
+.updbn .updsteps,.updbn .updmsg{flex:1 1 100%;font-size:13px}
+.updbn .updsteps ol{margin:4px 0 0 18px;padding:0}
+.updbn .updmsg:empty{display:none}
 nav.tabs a .n{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:4px;font-weight:500}
 .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .qc{height:30px;border:1px solid var(--line);background:var(--surface);border-radius:15px;padding:0 12px;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
@@ -476,6 +480,7 @@ BODY = """<div class="wrap">
 </header>
 <div class="banner" id="aiBanner" hidden></div>
 <div class="banner gsbn" id="gsBanner" hidden></div>
+<div class="banner gsbn updbn" id="updBanner" hidden></div>
 <div class="panel" id="progress" hidden>
   <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span><button class="btn sm" type="button" id="progStop" hidden title="Stop rating: batches already sent finish and their ratings are kept. Queued runs are cancelled.">Stop</button><button class="btn sm primary" type="button" id="progReload" hidden>Show new ratings</button></div>
   <div class="prog"><i id="progBar"></i></div>
@@ -1755,10 +1760,11 @@ def build(payload, path, fragment=False):
     cur = payload.get("current") or CURRENT
     data = "<script>window.__DATA__=" + json.dumps(payload, separators=(",", ":")).replace("</", "<\\/") + \
            ";window.__CURRENT__=" + json.dumps(cur) + ";</script>\n"
-    body = HEAD + BODY + data + SCRIPT
+    import appupdate
+    body = HEAD + BODY + data + SCRIPT + appupdate.BANNER_SCRIPT
     if not fragment:
         body = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
-                HEAD + "</head><body>" + BODY + data + SCRIPT + "</body></html>")
+                HEAD + "</head><body>" + BODY + data + SCRIPT + appupdate.BANNER_SCRIPT + "</body></html>")
     import paths
     paths.write_atomic(path, body)  # temp file + replace: the server never serves a half-written board

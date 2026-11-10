@@ -67,41 +67,14 @@ def _streams():
 
 def _stop():
     """Stop this data folder's installed Siftwell: tray helper, window, then the server and what it started.
-    Deliberately narrow: only the processes named in THIS data folder's pid files, and only when they are running this
-    same Siftwell.exe. It never goes looking for "whoever listens on the port" (that could be another install, or
-    something else entirely)."""
-    import time
-    import paths
+    Deliberately narrow: only the processes named in THIS data folder's pid files (tray.pid, window.pid, server.pid),
+    only when they are running this same Siftwell.exe and weren't created after their pid file was written (a reused
+    pid). It never goes looking for "whoever listens on the port" (that could be another install, or something else
+    entirely). With no pid file there is nothing to do."""
     import app_window as aw
-    me = os.path.basename(sys.executable).lower()
-
-    def ours(pid):
-        try:
-            import subprocess
-            r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], capture_output=True, text=True,
-                               timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            return r.stdout.strip().lower().startswith('"' + me + '"')
-        except Exception:
-            return False
-
-    for name in ("tray.pid", "window.pid", "server.pid"):
-        f = os.path.join(paths.DATA, name)
-        try:
-            pid = int(open(f).read().strip())
-        except (OSError, ValueError):
-            continue
-        if pid != os.getpid() and aw._pid_alive(pid) and ours(pid):
-            aw.log(f"--stop: stopping {name[:-4]} pid {pid}")
-            aw.kill_tree(pid)
-            for _ in range(20):
-                if not aw._pid_alive(pid):
-                    break
-                time.sleep(0.25)
-        try:
-            if not aw._pid_alive(pid):
-                os.remove(f)
-        except (OSError, UnboundLocalError):
-            pass
+    for kind in ("tray", "window", "server"):
+        r = aw.stop_recorded(kind)
+        aw.log(f"--stop: {kind}: {r}")
     return 0
 
 
