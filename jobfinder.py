@@ -635,6 +635,10 @@ def load_extra():
     if os.path.exists(os.path.join(HERE, "smb_fetchers.py")):
         import smb_fetchers
         FETCHERS.update(smb_fetchers.FETCHERS)
+    if os.path.exists(os.path.join(HERE, "ats_sap_taleo.py")):
+        sys.path.insert(0, HERE)
+        import ats_sap_taleo
+        FETCHERS.update(ats_sap_taleo.FETCHERS)
 
 # ---------------------------------------------------------------- pipeline
 BARE_US = re.compile(r"\s*(us|usa|u\.s\.|united states( of america)?|dragos usa)\s*")

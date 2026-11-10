@@ -293,6 +293,9 @@ CONFIG_RULES = {
     "phenom": {"url": (_https_origin, True), "refnum": (_rx(ALNUM), True)},
     "jibe": {"base": (_origin_only, True)},
     "clearcompany": {"url": (_rx(r"https://careers-api\.clearcompany\.com/v1/" + UUID), True), "board": (_https_origin, False)},
+    "successfactors": {"base": (_origin_only, True)},   # (the company's own career site: SuccessFactors Recruiting Marketing)
+    "taleo": {"host": (_rx(r"(?:[a-z0-9][a-z0-9-]{0,60}\.)?[a-z0-9][a-z0-9-]{0,60}\.taleo\.net"), True),
+              "section": (_rx(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}"), True)},
     "jsonld": {"list_url": (_https_origin, False), "sitemap": (_https_origin, False), "path_re": (_regex, False),
                "link_prefix": (_rx(r"/[^\s\x00-\x1f]{0,300}"), False)},
 }
