@@ -33,6 +33,7 @@ APP = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, APP)
 sys.dont_write_bytecode = True
 import paths  # noqa: E402  (no side effects beyond path constants)
+import frozen  # noqa: E402  (how to start another Siftwell process: from source or as the installed exe)
 sys.dont_write_bytecode = False
 
 WINDOWS = sys.platform == "win32"
@@ -165,9 +166,9 @@ def _is_python_proc(pid):
         if WINDOWS:
             r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], capture_output=True, text=True,
                                timeout=15, creationflags=NOWIN)
-            return r.stdout.strip().lower().startswith('"python')
+            return r.stdout.strip().lower().startswith(('"python', '"siftwell'))   # source run, or the installed Siftwell.exe
         r = subprocess.run(["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True, timeout=15)
-        return "python" in r.stdout.lower()
+        return "python" in r.stdout.lower() or "siftwell" in r.stdout.lower()
     except Exception:
         return False
 
@@ -212,17 +213,12 @@ def listener_pid(port):
 
 def server_python():
     """Interpreter for the server: the one running this window (pythonw next to it on Windows, so no console)."""
-    exe = sys.executable
-    if WINDOWS:
-        d, n = os.path.split(exe)
-        if n.lower() == "python.exe" and os.path.exists(os.path.join(d, "pythonw.exe")):
-            return os.path.join(d, "pythonw.exe")
-    return exe
+    return frozen.interpreter(windowed=True)
 
 
 def start_server(port):
     """Start server.py detached from this window, so it can outlive it (keep-available). Returns the Popen."""
-    cmd = [server_python(), "-X", "utf8", os.path.join(APP, "server.py"), str(port)]
+    cmd = frozen.command("server", port, utf8=True, windowed=True)
     kw = dict(stdin=subprocess.DEVNULL, cwd=APP)
     if WINDOWS:
         kw.update(stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -621,7 +617,9 @@ def main(argv=None, ready=None):
 
 if __name__ == "__main__":
     try:
-        code = main()
+        code = frozen.dispatch()      # installed Siftwell.exe: --server / --jobfinder / --stop ...; None = open the window
+        if code is None:
+            code = main()
     except SystemExit as e:
         code = e.code or 0
     except BaseException as e:   # pythonw has nowhere to show a crash

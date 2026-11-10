@@ -44,7 +44,7 @@ def start_helper(port):
     """Called by the server at start-up. Spawns the helper (detached) unless one is already running."""
     if not wanted() or _helper_running():
         return None
-    cmd = [aw.server_python(), "-X", "utf8", os.path.join(APP, "tray.py"), str(port)]
+    cmd = aw.frozen.command("tray", port, utf8=True, windowed=True)
     kw = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=APP)
     if aw.WINDOWS:
         # Via `start`, so the helper is not a child of the server: the Stop script kills the server's whole process tree,
@@ -108,7 +108,7 @@ def copy_text(text):
 
 
 def open_window():
-    cmd = [aw.server_python(), "-X", "utf8", os.path.join(APP, "app_window.py")]
+    cmd = aw.frozen.command("window", utf8=True, windowed=True)
     kw = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=APP,
               env=dict(os.environ, SIFTWELL_PORT=str(PORT_IN_USE)))
     if aw.WINDOWS:

@@ -14,6 +14,7 @@ RUNTIME the launcher's Python runtime (uv, Python, packages, virtualenv), per ma
           macOS    ~/Library/Application Support/Siftwell/runtime
           Linux    $XDG_CACHE_HOME/siftwell/runtime (default ~/.cache/siftwell/runtime)
         Set SIFTWELL_RUNTIME to use another folder (tests).
+Installed from Siftwell-Setup-x.y.z.exe, APP is the program's own bundle folder (read-only; no RUNTIME needed).
 Nothing at run time writes into APP, so the app folder can be deleted and replaced by a new download at any time.
 
 On first start after an upgrade, an old in-app data/ folder (plus the root companies.json and config.json) is copied
@@ -24,7 +25,8 @@ import os
 import shutil
 import sys
 
-APP = os.path.dirname(os.path.abspath(__file__))
+FROZEN = bool(getattr(sys, "frozen", False))   # the installed program (PyInstaller bundle), see frozen.py
+APP = (getattr(sys, "_MEIPASS", None) if FROZEN else None) or os.path.dirname(os.path.abspath(__file__))  # bundle folder when installed
 ASSETS = os.path.join(APP, "assets")
 PACKS = os.path.join(APP, "packs")
 CONFIG_DEFAULT = os.path.join(APP, "config.default.json")

@@ -4,7 +4,7 @@
 
 1. On GitHub open the repo, then **Actions -> Release -> Run workflow**.
 2. Pick the default branch, enter the **version** (like `0.2.0`, no `v`), optionally add **notes**, click **Run workflow**.
-3. When the run turns green, the release is at **Releases -> latest**, with `Siftwell-<version>.zip` attached.
+3. When the run turns green, the release is at **Releases -> latest**, with `Siftwell-<version>.zip` (Mac / manual) and `Siftwell-Setup-<version>.exe` (the Windows installer) attached.
 
 Versions starting with `0.` are marked "Pre-release". Nothing is published unless you click Run.
 
@@ -18,7 +18,8 @@ Versions starting with `0.` are marked "Pre-release". Nothing is published unles
    - required files exist (README, LICENSE, requirements, server, launchers).
 3. Writes the version into `VERSION`, commits "Release v<version>", and tags it (locally).
 4. Builds the ZIP with `git archive` (folder `Siftwell/`, dev-only files left out via `.gitattributes`) and checks that the `.command` files are still executable.
-5. Only then pushes the commit and tag, and creates the GitHub Release with notes made from the commit subjects since the last release.
+5. In parallel on a Windows runner (`windows` job, after the checks): builds `Siftwell.exe` with PyInstaller (`installer/siftwell.spec`), builds `Siftwell-Setup-<version>.exe` with Inno Setup (`installer/siftwell.iss`), and test-installs, starts and uninstalls it.
+6. Only when the checks, the ZIP and the installer all succeeded does it push the commit and tag, and create the GitHub Release (ZIP and installer attached together) with notes made from the commit subjects since the last release.
 
 If any check fails, nothing is pushed or published.
 
