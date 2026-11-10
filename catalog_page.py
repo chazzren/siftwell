@@ -3,12 +3,13 @@
 Same two-pane layout as /settings (settings_page.CSS): a list of sections on the left, the selected one on the
 right, chosen by the URL hash (/catalog#listings); at phone width a drill-down with a "‹ Catalog" back control.
 Sections: Companies (add by careers link, pause, remove, fetch now), Listings (server-side pages), Runs & updates
-(history, the automatic-update schedule, Fetch everything now), Rating (per person; opens the board's Re-rate
+(history, the automatic-update control (autoupdate.py), Fetch everything now), Rating (per person; opens the board's Re-rate
 panel), Find employers near me (employer_finder.py) and Share (catalog_share.py). Data comes from /api/catalog/*
 (catalog_api.py); each section loads when first shown."""
 import html
 import json
 
+import autoupdate
 import getting_started
 import people
 import report
@@ -63,10 +64,7 @@ BODIES = {
 <div class="pager"><button class="btn sm" type="button" id="lsPrev">‹ Previous</button><span class="note" id="lsPage"></span><button class="btn sm" type="button" id="lsNext">Next ›</button></div>
 <p class="sfoot">Under each listing: who it currently passes the filters for, and Claude's rating for them.</p>""",
     "runs": """
-<section class="sgsec"><h3 class="sgtitle">Automatic update</h3><div class="sgroup">
-  <div class="srow"><div class="slab"><label for="schedOn">Check every company each day</label><small id="schedNext"></small></div><div class="sctl"><input type="checkbox" role="switch" class="sw" id="schedOn"></div></div>
-  <div class="srow"><div class="slab"><label for="schedTime">Time</label><small>Siftwell must be running then (window open, or kept available).</small></div><div class="sctl"><input type="time" id="schedTime" class="tin"></div></div>
-</div></section>
+__AUTOUPDATE__
 <section class="sgsec"><h3 class="sgtitle">Fetch everything now</h3><div class="sgroup">
   <div class="srow"><div class="slab"><span>Check every company for new and removed jobs</span><small>About 40 minutes. Claude then rates the new listings for each person (uses your Claude plan).</small></div><div class="sctl"><button class="btn primary sm" type="button" id="fetchAll">Fetch everything now</button></div></div>
   <div class="srow stack" id="allBar" hidden><div class="lbtop"><b id="allTitle"></b><span class="note" id="allCount"></span></div><div class="pbar"><i id="allFill"></i></div><div class="note" id="allLine"></div></div>
@@ -134,7 +132,7 @@ def render(pid=None) -> str:
     for cid, label, icon in PANES:
         nav.append(f'<a class="scat" href="#{cid}" data-cat="{cid}"><span class="sico">{_SVG.format(icon)}</span>'
                    f'<span class="sname">{e(label)}</span><span class="schev" aria-hidden="true">›</span></a>')
-        panes.append(f'<section class="spane" data-cat="{cid}" aria-labelledby="h-{cid}" hidden>{_head(cid, label)}{BODIES[cid]}</section>')
+        panes.append(f'<section class="spane" data-cat="{cid}" aria-labelledby="h-{cid}" hidden>{_head(cid, label)}{BODIES[cid].replace('__AUTOUPDATE__', autoupdate.PANE_HTML)}</section>')
     tools = report.TOOLS.replace('id="catalogBtn" href="/catalog"', 'id="catalogBtn" href="/catalog" aria-current="page"')
     head = report.HEAD.replace("<title>Siftwell</title>", "<title>Catalog · Siftwell</title>")
     body = (settings_page.BODY.replace("<h1>Settings · __NAME__</h1>", "<h1>Catalog</h1>").replace("__TOOLS__", tools)
@@ -146,7 +144,7 @@ def render(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + settings_page.CSS + CSS + "</head><body>" + body +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") + ";window.__ME__=" + json.dumps({"id": pid, "name": people.name(pid)}).replace("</", "<\\/") +
-            ";</script>\n" + SCRIPT.replace("/*__THEME__*/", report.THEME_JS) + "</body></html>")
+            ";</script>\n" + SCRIPT.replace("/*__THEME__*/", report.THEME_JS) + autoupdate.SCRIPT + "</body></html>")
 
 
 CSS = """<style>
@@ -446,19 +444,10 @@ function runRow(r){
 }
 function loadRuns(){
   return get("/api/catalog/runs").then(d => {
-    $("schedOn").checked = !!d.schedule.enabled; $("schedTime").value = d.schedule.time;
-    $("schedNext").textContent = d.next_run ? "Next: " + when(d.next_run) : "Off";
     $("runRows").innerHTML = d.runs.length ? d.runs.map(runRow).join("") : `<p class="note" style="padding:10px 14px">Nothing has run yet.</p>`;
     if (d.status.running) { wasRunning = true; pollStatus(); }
   }).catch(err => { $("runRows").innerHTML = `<p class="note" style="padding:10px 14px">${esc(errText(err))}</p>`; });
 }
-function saveSchedule(body){
-  const s = document.querySelector('.spane[data-cat="runs"] .ssave');
-  post("/api/schedule", body).then(d => { s.classList.remove("err"); s.textContent = "Saved"; $("schedNext").textContent = d.next_run ? "Next: " + when(d.next_run) : "Off"; setTimeout(() => s.textContent = "", 2500); })
-    .catch(err => { s.classList.add("err"); s.textContent = errText(err); });
-}
-$("schedOn").addEventListener("change", () => saveSchedule({enabled: $("schedOn").checked}));
-$("schedTime").addEventListener("change", () => { if ($("schedTime").value) saveSchedule({time: $("schedTime").value}); });
 $("fetchAll").addEventListener("click", () => {
   if (!confirm("Fetch everything now?\n\nChecks every company's job board for new and removed jobs (about 40 minutes), then Claude rates the new listings for each person, which uses your Claude plan.")) return;
   fetch("/api/update", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error === "already running" ? "An update is already running." : d.error); }))

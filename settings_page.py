@@ -12,6 +12,7 @@ page's layout CSS, pane helpers and script pieces (fill_script)."""
 import html
 import json
 
+import autoupdate
 import backup
 import getting_started
 import people
@@ -67,7 +68,7 @@ CATEGORIES = [
             ("number", "claude.haiku_per_night", "Quick ratings per night", "Haiku, 0 to 20,000."),
             ("number", "claude.sonnet_pct", "Sonnet: best % of jobs", "0 to 50."),
             ("number", "claude.opus_top", "Opus: top jobs", "0 to 1,000."),
-            ("number", "claude.per_update", "Jobs per re-rate", "Most jobs Claude re-rates in one Re-rate or nightly run."),
+            ("number", "claude.per_update", "Jobs per re-rate", "Most jobs Claude re-rates in one Re-rate or automatic run."),
         ]),
         ("Automatic rating", "", [
             ("toggle", "claude.auto_rate", "Rate new jobs during updates", ""),
@@ -89,6 +90,7 @@ CATEGORIES = [
 GS_CAT = ("get-started", "Get started", '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>')
 PROF_CAT = ("profiles", "Profiles", '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')
 BACKUP_CAT = ("backup", "Backup & move", '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>')
+UPDATES_CAT = ("updates", "Updates", '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>')
 KEY_CAT = ("apikey", "API key", '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>')
 
 e = html.escape
@@ -124,7 +126,7 @@ def _pane_head(cid, name, back_href="/settings", back_label="Settings"):
 
 def _render_parts():
     nav, panes = [], []
-    for cid, name, icon, groups in [GS_CAT + ("checklist",), PROF_CAT + ("profiles",)] + CATEGORIES + [BACKUP_CAT + ("backup",), KEY_CAT + (None,)]:
+    for cid, name, icon, groups in [GS_CAT + ("checklist",), PROF_CAT + ("profiles",)] + CATEGORIES + [UPDATES_CAT + ("updates",), BACKUP_CAT + ("backup",), KEY_CAT + (None,)]:
         count = '<span class="scount" id="gsCount" hidden></span>' if cid == "get-started" else ""
         nav.append(f'<a class="scat" href="#{cid}" data-cat="{cid}"><span class="sico">{_SVG.format(icon)}</span>'
                    f'<span class="sname">{e(name)}</span>{count}<span class="schev" aria-hidden="true">›</span></a>')
@@ -136,6 +138,8 @@ def _render_parts():
                     '<div class="sbtns" style="margin-top:14px"><button class="btn primary" type="button" id="profAdd">Add a person</button></div>'
                     '<p class="note" id="profMsg" role="status" aria-live="polite" style="margin:8px 14px 0"></p>'
                     '<p class="note" style="margin:8px 14px 0">Resume, search settings, target and companies for the person you are viewing are on <a href="/profile">My profile</a>.</p>')
+        elif groups == "updates":
+            body = autoupdate.PANE_HTML
         elif groups == "backup":
             body = backup.PANE_HTML
         elif groups is None:
@@ -176,7 +180,7 @@ def render_settings_html(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + CSS + getting_started.CSS + backup.CSS + "</head><body>" + body + '<script src="/assets/vendor/qrcode.js"></script>\n' +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") +
-            ";</script>\n" + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + "</body></html>")
+            ";</script>\n" + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + autoupdate.SCRIPT + "</body></html>")
 
 
 CSS = """<style>

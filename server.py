@@ -732,45 +732,45 @@ def _auto_loop():
             except Exception as e:
                 print("automatic quick check failed for", p, e, flush=True)
 
-# ---- nightly job-listing update
-SCHEDULE_FILE = os.path.join(DATA, "schedule.json")
+# ---- automatic job-listing update (setting and OS job: autoupdate.py; mode "closed" is run by siftwell_update.py)
+import autoupdate
+SCHEDULE_FILE = autoupdate.FILE
 def schedule():
-    s = read_json(SCHEDULE_FILE, {}) or {}
-    return {"enabled": s.get("enabled", True), "time": s.get("time", "05:30")}
+    return autoupdate.schedule()
 def next_run():
-    s = schedule()
-    if not s["enabled"]:
-        return None
-    h, m = (int(x) for x in s["time"].split(":"))
-    now = dt.datetime.now()
-    t = now.replace(hour=h, minute=m, second=0, microsecond=0)
-    return t if t > now else t + dt.timedelta(days=1)
+    return autoupdate.next_time()  # when the next automatic update is due, whichever way it runs (None when off)
+def claim_update():
+    """Mark an update as running unless one (or a re-rate) already is. True when the caller may start it."""
+    with lock:
+        if state["running"] or any(v.get("running") for v in RERATE.values()):
+            return False
+        state["running"] = True
+        return True
+def run_scheduled_update():
+    """The automatic update's work (after claim_update() said yes): fetch, then re-rate anyone whose info changed."""
+    state["trigger"] = "scheduled"
+    run_update()
+    # separate step, after the listings are in: re-rate anyone whose info changed (cheap when nothing did)
+    if state.get("exit") in (0, 3):
+        for pid in people.ids():
+            try:
+                if people.prefs(pid).get("claude.auto_rerate", True):
+                    run_rerate(pid, int(people.prefs(pid).get("claude.per_update") or 300))
+            except Exception as e:
+                print("nightly re-rate failed for", pid, e, flush=True)
 def scheduler():
     import time
     while True:
-        t = next_run()
+        t = autoupdate.scheduler_next()  # None unless the mode is "while Siftwell is running" (the OS job does "closed")
         if not t:
-            time.sleep(300); continue
+            time.sleep(300 if autoupdate.get()["mode"] == "off" else 60); continue
         while dt.datetime.now() < t:
             time.sleep(min(300, max(1, (t - dt.datetime.now()).total_seconds())))
-            if next_run() != t:  # schedule changed
+            if autoupdate.scheduler_next() != t:  # schedule changed
                 break
         else:
-            with lock:
-                busy = state["running"] or any(v.get("running") for v in RERATE.values())
-                if not busy:
-                    state["running"] = True
-            if not busy:
-                state["trigger"] = "scheduled"
-                run_update()
-                # separate step, after the listings are in: re-rate anyone whose info changed (cheap when nothing did)
-                if state.get("exit") in (0, 3):
-                    for pid in people.ids():
-                        try:
-                            if people.prefs(pid).get("claude.auto_rerate", True):
-                                run_rerate(pid, int(people.prefs(pid).get("claude.per_update") or 300))
-                        except Exception as e:
-                            print("nightly re-rate failed for", pid, e, flush=True)
+            if claim_update():
+                run_scheduled_update()
             time.sleep(90)
 
 def run_update(only=None):
@@ -965,6 +965,8 @@ class H(BaseHTTPRequestHandler):
             s["recomputing"] = _RECOMPUTE["running"]
             s["job"] = joblock.info()  # whoever holds the job lock, even a job this server didn't start
             return self._send(200, s)
+        if path == "/api/schedule":
+            return self._send(200, autoupdate.status())
         if path == "/api/rerate":
             return self._send(200, rating_status(pid))
         if path == "/api/ratings/accept":
@@ -1275,16 +1277,19 @@ class H(BaseHTTPRequestHandler):
             threading.Thread(target=run_accept, args=(pid,), daemon=True).start()
             return self._send(202, {"ok": True})
         if path == "/api/schedule":
-            s = schedule()
-            if "enabled" in body: s["enabled"] = bool(body["enabled"])
-            if "time" in body:
-                if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(body["time"])):
-                    return self._send(400, {"error": "Use a time like 05:30."})
-                s["time"] = body["time"]
-            self._act("settings saved", pid, "schedule")
-            json.dump(s, open(SCHEDULE_FILE, "w"))
-            nr = next_run()
-            return self._send(200, {"ok": True, "schedule": s, "next_run": nr.isoformat(timespec="minutes") if nr else None})
+            try:
+                st = autoupdate.apply(body)
+            except ValueError as e:
+                return self._send(400, {"error": str(e)})
+            except Exception as e:
+                return self._send(500, {"error": f"Couldn't save: {type(e).__name__}"})
+            return self._send(200, dict(st, ok=True, schedule=schedule()))
+        if path == "/api/update/scheduled":  # what siftwell_update.py (the OS job) calls when this server is already running
+            if not claim_update():
+                return self._send(409, {"error": "busy"})
+            self._act("scheduled update started", pid, "asked by the automatic update job")
+            threading.Thread(target=run_scheduled_update, daemon=True).start()
+            return self._send(202, {"ok": True})
         if path == "/api/update":
             with lock:
                 if any(v.get("running") for v in RERATE.values()):
@@ -1530,6 +1535,7 @@ if __name__ == "__main__":
               f"python server.py <port>", flush=True)
         sys.exit(1)
     print(f"Siftwell on http://127.0.0.1:{PORT}" + (f"  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)" if BIND == "0.0.0.0" else "  (this computer only)"), flush=True)
+    autoupdate.ensure_initialized()  # first start: write down on/off for good (existing households stay on, new installs off)
     threading.Thread(target=scheduler, daemon=True).start()
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
     threading.Thread(target=recount_old_boards, daemon=True).start()
