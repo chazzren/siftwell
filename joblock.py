@@ -379,10 +379,10 @@ def sweep_temp_files():
 
 
 @contextlib.contextmanager
-def hold(kind, wait=True, timeout=None, on_wait=None, poll=1.0):
+def hold(kind, wait=True, timeout=None, on_wait=None, poll=1.0, cancel=None):
     """Hold the data-folder job lock for a block. Waits (polling) while another job holds it; timeout=None waits
-    without limit. Raises Busy if not waiting / timed out. Yields the lock token (pass it to child processes via
-    child_env())."""
+    without limit. Raises Busy if not waiting / timed out, or when `cancel` (a threading.Event) is set while waiting.
+    Yields the lock token (pass it to child processes via child_env())."""
     if getattr(_local, "token", None):  # this thread already holds it
         yield _local.token
         return
@@ -407,12 +407,15 @@ def hold(kind, wait=True, timeout=None, on_wait=None, poll=1.0):
         return _try_take(kind, token)
 
     while not attempt():
-        if not wait or (timeout is not None and time.time() - t0 > timeout):
+        if not wait or (timeout is not None and time.time() - t0 > timeout) or (cancel is not None and cancel.is_set()):
             raise Busy((holder() or {}).get("kind") or "another job")
         if on_wait and not told:
             on_wait((holder() or {}).get("kind") or "another job")
             told = True
-        time.sleep(poll)
+        if cancel is not None:
+            cancel.wait(poll)
+        else:
+            time.sleep(poll)
     _held[token] = True
     _local.token = token
     stop = threading.Event()

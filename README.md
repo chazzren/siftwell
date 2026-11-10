@@ -110,7 +110,7 @@ Leave that Terminal window open while you use Siftwell. Run `server.py <port>` t
 </details>
 
 ### 5. Add companies to watch
-A new install starts with no companies. Open the **Catalog** page (the database icon at the top, next to Re-rate), go to **Companies**, and paste the link to a company's careers page (for example `https://boards.greenhouse.io/examplecompany`) under **Add a company**. Siftwell figures out which job system it uses, checks that it can read the listings, adds it, and fetches its jobs right away. Besides the common job systems (Greenhouse, Lever, Workday and others), Siftwell can also read many custom careers sites that publish standard job data (the markup Google Jobs uses); if a site still can't be read, Siftwell tells you so when you paste the link. (You can still add a company from **My profile → Companies** too.)
+A new install starts with no companies. Open the **Catalog** page (the database icon at the top, next to Re-rate), go to **Companies**, and paste the link to a company's careers page (for example `https://boards.greenhouse.io/examplecompany`) under **Add a company**. Siftwell figures out which job system it uses, checks that it can read the listings, adds it, and fetches its jobs right away. Besides the common job systems (Greenhouse, Lever, Workday and others), Siftwell can also read many custom careers sites that publish standard job data (the markup Google Jobs uses); if a site still can't be read, Siftwell tells you so when you paste the link. (You can still add a company from **My profile → Companies** too.) For safety Siftwell only opens ordinary public web links (`https://` or `http://`): it refuses links to this computer or to devices on your home network, and links on unusual ports.
 
 Don't know where to start? Use **Catalog → Find employers near me** (see **The Catalog page** below): Claude looks up employers in your area and Siftwell checks which ones it can read, so you can add them with a tick. (The repository also includes `packs/dc-area.json`, a list of ~800 Washington, DC area employers it was first built with.)
 
@@ -163,12 +163,14 @@ When it's done you see the employers Siftwell can read, with their kind, locatio
 
 Find employers needs Claude Code installed and signed in on this computer. If it isn't, the page says so and links to **Settings → Get started**.
 
+Privacy: for its web searches, Find employers sends Claude the location you typed (and your focus, if any), plus the names of companies already in your catalog so it can skip them. For the **Remote-friendly employers in my field** kind it also sends your target roles and the career direction from your profile. Nothing else from your profile or resume is sent.
+
 ### Sharing companies and listings
 
 **Catalog → Share** lets you pass your company list to another Siftwell household (a friend in the same city, say), or receive theirs.
 
 - **Export:** tick whole lists or pick companies, choose whether to include their current listings (the open job posts and their text), and click **Download .siftwell file**. The file only holds public information: company names, their job systems and, if ticked, their open listings. It never contains profiles, resumes, saved or applied marks, tailored resumes, settings, your access key, Claude's ratings, company research or Glassdoor facts, or who added what.
-- **Import:** choose a `.siftwell` file. Siftwell shows what it holds ("312 new companies, 9,840 new listings, 41 already in your catalog"), you pick the list to put the new companies in, and click **Add**. Companies you already have are matched by their job board, listings by their id; nothing you have is removed or closed, and each listing keeps the earliest "first seen" and latest "last seen" date. Everyone's boards are rebuilt afterwards.
+- **Import:** choose a `.siftwell` file. Siftwell shows what it holds ("312 new companies, 9,840 new listings, 41 already in your catalog"), you pick the list to put the new companies in, and click **Add**. Companies you already have are matched by their job board, listings by their id; nothing you have is removed or closed, and each listing keeps the earliest "first seen" and latest "last seen" date. Everyone's boards are rebuilt afterwards. Siftwell checks everything in the file first: companies with a job system it doesn't know or with settings that look wrong (for example a link to a private network address) are skipped, links that aren't ordinary web links are dropped, and dates in the future are set to today.
 
 ## Your data stays on your computer
 
@@ -197,7 +199,7 @@ Siftwell can pack **everything it knows** into one file and unpack it on any com
 
 Restoring onto a computer that already has data **replaces everything currently in Siftwell on that computer**, so it asks you to tap twice. Before replacing anything it moves the current data to a folder named `before-restore-<date and time>` inside the `_archive` folder in your data folder, so you can get it back by hand. Siftwell checks the file first and refuses anything that isn't a Siftwell backup or isn't safe to open. A backup made by a newer Siftwell restores with a warning; one from a newer backup format asks you to update Siftwell first.
 
-After a restore the boards refresh by themselves (no restart). Your phone link keeps the same key but your new computer's network address may differ: if phone access is on, the new link is shown after the restore (you can also scan the QR code again in **Settings → Get started**). Jobs that aren't rated yet on the new board get the usual automatic quick check, which uses your Claude plan a little.
+After a restore the boards refresh by themselves (no restart). Your phone link keeps the same key but your new computer's network address may differ: if phone access is on, the new link is shown after the restore (you can also scan the QR code again in **Settings → Get started**). Claude's ratings come back with the backup; a restore never starts Claude by itself. Jobs that aren't rated yet get rated at the next update or when you re-rate.
 
 ## Good to know
 

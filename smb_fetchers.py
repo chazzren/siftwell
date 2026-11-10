@@ -27,6 +27,7 @@ Each reader takes a companies.json entry `c` and yields jobfinder.J(...) dicts. 
 Full descriptions are fetched per job only when extra_fetchers.wanted(c, title) is true.
 """
 import json, re, time, threading, html as _html, http.cookiejar, urllib.request, urllib.error, concurrent.futures as cf
+import netsafe
 from jobfinder import http_json, strip_html, J
 from extra_fetchers import http_text, wanted
 
@@ -239,8 +240,10 @@ def _req(url, body=None, headers=None, opener=None, timeout=30):
     last = None
     for _ in range(3):
         try:
-            with (opener or urllib.request.build_opener()).open(urllib.request.Request(url, data=data, headers=hdr), timeout=timeout) as r:
+            with (opener or netsafe.build_opener()).open(urllib.request.Request(url, data=data, headers=hdr), timeout=timeout) as r:
                 return json.loads(r.read())
+        except netsafe.UnsafeURL:
+            raise
         except Exception as e:
             last = e
             if getattr(e, "code", 0) in (400, 401, 403, 404, 429):
@@ -294,7 +297,7 @@ def f_paycom(c):
 def f_dayforce(c):
     ns, board = c["ns"], c.get("board") or "CANDIDATEPORTAL"
     jar = http.cookiejar.CookieJar()
-    op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    op = netsafe.build_opener(urllib.request.HTTPCookieProcessor(jar))
     host = "https://jobs.dayforcehcm.com"
     csrf = _req(f"{host}/api/auth/csrf", opener=op)["csrfToken"]
     start = 0

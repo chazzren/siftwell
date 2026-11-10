@@ -11,14 +11,20 @@ already in the catalog get that list added). The server rebuilds everyone's boar
 import datetime as dt
 import io
 import json
+import os
+import re
 import zipfile
 
 import catalog
+import netsafe
 
 FORMAT = "siftwell-catalog"
 VERSION = 1
-MAX_FILE = 400 * 1024 * 1024        # biggest .siftwell file accepted
-MAX_UNZIPPED = 1500 * 1024 * 1024   # guard against zip bombs
+MAX_FILE = 250 * 1024 * 1024        # biggest .siftwell file accepted
+MAX_UNZIPPED = 700 * 1024 * 1024    # guard against zip bombs (a whole 60,000-listing catalog unpacks to about 400 MB)
+MAX_MEMBER = {"manifest.json": 64 * 1024, "companies.json": 32 * 1024 * 1024, "listings.json": 600 * 1024 * 1024}
+MAX_COMPANIES = 20000
+MAX_LISTINGS = 250000
 COMPANY_KEEP_META = ("tier", "sector", "size", "ai_track")  # public labels kept with a shared company
 LISTING_COLS = ("id", "company", "title", "url", "workplace", "salary_min", "salary_max", "salary_mid", "dept", "posted",
                 "first_seen", "last_seen")
@@ -66,32 +72,143 @@ def export(names, with_listings=True, app_version=""):
     return buf.getvalue(), manifest
 
 
-def read(raw):
-    """Parse a .siftwell file -> (manifest, companies, listings). Raises ValueError with a plain message."""
-    if len(raw) > MAX_FILE:
+NOT_SHARE = "That isn't a Siftwell share file (.siftwell)."
+
+
+def _member(z, name):
+    """One member's bytes, refusing it once it unpacks past its limit (the zip's own size fields aren't trusted)."""
+    cap = MAX_MEMBER[name]
+    with z.open(name) as f:
+        data = f.read(cap + 1)
+    if len(data) > cap:
+        raise ValueError("That file is too big once unpacked.")
+    return data
+
+
+def _date(v, today):
+    """An ISO date (YYYY-MM-DD) no later than today, or None."""
+    if not isinstance(v, str):
+        return None
+    try:
+        d = dt.date.fromisoformat(v.strip()[:10])
+    except ValueError:
+        return None
+    if d.year < 2000:
+        return None
+    return min(d, today).isoformat()
+
+
+def _num(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) < 10**8 else None
+
+
+def _clean_company(c):
+    """A shared company: its cleaned name, a validated board config (netsafe.clean_config) and its short labels."""
+    if not isinstance(c, dict) or not isinstance(c.get("name"), str):
+        return None
+    name = netsafe.clean_text(c["name"].replace("::", " "), 60).replace(",", "").strip()  # ("::" separates name and id)
+    cfg, _ = netsafe.clean_config(c)
+    if not name or cfg is None:
+        return None
+    out = {"name": name, **cfg}
+    for k in COMPANY_KEEP_META:
+        if isinstance(c.get(k), str) and c[k].strip():
+            out[k] = netsafe.clean_text(c[k], 80)
+    return out
+
+
+def _clean_value(v, depth=0):
+    """Plain JSON values only (strings capped), for a listing's parsed fields."""
+    if v is None or isinstance(v, bool) or _num(v) is not None:
+        return v
+    if isinstance(v, str):
+        return v[:4000]
+    if isinstance(v, list) and depth < 2:
+        return [x for x in (_clean_value(i, depth + 1) for i in v[:50]) if x is not None]
+    return None
+
+
+def _clean_listing(j, src_names, today):
+    """A shared listing, or None. Its id must carry its company's name (Company::...), so a file can't overwrite
+    another company's listings; dates are real ISO dates no later than today; links are http(s) only."""
+    if not isinstance(j, dict) or not isinstance(j.get("id"), str) or not isinstance(j.get("company"), str) or j["company"] not in src_names:
+        return None
+    jid, co = j["id"], j["company"]
+    if not jid.startswith(co + "::") or len(jid) > 600 or len(jid) <= len(co) + 2 or re.search(r"[\x00-\x1f\x7f]", jid[len(co):]):
+        return None
+    title = netsafe.clean_text(j.get("title"), 300)
+    if not title:
+        return None
+    data = j.get("data") if isinstance(j.get("data"), dict) else {}
+    data = {k: cv for k, v in list(data.items())[:80] if isinstance(k, str) and len(k) <= 40 and (cv := _clean_value(v)) is not None}
+    fs = _date(j.get("first_seen"), today) or today.isoformat()
+    ls = _date(j.get("last_seen"), today) or fs
+    out = {"id": jid, "company": co, "title": title, "url": netsafe.clean_link(j.get("url")),
+           "workplace": j.get("workplace") if j.get("workplace") in ("remote", "hybrid", "onsite") else "",
+           "salary_min": _num(j.get("salary_min")), "salary_max": _num(j.get("salary_max")), "salary_mid": _num(j.get("salary_mid")),
+           "dept": netsafe.clean_text(j.get("dept"), 120), "posted": _date(j.get("posted"), today) or "",
+           "first_seen": min(fs, ls), "last_seen": max(fs, ls),
+           "locations": [netsafe.clean_text(x, 1000) for x in (j.get("locations") or [])[:300] if isinstance(x, str)] if isinstance(j.get("locations"), list) else [],
+           "data": data, "desc": j.get("desc")[:catalog.DESC_MAX] if isinstance(j.get("desc"), str) else ""}
+    return out
+
+
+def read(src):
+    """Parse a .siftwell file (a path or bytes) -> (manifest, companies, listings), every value checked and cleaned:
+    companies with an unknown job system or a malformed/unsafe board config are dropped (netsafe.clean_config), as are
+    duplicate company names and listings whose id doesn't belong to their company. Raises ValueError with a plain message."""
+    size = os.path.getsize(src) if isinstance(src, str) else len(src)
+    if size > MAX_FILE:
         raise ValueError("That file is too big.")
     try:
-        z = zipfile.ZipFile(io.BytesIO(raw))
-        if sum(i.file_size for i in z.infolist()) > MAX_UNZIPPED:
-            raise ValueError("That file is too big once unpacked.")
-        manifest = json.loads(z.read("manifest.json"))
-        companies = json.loads(z.read("companies.json"))
-        listings = json.loads(z.read("listings.json")) if "listings.json" in z.namelist() else []
-    except ValueError:
-        raise
-    except (zipfile.BadZipFile, KeyError, UnicodeDecodeError):
-        raise ValueError("That isn't a Siftwell share file (.siftwell).")
-    if manifest.get("format") != FORMAT:
-        raise ValueError("That isn't a Siftwell share file (.siftwell).")
-    if int(manifest.get("version") or 0) > VERSION:
+        with zipfile.ZipFile(src if isinstance(src, str) else io.BytesIO(src)) as z:
+            names = z.namelist()
+            if sum(i.file_size for i in z.infolist()) > MAX_UNZIPPED:
+                raise ValueError("That file is too big once unpacked.")
+            manifest = json.loads(_member(z, "manifest.json"))
+            companies = json.loads(_member(z, "companies.json"))
+            listings = json.loads(_member(z, "listings.json")) if "listings.json" in names else []
+    except ValueError as e:
+        if str(e) == "That file is too big once unpacked.":
+            raise
+        raise ValueError("That share file is damaged.")  # (bad JSON or text)
+    except (zipfile.BadZipFile, KeyError, EOFError, OSError):
+        raise ValueError(NOT_SHARE)
+    except (NotImplementedError, RuntimeError, MemoryError, Exception):
+        raise ValueError("That share file couldn't be read (damaged, encrypted or packed in an unusual way).")
+    if not isinstance(manifest, dict) or manifest.get("format") != FORMAT:
+        raise ValueError(NOT_SHARE)
+    try:
+        version = int(manifest.get("version") or 0)
+    except (TypeError, ValueError):
+        raise ValueError("That share file is damaged.")
+    if version > VERSION:
         raise ValueError("That file was made by a newer Siftwell. Update Siftwell, then import it.")
     if not isinstance(companies, list) or not isinstance(listings, list):
         raise ValueError("That share file is damaged.")
-    clean = []
+    if len(companies) > MAX_COMPANIES or len(listings) > MAX_LISTINGS:
+        raise ValueError("That share file has more companies or listings than Siftwell can import at once.")
+    manifest = {k: netsafe.clean_text(v, 40) if isinstance(v, str) else (v if _num(v) is not None else None)
+                for k, v in manifest.items() if k in ("format", "version", "exported", "app_version", "companies", "listings")}
+    clean, seen, src_names = [], set(), {}
     for c in companies:
-        if isinstance(c, dict) and isinstance(c.get("name"), str) and isinstance(c.get("ats"), str) and c["name"].strip():
-            clean.append({k: v for k, v in c.items() if k not in ("sets", "added_by") and not k.startswith("_")})
-    return manifest, clean, [j for j in listings if isinstance(j, dict) and j.get("id") and j.get("company")]
+        cc = _clean_company(c)
+        if cc is None or cc["name"].lower() in seen:
+            continue  # (unknown system, bad config, or a second company with the same name: its listings would be ambiguous)
+        seen.add(cc["name"].lower())
+        src_names[c["name"]] = cc["name"]
+        clean.append(cc)
+    today = dt.date.today()
+    out = []
+    for j in listings:
+        jj = _clean_listing(j, src_names, today)
+        if jj is None:
+            continue
+        cn = src_names[jj["company"]]
+        if cn != jj["company"]:  # the company's name was cleaned: its listing ids follow
+            jj["id"], jj["company"] = cn + jj["id"][len(jj["company"]):], cn
+        out.append(jj)
+    return manifest, clean, out
 
 
 def _plan(companies, listings):
@@ -107,10 +224,10 @@ def _plan(companies, listings):
             continue
         nm = c["name"].replace(",", "").strip()[:60]
         if nm.lower() in taken:
-            nm = f"{nm} ({c['ats']})"
+            nm = f"{nm[:50]} ({c['ats']})"
             i = 2
             while nm.lower() in taken:
-                nm, i = f"{c['name'][:50]} ({c['ats']} {i})", i + 1
+                nm, i = f"{c['name'][:45]} ({c['ats']} {i})", i + 1
         taken.add(nm.lower())
         by_key[k] = nm
         names[c["name"]] = (nm, True)
@@ -132,6 +249,7 @@ def _local_id(j, names):
 
 
 def preview(raw):
+    """raw: the file's path or bytes."""
     manifest, companies, listings = read(raw)
     names, present = _plan(companies, listings)
     new_cos = sum(1 for v in names.values() if v[1])
@@ -141,7 +259,7 @@ def preview(raw):
 
 
 def apply(raw, set_id, pid):
-    """Merge a .siftwell file into the catalog. Returns counts."""
+    """Merge a .siftwell file (path or bytes) into the catalog. Returns counts."""
     manifest, companies, listings = read(raw)
     names, _ = _plan(companies, listings)
     out = {"new_companies": 0, "known_companies": 0, "new_listings": 0, "updated_listings": 0}

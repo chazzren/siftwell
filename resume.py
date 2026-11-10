@@ -39,7 +39,8 @@ def fetch_google_doc(url):
     export = f"https://docs.google.com/document/d/{m.group(1)}/export?format=docx"
     req = urllib.request.Request(export, headers={"User-Agent": "Mozilla/5.0"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
+        import netsafe
+        with netsafe.urlopen(req, timeout=30) as r:
             data, ctype = r.read(), r.headers.get("Content-Type", "")
     except Exception as e:
         raise ValueError(f"Couldn't download the Google Doc ({e}).")

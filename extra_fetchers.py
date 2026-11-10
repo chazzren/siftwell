@@ -2,17 +2,55 @@
 iCIMS classic, UKG/UltiPro, Paylocity, ADP Workforce Now)."""
 import json, re, sys, html as _html, urllib.request, concurrent.futures as cf
 from jobfinder import http_json, strip_html, J
+import netsafe
+
+def household_homes():
+    """[((lat, lon, label), radius miles)]: every profile's home area, the same union the Workday location facets use.
+    During a fetch that's jobfinder's CFG["homes"]; elsewhere (e.g. checking a new company) it is read from the profiles."""
+    homes = list((getattr(_jf(), "CFG", None) or {}).get("homes") or [])
+    if not homes:
+        try:
+            import geo, people
+            for pid in people.ids():
+                z = str(people.settings(pid).get("home_zip") or "").strip()
+                if z:
+                    try:
+                        homes.append((geo.geocode_home(z), float(people.settings(pid).get("radius_miles") or 35)))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    out = {}
+    for h, r in homes:
+        k = (round(h[0], 2), round(h[1], 2))
+        out[k] = (h, max(r, out[k][1]) if k in out else r)
+    return list(out.values())
+
+
+def amazon_searches(c):
+    """Amazon search parameters: the company's own normalized_location list if it has one; else one search per home
+    area (lat/lon + radius) plus US remote ("Virtual Location") jobs, or just the remote search when no home is set."""
+    if c.get("locations"):
+        return [({"normalized_location[]": loc}, None) for loc in c["locations"]]
+    out = [({"latitude": f"{h[0]:.4f}", "longitude": f"{h[1]:.4f}", "radius": f"{max(8, round(r * 1.609))}km", "loc_query": str(h[2])[:80]}, None)
+           for h, r in household_homes()]
+    out.append(({"base_query": "virtual location", "normalized_country_code[]": "USA"}, "virtual"))
+    return out
+
 
 def f_amazon(c):
+    import urllib.parse
     seen = set()
-    for loc in c.get("locations", ["Arlington, Virginia, USA", "Washington, District of Columbia, USA"]):
+    for params, must in amazon_searches(c):
         off = 0
         while True:
-            q = f'https://www.amazon.jobs/en/search.json?offset={off}&result_limit=100&sort=recent&normalized_location[]={loc.replace(" ", "%20")}'
+            q = "https://www.amazon.jobs/en/search.json?" + urllib.parse.urlencode({"offset": off, "result_limit": 100, "sort": "recent", **params})
             d = http_json(q)
             for j in d.get("jobs", []):
                 if j["id"] in seen:
                     continue
+                if must and must not in json.dumps([j.get("location"), j.get("locations"), j.get("normalized_location")]).lower():
+                    continue  # (the remote search is a text search: keep only jobs at a "Virtual Location")
                 seen.add(j["id"])
                 locs = []
                 for l in j.get("locations") or []:
@@ -21,8 +59,9 @@ def f_amazon(c):
                     except Exception:
                         pass
                 locs = locs or [j.get("normalized_location", "")]
+                wp = "remote" if must or "virtual" in str(j.get("location") or "").lower() else ""
                 desc = strip_html(" ".join(j.get(k) or "" for k in ("description", "basic_qualifications", "preferred_qualifications")))
-                yield J(c, j.get("title"), "https://www.amazon.jobs" + j.get("job_path", ""), locs, "", None, desc,
+                yield J(c, j.get("title"), "https://www.amazon.jobs" + j.get("job_path", ""), locs, wp, None, desc,
                         j.get("posted_date", ""), j.get("job_category", ""), j["id"])
             off += 100
             if off >= min(d.get("hits", 0), 3000):
@@ -124,8 +163,10 @@ def http_text(url, timeout=30):
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"})
     for i in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with netsafe.urlopen(req, timeout=timeout) as r:
                 return r.read().decode("utf-8", "replace")
+        except netsafe.UnsafeURL:
+            raise
         except Exception:
             if i == 2:
                 raise

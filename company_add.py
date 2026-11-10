@@ -4,6 +4,7 @@ import json, os, re, threading, urllib.request
 import people
 
 import catalog
+import netsafe
 import paths
 HERE = paths.APP
 UA = {"User-Agent": "Mozilla/5.0 (personal job board)"}
@@ -37,7 +38,7 @@ BAD_TOKENS = {"www", "app", "api", "apply", "assets", "static", "cdn", "help", "
 
 def _get(url, data=None, timeout=45, cap=40_000_000):
     req = urllib.request.Request(url, data=data, headers={**UA, **({"Content-Type": "application/json"} if data else {})})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with netsafe.urlopen(req, timeout=timeout) as r:  # (http/https to public hosts only, redirects re-checked)
         return r.read(cap)
 
 def _match(text):
@@ -75,13 +76,21 @@ def _match(text):
 
 def detect(url):
     """Return ATS fields for a careers link, looking inside the page if the link itself isn't a job board."""
-    url = (url or "").strip()
-    if not re.match(r"https?://", url):
+    url = (url or "").strip()[:2000]
+    if not re.match(r"https?://", url, re.I):
+        if re.match(r"[a-z][a-z0-9+.-]*:(?!\d)", url, re.I):  # file:, javascript:, ftp: ... (but not host:port)
+            raise ValueError("Paste a web link that starts with https:// (or http://).")
         url = "https://" + url
+    try:
+        netsafe.check_url(url, resolve=False)
+    except netsafe.UnsafeURL as e:
+        raise ValueError(str(e))
     found = _match(url)
     if not found:
         try:
             page = _get(url, timeout=20, cap=3_000_000).decode("utf-8", "replace")
+        except netsafe.UnsafeURL as e:
+            raise ValueError(f"Couldn't open that page: {e}")
         except Exception as e:
             raise ValueError(f"Couldn't open that page ({type(e).__name__}).")
         found = _match(page)
@@ -94,11 +103,18 @@ def detect(url):
     if not found:
         raise ValueError("Couldn't find a supported job board on that page, and the site doesn't publish standard job data Siftwell can read. Supported: Greenhouse, Lever, Ashby, Workday, "
                          "SmartRecruiters, iCIMS, UKG, Oracle, Paylocity, ADP, Workable, BambooHR, JazzHR, Breezy, Recruitee, Paycom, Dayforce, Rippling, and custom careers sites that publish standard job data. Tip: open the company's job list and paste the link from the address bar.")
-    return found
+    cfg, why = netsafe.clean_config(found)
+    if cfg is None:
+        raise ValueError(f"Found a job board on that page, but its settings look wrong ({why}).")
+    return cfg
 
 def verify(c):
     """Return (job count, suggested name) from the live feed, or raise."""
     a = c["ats"]
+    try:
+        netsafe.check_config(c)
+    except netsafe.UnsafeURL as e:
+        raise ValueError(str(e))
     try:
         if a == "greenhouse":
             jobs = json.loads(_get(f"https://boards-api.greenhouse.io/v1/boards/{c['token']}/jobs"))["jobs"]
@@ -118,7 +134,7 @@ def verify(c):
             d = json.loads(_get(f"https://{c['tenant']}.{c['wd']}.myworkdayjobs.com/wday/cxs/{c['tenant']}/{c['site']}/jobs", body))
             return d.get("total", 0), None
         if a in ("icims", "ukg", "oracle", "paylocity", "adp", "rippling", "workable", "bamboohr", "jazzhr", "breezy",
-                 "recruitee", "paycom", "saashr", "dayforce"):
+                 "recruitee", "paycom", "saashr", "dayforce", "phenom", "jibe", "amazon", "clearcompany"):
             import sys
             sys.path.insert(0, HERE)
             import extra_fetchers, smb_fetchers
@@ -138,6 +154,8 @@ def verify(c):
             if not posts:
                 raise ValueError("no JobPosting found")
             return max(len(posts), cc.get("_url_count", 0)), next((p["org"] for p in posts if p["org"]), None)
+    except netsafe.UnsafeURL as e:
+        raise ValueError(f"Found a {a} board, but Siftwell won't contact it: {e}")
     except Exception as e:
         raise ValueError(f"Found a {a} board, but its job feed didn't respond ({type(e).__name__}).")
     raise ValueError("Unsupported job board.")

@@ -108,9 +108,12 @@ def handle_get(h, path, pid):
         elif who in boards:
             only = set(boards[who]["jobs"]) if boards[who] else set()
         try:
+            page, per = int(q.get("page") or 1), int(q.get("per") or 50)
+            if not (1 <= page <= 10**6):
+                raise ValueError
             rows, total = catalog.find_listings(q.get("q", "")[:200], q.get("state", "open"), q.get("company", "")[:80],
-                                                int(q.get("page") or 1), int(q.get("per") or 50), q.get("sort", "last_seen"), only)
-        except ValueError:
+                                                page, per, q.get("sort", "last_seen"), only)
+        except (ValueError, OverflowError):
             return h._send(400, {"error": "bad page"})
         for r in rows:
             r["people"] = []
@@ -120,7 +123,7 @@ def handle_get(h, path, pid):
                 if hit:
                     tier, fit, stale, unmet = hit
                     r["people"].append({"id": p["id"], "name": p["name"], "tier": tier, "fit": fit, "stale": stale, "unmet": unmet})
-        return h._send(200, {"rows": rows, "total": total, "page": int(q.get("page") or 1), "per": int(q.get("per") or 50)})
+        return h._send(200, {"rows": rows, "total": total, "page": page, "per": max(10, min(200, per))})
     if path == "/api/catalog/runs":
         runs = catalog.runs(80)
         job = __import__("joblock").info()
@@ -162,14 +165,25 @@ def handle_get(h, path, pid):
 
 # ---------------------------------------------------------------- POST
 def _start_fetch(only=None):
-    """Start an update (all companies, or a comma-separated list) unless one is running. Returns (started, error)."""
+    """Start an update (all companies, or a comma-separated list) unless one is running or waiting. Returns
+    (started, error). The update counts as running only once it holds the job lock (run_update(defer_running=True)):
+    while it waits (e.g. for Find employers), Remove and Import still work."""
     with S.lock:
         if any(v.get("running") for v in S.RERATE.values()):
             return False, "Re-rating is running. Fetch when it finishes."
         if S.state["running"]:
             return False, "An update is already running. Try again when it finishes."
-        S.state["running"] = True
-    threading.Thread(target=S.run_update, args=(only,), daemon=True).start()
+        if S.state.get("queued"):
+            return False, "An update is already waiting to start. Try again when it finishes."
+        S.state["queued"] = True
+
+    def go():
+        try:
+            S.run_update(only, defer_running=True)
+        finally:
+            with S.lock:
+                S.state["queued"] = False
+    threading.Thread(target=go, daemon=True).start()
     return True, None
 
 
@@ -216,24 +230,48 @@ def _clean_imports():
             pass
 
 
+def _remove(p):
+    try:
+        os.remove(p)
+    except OSError:
+        pass
+
+
 def handle_import_upload(h, pid):
-    """POST /api/catalog/import/preview with the raw .siftwell file as the body."""
+    """POST /api/catalog/import/preview with the raw .siftwell file as the body. The upload is streamed to
+    DATA/imports/<token>.siftwell in chunks (never held in memory whole) and deleted again if it can't be read."""
     import catalog_share
-    n = int(h.headers.get("Content-Length") or 0)
+    try:
+        n = int(h.headers.get("Content-Length") or 0)
+    except ValueError:
+        n = -1
     if n <= 0:
         return h._send(400, {"error": "Choose a .siftwell file first."})
     if n > catalog_share.MAX_FILE:
         return h._send(413, {"error": "That file is too big."})
-    raw = h.rfile.read(n)
-    try:
-        pv = catalog_share.preview(raw)
-    except ValueError as e:
-        return h._send(400, {"error": str(e)})
     _clean_imports()
     os.makedirs(os.path.join(S.DATA, IMPORT_DIR), exist_ok=True)
     token = secrets.token_hex(8)
-    with open(os.path.join(S.DATA, IMPORT_DIR, token + ".siftwell"), "wb") as f:
-        f.write(raw)
+    p = os.path.join(S.DATA, IMPORT_DIR, token + ".siftwell")
+    try:
+        left = n
+        with open(p, "wb") as f:
+            while left > 0:
+                chunk = h.rfile.read(min(left, 1 << 20))
+                if not chunk:
+                    break
+                f.write(chunk)
+                left -= len(chunk)
+        if left:
+            raise ValueError("The upload was cut off. Choose the file again.")
+        pv = catalog_share.preview(p)
+    except ValueError as e:
+        _remove(p)
+        return h._send(400, {"error": str(e)})
+    except Exception as e:
+        _remove(p)
+        print("catalog import preview failed:", type(e).__name__, str(e)[:200], flush=True)
+        return h._send(400, {"error": "That share file couldn't be read."})
     return h._send(200, {"ok": True, "token": token, **pv})
 
 
@@ -356,22 +394,21 @@ def handle_post(h, path, body, pid):
         if set_id not in {x["id"] for x in lists()}:
             return h._send(400, {"error": "Pick a list."})
         p = os.path.join(S.DATA, IMPORT_DIR, token + ".siftwell")
-        try:
-            with open(p, "rb") as f:
-                raw = f.read()
-        except OSError:
+        if not os.path.isfile(p):
             return h._send(400, {"error": "Choose the file again."})
         with S.lock:
             if S.state["running"]:
                 return h._send(409, {"error": "An update is running. Add these when it finishes."})
         try:
-            out = catalog_share.apply(raw, set_id, pid)
+            out = catalog_share.apply(p, set_id, pid)
         except ValueError as e:
+            _remove(p)
             return h._send(400, {"error": str(e)})
-        try:
-            os.remove(p)
-        except OSError:
-            pass
+        except Exception as e:
+            _remove(p)
+            print("catalog import failed:", type(e).__name__, str(e)[:200], flush=True)
+            return h._send(400, {"error": "That share file couldn't be imported. Nothing was changed."})
+        _remove(p)
         h._act("catalog imported", pid, f"{out['new_companies']} new companies, {out['new_listings']} new listings")
         S.request_recompute()
         return h._send(200, {"ok": True, **out})

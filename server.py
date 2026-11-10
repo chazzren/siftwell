@@ -122,17 +122,20 @@ def recount_old_boards():
         request_recompute(old)
 
 # ---- rebuilding boards from the catalog (seconds; no fetching, no Claude)
-_RECOMPUTE = {"running": False, "pending": set(), "all": False, "fails": 0}
+_RECOMPUTE = {"running": False, "pending": set(), "all": False, "fails": 0, "quiet": False}
 RECOMPUTE_RETRIES = 3
 
 def _busy():
     import catalog_api
     return state["running"] or any(v.get("running") for v in RERATE.values()) or catalog_api.find_live()
 
-def request_recompute(pids=None):
+def request_recompute(pids=None, auto_rate=True):
     """Rebuild these people's boards (everyone if None) in the background. While an update or re-rate is running,
-    the request waits and runs as soon as it finishes (flush_recompute)."""
+    the request waits and runs as soon as it finishes (flush_recompute). auto_rate=False: the rebuild that serves this
+    request doesn't start the automatic quick check of new jobs (used after a restore: no Claude use by itself)."""
     with lock:
+        if not auto_rate:
+            _RECOMPUTE["quiet"] = True
         if pids is None:
             _RECOMPUTE["all"] = True
         else:
@@ -157,14 +160,16 @@ def _recompute_loop():
                     return
                 was_all = _RECOMPUTE["all"]
                 pids = [] if was_all else sorted(_RECOMPUTE["pending"])
+                quiet = _RECOMPUTE["quiet"]
                 _RECOMPUTE["all"] = False
                 _RECOMPUTE["pending"].clear()
+                _RECOMPUTE["quiet"] = False
             failed, why = None, ""
             try:
                 with joblock.hold("recompute") as token, jobs_file_lock:
                     r = subprocess.run([sys.executable, os.path.join(HERE, "jobfinder.py"), "--recompute", *pids], cwd=HERE,
                                        capture_output=True, text=True, timeout=900, env=joblock.child_env(token))
-                for m in re.finditer(r"^NEW_UNRATED (\{.*\})$", r.stdout or "", re.M):  # new listings Claude hasn't rated
+                for m in ([] if quiet else re.finditer(r"^NEW_UNRATED (\{.*\})$", r.stdout or "", re.M)):  # new listings Claude hasn't rated
                     try:
                         nu = json.loads(m.group(1)); note_new_unrated(nu["pid"], nu["ids"], bool(nu.get("first")))
                     except Exception as e:
@@ -188,6 +193,7 @@ def _recompute_loop():
                         _RECOMPUTE["all"] = True
                     else:
                         _RECOMPUTE["pending"].update(failed)
+                    _RECOMPUTE["quiet"] = _RECOMPUTE["quiet"] or quiet
                 else:
                     _RECOMPUTE["fails"] = 0
             print(f"board rebuild failed ({'will retry' if n <= RECOMPUTE_RETRIES else 'giving up after retries'}):", why, flush=True)
@@ -773,18 +779,27 @@ def scheduler():
                             print("nightly re-rate failed for", pid, e, flush=True)
             time.sleep(90)
 
-def run_update(only=None):
+def run_update(only=None, defer_running=False):
+    """defer_running: the caller didn't mark the update as running; it counts as running only once it holds the job
+    lock (Catalog's Fetch now / Add, so a fetch queued behind Find employers doesn't block Remove or Import)."""
     cmd = [sys.executable, os.path.join(HERE, "jobfinder.py")] + (["--only", only] if only else [])
     osdeps.keep_awake(True)
+    fresh = dict(started=dt.datetime.now().isoformat(timespec="seconds"), finished=None, exit=None, phase="fetch", done=0, total=0, lines=[])
     with lock:
-        state.update(running=True, started=dt.datetime.now().isoformat(timespec="seconds"), finished=None,
-                     exit=None, phase="fetch", done=0, total=0, lines=[])
+        if defer_running:
+            state["lines"] = []
+        else:
+            state.update(running=True, **fresh)
     def waiting(kind):
         with lock:
             state["lines"] = (state["lines"] + [f"Waiting for the running {kind} to finish..."])[-12:]
     rc = None
     try:
         with joblock.hold("fetch", on_wait=waiting) as token:
+            if defer_running:
+                with lock:
+                    state.update(running=True, **{**fresh, "started": dt.datetime.now().isoformat(timespec="seconds"),
+                                                  "lines": state["lines"]})
             with open(LOG, "w") as log:
                 p = subprocess.Popen(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                                      env=joblock.child_env(token))
@@ -1503,7 +1518,10 @@ def after_restore():
     getting_started.configure(PORT, TOKEN, busy_reason)
     _pstate.clear()
     people.set_current(people.first())
-    request_recompute()
+    with lock:  # quick checks queued before the restore were for the replaced data
+        for k in [k for k in _AUTO if k != "_loop"]:
+            _AUTO.pop(k, None)
+    request_recompute(auto_rate=False)  # ratings come back with the backup; a restore never starts Claude by itself
 
 if __name__ == "__main__":
     osdeps.ensure_utf8()

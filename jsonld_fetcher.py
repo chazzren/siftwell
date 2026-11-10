@@ -4,6 +4,7 @@ Company config: {"ats": "jsonld", "list_url": <careers page>, "sitemap": <sitema
                  "link_prefix": <path prefix of job links found on list_url>}  (any of the three sources may be present)
 detect_config(url, page) finds that config for a careers link no known job system matches; f_jsonld(c) is the fetcher."""
 import gzip, io, html as _html, json, os, re, time, hashlib, threading, urllib.request, urllib.error, urllib.parse
+import netsafe
 import concurrent.futures as cf
 from html.parser import HTMLParser
 from urllib import robotparser
@@ -284,7 +285,7 @@ def _open(url, headers=None):
                                                "Accept-Encoding": "gzip", **(headers or {})})
     for i in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            with netsafe.urlopen(req, timeout=TIMEOUT) as r:  # (public http/https only, redirects re-checked)
                 raw = r.read(MAX_BYTES)
                 if r.headers.get("Content-Encoding") == "gzip" or raw[:2] == b"\x1f\x8b":
                     raw = gzip.GzipFile(fileobj=io.BytesIO(raw)).read(MAX_BYTES * 4)
