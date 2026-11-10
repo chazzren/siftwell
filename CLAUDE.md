@@ -4,7 +4,7 @@ Siftwell is a self-hosted household job board: it fetches listings from employer
 
 ## Map
 - `server.py`: HTTP server (`python server.py [port]`), all routes in `H.do_GET` / `H.do_POST`. POSTs need header `X-Jobboard: 1` and same origin. Access: from 127.0.0.1 directly, or a cookie set by `/?k=<access key>`. Current profile = `jb_person` cookie.
-- `paths.py`: APP (repo), DATA (user data dir outside the repo; env `JOBBOARD_DATA` overrides; also holds the launcher's `port` and `server.pid`), RUNTIME (launcher's uv/Python/venv, per machine; env `SIFTWELL_RUNTIME` overrides), ASSETS, PACKS, `load_config()`, `load_companies()`, one-time `migrate()`.
+- `paths.py`: APP (repo), DATA (user data dir outside the repo; env `JOBBOARD_DATA` overrides; also holds the launcher's `port` and `server.pid`), RUNTIME (launcher's uv/Python/venv, per machine; env `SIFTWELL_RUNTIME` overrides), ASSETS, PACKS, `load_config()`, one-time `migrate()`.
 - `people.py`: profiles, per-profile settings and prefs (`PREF_SCHEMA`).
 - `jobfinder.py`: fetching (ATS fetchers), per-person filtering (`select_for_person`), scoring, board build. `extra_fetchers.py`, `smb_fetchers.py`: more ATS fetchers. `company_add.py`: add a company from a careers link (detect + verify).
 - `ai_score.py`: Claude Match ratings (Haiku → Sonnet → Opus funnel). `pivot.py`: Target-tab ratings. `claude_cli.py`: wrapper around `claude -p`. `nlsearch.py`: natural-language search.

@@ -66,7 +66,7 @@ def _runtime_dir():
 
 DATA = _data_dir()
 RUNTIME = _runtime_dir()
-COMPANIES = os.path.join(DATA, "companies.json")   # this household's working company list (company_add.py writes it)
+COMPANIES = os.path.join(DATA, "companies.json")   # the old company list (catalog.db replaced it); migrate() below copies it
 CONFIG = os.path.join(DATA, "config.json")         # overrides merged over config.default.json
 SECRETS = os.path.join(DATA, "secrets.json")
 ACCESS_KEY = os.path.join(DATA, "access_key")
@@ -235,14 +235,6 @@ def load_config():
     except FileNotFoundError:
         over = {}
     return _merge(base, over)
-
-
-def load_companies():
-    """The working company list; empty on a fresh install (a starter pack can be imported later)."""
-    try:
-        return json.load(open(COMPANIES, encoding="utf-8"))
-    except FileNotFoundError:
-        return []
 
 
 # ---- one-time move of the old in-app data folder
