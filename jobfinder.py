@@ -176,32 +176,6 @@ def looks_local_unnamed(loc):
     l = (loc or "").strip().lower()
     return bool(l) and not ELSEWHERE.search(l) and not any(c in l for c in NON_US) and "remote" not in l
 
-def classify(job):
-    """Returns 'remote' / 'dmv' / None. Sets job['dmv_locations']."""
-    locs = job["locations"]
-    close = [l for l in locs if near(l)]
-    job["dmv_locations"] = close
-    wp = job.get("workplace") or ""
-    remote = wp == "remote" and not any(any(c in l.lower() for c in NON_US) for l in locs if l) \
-        or any(is_remote_us(l) for l in locs)
-    if wp == "remote" and locs and all(any(c in l.lower() for c in NON_US) for l in locs):
-        remote = False
-    if not remote and not close:
-        bare_us = any(re.fullmatch(r"\s*(us|usa|u\.s\.|united states( of america)?|dragos usa)\s*", l.lower()) for l in locs)
-        d = job.get("desc", "").lower()
-        if bare_us and (job.get("tier") == "remote_first" or re.search(
-                r"fully remote|remote[- ]first|100% remote|remote position|remote role|work remotely|remote within the (us|united states)|remote \(us\)|this role is remote|remote, us", d)):
-            remote = True
-    if remote:
-        job["workplace"] = "remote"
-        return "remote"
-    if close:
-        return "dmv"
-    if job.get("tier") == "dmv_hq" and locs and all(looks_local_unnamed(l) for l in locs if l):
-        job["dmv_locations"] = [f"{l} (DC area)" for l in locs if l][:3]
-        return "dmv"
-    return None
-
 def title_ok(title):
     t = " " + title.lower() + " "
     if any(x in t for x in CFG["title_exclude"]):
@@ -506,7 +480,7 @@ def f_lever(c):
         cat = j.get("categories", {})
         locs = cat.get("allLocations") or [cat.get("location", "")]
         if j.get("country") and j["country"] != "US":
-            locs = [f'{l} ({j["country"]}) europe' for l in locs]  # "europe" = non-US marker for classify()
+            locs = [f'{l} ({j["country"]}) europe' for l in locs]  # "europe" = non-US marker for prepare_listing()
         wp = {"remote": "remote", "hybrid": "hybrid", "on-site": "onsite", "onsite": "onsite"}.get(j.get("workplaceType") or "", "")
         desc = " ".join([j.get("descriptionPlain") or j.get("descriptionBodyPlain") or "", j.get("additionalPlain") or ""] +
                         [strip_html(x.get("content")) for x in j.get("lists", [])])
@@ -587,7 +561,7 @@ def f_workday(c):
     # Workday ORs values within a facet; query each location facet separately and merge.
     queries = [{k: v} for k, v in facets.items()] or [{}]
     # A DC-headquartered employer whose location labels we can't read ("Main Campus") gets its full list;
-    # classify() then keeps anything that doesn't name another state or country.
+    # select_for_person() then keeps anything that doesn't name another state or country.
     if c.get("tier") == "dmv_hq" and (not any("location" in k.lower() for k in facets) or first.get("total", 0) <= 600):
         queries = [{}]
     for applied in queries:
@@ -631,104 +605,119 @@ def load_extra():
         FETCHERS.update(smb_fetchers.FETCHERS)
 
 # ---------------------------------------------------------------- pipeline
+BARE_US = re.compile(r"\s*(us|usa|u\.s\.|united states( of america)?|dragos usa)\s*")
+REMOTE_DESC = re.compile(r"fully remote|remote[- ]first|100% remote|remote position|remote role|work remotely|remote within the (us|united states)|remote \(us\)|this role is remote|remote, us")
+
+def prepare_listing(j, c):
+    """Parse one fetched posting for the catalog. Nothing here depends on who is looking: whether it is near someone,
+    pays enough or has a fitting title is decided per person in select_for_person(). Returns None for postings
+    outside the US (and not remote-US), which no one can use."""
+    locs = j["locations"]
+    base = j.get("workplace") or ""
+    nonus = lambda l: any(x in l.lower() for x in NON_US)
+    strict = base == "remote" and not any(nonus(l) for l in locs if l) or any(is_remote_us(l) for l in locs)
+    if base == "remote" and locs and all(nonus(l) for l in locs):
+        strict = False
+    text = j.get("desc") or ""
+    bare = any(BARE_US.fullmatch(l.lower()) for l in locs) and (c.get("tier") == "remote_first" or bool(REMOTE_DESC.search(text.lower())))
+    unnamed = c.get("tier") == "dmv_hq" and bool(locs) and all(looks_local_unnamed(l) for l in locs if l)
+    if not (strict or bare or unnamed or not locs or any(not nonus(l) for l in locs if l)):
+        return None
+    j.update(ai_track=c.get("ai_track", ""), base_wp=base, remote_strict=bool(strict), remote_bare=bool(bare), local_unnamed=unnamed)
+    if not j["salary"]:
+        j["salary"] = parse_salary(text)
+    if j["salary"]:
+        j["salary_min"], j["salary_max"], j["salary_text"] = round(j["salary"][0]), round(j["salary"][1]), j["salary"][2]
+    else:
+        j["salary_min"] = j["salary_max"] = None; j["salary_text"] = ""
+    del j["salary"]
+    enrich(j, text)  # also fills workplace from the text when the board didn't say
+    j["snippet"] = text[:600]
+    return j
+
 def process(c):
+    """Fetch one company. Postings whose title and text are unchanged since the last fetch aren't parsed again."""
+    import catalog
     t0 = time.time()
-    raw = kept = 0
+    raw = 0
     out = []
     try:
+        known = catalog.known_hashes(c["name"])
         for j in FETCHERS[c["ats"]](c):
             raw += 1
-            cur_ok = title_ok(j["title"])
-            ai_ok = any(target_ok(st, c.get("ai_track"), j["title"]) for st in CFG.get("targets", []))
-            if not (cur_ok or ai_ok):
+            if known.get(j["id"]) == catalog.listing_hash(j["title"], j.get("desc")):
+                out.append({"id": j["id"], "_unchanged": True})
                 continue
-            j["tracks"] = (["current"] if cur_ok else []) + (["ai"] if ai_ok else [])
-            j["ai_track"] = c.get("ai_track", "")
-            where = classify(j)
-            if not where:
-                continue
-            text = j["desc"]
-            if not j["salary"]:
-                j["salary"] = parse_salary(text)
-            if j["salary"]:
-                j["salary_min"], j["salary_max"], j["salary_text"] = round(j["salary"][0]), round(j["salary"][1]), j["salary"][2]
-            else:
-                j["salary_min"] = j["salary_max"] = None; j["salary_text"] = ""
-            del j["salary"]
-            if j["salary_max"] is not None and j["salary_max"] < CFG["salary_floor"] and not CFG["keep_below_floor"]:
-                continue
-            if j["salary_max"] is None and not CFG["keep_unlisted_salary"]:
-                continue
-            enrich(j, text)
-            if j["salary_max"] is None and not CFG["keep_unlisted_salary"]:
-                continue
-            score(j)
-            j["snippet"] = text[:600]
-            out.append(j); kept += 1
+            p = prepare_listing(j, c)
+            if p:
+                out.append(p)
         status = "ok"
     except Exception as e:
         status = f"error: {type(e).__name__}: {e}"[:200]
     return {"company": c["name"], "ats": c["ats"], "tier": c.get("tier"), "sector": c.get("sector"),
-            "raw_jobs": raw, "matched": kept, "status": status, "secs": round(time.time() - t0, 1)}, out
+            "raw_jobs": raw, "matched": len(out), "status": status, "secs": round(time.time() - t0, 1)}, out
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="comma-separated company names")
-    ap.add_argument("--rescore", action="store_true", help="recompute scores from saved data without fetching")
-    ap.add_argument("--rerate", metavar="PID", help="have Claude re-rate this person's jobs rated with older info (no fetching)")
-    ap.add_argument("--n", type=int, default=300, help="how many jobs --rerate may send to Claude")
+    ap.add_argument("--rescore", action="store_true", help="re-parse every open listing from its saved text, then rebuild boards (no fetching)")
+    ap.add_argument("--recompute", nargs="*", metavar="PID", help="rebuild these people's boards (everyone if none given) from the catalog; no fetching, no Claude")
+    ap.add_argument("--rerate", metavar="PID", help="have Claude rate this person's unrated listings and redo ones rated with older info (no fetching)")
+    ap.add_argument("--n", type=int, default=300, help="(kept for compatibility; budgets come from the person's settings)")
     args = ap.parse_args()
+    import catalog
     people.ensure_migrated(BASE_CFG)
+    catalog.migrate()
     if args.rescore:
         return rescore()
+    if args.recompute is not None:
+        rid = catalog.start_run("recompute", details={"people": args.recompute or "all"})
+        out = recompute(args.recompute or None)
+        catalog.finish_run(rid, details={"boards": out})
+        return 0
     if args.rerate:
         return rerate(args.rerate, args.n)
-    use_cfg(fetch_cfg([person_cfg(pid)[0] for pid in people.ids()]))
+    use_cfg(fetch_cfg([person_cfg(pid)[0] for pid in people.ids()]))  # decides which postings get their full text fetched
     load_extra()
-    companies = paths.load_companies()
+    companies = catalog.companies(include_paused=False)
     if args.only:
         want = {x.strip().lower() for x in args.only.split(",")}
         companies = [c for c in companies if c["name"].lower() in want]
     if not companies:
         print("No companies to check yet: add some to the company list, then run the update again.", flush=True)
         return 0
-    os.makedirs(DATA, exist_ok=True)
-    seen_path = os.path.join(DATA, "seen.json")
-    seen = json.load(open(seen_path)) if os.path.exists(seen_path) else {}
-    today = dt.date.today().isoformat()
-
-    summaries, jobs = [], []
+    rid = catalog.start_run("fetch", details={"only": args.only})
+    totals = {"new": 0, "changed": 0, "reopened": 0, "closed": 0, "unchanged": 0}
+    errors, n_ok = [], 0
     # Workday tenants share one per-IP rate limit, so they get their own small lane; everything else runs wide.
     with cf.ThreadPoolExecutor(12) as fast, cf.ThreadPoolExecutor(4) as slow:
         futs = {(slow if c["ats"] == "workday" else fast).submit(process, c): c
                 for c in companies if c["ats"] in FETCHERS}
         for n, f in enumerate(cf.as_completed(futs), 1):
             s, js = f.result()
-            summaries.append(s); jobs.extend(js)
-            print(f'{s["company"]:<24} {s["ats"]:<15} raw={s["raw_jobs"]:<5} matched={s["matched"]:<4} {s["status"]} ({s["secs"]}s)', flush=True)
+            with catalog.db() as con:
+                counts = catalog.record_fetch(s["company"], s, js, con)
+            for k in totals:
+                totals[k] += counts[k]
+            if s["status"] == "ok":
+                n_ok += 1
+            else:
+                errors.append({"company": s["company"], "error": s["status"]})
+            print(f'{s["company"]:<24} {s["ats"]:<15} raw={s["raw_jobs"]:<5} kept={s["matched"]:<4} new={counts["new"]:<4} closed={counts["closed"]:<4} {s["status"]} ({s["secs"]}s)', flush=True)
             print(f"PROGRESS fetch {n}/{len(futs)}", flush=True)
-
-    # dedupe on (company, title, url)
-    uniq = {}
-    for j in jobs:
-        uniq.setdefault((j["company"], j["title"], j["url"]), j)
-    jobs = list(uniq.values())
-    # full descriptions live in their own file (used by tailoring), not in the page
-    desc_path = os.path.join(DATA, "descriptions.json")
-    descs = json.load(open(desc_path)) if args.only and os.path.exists(desc_path) else {}
-    descs.update({j["id"]: (j.get("desc") or "")[:12000] for j in jobs})
-    json.dump(descs, open(desc_path, "w"))
-    for j in jobs:
-        j["first_seen"] = seen.setdefault(j["id"], today)
-        j["new"] = j["first_seen"] == today
-    json.dump(seen, open(seen_path, "w"))
+    if not args.only:
+        catalog.set_meta("last_full_fetch", dt.date.today().isoformat())
+    pool = catalog.open_listings()
     if not args.only:
         import target
-        target.write_market(jobs)
-    only = {c["name"] for c in companies} if args.only else None
-    for pid in people.ids():
-        build_person(pid, jobs, summaries, only)
-    print(f"\n{len(jobs)} jobs fetched from {len(summaries)} companies; boards built for {len(people.ids())} profile(s)")
+        target.write_market(pool)
+    print(f"\nCatalog: {len(pool)} open listings; this run {totals['new']} new, {totals['closed']} closed, "
+          f"{totals['changed']} changed, {totals['reopened']} back again, {len(errors)} companies failed", flush=True)
+    boards = recompute(None, rate=True, pool=pool)
+    catalog.finish_run(rid, status="ok" if not errors else "partial", companies=len(futs), fetched=n_ok,
+                       new=totals["new"], closed=totals["closed"], changed=totals["changed"], reopened=totals["reopened"],
+                       errors=errors[:200], details={"boards": boards})
+    print(f"boards rebuilt for {len(boards)} profile(s)", flush=True)
 
 CSV_COLS = ["req_status", "score", "pv_score", "pv_label", "pv_now", "pv_later", "ai_label", "ai_asis", "ai_fit", "ai_reason", "ai_tailor",
             "fit_score", "comp_score", "qol_score", "company", "title", "level", "workplace", "dmv_locations", "locations",
@@ -749,42 +738,46 @@ def company_lists_payload(pid, jobs, sets, watch):
     return {"options": [{"id": x, "label": LIST_SHORT.get(x, "Added by you")} for x in used], "by_company": by_co}
 
 def company_sets_map():
+    import catalog
     try:
-        return {c["name"]: set(c.get("sets") or ["tech"]) for c in paths.load_companies()}
+        return catalog.sets_map()
     except Exception:
         return {}
 
-def select_for_person(pool):
-    """Apply the current person's company lists, title filter and pay floor (CFG is theirs) to the shared pool; returns copies."""
+def select_for_person(pool, sets=None):
+    """The current person's filters (CFG is theirs) over catalog listings: company lists, title, pay floor, area/remote
+    and workplace. Returns copies with this person's view of workplace, nearby locations and tracks."""
     out = []
-    watch, sets = people.company_sets(), company_sets_map()
+    watch, sets = people.company_sets(), sets if sets is not None else company_sets_map()
+    wps = CFG.get("workplaces") or ["onsite", "hybrid", "remote"]
+    homes = CFG.get("homes", [])
+    dc_ok = CFG.get("legacy_area", True) or (bool(homes) and any(__import__("geo").within(["Washington, DC"], h, r + 10)[0] for h, r in homes))
+    targets = CFG.get("targets", [])
     for j0 in pool:
         if not (sets.get(j0["company"], {"tech"}) & watch):
             continue
         cur_ok = title_ok(j0["title"])
-        ai_ok = any(target_ok(st, j0.get("ai_track"), j0["title"]) for st in CFG.get("targets", []))
+        ai_ok = any(target_ok(st, j0.get("ai_track"), j0["title"]) for st in targets)
         if not (cur_ok or ai_ok):
             continue
-        if j0.get("salary_max") is not None and j0["salary_max"] < CFG["salary_floor"] and not CFG["keep_below_floor"]:
+        smax = j0.get("salary_max")
+        if smax is not None and smax < CFG["salary_floor"] and not CFG["keep_below_floor"]:
             continue
-        # The shared pool covers everyone's areas; keep only what's inside this person's.
+        if smax is None and not CFG["keep_unlisted_salary"]:
+            continue
         locs = j0.get("locations") or []
         mine = [l for l in locs if near(l)]
-        dc_fallback = bool(j0.get("dmv_locations")) and all(str(l).endswith("(DC area)") for l in j0["dmv_locations"]) \
-            and (CFG.get("legacy_area", True) or any(__import__("geo").within(["Washington, DC"], h, r + 10)[0] for h, r in CFG.get("homes", [])))
-        remote = j0.get("workplace") == "remote"
+        remote = bool(j0.get("remote_strict") or (j0.get("remote_bare") and not mine))
+        dc_fallback = not remote and not mine and bool(j0.get("local_unnamed")) and dc_ok
         if not (mine or dc_fallback or (remote and CFG.get("remote_ok", True))):
             continue
-        wps = CFG.get("workplaces") or ["onsite", "hybrid", "remote"]
-        if j0.get("workplace") and j0["workplace"] not in wps and not (j0["workplace"] == "remote" and mine):
+        wp = "remote" if remote else (j0.get("workplace") or "")
+        if wp and wp not in wps and not (wp == "remote" and mine):
             continue
         j = dict(j0)
-        if not dc_fallback:
-            j["dmv_locations"] = mine
+        j["workplace"] = wp
+        j["dmv_locations"] = [f"{l} (DC area)" for l in locs if l][:3] if dc_fallback else mine
         j["tracks"] = (["current"] if cur_ok else []) + (["ai"] if ai_ok else [])
-        for k in [k for k in j if k.startswith(("ai_", "pv_"))]:
-            if k != "ai_track":
-                del j[k]
         out.append(j)
     return out
 
@@ -823,12 +816,30 @@ def eligible_for_claude(j):
     return L is None or band[0] - 1 <= L <= band[1] + 1
 
 def score_person(jobs, prof, new_claude=True, refresh=False):
-    """Appeal for every job, then Match from Claude: the Haiku -> Sonnet -> Opus funnel (cache only if not new_claude)."""
-    import ai_score, pivot
+    """Appeal for every job, then Match from Claude: the Haiku -> Sonnet -> Opus funnel (cache only if not new_claude).
+    When rating, the Target (pivot) ratings run at the same time as the funnel, on copies; both caches are then
+    applied in the original order, so the result is the same as running them one after the other."""
+    import ai_score, pivot, threading
     for j in jobs:
         score(j)
     ok = [j for j in jobs if j.get("req_status") != "unmet"]
     unmet = [j for j in jobs if j.get("req_status") == "unmet"]
+    pv_run, pv_thread = {"status": ""}, None
+    if CFG["pivot_enabled"] and prof and new_claude:
+        cfg_pv = {**CFG["pivot"], **({"refresh_stale": True} if refresh else {})}
+        copies = [dict(j) for j in ok if "ai" in j["tracks"]]
+        pid = people.current()
+        def run_pivot():
+            people.set_current(pid)
+            t0 = time.time()
+            try:
+                pv_run["status"] = pivot.score_jobs(copies, cfg_pv, log=lambda m: print(m, flush=True))
+            except Exception as e:
+                pv_run["status"] = "partial"
+                print(f"Target rating failed: {type(e).__name__}: {e}", flush=True)
+            print(f"TIMING target total {time.time() - t0:.1f}s", flush=True)
+        pv_thread = threading.Thread(target=run_pivot, daemon=True)
+        pv_thread.start()
     if prof:
         budgets = CFG.get("funnel") or {}
         if not new_claude:
@@ -839,10 +850,13 @@ def score_person(jobs, prof, new_claude=True, refresh=False):
         ai_status = "no_profile"
     for j in jobs:
         combine(j)
+    if pv_thread:
+        pv_thread.join()
     pv_status = ""
     if CFG["pivot_enabled"] and prof:
-        cap = ({"refresh_stale": True} if refresh else {}) if new_claude else {"max_new_per_run": 0}
-        pv_status = pivot.score_jobs([j for j in ok if "ai" in j["tracks"]], {**CFG["pivot"], **cap}, log=lambda m: print(m, flush=True))
+        applied = pivot.score_jobs([j for j in ok if "ai" in j["tracks"]], {**CFG["pivot"], "max_new_per_run": 0,
+                                   **({"refresh_stale": True} if refresh else {})}, log=lambda m: None)
+        pv_status = pv_run["status"] if new_claude else applied
         pu = [j for j in unmet if "ai" in j["tracks"]]
         if pu:
             pivot.score_jobs(pu, {**CFG["pivot"], "max_new_per_run": 0}, log=lambda m: None)
@@ -895,10 +909,13 @@ def ratings_summary(jobs):
             "stale": sum(1 for j in top if j.get("ai_stale")), "unrated": sum(1 for j in top if j.get("ai_fit") is None),
             "stale_all": sum(1 for j in jobs if j.get("ai_stale"))}
 
+BOARD_HIDDEN = ("desc", "base_wp", "remote_strict", "remote_bare", "local_unnamed", "last_seen")
+
 def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     import collections, report
     for j in jobs:
-        j.pop("desc", None)
+        for k in BOARD_HIDDEN:  # catalog bookkeeping the page doesn't use
+            j.pop(k, None)
     jobs.sort(key=lambda j: -j["score"])
     per_co = collections.Counter(j["company"] for j in jobs)
     watch, sets = people.company_sets(pid), company_sets_map()
@@ -921,81 +938,101 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     report.build(payload, people.pdir("report.html", pid=pid))
     print(f"{people.name(pid)}: {len(jobs)} jobs on the board", flush=True)
 
-def build_person(pid, pool, summaries, only=None):
-    pc, prof, st = person_cfg(pid)
-    use_cfg(pc)
-    people.set_current(pid, process_wide=True)
-    print(f"--- {people.name(pid)}", flush=True)
-    jobs = select_for_person(pool)
-    apply_requirements(pid, jobs)
-    ai_status, pv_status = score_person(jobs, prof)
-    prev_path = people.pdir("jobs.json", pid=pid)
-    if only and os.path.exists(prev_path):
-        # partial refresh: keep this person's other companies from last time (cached scores only)
-        prev = json.load(open(prev_path))
-        descs = load_descriptions()
-        old = [dict(j, desc=descs.get(j["id"], "")) for j in prev["jobs"] if j["company"] not in only]
-        watch, sets = people.company_sets(pid), company_sets_map()
-        old = [j for j in old if sets.get(j["company"], {"tech"}) & watch]  # drop lists this person no longer watches
-        for j in old:
-            j["new"] = False
-        apply_requirements(pid, old)
-        score_person(old, prof, new_claude=False)
-        jobs += old
-        summaries = [s for s in prev["companies"] if s["company"] not in only] + summaries
-    write_person(pid, jobs, summaries, prof, st, ai_status, pv_status)
+def company_summaries():
+    """One row per company in the catalog for the board's Companies tab (matched is filled in per board)."""
+    import catalog
+    out = []
+    for c in catalog.companies(include_paused=False):
+        f = c["_fetch"]
+        status = "ok" if f["status"] == "ok" else (f["error"] or "not fetched yet")
+        out.append({"company": c["name"], "ats": c["ats"], "tier": c.get("tier"), "sector": c.get("sector"),
+                    "raw_jobs": f["raw"] or 0, "matched": 0, "status": status, "secs": f["secs"] or 0})
+    return out
 
-def load_descriptions():
-    """Full posting text by job id ({} before the first update has run)."""
-    try:
-        return json.load(open(os.path.join(DATA, "descriptions.json")))
-    except FileNotFoundError:
-        return {}
+def _kept_status(pid):
+    """Last Claude status shown on a board (kept when a rebuild doesn't call Claude, so a sign-in banner stays put)."""
+    import catalog
+    st = catalog.get_meta(f"board_status:{pid}")
+    if st is None:
+        try:
+            prev = json.load(open(people.pdir("jobs.json", pid=pid)))
+            st = [prev.get("ai_status") or "ok", prev.get("pivot_status") or ""]
+        except Exception:
+            st = ["ok", ""]
+    return st
 
-def rerate(pid, n):
-    """Separate from fetching: re-rate this person's best jobs whose Claude rating was made with older info."""
-    import ai_score, pivot
-    descs = load_descriptions()
-    pc, prof, st = person_cfg(pid)
-    use_cfg(pc)
-    people.set_current(pid, process_wide=True)
-    if not prof:
-        print("No approved resume profile yet.", flush=True); return 1
-    if not os.path.exists(people.pdir("jobs.json", pid=pid)):
-        print("No jobs on this board yet: run an update first.", flush=True); return 0
-    prev = json.load(open(people.pdir("jobs.json", pid=pid)))
-    jobs = prev["jobs"]
-    for j in jobs:
-        j["desc"] = descs.get(j["id"]) or j.get("snippet", "")
-        j.setdefault("tracks", ["current"])
-    apply_requirements(pid, jobs)
-    for j in jobs:
-        score(j)
-    print(f"Re-rating {people.name(pid)}'s jobs with the latest info (Haiku check, then Sonnet and Opus for the best)", flush=True)
-    ai_status, pv_status = score_person(jobs, prof, new_claude=True, refresh=True)
-    write_person(pid, jobs, prev["companies"], prof, st, ai_status, pv_status)
-    print("done", flush=True)
-
-def rescore():
-    """Re-derive levels, pay, travel and scores for every profile from saved data (no fetching, no new Claude calls)."""
-    descs = load_descriptions()
-    for pid in people.ids():
-        path = people.pdir("jobs.json", pid=pid)
-        if not os.path.exists(path):
+def recompute(pids=None, rate=False, refresh=False, pool=None):
+    """Rebuild boards from the catalog: each person's filters over every open listing, requirements, Appeal and
+    cached Claude ratings. rate=True also runs the Claude funnel over passing listings that are unrated
+    (refresh=True: also ones rated with older info). Without rate it makes no network calls.
+    Returns {pid: {"jobs": n, "unrated": n, "secs": s}}."""
+    import catalog, ai_score
+    pids = pids or people.ids()
+    pool = pool if pool is not None else catalog.open_listings()
+    since = catalog.get_meta("last_full_fetch") or ""
+    sets = company_sets_map()
+    summaries = company_summaries()
+    out = {}
+    for pid in pids:
+        if not people.exists(pid):
             continue
+        t0 = time.time()
+        ai_score.TIMINGS.clear()
         pc, prof, st = person_cfg(pid)
         use_cfg(pc)
         people.set_current(pid, process_wide=True)
-        prev = json.load(open(path))
-        jobs = prev["jobs"]
+        jobs = select_for_person(pool, sets)
+        descs = catalog.descriptions(j["id"] for j in jobs)
         for j in jobs:
-            text = descs.get(j["id"]) or j.get("snippet", "")
+            j["desc"] = descs.get(j["id"]) or j.get("snippet", "")
+            j["new"] = bool(since) and (j.get("first_seen") or "") >= since
+        apply_requirements(pid, jobs)
+        if rate:
+            print(f"--- {people.name(pid)}: {len(jobs)} listings pass their filters", flush=True)
+        ai_status, pv_status = score_person(jobs, prof, new_claude=rate, refresh=refresh)
+        if rate:
+            catalog.set_meta(f"board_status:{pid}", [ai_status, pv_status])
+        else:
+            ai_status, pv_status = _kept_status(pid)
+        unrated = sum(1 for j in jobs if j.get("ai_fit") is None)
+        write_person(pid, jobs, summaries, prof, st, ai_status, pv_status)
+        out[pid] = {"jobs": len(jobs), "unrated": unrated, "secs": round(time.time() - t0, 1)}
+        if rate:
+            out[pid]["timings"] = list(ai_score.TIMINGS)
+    return out
+
+def rerate(pid, n=None):
+    """Separate from fetching: rebuild this person's board from the catalog, then have Claude rate passing listings
+    that are unrated or were rated with older info."""
+    import catalog
+    if not people.exists(pid):
+        print("No such profile.", flush=True); return 1
+    if not person_cfg(pid)[1]:
+        print("No approved resume profile yet.", flush=True); return 1
+    rid = catalog.start_run("rerate", details={"person": pid})
+    print(f"Re-rating {people.name(pid)}'s jobs with the latest info (Haiku check, then Sonnet and Opus for the best)", flush=True)
+    out = recompute([pid], rate=True, refresh=True)
+    catalog.finish_run(rid, details={"boards": out})
+    print("done", flush=True)
+
+def rescore():
+    """Re-parse every open listing from its saved text (after a parsing change), then rebuild every board.
+    No fetching, no new Claude calls."""
+    import catalog
+    rid = catalog.start_run("rescore")
+    n = 0
+    with catalog.db() as con:
+        rows = con.execute("SELECT id, data, desc, first_seen, last_seen FROM listings WHERE closed_at IS NULL AND partial=0").fetchall()
+        for r in rows:
+            j = json.loads(r["data"])
+            text = r["desc"] or j.get("snippet", "")
+            j["workplace"] = j.get("base_wp", j.get("workplace", ""))
             enrich(j, text)
             j["desc"] = text
-            j.setdefault("tracks", ["current"])
-        apply_requirements(pid, jobs)
-        ai_status, pv_status = score_person(jobs, prof, new_claude=False)
-        write_person(pid, jobs, prev["companies"], prof, st, prev.get("ai_status", ai_status), prev.get("pivot_status", pv_status))
+            catalog.put_listing(con, j, first_seen=r["first_seen"], last_seen=r["last_seen"])
+            n += 1
+    out = recompute(None)
+    catalog.finish_run(rid, fetched=n, details={"boards": out})
 
 if __name__ == "__main__":
     osdeps.ensure_utf8()

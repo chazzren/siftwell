@@ -12,7 +12,7 @@ people.DEFAULT_SETTINGS, so this module writes settings.json itself (people.sett
 later saves from the Profile panel preserve them)."""
 import json, os, re, statistics
 
-import paths
+import catalog
 import people
 
 STEPS = ["welcome", "resume", "highlights", "where", "pay", "level", "direction", "dealbreakers", "companies",
@@ -236,7 +236,7 @@ def get_state(pid, ingest=None):
     emp = current_employer(prof)
     direction = s.get("direction") or ("specific" if (s.get("target_text") or "").strip() else "")
     try:
-        cos = paths.load_companies()
+        cos = catalog.companies()
         counts = {k: sum(1 for c in cos if k in (c.get("sets") or ["tech"])) for k in people.COMPANY_SETS}
     except Exception:
         counts = {}

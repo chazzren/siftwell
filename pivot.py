@@ -3,7 +3,7 @@
 Two numbers per job: now_fit (a realistic shot today, with honest tailoring) and later_fit (after the
 3-4 month build plan). Gap tags come from a fixed list so the board can total them into a portfolio plan.
 Runs on the Claude subscription via the Claude Code CLI. Cache: data/pivot_scores.json keyed by profile."""
-import concurrent.futures as cf, json, os, re, threading
+import concurrent.futures as cf, json, os, re, threading, time
 
 import claude_cli
 
@@ -131,7 +131,7 @@ def score_jobs(jobs, cfg, log=print):
         bs = cfg.get("batch_size", 12)
         batches = [todo[i:i + bs] for i in range(0, len(todo), bs)]
         log(f"Pivot scoring {len(todo)} AI-company jobs in {len(batches)} batches...")
-        done = 0
+        done, failed, t0 = 0, 0, time.time()
         with cf.ThreadPoolExecutor(cfg.get("cli_concurrency", 3)) as ex:
             futs = [ex.submit(_batch, cfg, system, profile, b) for b in batches]
             for f in cf.as_completed(futs):
@@ -146,10 +146,13 @@ def score_jobs(jobs, cfg, log=print):
                     for x in futs: x.cancel()
                     break
                 except Exception as e:
-                    status = "partial"
+                    status = "partial"; failed += 1
                     log(f"Pivot batch failed: {type(e).__name__}: {str(e)[:150]}")
                 done += 1
                 log(f"PROGRESS pivot {done}/{len(batches)}")
+        ai_score.TIMINGS.append({"tier": "target", "jobs": len(todo), "batches": len(batches), "failed": failed,
+                                 "secs": round(time.time() - t0, 1), "status": status})
+        log(f"TIMING target: {len(todo)} jobs, {len(batches)} batches, {failed} failed, {time.time() - t0:.1f}s ({status})")
         json.dump(allc, open(CACHE, "w"))
     for j in jobs:
         if j["id"] in cache:

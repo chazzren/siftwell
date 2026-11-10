@@ -3,9 +3,9 @@ import json, os, re, threading, urllib.request
 
 import people
 
+import catalog
 import paths
 HERE = paths.APP
-COMPANIES = paths.COMPANIES
 UA = {"User-Agent": "Mozilla/5.0 (personal job board)"}
 _lock = threading.Lock()
 
@@ -136,7 +136,7 @@ def add(url, name="", scope="me"):
     ident = c.get("token") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key") or c.get("id") or re.sub(r"^https://|\..*$", "", c.get("base", "")).replace("careers-", "")
     nm = (name or suggested or ident.replace("-", " ").replace("_", " ").title()).strip()[:60]
     with _lock:
-        cos = paths.load_companies()
+        cos = catalog.companies()
         same = next((x for x in cos if x["ats"] == c["ats"] and all(x.get(k) == v for k, v in c.items())), None)
         if same:
             sets = set(same.get("sets") or ["tech"])
@@ -148,11 +148,10 @@ def add(url, name="", scope="me"):
                 nm = f"{nm} ({c['ats']})"
             entry = {"name": nm, "tier": "dmv_office", "sector": "Added by you", **c,
                      "sets": ["all" if scope == "all" else f"own-{pid}"], "added_by": pid}
-            cos.append(entry)
-        json.dump(cos, open(COMPANIES, "w"), indent=1)
+        catalog.save_company(entry)
     return {"name": entry["name"], "ats": c["ats"], "open_jobs": total, "existing": bool(same)}
 
 def own(pid=None):
     pid = pid or people.current()
     return [{"name": c["name"], "ats": c["ats"], "everyone": "all" in (c.get("sets") or [])}
-            for c in paths.load_companies() if f"own-{pid}" in (c.get("sets") or []) or c.get("added_by") == pid]
+            for c in catalog.companies() if f"own-{pid}" in (c.get("sets") or []) or c.get("added_by") == pid]

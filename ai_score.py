@@ -1,5 +1,5 @@
 """Claude fit scoring: rates each job against the active resume profile, caches results in DATA/ai_scores.json."""
-import concurrent.futures as cf, json, os, shutil, subprocess, threading
+import concurrent.futures as cf, json, os, shutil, subprocess, threading, time
 import osdeps
 
 import paths
@@ -248,7 +248,7 @@ def _rate(todo, tier, inf, log):
     bs = cfg["batch_size"]
     batches = [todo[i:i + bs] for i in range(0, len(todo), bs)]
     log(f"{tier.capitalize()} rating {len(todo)} jobs in {len(batches)} batches...")
-    out, done = {}, 0
+    out, done, failed, t0 = {}, 0, 0, time.time()
     import datetime as _dt
     now = _dt.date.today().isoformat()
     client = None
@@ -262,15 +262,25 @@ def _rate(todo, tier, inf, log):
                 res = f.result()
             except CLIAuthError:
                 for x in futs: x.cancel()
+                _timing(tier, len(todo), len(batches), failed, t0, log, stopped="signed out")
                 raise
             except Exception as e:
-                log(f"{tier} batch failed: {type(e).__name__}: {str(e)[:150]}"); res = {}
+                log(f"{tier} batch failed: {type(e).__name__}: {str(e)[:150]}"); res = {}; failed += 1
             for v in res.values():
                 v.update(fp=inf["fp"], hl=inf["hl"], facts=[fid for fid, _ in inf["facts"]], at=now)
             out.update(res)
             done += 1
             log(f"PROGRESS ai {done}/{len(batches)}")
+    _timing(tier, len(todo), len(batches), failed, t0, log, rated=len(out))
     return out
+
+TIMINGS = []  # per-tier timing of the current run, collected by jobfinder into the run history
+
+def _timing(tier, jobs, batches, failed, t0, log, **extra):
+    t = {"tier": tier, "jobs": jobs, "batches": batches, "failed": failed, "secs": round(time.time() - t0, 1), **extra}
+    TIMINGS.append(t)
+    log(f"TIMING {tier}: {jobs} jobs, {batches} batches, {failed} failed, {t['secs']}s" +
+        (f", {extra['rated']} rated" if "rated" in extra else "") + (f" ({extra['stopped']})" if "stopped" in extra else ""))
 
 def bestbets(appeal, match):
     import math

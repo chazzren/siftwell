@@ -22,6 +22,12 @@ TOKEN = open(TOKEN_FILE).read().strip()
 sys.path.insert(0, HERE)
 import people
 people.ensure_migrated()
+import catalog
+try:
+    _CATALOG_MIGRATED = catalog.migrate()  # one-time: build DATA/catalog.db from the old file-based data (here, in the server process)
+except Exception as e:
+    _CATALOG_MIGRATED = False
+    print(f"catalog migration failed: {type(e).__name__}: {e}", flush=True)
 _pstate = {}
 jobs_file_lock = threading.Lock()
 
@@ -69,17 +75,48 @@ def refresh_stale_boards():
         except Exception as e:
             print(f"couldn't re-render {pid}'s board: {e}", flush=True)
 
-_DESC = {"mtime": 0, "data": {}}
-def descriptions():
-    """Full posting text by job id (large file, cached until it changes)."""
-    p = os.path.join(DATA, "descriptions.json")
+# ---- rebuilding boards from the catalog (seconds; no fetching, no Claude)
+_RECOMPUTE = {"running": False, "pending": set(), "all": False}
+
+def _busy():
+    return state["running"] or any(v.get("running") for v in RERATE.values())
+
+def request_recompute(pids=None):
+    """Rebuild these people's boards (everyone if None) in the background. While an update or re-rate is running,
+    the request waits and runs as soon as it finishes (flush_recompute)."""
+    with lock:
+        if pids is None:
+            _RECOMPUTE["all"] = True
+        else:
+            _RECOMPUTE["pending"].update(pids)
+    flush_recompute()
+
+def flush_recompute():
+    with lock:
+        if _RECOMPUTE["running"] or _busy() or not (_RECOMPUTE["all"] or _RECOMPUTE["pending"]):
+            return
+        _RECOMPUTE["running"] = True
+    threading.Thread(target=_recompute_loop, daemon=True).start()
+
+def _recompute_loop():
     try:
-        m = os.path.getmtime(p)
-        if m != _DESC["mtime"]:
-            _DESC["data"], _DESC["mtime"] = json.load(open(p)), m
-    except Exception:
-        pass
-    return _DESC["data"]
+        while True:
+            with lock:
+                if _busy() or not (_RECOMPUTE["all"] or _RECOMPUTE["pending"]):
+                    return
+                pids = [] if _RECOMPUTE["all"] else sorted(_RECOMPUTE["pending"])
+                _RECOMPUTE["all"] = False
+                _RECOMPUTE["pending"].clear()
+            with jobs_file_lock:
+                r = subprocess.run([sys.executable, os.path.join(HERE, "jobfinder.py"), "--recompute", *pids], cwd=HERE,
+                                   capture_output=True, text=True, timeout=900)
+            if r.returncode:
+                print("board rebuild failed:", (r.stdout or "")[-400:], (r.stderr or "")[-1500:], flush=True)
+    except Exception as e:
+        print(f"board rebuild failed: {type(e).__name__}: {e}", flush=True)
+    finally:
+        with lock:
+            _RECOMPUTE["running"] = False
 
 # ---- Claude Code sign-in from the board (works from any device).
 # `claude auth login` prints a sign-in link, then waits for the code that the sign-in page shows.
@@ -156,7 +193,7 @@ def find_job(job_id):
     job = next((j for j in data["jobs"] if j["id"] == job_id), None)
     if not job:
         raise ValueError("That job is no longer in the list. Click Update jobs and try again.")
-    desc = read_json(os.path.join(DATA, "descriptions.json"), {}).get(job_id) or job.get("snippet", "")
+    desc = catalog.description(job_id) or job.get("snippet", "")
     return job, desc
 
 def bg_questions(key, job_id):
@@ -172,22 +209,6 @@ def bg_questions(key, job_id):
     except Exception as e:
         ps()["questions"][key] = {"running": False, "error": str(e)[:400]}
 
-_RESCORE = {"running": False, "again": False}
-def bg_rescore_all():
-    """Re-derive every board from saved data (no fetching, no new Claude calls), e.g. after highlights change."""
-    with lock:
-        if _RESCORE["running"]:
-            _RESCORE["again"] = True; return
-        _RESCORE["running"] = True
-    try:
-        while True:
-            _RESCORE["again"] = False
-            if not state["running"]:
-                subprocess.run([sys.executable, os.path.join(HERE, "jobfinder.py"), "--rescore"], capture_output=True, timeout=900)
-            if not _RESCORE["again"]:
-                break
-    finally:
-        _RESCORE["running"] = False
 
 def bg_highlights(pid):
     import highlights
@@ -196,7 +217,7 @@ def bg_highlights(pid):
         highlights.refresh(pid)
     except Exception as e:
         print("highlights refresh failed:", e, flush=True)
-    bg_rescore_all()
+    request_recompute([pid])
 
 def apply_rescore(job_id, desc):
     """Re-score one job with Claude and write the new numbers into jobs.json and the page (skipped mid-update)."""
@@ -234,7 +255,7 @@ def bg_rate(ids, mode):
             payload = read_json(path, None)
             want = set(ids)
             sel = [j for j in payload["jobs"] if j["id"] in want]
-            descs = read_json(os.path.join(DATA, "descriptions.json"), {})
+            descs = catalog.descriptions(want)
             for j in sel:
                 j["desc"] = descs.get(j["id"]) or j.get("snippet", "")
             if mode == "pivot":
@@ -421,18 +442,21 @@ def run_rerate(pid, n):
     r = RERATE[pid]
     p = subprocess.Popen([sys.executable, os.path.join(HERE, "jobfinder.py"), "--rerate", pid, "--n", str(n)], cwd=HERE,
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    for line in p.stdout:
-        line = line.rstrip()
-        m = re.match(r"PROGRESS (?:ai|pivot) (\d+)/(\d+)", line)
-        with lock:
-            if m:
-                r["done"], r["total"] = int(m.group(1)), int(m.group(2))
-            elif line:
-                r["lines"] = (r["lines"] + [line])[-8:]
-    p.wait()
+    with open(os.path.join(DATA, f"rerate-{pid}.log"), "w") as log:  # full output incl. per-tier TIMING lines
+        for line in p.stdout:
+            log.write(line); log.flush()
+            line = line.rstrip()
+            m = re.match(r"PROGRESS ai (\d+)/(\d+)", line)  # the Target ratings run alongside; the bar follows the main funnel
+            with lock:
+                if m:
+                    r["done"], r["total"] = int(m.group(1)), int(m.group(2))
+                elif line and not line.startswith("PROGRESS"):
+                    r["lines"] = (r["lines"] + [line])[-8:]
+        p.wait()
     with lock:
         r.update(running=False, finished=dt.datetime.now().isoformat(timespec="seconds"),
                  error=None if p.returncode == 0 else (r["lines"][-1] if r["lines"] else "failed"))
+    flush_recompute()
 
 # ---- nightly job-listing update
 SCHEDULE_FILE = os.path.join(DATA, "schedule.json")
@@ -498,6 +522,7 @@ def run_update(only=None):
     with lock:
         state.update(running=False, exit=p.returncode, finished=dt.datetime.now().isoformat(timespec="seconds"))
     osdeps.keep_awake(False)
+    flush_recompute()
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -577,7 +602,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/highlights":
             import highlights
             out = highlights.payload(pid)
-            out["rescoring"] = _RESCORE["running"]
+            out["rescoring"] = _RECOMPUTE["running"]
             return self._send(200, out)
         if path == "/api/setup":
             import setup_flow
@@ -587,7 +612,7 @@ class H(BaseHTTPRequestHandler):
             if setup_flow.needs_setup(pid):
                 self.send_response(303); self.send_header("Location", "/setup"); self.end_headers(); return
             rp = people.pdir("report.html")
-            if not os.path.exists(rp) and people.load_index() and os.path.exists(os.path.join(DATA, "descriptions.json")):
+            if not os.path.exists(rp) and people.load_index() and catalog.stats()["open"]:
                 empty_board(pid)
             if not os.path.exists(rp):
                 return self._send(200, "<p>No data yet. Starting first refresh…</p><script>fetch('/api/update',{method:'POST',headers:{'X-Jobboard':'1'}}).then(()=>setTimeout(()=>location.reload(),5000))</script>", "text/html")
@@ -598,6 +623,7 @@ class H(BaseHTTPRequestHandler):
             nr = next_run()
             s["next_run"] = nr.isoformat(timespec="minutes") if nr else None
             s["schedule"] = schedule()
+            s["recomputing"] = _RECOMPUTE["running"]
             return self._send(200, s)
         if path == "/api/rerate":
             with lock:
@@ -606,7 +632,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/desc":
             from urllib.parse import parse_qs
             jid = (parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "").get("id") or [""])[0]
-            return self._send(200, {"desc": descriptions().get(jid, "")})
+            return self._send(200, {"desc": catalog.description(jid)})
         if path == "/api/marks":
             return self._send(200, read_json(people.pdir("marks.json"), {}))
         if path == "/api/profile":
@@ -695,7 +721,7 @@ class H(BaseHTTPRequestHandler):
                                     "target_job": ps().get("target") or {"running": False}})
         if path == "/api/companies/mine":
             import company_add
-            cos = paths.load_companies()
+            cos = catalog.companies(include_paused=False)
             counts = {k: sum(1 for c in cos if k in (c.get("sets") or ["tech"])) for k in people.COMPANY_SETS}
             return self._send(200, {"sets": [{"id": k, "label": v, "count": counts[k]} for k, v in people.COMPANY_SETS.items()],
                                     "watching": sorted(people.settings().get("company_sets") or ["tech"]), "own": company_add.own()})
@@ -747,7 +773,7 @@ class H(BaseHTTPRequestHandler):
                     return self._send(400, {"error": str(e)[:300]})
             if body.get("confirm"):
                 highlights.confirm(pid)
-            threading.Thread(target=bg_rescore_all, daemon=True).start()
+            request_recompute([pid])
             out = highlights.payload(pid); out["rescoring"] = True
             return self._send(200, out)
         if path == "/api/highlights/refresh":
@@ -765,6 +791,7 @@ class H(BaseHTTPRequestHandler):
                 out = setup_flow.finish(pid)
             except ValueError as e:
                 return self._send(400, {"error": str(e), "field": getattr(e, "field", None)})
+            request_recompute([pid])  # the board fills from the catalog right away; the update below adds fresh listings
             if out["kick"]["interpret_target"]:
                 ps()["target"] = {"running": True, "error": None}; spawn(bg_interpret)
             if out["kick"]["update"]:
@@ -835,6 +862,7 @@ class H(BaseHTTPRequestHandler):
             if changed:
                 ps()["target"] = {"running": True, "error": None}
                 spawn(bg_interpret)
+            request_recompute([pid])  # filters changed: re-run them over the whole catalog
             return self._send(200, {"ok": True, "settings": saved, "interpreting": changed})
         if path == "/api/target/suggest":
             if not (ps().get("suggest") or {}).get("running"):
@@ -885,7 +913,7 @@ class H(BaseHTTPRequestHandler):
                 return self._send(503, {"error": "Claude Code is signed out.", "signin": True})
             except Exception as e:
                 return self._send(502, {"error": f"Claude couldn't read that search ({str(e)[:120]})."})
-            ranked = nlsearch.rank(jobs, descriptions(), crit)
+            ranked = nlsearch.rank(jobs, catalog.descriptions(j["id"] for j in jobs), crit)
             return self._send(200, {"q": q, "criteria": crit, "ids": [i for i, _ in ranked], "scores": [s for _, s in ranked]})
         if path == "/api/people/remove":
             gone = str(body.get("id", ""))
@@ -1043,4 +1071,6 @@ if __name__ == "__main__":
     print(f"Job Board on http://127.0.0.1:{PORT}  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)", flush=True)
     threading.Thread(target=scheduler, daemon=True).start()
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
+    if _CATALOG_MIGRATED:
+        request_recompute()  # first start on the catalog: rebuild every board from it
     srv.serve_forever()
