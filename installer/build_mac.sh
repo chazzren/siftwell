@@ -17,6 +17,10 @@ python -m PyInstaller --noconfirm --clean --distpath dist --workpath build insta
 APP="dist/Siftwell.app"
 test -x "$APP/Contents/MacOS/Siftwell" || { echo "Siftwell.app was not built" >&2; exit 1; }
 /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist"
+# informational: the oldest macOS each bundled library says it runs on (the highest "minos" below is the real minimum)
+find "$APP" \( -name "*.so" -o -name "*.dylib" -o -name Siftwell -o -name "Python" \) -type f 2>/dev/null | head -4000 | while read -r f; do
+  otool -l "$f" 2>/dev/null | awk '/LC_BUILD_VERSION/{b=1} b&&/minos/{print $2; b=0}'
+done | sort -t. -k1,1n -k2,2n | uniq -c | tail -5 | sed 's/^/minos: /' || true
 
 # PyInstaller already ad-hoc signs the binaries; sign the finished bundle the same way so its seal covers the Info.plist
 # and resources (an unsealed bundle makes macOS report it as damaged on some versions).
