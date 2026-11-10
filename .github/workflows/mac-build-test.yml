@@ -1,0 +1,53 @@
+name: Mac build test
+
+# Run by hand (Actions -> Mac build test -> Run workflow). Builds Siftwell.app and the .dmg exactly like the release
+# workflow's macos job and smoke tests the .dmg, then keeps it as a workflow artifact. It never tags, pushes or publishes
+# anything.
+on:
+  push:
+    branches: [mac-app]       # while the Mac build is being developed; builds only, never publishes
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp into the test build (default: the VERSION file)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    env:
+      VERSION_INPUT: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Pick the version
+        run: |
+          if [ -n "$VERSION_INPUT" ]; then printf '%s\n' "$VERSION_INPUT" > VERSION; fi
+          echo "VERSION=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
+
+      - name: Install the build tools and Siftwell's packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller==6.22.3
+
+      - name: Build Siftwell.app and Siftwell-<version>.dmg
+        run: bash installer/build_mac.sh installer-out
+
+      - name: Smoke test the .dmg
+        run: bash installer/smoke_mac.sh "installer-out/Siftwell-$VERSION.dmg" "$VERSION" 8871
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg-test
+          path: installer-out/Siftwell-*.dmg
+          if-no-files-found: error
+          retention-days: 3

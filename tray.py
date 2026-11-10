@@ -156,6 +156,14 @@ def main(port):
         pystray.MenuItem("Copy phone link", copy_link, visible=lambda item: phone_link(port) is not None),
         pystray.MenuItem("Stop Siftwell", stop_all),
     )
+    if sys.platform == "darwin":
+        # A menu-bar icon only: no Dock icon and no app menu for this helper (it shares the .app's executable, which
+        # would otherwise show up in the Dock like the window does). pystray runs the menu loop on this, the main, thread.
+        try:
+            from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+            NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+        except Exception as e:
+            aw.log(f"tray: couldn't hide the Dock icon: {e}")
     icon = pystray.Icon("Siftwell", Image.open(ICON_PNG), f"Siftwell is running (port {port})", menu)
 
     def watch(icon):

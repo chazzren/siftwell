@@ -4,7 +4,7 @@
 
 1. On GitHub open the repo, then **Actions -> Release -> Run workflow**.
 2. Pick the default branch, enter the **version** (like `0.2.0`, no `v`), optionally add **notes**, click **Run workflow**.
-3. When the run turns green, the release is at **Releases -> latest**, with `Siftwell-<version>.zip` (Mac / manual), `Siftwell-Setup-<version>.exe` (the Windows installer) and `Siftwell-Portable-<version>.zip` (Windows, no install, data next to the app) attached.
+3. When the run turns green, the release is at **Releases -> latest**, with `Siftwell-<version>.zip` (Intel Mac / manual), `Siftwell-Setup-<version>.exe` (the Windows installer), `Siftwell-Portable-<version>.zip` (Windows, no install, data next to the app) and `Siftwell-<version>.dmg` (the Mac app, Apple silicon, unsigned) attached.
 
 Versions starting with `0.` are marked "Pre-release". Nothing is published unless you click Run.
 
@@ -19,7 +19,8 @@ Versions starting with `0.` are marked "Pre-release". Nothing is published unles
 3. Writes the version into `VERSION`, commits "Release v<version>", and tags it (locally).
 4. Builds the ZIP with `git archive` (folder `Siftwell/`, dev-only files left out via `.gitattributes`) and checks that the `.command` files are still executable.
 5. In parallel on a Windows runner (`windows` job, after the checks): builds `Siftwell.exe` with PyInstaller (`installer/siftwell.spec`), builds `Siftwell-Setup-<version>.exe` with Inno Setup (`installer/siftwell.iss`), and test-installs, starts and uninstalls it. The same job zips the PyInstaller bundle as `Siftwell-Portable-<version>.zip`: a top-level `Siftwell/` folder with the bundle plus `portable.txt` (the marker that switches portable mode on: data goes to `Siftwell/data`) and `README-portable.txt` (both live in `installer/portable/`). It unzips that ZIP into a scratch folder and checks `Siftwell.exe --version`.
-6. Only when the checks, the ZIP, the installer and the portable ZIP all succeeded does it push the commit and tag, and create the GitHub Release (ZIP, installer and portable ZIP attached together) with notes made from the commit subjects since the last release.
+6. In parallel on a `macos-15` runner (Apple silicon, `macos` job, after the checks): `installer/build_mac.sh` builds `Siftwell.app` with PyInstaller (`installer/siftwell-mac.spec`; the icon is `assets/brand/siftwell.icns`), signs it ad hoc and packs it with an `Applications` shortcut into `Siftwell-<version>.dmg` (hdiutil); `installer/smoke_mac.sh` then mounts that .dmg, checks the version and that the window / menu-bar libraries load (`Siftwell --check-imports`), starts `Siftwell --server <port>` on scratch data with Claude blocked, waits for `/api/ping`, and runs `Siftwell --stop`. The app is not signed with a developer certificate or notarized, so users do the first-launch Gatekeeper steps in `docs/GUIDE.md`. To try the Mac build without releasing anything, run **Actions -> Mac build test** (same build and smoke test; the .dmg is kept as a workflow artifact for 3 days).
+7. Only when the checks, the ZIP, the installer, the portable ZIP and the .dmg all succeeded does it push the commit and tag, and create the GitHub Release (all four attached together) with notes made from the commit subjects since the last release.
 
 If any check fails, nothing is pushed or published.
 
