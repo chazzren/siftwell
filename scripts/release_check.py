@@ -177,6 +177,8 @@ def check_leaks(files):
     slug = _repo_slug()
     if slug:
         phrases.append(slug.lower())
+        owner, _, name = slug.lower().partition("/")
+        phrases.append(f"io.github.{owner}.{name}")   # the Mac app's bundle id is built from the same public address
     allow_file = os.path.join(ROOT, "scripts", "leak_allow.txt")
     if os.path.isfile(allow_file):
         with open(allow_file, encoding="utf-8") as fh:
