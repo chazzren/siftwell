@@ -11,7 +11,7 @@ Siftwell is a self-hosted household job board: it fetches listings from employer
 - `report.py`: the board page. `HEAD`/`BODY`/`TOOLS` are plain strings; `SCRIPT` is a **raw** string holding all board JS. Output: `DATA/people/<id>/report.html`.
 - `appupdate.py`: Siftwell's own update check/installer (GitHub Releases, once a day; Settings → About & updates; banner on the board and Settings; routes `/api/app-update*` wired in server.py).
 - `backup.py`: Backup & move (Settings pane + welcome link): export/restore the whole DATA folder as a zip; routes under `/api/backup/` are wired in server.py via `backup.configure`.
-- Other pages: `settings_page.py` (/settings), `setup_page.py` + `setup_flow.py` (/setup), `welcome_page.py` (no profiles yet).
+- Other pages: `settings_page.py` (/settings), `setup_page.py` + `setup_flow.py` (/setup), `welcome_page.py` (no profiles yet). `connect_claude.py`: the inline Connect Claude card (install + sign in) used by setup; test hook `SIFTWELL_TEST_CLAUDE_EXE=<fake claude>`; Claude Code lookup paths in `osdeps.find_exe` (`scripts/test_find_exe.py`).
 - `resume.py`, `tailor.py`, `review.py` (Astra, via Codex CLI), `interview.py`, `highlights.py`, `requirements.py`, `target.py`, `geo.py` (offline geocoding from `assets/geo`).
 
 ## Conventions
