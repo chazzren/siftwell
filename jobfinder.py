@@ -639,6 +639,9 @@ def load_extra():
         sys.path.insert(0, HERE)
         import ats_sap_taleo
         FETCHERS.update(ats_sap_taleo.FETCHERS)
+    if os.path.exists(os.path.join(HERE, "ats_more.py")):
+        import ats_more
+        FETCHERS.update(ats_more.FETCHERS)
 
 # ---------------------------------------------------------------- pipeline
 BARE_US = re.compile(r"\s*(us|usa|u\.s\.|united states( of america)?|dragos usa)\s*")

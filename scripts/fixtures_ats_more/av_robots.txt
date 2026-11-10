@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /$
+Allow: /careers
+Disallow: /careers/*qtvc=
+Allow: /*/careers
+Disallow: /*/careers/*qtvc=
