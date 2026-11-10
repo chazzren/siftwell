@@ -46,7 +46,8 @@ import report
 VERSION = "1"
 NETWORK = os.path.join(paths.DATA, "network.json")
 APP = paths.APP
-TASK_NAME = "Job Board server"                       # scheduled task made by the older setup_windows.ps1
+TASK_NAME = "Job Board server"                       # scheduled task made by older installs (starts the server at sign-in)
+WAKE_TASK = "Job Board wake for nightly update"      # older installs' 05:25 wake-up task; harmless, never touched
 MAC_LABEL = "com.siftwell.server"
 CTX = {"port": 8766, "token": "", "busy": lambda: False, "bound_lan": False}
 NOWIN = getattr(subprocess, "CREATE_NO_WINDOW", 0) if osdeps.WINDOWS else 0
@@ -189,31 +190,120 @@ def _linux_desktop():
     return os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "autostart", "siftwell.desktop")
 
 
-def _task_info():
-    """The older setup's scheduled task: {} when absent, else {state, wd, args}. Read-only; cached."""
+_DENIED = ("access is denied", "0x80070005", "permissiondenied", "unauthorizedaccess")
+
+
+def _test_tasks():
+    """Tests only: SIFTWELL_TEST_TASKS=<json file> stands in for the Windows scheduled tasks, so the real ones are never
+    touched. {"tasks": {"<name>": {"enabled": bool, "state": "Running", "wd": ..., "exe": ..., "args": ...}},
+    "deny": bool (changing a task without admin is refused), "uac": "ok" | "declined", "calls": [...]}."""
+    p = os.environ.get("SIFTWELL_TEST_TASKS")
+    if not p:
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {"tasks": {}}
+
+
+def _test_save(d):
+    with open(os.environ["SIFTWELL_TEST_TASKS"], "w", encoding="utf-8") as f:
+        json.dump(d, f, indent=1)
+
+
+def _ps(script, timeout=30):
+    r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+                       capture_output=True, text=True, timeout=timeout, creationflags=NOWIN)
+    return r.returncode, ((r.stdout or "") + (r.stderr or "")).strip()
+
+
+def _task_query(name):
+    """A scheduled task as {state, enabled, wd, exe, args}, or {} when it doesn't exist. Read-only."""
     if not osdeps.WINDOWS:
         return {}
-    def q():
-        try:
-            ps = (f"$t=Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue; "
-                  "if($t){@{state=[string]$t.State;wd=[string]$t.Actions[0].WorkingDirectory;args=[string]$t.Actions[0].Arguments}|ConvertTo-Json -Compress}")
-            r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
-                               capture_output=True, text=True, timeout=30, creationflags=NOWIN)
-            return json.loads(r.stdout) if r.stdout.strip() else {}
-        except Exception:
+    t = _test_tasks()
+    if t is not None:
+        x = (t.get("tasks") or {}).get(name)
+        if not x:
             return {}
-    return _cached("task", q)
+        en = bool(x.get("enabled", True))
+        return {"state": (x.get("state") or "Ready") if en else "Disabled", "enabled": en,
+                "wd": x.get("wd") or "", "exe": x.get("exe") or "", "args": x.get("args") or ""}
+    try:
+        ps = (f"$t=Get-ScheduledTask -TaskName '{name}' -ErrorAction SilentlyContinue; "
+              "if($t){@{state=[string]$t.State;wd=[string]$t.Actions[0].WorkingDirectory;exe=[string]$t.Actions[0].Execute;"
+              "args=[string]$t.Actions[0].Arguments}|ConvertTo-Json -Compress}")
+        _rc, out = _ps(ps)
+        d = json.loads(out) if out else {}
+    except Exception:
+        return {}
+    if d:
+        d["enabled"] = d.get("state") != "Disabled"
+    return d
+
+
+def _task_info():
+    """The older setup's "Job Board server" task: {} when absent, else {state, enabled, wd, exe, args}. Cached."""
+    return _cached("task", lambda: _task_query(TASK_NAME))
 
 
 def _task_exists():
     return bool(_task_info())
 
 
-def task_managed():
-    """True when this server is (very likely) the one the scheduled task runs: the task is Running, its working
-    folder is this app, and it uses our port (it passes none, so 8766). Restarting from inside it is unreliable."""
+def _task_enabled():
     t = _task_info()
-    if not t or t.get("state") != "Running":
+    return bool(t) and bool(t.get("enabled", True))
+
+
+def _wake_exists():
+    return bool(_cached("wake", lambda: _task_query(WAKE_TASK)))
+
+
+def _task_set(enabled, elevated=False):
+    """Enable or disable the legacy "Job Board server" task (never deletes it). Returns "ok", "denied" (Windows wants
+    administrator permission), "declined" (the person said no to the permission prompt) or "failed: <why>"."""
+    verb = "Enable" if enabled else "Disable"
+    t = _test_tasks()
+    if t is not None:
+        x = (t.get("tasks") or {}).get(TASK_NAME)
+        t.setdefault("calls", []).append({"op": verb.lower(), "elevated": bool(elevated)})
+        if not x:
+            res = "failed: no such task"
+        elif elevated:
+            res = "declined" if t.get("uac") == "declined" else "ok"
+        elif t.get("deny"):
+            res = "denied"
+        else:
+            res = "ok"
+        if res == "ok":
+            x["enabled"] = bool(enabled)
+        _test_save(t)
+        return res
+    cmd = f"{verb}-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction Stop | Out-Null"
+    try:
+        if not elevated:
+            rc, out = _ps(cmd)
+            if rc == 0:
+                return "ok"
+            return "denied" if any(m in out.lower() for m in _DENIED) else "failed: " + out[:160]
+        import base64
+        enc = base64.b64encode(f"try{{{cmd};exit 0}}catch{{exit 1}}".encode("utf-16-le")).decode()
+        outer = ("try{$p=Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden "
+                 f"-ArgumentList '-NoProfile','-EncodedCommand','{enc}'; exit $p.ExitCode}}catch{{exit 1223}}")
+        rc, out = _ps(outer, timeout=180)   # waits while the person answers the Windows permission prompt
+        return "ok" if rc == 0 else "declined" if rc == 1223 else "failed: the task could not be changed"
+    except Exception as e:
+        return "failed: " + str(e)[:160]
+
+
+def task_managed():
+    """True when this server is (very likely) the one the scheduled task runs: the task is enabled and Running, its
+    working folder is this app, and it uses our port (it passes none, so 8766). Restarting from inside it is unreliable.
+    A disabled task isn't managing startup, so a restart works."""
+    t = _task_info()
+    if not t or not t.get("enabled", True) or t.get("state") != "Running":
         return False
     same = os.path.normcase(os.path.abspath(t.get("wd") or "")) == os.path.normcase(os.path.abspath(APP))
     port = CTX["port"]
@@ -221,15 +311,70 @@ def task_managed():
 
 
 def startup_state():
-    """{"on", "via", "task"}: via is shortcut / task / launchagent / autostart."""
+    """{"on", "via", ...}: via is shortcut / task / launchagent / autostart. On Windows "task" means the older
+    "Job Board server" task exists and "task_enabled" that it is still turned on (a disabled one starts nothing);
+    "own" is our Startup shortcut; "legacy_dir" the folder the older task points at; "wake" the older 5:25 wake task."""
     if osdeps.WINDOWS:
-        lnk, task = os.path.exists(_win_lnk()), _task_exists()
-        return {"on": lnk or task, "via": "shortcut" if lnk else "task" if task else None, "task": task, "own": lnk}
+        lnk, task, active = os.path.exists(_win_lnk()), _task_exists(), _task_enabled()
+        return {"on": lnk or active, "via": "shortcut" if lnk else "task" if active else None, "task": task,
+                "task_enabled": active, "own": lnk, "legacy_dir": (_task_info().get("wd") or "") if task else "",
+                "wake": _wake_exists()}
     if osdeps.MAC:
         own = os.path.exists(_mac_plist())
-        return {"on": own, "via": "launchagent" if own else None, "task": False, "own": own}
+        return {"on": own, "via": "launchagent" if own else None, "task": False, "task_enabled": False, "own": own}
     own = os.path.exists(_linux_desktop())
-    return {"on": own, "via": "autostart" if own else None, "task": False, "own": own}
+    return {"on": own, "via": "autostart" if own else None, "task": False, "task_enabled": False, "own": own}
+
+
+def switch_startup(elevated=False):
+    """Move sign-in startup from the older "Job Board server" task to our own Startup shortcut (Windows). The task is
+    turned off first and the shortcut made after, so a failure never leaves both starting a server. Doesn't stop the
+    running server. Returns "ok" or what _task_set returned."""
+    if not osdeps.WINDOWS:
+        raise RuntimeError("This only applies to Windows.")
+    _slow.clear()
+    res = "ok"
+    if _task_enabled():
+        res = _task_set(False, elevated)
+        _slow.clear()
+        if res == "ok" and _task_enabled():
+            res = "failed: the task is still on"
+        if res != "ok":
+            return res
+    try:
+        set_startup(True)        # (re)writes the shortcut for this app folder
+    except Exception as e:
+        if _task_exists():
+            _task_set(True, elevated)   # put things back as they were
+        _slow.clear()
+        return "failed: " + str(e)[:160]
+    _slow.clear()
+    return "ok"
+
+
+def unswitch_startup(elevated=False):
+    """Undo switch_startup: remove our shortcut, turn the older task back on. Never leaves both on."""
+    if not osdeps.WINDOWS:
+        raise RuntimeError("This only applies to Windows.")
+    _slow.clear()
+    had = os.path.exists(_win_lnk())
+    if had:
+        set_startup(False)
+    if _task_exists() and not _task_enabled():
+        res = _task_set(True, elevated)
+        _slow.clear()
+        if res == "ok" and not _task_enabled():
+            res = "failed: the task is still off"
+        if res != "ok":
+            if had:
+                try:
+                    set_startup(True)
+                except Exception:
+                    pass
+            _slow.clear()
+            return res
+    _slow.clear()
+    return "ok"
 
 
 def _launcher():
@@ -377,7 +522,8 @@ def heal_overnight_job(log=print):
     """Hook for an OS-level overnight job (Windows scheduled task / launchd / cron) created by this app. None exists
     yet: the nightly update runs inside the server (server.scheduler). If one is added, check here on every start
     that it points at APP and the current runtime, the same way heal_startup() does. Never touch the older
-    "Job Board server" / "Job Board wake for nightly update" scheduled tasks made by setup_windows.ps1."""
+    "Job Board wake for nightly update" scheduled task (it doesn't reference the app folder); the older "Job Board
+    server" task is only ever turned off or on from the Get started page (switch_startup / unswitch_startup)."""
     return "none"
 
 
@@ -604,8 +750,30 @@ def handle_post(h, path, body):
             start_install()
             h._send(202, {"ok": True})
         elif act == "startup":
-            set_startup(bool(body.get("on")))
-            h._send(200, status())
+            on = bool(body.get("on"))
+            if on and osdeps.WINDOWS and _task_enabled():
+                return h._send(409, {"error": "An older setup already starts Siftwell at sign-in. Use Switch to the new startup instead, "
+                                              "so two copies never start."}) or True
+            set_startup(on)
+            _slow.clear()
+            h._send(200, status(fresh=True))
+        elif act in ("switch", "unswitch"):
+            if not osdeps.WINDOWS:
+                return h._send(400, {"error": "This only applies to Windows."}) or True
+            el = bool(body.get("elevated"))
+            undo = act == "unswitch"
+            res = (unswitch_startup if undo else switch_startup)(el)
+            if res == "ok":
+                msg = ("Undone. The older setup starts Siftwell at sign-in again." if undo else
+                       "Done. Siftwell keeps running now, and the new startup takes over the next time you sign in to Windows.")
+            elif res == "denied":
+                msg = "Windows needs administrator permission to change that task."
+            elif res == "declined":
+                msg = "The administrator permission prompt was declined, so nothing was changed."
+            else:
+                msg = "Couldn't change the older task. " + res.split(": ", 1)[-1]
+            h._send(200, dict(status(fresh=True), switch={"state": res if res in ("ok", "denied", "declined") else "failed",
+                                                          "op": "undo" if undo else "switch", "message": msg}))
         elif act == "network":
             save_network(bool(body.get("on")))
             h._send(200, status())
@@ -756,16 +924,34 @@ function rowBrowser(){
     body: `<div class="gsrow"><a class="btn" href="https://www.google.com/chrome/" target="_blank" rel="noopener">Get Google Chrome</a>${S.windows ? "" : mac ? "" : `<a class="btn" href="https://www.microsoft.com/edge" target="_blank" rel="noopener">Get Microsoft Edge</a>`}<button class="btn ghost" type="button" data-act="recheck">Re-check</button></div>
     <span class="gsmsg">${S.windows ? "Windows already includes Edge; if this still shows, reinstall it from microsoft.com/edge." : ""}</span>`};
 }
+function taskSteps(enable){
+  return `<ol class="steps"><li>Open the Start menu, type <b>Task Scheduler</b> and open it.</li><li>Click <b>Task Scheduler Library</b> on the left.</li><li>Right-click <b>Job Board server</b> in the list and choose <b>${enable ? "Enable" : "Disable"}</b>.</li><li>Come back to this page and press <b>Re-check</b>${enable ? "" : ", then turn on the switch here"}.</li></ol><button class="btn sm ghost" type="button" data-act="recheck">Re-check</button>`;
+}
 function rowStartup(){
-  const s = S.startup;
+  const s = S.startup, sw = ui.sw, b = ui.busy.startup;
+  const wake = s.wake ? `<span class="gsmsg">Your PC wakes at 5:25 for the nightly update. That still works.</span>` : "";
+  if (S.windows && s.task_enabled) {
+    const dir = s.legacy_dir ? s.legacy_dir : "an older folder";
+    const desc = `Your Siftwell starts through an older setup that points at ${dir}. Switch so it keeps working if you move or delete that folder.`;
+    let body = "";
+    if (s.own) body += `<div class="gswarn">The older setup and the new startup are both turned on, so Siftwell may try to start twice when you sign in. Press Switch to turn the older one off.</div>`;
+    body += `<div class="gsrow"><button class="btn primary" type="button" data-act="switch" ${b ? "disabled" : ""}>${b ? "Switching…" : "Switch to the new startup"}</button></div>`
+      + `<span class="gsmsg">Siftwell keeps running right now. The new startup takes over the next time you sign in to Windows. The older task is turned off, not deleted.</span>`;
+    if (sw && sw.op === "switch" && sw.state === "denied") body += `<div class="gswarn">Windows needs administrator permission to turn off that older task. <button class="btn sm primary" type="button" data-act="switch-admin" ${b ? "disabled" : ""}>Allow (asks for administrator permission)</button></div><details><summary>Or turn it off by hand</summary>${taskSteps(false)}</details>`;
+    else if (sw && sw.op === "switch" && sw.state === "declined") body += `<div class="gsmsg err">The administrator permission prompt was declined, so nothing was changed. You can turn the older task off by hand instead:</div>${taskSteps(false)}`;
+    else if (sw && sw.op === "switch" && sw.state === "failed") body += `<div class="gsmsg err">${esc(sw.message)}</div>${taskSteps(false)}`;
+    return {desc, body: body + wake + msgHtml("startup")};
+  }
   let desc = "Siftwell starts by itself when you sign in to this computer, so the board is always ready.";
-  let body = "";
-  if (s.task && !s.own) desc = "Already on: an older Siftwell setup made a scheduled task named \"Job Board server\" that starts it at sign-in. Nothing to do here.";
-  else if (s.task && s.own) desc = "On. (An older setup's scheduled task \"Job Board server\" is also present and is left alone.)";
-  else if (s.on) desc = "On. Siftwell will start the next time you sign in to this computer.";
-  const locked = s.task && !s.own;
-  body = `<label class="gsw"><input type="checkbox" class="sw" role="switch" id="swStartup" ${s.on ? "checked" : ""} ${locked || ui.busy.startup ? "disabled" : ""}><span>${s.on ? "On" : "Off"}</span></label>`;
-  return {desc, body: body + msgHtml("startup")};
+  if (s.on) desc = "On. Siftwell will start the next time you sign in to this computer.";
+  let body = `<label class="gsw"><input type="checkbox" class="sw" role="switch" id="swStartup" ${s.on ? "checked" : ""} ${b ? "disabled" : ""}><span>${s.on ? "On" : "Off"}</span></label>`;
+  if (S.windows && s.task && s.own) {
+    desc = "On, through the new startup. The older \"Job Board server\" task is turned off.";
+    body += `<div class="gsrow"><button class="btn sm ghost" type="button" data-act="undo" ${b ? "disabled" : ""}>Undo (go back to the older setup)</button></div>`;
+    if (sw && sw.op === "undo" && sw.state === "denied") body += `<div class="gswarn">Windows needs administrator permission to turn that older task back on. <button class="btn sm primary" type="button" data-act="undo-admin" ${b ? "disabled" : ""}>Allow (asks for administrator permission)</button></div><details><summary>Or turn it on by hand</summary>${taskSteps(true)}</details>`;
+    else if (sw && sw.op === "undo" && (sw.state === "declined" || sw.state === "failed")) body += `<div class="gsmsg err">${esc(sw.message)}</div>${taskSteps(true)}`;
+  }
+  return {desc, body: body + wake + msgHtml("startup")};
 }
 function rowPhone(){
   const p = S.phone;
@@ -859,6 +1045,13 @@ document.addEventListener("click", e => {
   }
   if (act === "cancel") { clPost({action: "cancel"}); ui.login = null; ui.loginMsg = ""; render("signin"); }
   if (act === "restart") restart();
+  if (act === "switch" || act === "switch-admin" || act === "undo" || act === "undo-admin") {
+    const undo = act.startsWith("undo"), admin = act.endsWith("admin");
+    ui.busy.startup = true; ui.sw = null; say("startup", ""); render("startup");
+    api("POST", "/api/getting-started/" + (undo ? "unswitch" : "switch"), {elevated: admin})
+      .then(d => { S = d; const r = d.switch || {}; if (r.state === "ok") say("startup", r.message, "ok"); else ui.sw = r; })
+      .catch(err => say("startup", err.message, "err")).finally(() => { ui.busy.startup = false; render(); });
+  }
 });
 document.addEventListener("change", e => {
   const el = e.target;

@@ -29,6 +29,8 @@ try:
 except Exception as e:
     _CATALOG_MIGRATED = False
     print(f"catalog migration failed: {type(e).__name__}: {e}", flush=True)
+if not _CATALOG_MIGRATED:
+    catalog.retire_old_files()  # files the catalog replaced move to DATA/_archive/retired-<date>/ (not on the start that migrated)
 _pstate = {}
 jobs_file_lock = threading.Lock()
 

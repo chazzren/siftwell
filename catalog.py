@@ -320,7 +320,8 @@ def runs(limit=50):
 # ---------------------------------------------------------------- one-time migration from the file-based layout
 def migrate(log=print):
     """Build the catalog from DATA/companies.json, people/*/jobs.json, descriptions.json, seen.json and market.json.
-    Idempotent: runs only while meta 'migrated_at' is unset. Old files are left in place (no longer read)."""
+    Idempotent: runs only while meta 'migrated_at' is unset. Old files are left in place here; retire_old_files() moves
+    them away on a later start."""
     if get_meta("migrated_at"):
         return False
     D = paths.DATA
@@ -411,3 +412,54 @@ def migrate(log=print):
                    details={"listings": n_list, "partial": n_partial, "boards": len(boards), "seen": len(seen), "last_full_fetch": fetched})
     log(f"catalog: migrated {len(cos)} companies, {n_list} listings (+{n_partial} partial), {len(seen)} first-seen dates")
     return True
+
+
+# ---------------------------------------------------------------- retire the files the catalog replaced
+RETIRED_FILES = ("descriptions.json", "companies.json", "seen.json")   # only migrate() reads them, before migration
+RETIRED_KEEP_DAYS = 30
+
+
+def retire_old_files(log=None):
+    """Once the migration has succeeded (meta 'migrated_at' set and the catalog holds listings), move the files it
+    replaced into DATA/_archive/retired-<date>/ (a rename, so it is atomic; logged in migration.log), and delete
+    _archive/retired-* folders older than 30 days. Does nothing when there is nothing to move. Never raises.
+    market.json (target.py) and company_facts*/company_research are not touched. Returns the names moved."""
+    import re
+    import shutil
+    import time
+    D = paths.DATA
+    log = log or paths._log
+    moved = []
+    try:
+        if not get_meta("migrated_at"):
+            return moved
+        with db() as con:
+            if not con.execute("SELECT COUNT(*) FROM listings").fetchone()[0]:
+                return moved
+        present = [n for n in RETIRED_FILES if os.path.isfile(os.path.join(D, n))]
+        if present:
+            dest = os.path.join(D, "_archive", "retired-" + today())
+            os.makedirs(dest, exist_ok=True)
+            for n in present:
+                target = os.path.join(dest, n)
+                i = 2
+                while os.path.exists(target):
+                    target = os.path.join(dest, f"{i}-{n}")
+                    i += 1
+                os.replace(os.path.join(D, n), target)
+                moved.append(n)
+                log(f"retired {n} -> {target} (the catalog replaced it)")
+        arch = os.path.join(D, "_archive")
+        if os.path.isdir(arch):
+            cutoff = time.time() - RETIRED_KEEP_DAYS * 86400
+            for n in os.listdir(arch):
+                p = os.path.join(arch, n)
+                if re.fullmatch(r"retired-[0-9]{4}-[0-9]{2}-[0-9]{2}", n) and os.path.isdir(p) and os.path.getmtime(p) < cutoff:
+                    shutil.rmtree(p, ignore_errors=True)
+                    log(f"deleted {p} (older than {RETIRED_KEEP_DAYS} days)")
+    except Exception as e:  # never stop the server over housekeeping
+        try:
+            log(f"retire_old_files: {type(e).__name__}: {str(e)[:150]}")
+        except Exception:
+            pass
+    return moved
