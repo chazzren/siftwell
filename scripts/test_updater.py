@@ -31,7 +31,9 @@ STUB_SHA = hashlib.sha256(STUB).hexdigest()
 NOTES = "Fixes things.\n<img src=x onerror=alert(1)> & more"
 
 CUR = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VERSION")).read().strip()  # the version under test
-SC = {"mode": "newer", "version": "0.3.0", "digest": "good", "size": "good", "hits": []}
+_c = [int(x) for x in CUR.split(".")]
+NEW = f"{_c[0]}.{_c[1] + 1}.0"   # always newer than the version under test
+SC = {"mode": "newer", "version": NEW, "digest": "good", "size": "good", "hits": []}
 
 
 def release(version, prerelease=False, installer=True, port=0):
@@ -85,7 +87,7 @@ class Fake(BaseHTTPRequestHandler):
         if mode == "prerelease_only":
             if self.path.endswith("/latest"):
                 return self._json(404, {"message": "Not Found"})
-            return self._json(200, [release("0.2.0", True, port=port), release("0.3.0", True, port=port), {"tag_name": "v9.9.9", "draft": True}])
+            return self._json(200, [release("0.2.0", True, port=port), release(NEW, True, port=port), {"tag_name": "v9.9.9", "draft": True}])
         v = {"newer": SC["version"], "dl404": SC["version"], "same": CUR, "older": "0.0.9"}[mode]
         if self.path.endswith("/latest"):
             return self._json(200, release(v, port=port))
@@ -184,7 +186,7 @@ def main():
     open(os.path.join(scratch, "stub_installer.py"), "w").write(
         "import hashlib, json, os, sys\n"
         "d = open(sys.argv[1], 'rb').read()\n"
-        "json.dump({'argv': sys.argv[1:], 'sha': hashlib.sha256(d).hexdigest(), 'size': len(d)}, open(os.environ['STUB_MARKER'], 'w'))\n")
+        "json.dump({'argv': sys.argv[1:], 'sha': hashlib.sha256(d).hexdigest(), 'size': len(d), 'ppid': os.getppid()}, open(os.environ['STUB_MARKER'], 'w'))\n")
     fake = ThreadingHTTPServer(("127.0.0.1", fake_port), Fake)
     threading.Thread(target=fake.serve_forever, daemon=True).start()
     data = os.path.join(scratch, "data")
@@ -199,14 +201,14 @@ def main():
         got = wait_for(lambda: call(app_port, "/api/app-update")[1]["newer"], 12)
         check("automatic check at start-up finds the newer version", bool(got))
         st = call(app_port, "/api/app-update")[1]
-        check("newer: version and plain-text notes come through", st["latest"]["version"] == "0.3.0" and st["latest"]["notes"] == NOTES, st)
+        check("newer: version and plain-text notes come through", st["latest"]["version"] == NEW and st["latest"]["notes"] == NOTES, st)
         check("ZIP copy: Update is not offered, link to the release page is", not st["can_install"] and st["release_page"].startswith("https://github.com/" + REPO), st)
         saved = json.load(open(os.path.join(data, "app_update.json")))
         check("next automatic check is about a day away", 80000 < saved["next_check"] - time.time() < 90000, saved)
         n = len(SC["hits"])
         wait_for(lambda: False, 3)
         check("no repeat request within the day", len(SC["hits"]) == n)
-        s, d = call(app_port, "/api/app-update/dismiss", {"version": "0.3.0"})
+        s, d = call(app_port, "/api/app-update/dismiss", {"version": NEW})
         check("dismiss is remembered", d["dismissed"] is True and call(app_port, "/api/app-update")[1]["dismissed"] is True)
         s, d = call(app_port, "/api/app-update/install", {})
         dl = [h for h in SC["hits"] if h.startswith("/dl/")]
@@ -224,7 +226,7 @@ def main():
             check(f"HTTP {mode}: silent (no update, no error)", s == 200 and d["newer"] is False and d["result"] == "unavailable", d)
         SC["mode"] = "prerelease_only"
         s, d = call(app_port, "/api/app-update/check", {})
-        check("/latest 404 but a pre-release in the list: found (drafts ignored)", d["newer"] and d["latest"]["version"] == "0.3.0", d)
+        check("/latest 404 but a pre-release in the list: found (drafts ignored)", d["newer"] and d["latest"]["version"] == NEW, d)
         SC["mode"] = "hang"
         t0 = time.time()
         s, d = call(app_port, "/api/app-update/check", {})
@@ -281,10 +283,12 @@ def main():
             check(f"[{variant}] download then silent launch of the installer", os.path.exists(marker))
             m = json.load(open(marker)) if os.path.exists(marker) else {"argv": [""]}
             fn = os.path.basename(m["argv"][0])
-            check(f"[{variant}] installer file is Siftwell-Setup-0.3.0.exe in DATA/_updates", fn == "Siftwell-Setup-0.3.0.exe"
+            check(f"[{variant}] installer file is Siftwell-Setup-<new>.exe in DATA/_updates", fn == f"Siftwell-Setup-{NEW}.exe"
                   and os.path.dirname(os.path.abspath(m["argv"][0])) == os.path.abspath(os.path.join(dd, "_updates")), m)
             check(f"[{variant}] bytes verified (sha256 of what was launched = release asset)", m.get("sha") == STUB_SHA and m.get("size") == len(STUB), m)
-            check(f"[{variant}] silent flags incl. relaunch", m["argv"][1:] == ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/CURRENTUSER", "/NORESTART", "/RELAUNCH"], m)
+            check(f"[{variant}] silent flags incl. relaunch", m["argv"][1:6] == ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/CURRENTUSER", "/NORESTART", "/RELAUNCH"]
+                  and m["argv"][6:] == ["/LOG=" + os.path.join(dd, "_updates", "install.log")], m)
+            check(f"[{variant}] installer is not a child of the server (its --stop must not kill it)", m.get("ppid") not in (None, app.pid), m)
             gone = wait_for(lambda: not up(app_port), 15)
             check(f"[{variant}] Siftwell exits so the installer can replace files", bool(gone))
             stop_app(app, dd)

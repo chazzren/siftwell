@@ -296,7 +296,8 @@ def _set(**kw):
 def installer_command(path):
     """argv for the silent install. SIFTWELL_UPDATE_RUNNER (tests only) replaces "run the file itself"."""
     runner = os.environ.get("SIFTWELL_UPDATE_RUNNER")
-    return (shlex.split(runner) if runner else []) + [path] + INSTALLER_FLAGS
+    log = "/LOG=" + os.path.join(UPDATES_DIR, "install.log")   # Inno Setup's own log, for troubleshooting a failed upgrade
+    return (shlex.split(runner) if runner else []) + [path] + INSTALLER_FLAGS + [log]
 
 
 def _download(inst, dest):
@@ -350,6 +351,10 @@ def _install_worker(lat):
         cmd = installer_command(final)
         kw = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=UPDATES_DIR, close_fds=True)
         if os.name == "nt":
+            # Via `start`, so the installer is not a descendant of this server: when the server was started by the
+            # window, the installer's own "Siftwell.exe --stop" kills the window's whole process tree, and a child
+            # installer would be killed with it (the upgrade silently never happened).
+            cmd = ["cmd", "/c", "start", "", "/B"] + cmd
             kw.update(creationflags=NOWIN | subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
         else:
             kw.update(start_new_session=True)
