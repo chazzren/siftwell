@@ -4,7 +4,7 @@ import report
 
 
 def render_welcome_html() -> str:
-    head = report.HEAD.replace("<title>Job Board</title>", "<title>Welcome to Job Board</title>")
+    head = report.HEAD.replace("<title>Siftwell</title>", "<title>Welcome to Siftwell</title>")
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
             head + CSS + "</head><body>" + BODY + SCRIPT + "</body></html>")
@@ -23,7 +23,7 @@ CSS = """<style>
 """
 
 BODY = """<div class="wrap"><main class="welcome">
-  <h1>Welcome to Job Board</h1>
+  <h1>Welcome to Siftwell</h1>
   <p>Each person in your household gets their own board, resume and settings. Start with the first person; a short setup follows (resume, where, pay, level and what you're aiming for).</p>
   <form id="addForm">
     <input type="text" id="name" placeholder="First person's name" aria-label="Name" autocomplete="off" maxlength="40" required>

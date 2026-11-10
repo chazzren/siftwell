@@ -1,5 +1,5 @@
 {
- "_note": "Built-in defaults. Your own overrides go in config.json in your Job Board data folder and are merged over these.",
+ "_note": "Built-in defaults. Your own overrides go in config.json in your Siftwell data folder and are merged over these.",
  "salary_floor": 0,
  "keep_unlisted_salary": true,
  "keep_below_floor": false,
