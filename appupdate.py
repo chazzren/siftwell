@@ -18,6 +18,11 @@
   * Portable copy (Siftwell-Portable-x.y.z.zip, paths.PORTABLE): never replaces itself; the banner says "Download the new
     portable version" and links to the release's Siftwell-Portable-<version>.zip, with the steps (close Siftwell, unzip over
     the old folder or copy your data folder into the new one).
+  * Installed Mac app (Siftwell.app from the .dmg, frozen on macOS): Update downloads Siftwell-<version>.dmg (same size /
+    SHA256 checks), mounts it, copies the new Siftwell.app next to the old one (ditto) and checks it (codesign, version), then
+    starts a small detached shell helper (MAC_HELPER) and exits. The helper runs `Siftwell --stop` for this data folder, waits
+    for the server to be gone, swaps the two apps and opens the new one. If the app can't be replaced (no write permission,
+    still running from the disk image) the error says so and the "Download the new version" link stays.
   * ZIP / source copy: never replaces itself; the banner links to the release page ("Download the new version").
 
 Test hooks (never set by the app itself): SIFTWELL_UPDATE_API (API base URL), SIFTWELL_UPDATE_DELAY (seconds before the
@@ -44,6 +49,7 @@ RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 API_BASE = "https://api.github.com"
 INSTALLER_NAME = "Siftwell-Setup-{version}.exe"
 PORTABLE_NAME = "Siftwell-Portable-{version}.zip"
+DMG_NAME = "Siftwell-{version}.dmg"
 INSTALLER_FLAGS = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/CURRENTUSER", "/NORESTART", "/RELAUNCH"]
 CHECK_EVERY = 24 * 3600
 RETRY_OFFLINE = 3600                            # no internet: try again sooner than a day
@@ -73,6 +79,18 @@ def installed_copy():
     if paths.PORTABLE:
         return False
     return bool(frozen.FROZEN or os.environ.get("SIFTWELL_UPDATE_RUNNER"))
+
+
+def mac_app():
+    """The path of Siftwell.app when this is the installed Mac app (the PyInstaller program running from inside a .app
+    bundle), else None."""
+    if sys.platform != "darwin" or not frozen.FROZEN:
+        return None
+    parts = os.path.realpath(sys.executable).split(os.sep)
+    for i in range(len(parts) - 1, 0, -1):
+        if parts[i].endswith(".app"):
+            return os.sep.join(parts[:i + 1])
+    return None
 
 
 # ---------------------------------------------------------------- versions
@@ -162,9 +180,13 @@ def _summary(rel):
         return None
     out = {"version": version, "tag": tag[:60], "notes": str(rel.get("body") or "")[:20000],
            "url": str(rel.get("html_url") or "")[:300], "prerelease": bool(rel.get("prerelease")), "installer": None,
-           "portable": None}
+           "portable": None, "dmg": None}
     want = INSTALLER_NAME.format(version=version)
     for a in rel.get("assets") or []:
+        if isinstance(a, dict) and a.get("name") == DMG_NAME.format(version=version) and a.get("browser_download_url"):
+            dg = str(a.get("digest") or "").lower()
+            out["dmg"] = {"name": a["name"], "url": str(a["browser_download_url"]), "size": int(a.get("size") or 0),
+                          "sha256": dg[7:] if re.fullmatch(r"sha256:[0-9a-f]{64}", dg) else ""}
         if isinstance(a, dict) and a.get("name") == PORTABLE_NAME.format(version=version) and a.get("browser_download_url"):
             out["portable"] = {"name": a["name"], "url": str(a["browser_download_url"])[:400], "size": int(a.get("size") or 0)}
         if isinstance(a, dict) and a.get("name") == want and a.get("browser_download_url"):
@@ -275,14 +297,15 @@ def status():
     newer = bool(lat and is_newer(lat.get("version"), cur))
     with _ilock:
         inst = dict(INSTALL)
+    mac = bool(mac_app())
     return {
         "current": cur, "auto": d.get("auto", True) is not False, "checked": d.get("checked"), "outcome": d.get("last_outcome"),
         "newer": newer, "dismissed": bool(newer and d.get("dismissed") == lat.get("version")),
         "latest": ({"version": lat["version"], "notes": lat.get("notes", ""), "url": lat.get("url") or RELEASES_PAGE,
-                    "size": (lat.get("installer") or {}).get("size", 0),
+                    "size": ((lat.get("dmg") if mac else lat.get("installer")) or {}).get("size", 0),
                     "portable_url": (lat.get("portable") or {}).get("url", "")} if newer else None),
-        "can_install": bool(newer and installed_copy() and lat.get("installer")),
-        "installed_copy": installed_copy(), "portable": paths.PORTABLE, "release_page": RELEASES_PAGE, "install": inst,
+        "can_install": bool(newer and installed_copy() and (lat.get("dmg") if mac else lat.get("installer"))),
+        "installed_copy": installed_copy(), "mac": mac, "portable": paths.PORTABLE, "release_page": RELEASES_PAGE, "install": inst,
         "data_dir": paths.DATA, "port": _port(),
     }
 
@@ -298,6 +321,98 @@ def installer_command(path):
     runner = os.environ.get("SIFTWELL_UPDATE_RUNNER")
     log = "/LOG=" + os.path.join(UPDATES_DIR, "install.log")   # Inno Setup's own log, for troubleshooting a failed upgrade
     return (shlex.split(runner) if runner else []) + [path] + INSTALLER_FLAGS + [log]
+
+
+MAC_HELPER = r"""#!/bin/sh
+# Siftwell's Mac update helper (written by appupdate.py): waits for Siftwell to stop, swaps the new Siftwell.app (already
+# copied next to the old one) into place and opens it. Usage: mac-update.sh <siftwell pid> <new app> <app> <log file>
+PID="$1"; STAGED="$2"; APP="$3"; LOG="$4"
+exec >>"$LOG" 2>&1
+echo "$(date '+%F %T') update helper started (waiting for pid $PID)"
+# stop this data folder's Siftwell (window, menu-bar helper, server): it only ever stops the pids Siftwell recorded
+if [ -x "$APP/Contents/MacOS/Siftwell" ]; then "$APP/Contents/MacOS/Siftwell" --stop; fi
+i=0
+while kill -0 "$PID" 2>/dev/null && [ "$i" -lt 60 ]; do sleep 1; i=$((i+1)); done
+if kill -0 "$PID" 2>/dev/null; then
+  echo "Siftwell did not stop; the old version stays"
+  rm -rf "$STAGED"
+  open "$APP"
+  exit 1
+fi
+OLD="$APP.old-update"
+rm -rf "$OLD"
+if mv "$APP" "$OLD"; then
+  if mv "$STAGED" "$APP"; then
+    rm -rf "$OLD"
+    echo "replaced"
+  else
+    echo "couldn't move the new version into place; putting the old one back"
+    mv "$OLD" "$APP"
+    rm -rf "$STAGED"
+  fi
+else
+  echo "couldn't move the old version aside; the old version stays"
+  rm -rf "$STAGED"
+fi
+open "$APP"
+"""
+
+
+def _run(cmd, what, timeout=600):
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+    if r.returncode != 0:
+        raise RuntimeError(f"{what} failed: " + ((r.stderr or r.stdout or "").strip()[-200:] or f"exit code {r.returncode}"))
+    return r.stdout
+
+
+def _mac_prepare(dmg, version):
+    """Mac app: mount the downloaded .dmg, copy the new Siftwell.app next to the running one, check it, and write the swap
+    helper. Returns the argv that starts the helper detached (the caller launches it and exits). Raises with a plain message
+    when the app can't be replaced; the running version is untouched until the helper runs."""
+    import plistlib
+    import shutil
+    import tempfile
+    app = mac_app()
+    parent = os.path.dirname(app)
+    if "/AppTranslocation/" in app or app.startswith("/Volumes/"):
+        raise RuntimeError("Siftwell is running from the downloaded disk image. Drag Siftwell to Applications, open it from there, then update.")
+    if not os.access(parent, os.W_OK):
+        raise RuntimeError(f"Siftwell can't replace itself in {parent} (no permission). Download the new version and drag it over the old one.")
+    staged = os.path.join(parent, ".Siftwell-update.app")
+    shutil.rmtree(staged, ignore_errors=True)
+    mnt = tempfile.mkdtemp(prefix="siftwell-mnt-", dir=UPDATES_DIR)
+    try:
+        _run(["hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mnt, dmg], "Opening the disk image", 120)
+        try:
+            src = os.path.join(mnt, "Siftwell.app")
+            if not os.path.isdir(src):
+                raise RuntimeError("The disk image doesn't contain Siftwell.app.")
+            _run(["ditto", src, staged], "Copying the new version", 600)
+        finally:
+            if subprocess.run(["hdiutil", "detach", mnt, "-quiet"], capture_output=True, timeout=120).returncode != 0:
+                subprocess.run(["hdiutil", "detach", mnt, "-force", "-quiet"], capture_output=True, timeout=120)
+        exe = os.path.join(staged, "Contents", "MacOS", "Siftwell")
+        with open(os.path.join(staged, "Contents", "Info.plist"), "rb") as f:
+            got = str(plistlib.load(f).get("CFBundleShortVersionString") or "")
+        if not os.path.exists(exe) or got != version:
+            raise RuntimeError(f"The downloaded app is not Siftwell {version} (it says {got or 'nothing'}).")
+        _run(["codesign", "--verify", "--deep", "--strict", staged], "Checking the new version", 300)
+        subprocess.run(["xattr", "-dr", "com.apple.quarantine", staged], capture_output=True, timeout=120)
+    except BaseException:
+        shutil.rmtree(staged, ignore_errors=True)
+        raise
+    finally:
+        try:
+            os.rmdir(mnt)
+        except OSError:
+            pass
+    script = os.path.join(UPDATES_DIR, "mac-update.sh")
+    with open(script, "w", encoding="utf-8", newline="\n") as f:
+        f.write(MAC_HELPER)
+    os.chmod(script, 0o755)
+    # `sh -c '... &'`: the helper's parent is gone at once, so it is not a child of this server (`--stop` ends the server's children)
+    return ["/bin/sh", "-c", 'nohup /bin/sh "$0" "$@" >/dev/null 2>&1 &', script, str(os.getpid()), staged, app,
+            os.path.join(UPDATES_DIR, "mac-update.log")]
 
 
 def _download(inst, dest):
@@ -325,7 +440,7 @@ def _download(inst, dest):
 
 
 def _install_worker(lat):
-    inst = lat["installer"]
+    inst = (lat.get("dmg") if mac_app() else lat.get("installer"))
     version = lat["version"]
     final = os.path.join(UPDATES_DIR, inst["name"])
     part = final + ".part"
@@ -348,7 +463,7 @@ def _install_worker(lat):
             raise RuntimeError("The download doesn't match the checksum GitHub lists for it, so it was not used.")
         os.replace(part, final)
         _set(phase="launching")
-        cmd = installer_command(final)
+        cmd = _mac_prepare(final, version) if mac_app() else installer_command(final)
         kw = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=UPDATES_DIR, close_fds=True)
         if os.name == "nt":
             # Via `start`, so the installer is not a descendant of this server: when the server was started by the
@@ -389,7 +504,7 @@ def start_install():
     if not st["newer"]:
         return False, "Siftwell is already up to date."
     if not st["can_install"]:
-        return False, "This release has no installer for Windows. Use the download link."
+        return False, "This release has no " + ("Mac disk image (.dmg)" if mac_app() else "installer for Windows") + ". Use the download link."
     why = _hooks["busy"]()
     if why:
         return False, f"Siftwell is busy: {why}. Installing now would stop it. Try again when it finishes."
@@ -445,7 +560,11 @@ function steps(s){
   const o = mk("div", "updsteps");
   o.append(mk("strong", null, "To update:"));
   const ol = mk("ol");
-  (s.portable ? ["Click \"Download the new portable version\" and save the ZIP.",
+  (s.mac ? (s.can_install ? ["Click Update. Siftwell downloads the new version, replaces itself in your Applications folder and opens again."]
+       : ["Click \"Download the new version\" and download the .dmg from the page that opens.",
+          "Open it and drag Siftwell onto Applications, choosing Replace (close Siftwell first, or use Stop Siftwell from the menu-bar icon).",
+          "Open Siftwell again. Your profiles, ratings and settings are kept outside the app, so they carry over."])
+    : s.portable ? ["Click \"Download the new portable version\" and save the ZIP.",
        "Close Siftwell (close its window; if it keeps running for your phone, use Stop Siftwell from the tray icon).",
        "Unzip the new ZIP over your old Siftwell folder and say yes to replace files. Or unzip it somewhere new and copy your old data folder into the new Siftwell folder.",
        "Open Siftwell.exe again. Your profiles, ratings and settings are in the data folder, so they carry over."]
@@ -526,7 +645,7 @@ const box = $("apBanner");
 function when(ts){ if (!ts) return "never"; const d = new Date(ts * 1000); return d.toLocaleDateString([], {month: "short", day: "numeric"}) + " " + d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); }
 function show(s){
   $("apVer").textContent = "Siftwell " + s.current;
-  $("apVerNote").textContent = s.portable ? "Portable copy: your data is kept in the data folder next to Siftwell.exe." : s.installed_copy ? "Installed with the Windows installer." : "Running from a downloaded folder (ZIP).";
+  $("apVerNote").textContent = s.portable ? "Portable copy: your data is kept in the data folder next to Siftwell.exe." : s.mac ? "Installed as a Mac app (Siftwell.app)." : s.installed_copy ? "Installed with the Windows installer." : "Running from a downloaded folder (ZIP).";
   $("apData").textContent = s.data_dir || "";
   $("apDataNote").textContent = "Where this copy keeps your profiles and settings." + (s.port && s.port !== 8766 ? " This copy runs on port " + s.port + " (test copy)." : "");
   $("apAuto").checked = !!s.auto;

@@ -281,13 +281,21 @@ def proc_info(pid):
         cmd = (r.stdout or "").strip()
         if not cmd:
             return None
+        exe = cmd.split(" ")[0]
+        if MAC:
+            # `comm` is the full path of the program on a Mac, which may contain spaces (Siftwell.app in a folder
+            # called "My Apps"); the first word of the command line would cut it short.
+            c = subprocess.run(["ps", "-p", str(int(pid)), "-o", "comm="], capture_output=True, text=True, timeout=15)
+            full = (c.stdout or "").strip()
+            if full.startswith("/") and cmd.startswith(full):
+                exe = full
         r = subprocess.run(["ps", "-p", str(int(pid)), "-o", "etime="], capture_output=True, text=True, timeout=15)
         created = 0.0
         m = re.fullmatch(r"(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)", (r.stdout or "").strip())
         if m:
             dd, hh, mm, ss = (int(x or 0) for x in m.groups())
             created = time.time() - (((dd * 24 + hh) * 60 + mm) * 60 + ss)
-        return {"exe": cmd.split(" ")[0], "cmd": cmd, "created": created}
+        return {"exe": exe, "cmd": cmd, "created": created}
     except Exception as e:
         log(f"couldn't inspect pid {pid}: {e}")
         return None
@@ -337,8 +345,8 @@ def verify_siftwell(pid, kind, pidfile):
     if frozen.FROZEN:
         if _norm_path(os.path.abspath(info["exe"])) != _norm_path(os.path.abspath(sys.executable)):
             return False, "not this Siftwell.exe"
-        words = info["cmd"].split()
-        mode = next((w for w in words[1:] if w.startswith("--")), "")
+        rest = info["cmd"][len(info["exe"]):] if info["cmd"].startswith(info["exe"]) else " ".join(info["cmd"].split()[1:])
+        mode = next((w for w in rest.split() if w.startswith("--")), "")
         return (mode in KIND_FROZEN_MODES[kind]), "different Siftwell mode"
     for script, args_re in KIND_SCRIPTS[kind]:
         if _runs_script(info["cmd"], os.path.join(APP, script), args_re):

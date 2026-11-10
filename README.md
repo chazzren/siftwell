@@ -19,9 +19,10 @@ Go to **[Releases → latest](https://github.com/chazzren/siftwell/releases/late
 
 - **Siftwell-Setup-x.y.z.exe**: Windows installer (recommended). No admin needed.
 - **Siftwell-Portable-x.y.z.zip**: Windows, no install. Unzip anywhere (even a USB stick) and run `Siftwell.exe`.
-- **Siftwell-x.y.z.zip**: Mac or advanced. Unzip, then open **Start Siftwell**.
+- **Siftwell-x.y.z.dmg**: Mac (Apple silicon). Open it and drag Siftwell onto Applications.
+- **Siftwell-x.y.z.zip**: Mac with an Intel chip, or advanced. Unzip, then open **Start Siftwell**.
 
-The first time, Windows may say **"Windows protected your PC"**: click **More info → Run anyway** (the app isn't code-signed yet).
+The first time, Windows may say **"Windows protected your PC"**: click **More info → Run anyway** (the app isn't code-signed yet). On a Mac, the first time, right-click **Siftwell** → **Open** (macOS 15: **System Settings → Privacy & Security → Open Anyway**); the guide has the steps.
 
 ## Get started
 

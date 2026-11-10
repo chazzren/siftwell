@@ -6,11 +6,13 @@ source checkout behave the same:
 
     from source   python [-X utf8] <app folder>/<script>.py <args>        (exactly what each caller did before)
     installed     Siftwell.exe --<mode> <args>                            (one exe; dispatch() picks the entry point)
+    installed Mac Siftwell.app/Contents/MacOS/Siftwell --<mode> <args>   (the same exe inside the .app bundle)
 
 Modes of Siftwell.exe (dispatch()): no argument = open the window (app_window.main); --server [port] = the windowless
 server; --jobfinder <jobfinder args> = a fetch / recompute / re-rate run; --tray <port>; --update = the headless
 updater (siftwell_update.py, when present); --stop = stop this data folder's Siftwell (the installer runs it before
-upgrading or uninstalling); --waiter = the restart helper; --version.
+upgrading or uninstalling); --waiter = the restart helper; --version; --check-imports = load the window / tray
+libraries and say so (the release build runs it as a smoke test, since the build machine has no screen).
 
 Nothing here writes into the app folder.
 """
@@ -78,6 +80,26 @@ def _stop():
     return 0
 
 
+def _check_imports():
+    """Import what the window and the tray need (the Mac build needs PyObjC's AppKit and WebKit as well). Prints one
+    line; exit code 0 only when everything loads."""
+    import importlib
+    names = ["webview", "pystray", "PIL.Image"] + (["AppKit", "WebKit", "Foundation"] if sys.platform == "darwin" else [])
+    bad = []
+    for n in names:
+        try:
+            importlib.import_module(n)
+        except Exception as e:
+            bad.append(f"{n}: {type(e).__name__}: {e}")
+    if sys.platform == "darwin":
+        try:
+            importlib.import_module("pystray._darwin")
+        except Exception as e:
+            bad.append(f"pystray._darwin: {type(e).__name__}: {e}")
+    print("imports ok: " + ", ".join(names) if not bad else "imports FAILED: " + "; ".join(bad))
+    return 1 if bad else 0
+
+
 def _run_server(rest):
     import paths
     import runpy
@@ -98,6 +120,7 @@ def dispatch(argv=None):
     if not FROZEN:
         return None
     argv = list(sys.argv[1:] if argv is None else argv)
+    argv = [a for a in argv if not a.startswith("-psn_")]     # old macOS passes a process serial number when Finder opens an app
     if not argv or argv[0] in ("--window", "--owns-server"):
         return None
     mode, rest = argv[0], argv[1:]
@@ -111,6 +134,8 @@ def dispatch(argv=None):
         return 0
     if mode == "--stop":
         return _stop()
+    if mode == "--check-imports":
+        return _check_imports()
     if mode == "--server":
         return _run_server(rest)
     if mode == "--jobfinder":

@@ -5,9 +5,11 @@ name: Release
 # check    (Linux)   validates the version and runs the release checks.
 # windows  (Windows) builds Siftwell.exe with PyInstaller, then Siftwell-Setup-<version>.exe with Inno Setup, and
 #                    Siftwell-Portable-<version>.zip (the same bundle plus portable.txt and README-portable.txt).
-# publish  (Linux)   only after both of the above passed: writes VERSION, tags, builds the ZIP, pushes, and creates the
-#                    GitHub Release with the ZIP, the installer and the portable ZIP attached together. Nothing is pushed or published
-#                    before every file exists.
+# macos    (macOS)   builds Siftwell.app with PyInstaller (installer/siftwell-mac.spec, Apple silicon), packs it into
+#                    Siftwell-<version>.dmg and smoke tests that .dmg (installer/build_mac.sh, installer/smoke_mac.sh).
+# publish  (Linux)   only after all of the above passed: writes VERSION, tags, builds the ZIP, pushes, and creates the
+#                    GitHub Release with the ZIP, the installer, the portable ZIP and the .dmg attached together. Nothing is
+#                    pushed or published before every file exists.
 on:
   workflow_dispatch:
     inputs:
@@ -177,8 +179,43 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  macos:
+    needs: check
+    runs-on: macos-14
+    steps:
+      - name: Check out the commit that passed the checks
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Write the version (the same VERSION the release commit will carry)
+        run: printf '%s\n' "$VERSION" > VERSION
+
+      - name: Install the build tools and Siftwell's packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller==6.22.3
+
+      - name: Build Siftwell.app and Siftwell-<version>.dmg (PyInstaller + hdiutil, Apple silicon)
+        run: bash installer/build_mac.sh installer-out
+
+      - name: Smoke test the .dmg (mounts, version, window libraries load, server answers, --stop stops it)
+        run: bash installer/smoke_mac.sh "installer-out/Siftwell-$VERSION.dmg" "$VERSION" 8871
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: installer-out/Siftwell-${{ inputs.version }}.dmg
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
-    needs: [check, windows]
+    needs: [check, windows, macos]
     runs-on: ubuntu-latest
     env:
       EXTRA_NOTES: ${{ inputs.notes }}
@@ -203,11 +240,17 @@ jobs:
         with:
           name: windows-installer
 
-      - name: Check the installer and the portable ZIP are there
+      - name: Download the Mac .dmg
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-dmg
+
+      - name: Check the installer, the portable ZIP and the .dmg are there
         run: |
-          ls -l "Siftwell-Setup-$VERSION.exe" "Siftwell-Portable-$VERSION.zip"
+          ls -l "Siftwell-Setup-$VERSION.exe" "Siftwell-Portable-$VERSION.zip" "Siftwell-$VERSION.dmg"
           test -s "Siftwell-Setup-$VERSION.exe"
           test -s "Siftwell-Portable-$VERSION.zip"
+          test -s "Siftwell-$VERSION.dmg"
 
       - name: Write version, commit and tag (local only until everything is verified)
         run: |
@@ -259,18 +302,20 @@ jobs:
             echo
             echo "**Windows, no install:** download **Siftwell-Portable-$VERSION.zip**, unzip it anywhere (a USB stick works), and double-click Siftwell.exe. Your data stays in a data folder next to it."
             echo
-            echo "**Mac, or Windows without the installer:** download **Siftwell-$VERSION.zip** below, unzip it, and open the Start Siftwell file for your system."
+            echo "**Mac (Apple silicon):** download **Siftwell-$VERSION.dmg** below, open it, and drag Siftwell onto Applications. The first time, macOS asks whether you trust it: see the steps in the guide (Install, Mac)."
+            echo
+            echo "**Mac with an Intel chip, or Windows without the installer:** download **Siftwell-$VERSION.zip** below, unzip it, and open the Start Siftwell file for your system."
           } > release_notes.md
           cat release_notes.md
 
       - name: Push commit and tag
         run: git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/v$VERSION"
 
-      - name: Create the GitHub Release (ZIP and installer together)
+      - name: Create the GitHub Release (ZIP, installer, portable ZIP and .dmg together)
         run: |
           FLAGS=()
           if [[ "$VERSION" == 0.* ]]; then FLAGS+=(--prerelease); fi
-          gh release create "v$VERSION" "Siftwell-$VERSION.zip" "Siftwell-Setup-$VERSION.exe" "Siftwell-Portable-$VERSION.zip" \
+          gh release create "v$VERSION" "Siftwell-$VERSION.zip" "Siftwell-Setup-$VERSION.exe" "Siftwell-Portable-$VERSION.zip" "Siftwell-$VERSION.dmg" \
             --title "Siftwell v$VERSION" \
             --notes-file release_notes.md \
             --verify-tag \
