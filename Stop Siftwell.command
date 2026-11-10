@@ -43,10 +43,43 @@ own_cmd() {
     return 1
 }
 
+# The pid file is also trusted for a live Python running a script called server.py, whether written with a relative or
+# an absolute path (older installs started it as "<python> -X utf8 server.py"). An absolute path into another app folder,
+# an editor, or `python -c "...server.py..."` is refused.
+pid_cmd_ok() {
+    local c="$1" prefix script base
+    if [[ "$c" =~ ^(.*)[[:space:]][0-9]+$ ]]; then c="${BASH_REMATCH[1]}"; fi
+    case "$c" in
+        *" getting_started.py --serve") script="${c% --serve}" ;;
+        *) script="$c" ;;
+    esac
+    prefix="${script% *}"; script="${script##* }"
+    [ "$prefix" = "$script" ] && return 1
+    case "${script##*/}" in server.py|getting_started.py) ;; *) return 1 ;; esac
+    case "$script" in /*) [ "${script%/*}" = "$APP" ] || return 1 ;; esac
+    prefix="${prefix% -X utf8}"
+    base="$(printf '%s' "${prefix##*/}" | tr 'A-Z' 'a-z')"
+    case "$base" in python|python3|python3.*|pythonw) return 0 ;; esac
+    return 1
+}
+
+# The Siftwell window of this folder, so it doesn't sit there pointing at a stopped server.
+WIN_PID_FILE="$DATA/window.pid"
+if [ -f "$WIN_PID_FILE" ]; then
+    wpid="$(tr -dc '0-9' < "$WIN_PID_FILE")"
+    if [ -n "$wpid" ] && case "$(ps -p "$wpid" -o command= 2>/dev/null)" in *"$APP/app_window.py"*) true ;; *) false ;; esac; then
+        pkill -TERM -P "$wpid" 2>/dev/null; kill -TERM "$wpid" 2>/dev/null
+    fi
+    rm -f "$WIN_PID_FILE"
+fi
+
 pids=""
 if [ -f "$PID_FILE" ]; then
     pid="$(tr -dc '0-9' < "$PID_FILE")"
-    if [ -n "$pid" ] && own_cmd "$(ps -p "$pid" -o command= 2>/dev/null)"; then pids="$pid"; fi
+    if [ -n "$pid" ]; then
+        pcmd="$(ps -p "$pid" -o command= 2>/dev/null)"
+        if own_cmd "$pcmd" || pid_cmd_ok "$pcmd"; then pids="$pid"; fi
+    fi
 fi
 while read -r pid cmd; do
     if own_cmd "$cmd"; then pids="$pids $pid"; fi
