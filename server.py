@@ -23,7 +23,7 @@ TOKEN = open(TOKEN_FILE).read().strip()
 sys.path.insert(0, HERE)
 import people
 people.ensure_migrated()
-import catalog, joblock
+import catalog, joblock, backup
 try:
     _CATALOG_MIGRATED = catalog.migrate()  # one-time: build DATA/catalog.db from the old file-based data (here, in the server process)
 except Exception as e:
@@ -864,6 +864,8 @@ class H(BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._send(403, "<p style='font:16px system-ui;padding:24px'>Open Siftwell with your access link (it ends in ?k=…).</p>", "text/html")
         path = self.path.split("?")[0]
+        if path.startswith("/api/backup/") and backup.handle_get(self, path):
+            return
         pid = self._person()
         import getting_started
         if path in getting_started.GET_PATHS and getting_started.handle_get(self, path, pid, self.path.partition("?")[2]):
@@ -1025,6 +1027,8 @@ class H(BaseHTTPRequestHandler):
         host = self.headers.get("Host") or ""
         if not self._host_ok() or self.headers.get("X-Jobboard") != "1" or (origin and origin != f"http://{host}"):
             return self._send(403, {"error": "forbidden"})
+        if self.path.split("?")[0] == "/api/backup/upload":  # raw zip body, streamed to disk (backups can be far bigger than the JSON limit)
+            return backup.handle_upload(self)
         n = int(self.headers.get("Content-Length") or 0)
         if n > 25 * 1024 * 1024:
             return self._send(413, {"error": "file too large"})
@@ -1036,6 +1040,8 @@ class H(BaseHTTPRequestHandler):
         pid = self._person()
         import getting_started
         if getting_started.handle_post(self, path, body):
+            return
+        if path.startswith("/api/backup/") and backup.handle_post(self, path, body):
             return
         if path == "/api/claude/login":  # before the no-profile check: sign-in is part of first-time setup
             return self._send(*claude_login(str(body.get("action") or ""), str(body.get("code") or "")))
@@ -1395,6 +1401,21 @@ def busy_reason():
             return "A resume is being tailored or read"
     return ""
 
+def after_restore():
+    """Backup & move just swapped DATA's contents: re-read the access key and the people index, drop in-memory
+    per-profile state, and rebuild every board from the restored catalog (restart-free)."""
+    global TOKEN
+    if os.path.exists(TOKEN_FILE):
+        TOKEN = open(TOKEN_FILE).read().strip() or TOKEN
+    else:
+        fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT, 0o600)
+        os.write(fd, TOKEN.encode()); os.close(fd)
+    import getting_started
+    getting_started.configure(PORT, TOKEN, busy_reason)
+    _pstate.clear()
+    people.set_current(people.first())
+    request_recompute()
+
 if __name__ == "__main__":
     osdeps.ensure_utf8()
 
@@ -1413,6 +1434,7 @@ if __name__ == "__main__":
         BIND = getting_started.bind_host()  # 127.0.0.1 unless phone access is on (DATA/network.json)
         srv = Server((BIND, PORT), H)
         getting_started.configure(PORT, TOKEN, busy_reason)
+        backup.configure(jobs_file_lock, busy_reason, after_restore)
         getting_started.note_started()
     except OSError:
         print(f"Port {PORT} is already in use by another program. Stop it, or run on another port: "
