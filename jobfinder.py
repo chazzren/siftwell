@@ -1049,15 +1049,18 @@ def _kept_status(pid, prof=None):
     return st
 
 def new_unrated(pid, jobs):
-    """Jobs Claude would rate that just came onto this board (not on the board it replaces) and have no rating at
-    all: the automatic Haiku check rates these. Uses ai_rs/ai_fit set by score_person, so call after it."""
+    """(ids, first): jobs Claude would rate that just came onto this board (not on the board it replaces) and have no
+    rating at all: the automatic Haiku check rates these. first is True when this person has no board yet, so every
+    passing unrated job counts as new (the check still stops at the per-run Haiku cap). Uses ai_rs/ai_fit set by
+    score_person, so call after it."""
+    first = False
     try:
         prev = {j["id"] for j in json.load(open(people.pdir("jobs.json", pid=pid))).get("jobs", [])}
     except FileNotFoundError:
-        prev = set()  # first board for this person (e.g. setup just finished)
+        prev, first = set(), True  # first board for this person (e.g. setup just finished)
     except Exception:
-        return []  # can't tell what's new: don't guess
-    return [j["id"] for j in jobs if j["id"] not in prev and (j.get("ai_rs") or "f")[0] == "-" and j.get("ai_fit") is None]
+        return [], False  # can't tell what's new: don't guess
+    return [j["id"] for j in jobs if j["id"] not in prev and (j.get("ai_rs") or "f")[0] == "-" and j.get("ai_fit") is None], first
 
 def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
     """Rebuild boards from the catalog: each person's filters over every open listing, requirements, Appeal and
@@ -1094,9 +1097,9 @@ def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
                 catalog.set_meta(f"board_status:{pid}", [ai_status, pv_status])
             else:
                 ai_status, pv_status = _kept_status(pid, prof)
-                fresh_ids = new_unrated(pid, jobs) if prof else []
+                fresh_ids, first = new_unrated(pid, jobs) if prof else ([], False)
                 if fresh_ids:  # the server queues a quick Haiku check of just these (if the person allows it)
-                    print("NEW_UNRATED " + json.dumps({"pid": pid, "ids": fresh_ids}), flush=True)
+                    print("NEW_UNRATED " + json.dumps({"pid": pid, "ids": fresh_ids, "first": first}), flush=True)
             unrated = sum(1 for j in jobs if j.get("ai_fit") is None)
             write_person(pid, jobs, summaries, prof, st, ai_status, pv_status)
             out[pid] = {"jobs": len(jobs), "unrated": unrated, "secs": round(time.time() - t0, 1)}

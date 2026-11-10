@@ -140,13 +140,8 @@ td.err{color:var(--bad);white-space:normal;min-width:200px}
 .clok{color:var(--good)}
 .drop{border:1.5px dashed var(--line);border-radius:8px;padding:16px;text-align:center;color:var(--muted);cursor:pointer}
 .drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
-.panel input[type=url]{flex:1 1 260px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
 .panel textarea{width:100%;min-height:5.5em;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;resize:vertical}
-.panel label.f{font-weight:600;font-size:13px;display:block;margin-top:4px}
 .panel .help{font-size:12.5px;color:var(--muted);margin:0 0 4px}
-.refr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
-.refr .ev{font-size:12.5px;color:var(--muted)}
-.facts{font-size:13px;color:var(--muted)}
 .chip.lbl-apply_now{background:var(--good-soft);color:var(--good);border-color:transparent;font-weight:600}
 .chip.lbl-tailor{background:var(--accent-soft);color:var(--accent);border-color:transparent;font-weight:600}
 .chip.lbl-stretch{background:var(--warn-soft);color:var(--warn);border-color:transparent}
@@ -232,7 +227,6 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
 .frow{display:flex;gap:8px;align-items:center}
 .frow input[type=search]{flex:1 1 auto;min-width:0}
 .frow select{flex:0 0 auto}
-.rmrow{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .rmbtn{color:var(--bad);background:transparent;border:1px solid var(--line)}
 .rmbtn[data-armed="1"]{background:var(--bad-soft);border-color:var(--bad)}
 .nlbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:7px 10px;border-radius:var(--r);background:var(--accent-soft);color:var(--ink);font-size:13px}
@@ -269,8 +263,6 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
 .pvgaps[open]{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
 .panel{border-radius:var(--r);gap:10px}
 .panel h2.sec{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:6px 0 0}
-.panel details>summary{cursor:pointer;font-weight:600;padding:6px 0}
-.panel details{border-top:1px solid var(--line);padding-top:6px}
 .acts{flex-wrap:wrap}
 .acts a{display:inline-flex;align-items:center;height:var(--h-sm);padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--muted);font-size:12px;text-decoration:none;white-space:nowrap}
 .acts button.danger{margin-left:auto;color:var(--bad);border-color:transparent;background:transparent}
@@ -457,7 +449,7 @@ $("themeBtn").addEventListener("click", () => {
 TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></a>
     <button class="iconBtn" type="button" id="updateBtn" title="Update job listings now: checks every employer for new jobs (about 40 min)" aria-label="Update job listings now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span class="vh" id="updSmall">every employer, ~40 min</span></button>
     <button class="iconBtn" type="button" id="rerateBtn" title="Re-rate: choose how Claude re-rates your jobs, no new listings" aria-label="Re-rate jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="rrbadge" id="rrBadge" hidden></span><span class="vh" id="rrSmall">Claude only, no new listings</span></button>
-    <button class="iconBtn" type="button" id="resumeBtn" aria-expanded="false" title="My profile: resume, search settings, target, companies" aria-label="My profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.5 17c.6-1.9 2-3 3.5-3s2.9 1.1 3.5 3"/><path d="M15 9.5h3.5M15 13h3.5"/></svg></button>
+    <a class="iconBtn" id="resumeBtn" href="/profile" title="My profile: resume, about you, job search, target, companies" aria-label="My profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.5 17c.6-1.9 2-3 3.5-3s2.9 1.1 3.5 3"/><path d="M15 9.5h3.5M15 13h3.5"/></svg></a>
     <button class="iconBtn" type="button" id="themeBtn" title="Theme: Auto (follows your device). Click for Light" aria-label="Theme: Auto (follows your device). Click for Light"><svg class="ti ti-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg><svg class="ti ti-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="ti ti-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
     <a class="iconBtn" id="prefsBtn" href="/settings" title="Settings: setup checklist, resume PDFs, review, Claude usage, display" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="rrbadge" id="gsBadge" hidden></span></a>
     <div class="menuWrap">
@@ -491,19 +483,22 @@ BODY = """<div class="wrap">
   <div class="rrrow rec">
     <div class="rrtxt"><span><b>Full re-rate</b><span class="rrtag">recommended</span></span>
       <small>Quick check of jobs that need it, then Sonnet on your best <span class="rrPctTxt"></span>%, then Opus on your top <span class="rrTopTxt"></span>. Only ratings made with older info are redone.</small>
-      <small id="rrEstFull"></small></div>
+      <small id="rrEstFull"></small>
+      <label class="chk rrTgt"><input type="checkbox" id="rrTgtFull" checked><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs)</small></span></label></div>
     <button class="btn primary sm" type="button" data-rr="full">Run</button>
   </div>
   <div class="rrrow">
     <div class="rrtxt"><b>Quick check · Haiku</b>
       <small id="rrHAll"></small>
-      <label class="chk"><input type="checkbox" id="rrHNeed" checked><span>Only jobs that need it (<span id="rrHN">0</span>)</span></label></div>
+      <label class="chk"><input type="checkbox" id="rrHNeed" checked><span>Only jobs that need it (<span id="rrHN">0</span>)</span></label>
+      <label class="chk rrTgt"><input type="checkbox" id="rrTgtHaiku"><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs; off unless you tick it)</small></span></label></div>
     <button class="btn sm" type="button" data-rr="haiku">Run</button>
   </div>
   <div class="rrrow">
     <div class="rrtxt"><b>Careful look · Sonnet</b>
       <span>Top <input type="number" id="rrPct" min="1" max="100" step="1" aria-label="Percent of board jobs for Sonnet"> % of board jobs <span class="note" id="rrSN"></span></span>
       <label class="chk"><input type="checkbox" id="rrSNeed" checked><span>Only ones that need it (<span id="rrSNn">0</span>)</span></label>
+      <label class="chk rrTgt"><input type="checkbox" id="rrTgtSonnet"><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs; off unless you tick it)</small></span></label>
       <small class="rrhint" hidden>Run the quick check first for better picks.</small></div>
     <button class="btn sm" type="button" data-rr="sonnet">Run</button>
   </div>
@@ -511,81 +506,15 @@ BODY = """<div class="wrap">
     <div class="rrtxt"><b>Best judgment · Opus</b>
       <span>Top <input type="number" id="rrTop" min="1" max="2000" step="1" aria-label="Number of top jobs for Opus"> jobs <span class="note" id="rrON"></span></span>
       <label class="chk"><input type="checkbox" id="rrONeed" checked><span>Only ones that need it (<span id="rrONn">0</span>)</span></label>
+      <label class="chk rrTgt"><input type="checkbox" id="rrTgtOpus"><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs; off unless you tick it)</small></span></label>
       <small class="rrhint" hidden>Run the quick check first for better picks.</small></div>
     <button class="btn sm" type="button" data-rr="opus">Run</button>
   </div>
   <div class="rrfoot">
-    <label class="chk" id="rrTargetWrap" hidden><input type="checkbox" id="rrTarget" checked> Also rate for my Target tab</label>
     <small id="rrEst"></small>
-    <small>"Top" follows your Best bets order. These numbers apply to this run only; your defaults stay in Settings.</small>
+    <small>"Top" follows your Best bets order. These numbers apply to this run only; your defaults stay in Settings. Target-tab ratings are a separate cost: the Full re-rate includes them, single-model runs only if you tick the box.</small>
     <small class="rrmsg" id="rrMsg" role="status"></small>
   </div>
-</div>
-<div class="panel" id="resumePanel" hidden>
-  <div class="row" style="justify-content:space-between"><strong class="ptitle">Profile</strong><button class="btn ghost sm" type="button" id="profileClose">Close</button></div>
-  <h2 class="sec">Resume</h2>
-  <div class="note" id="resumeState"></div>
-  <label class="drop" id="drop" for="resumeFile">Drop a resume here or click to choose a file<br><small>PDF, Word, RTF, text, or a photo of a printed resume</small></label>
-  <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.rtf,.odt,.txt,.md,.html,.png,.jpg,.jpeg,.heic,.webp" hidden>
-  <form class="row" id="gdocForm">
-    <input type="url" id="gdocUrl" placeholder="Or paste a Google Docs link (docs.google.com/document/d/…)" aria-label="Google Docs link">
-    <button class="btn" type="submit">Use Google Doc</button>
-  </form>
-  <small>A Google Doc link works if sharing is set to "Anyone with the link can view". Otherwise use File &gt; Download &gt; Microsoft Word in Google Docs and drop that file here.</small>
-  <div id="hlBox" hidden>
-    <h2 class="sec">What we pulled from your resume</h2>
-    <p class="help">Jobs that require a degree or license you don't have are hidden (you can still show them from Filters). Fix anything that's wrong here and the board re-checks itself.</p>
-    <div class="hlbanner" id="hlBanner" hidden><span>Please check these are right. They decide which jobs are hidden.</span><span class="row"><button class="btn sm" type="button" id="hlEditBtn2">Fix something</button><button class="btn primary sm" type="button" id="hlConfirm">Looks right</button></span></div>
-    <div class="hlcards" id="hlCards"></div>
-    <div class="row"><button class="btn sm" type="button" id="hlEditBtn">Edit</button><button class="btn ghost sm" type="button" id="hlRefresh">Re-read my resume</button><span class="note" id="hlMsg"></span></div>
-    <div class="hledit" id="hlEdit" hidden></div>
-  </div>
-  <details id="personSettings">
-    <summary>Search settings and target</summary>
-    <div class="psgrid">
-      <label>Name<input id="psName" type="text"></label>
-      <label>Salary floor ($ base)<input id="psFloor" type="number" step="5000" min="30000"></label>
-      <label>Current base ($, optional)<input id="psBase" type="number" step="5000"></label>
-      <label>Current package, one line (optional)<input id="psLabel" type="text" placeholder="e.g. $120k base, hybrid, 4 weeks PTO"></label>
-      <label>Home ZIP (or City, ST)<input id="psZip" type="text" placeholder="Blank = the DC-area list"></label>
-      <label>Search radius<select id="psRadius"><option value="10">10 miles</option><option value="25">25 miles</option><option value="35">35 miles</option><option value="50">50 miles</option><option value="75">75 miles</option></select></label>
-      <label class="chk"><input id="psRemote" type="checkbox"> Include remote jobs anywhere in the US</label>
-      <label>Your level<select id="psLevel"><option value="2">Mid-level</option><option value="3">Senior</option><option value="4">Lead / Manager</option><option value="5">Principal / Sr. Manager</option><option value="6">Director</option><option value="7">VP / Executive</option></select></label>
-      <label style="grid-column:1/-1">Goals for Claude to weigh (pay, commute, what to avoid)<textarea id="psGoals"></textarea></label>
-    </div>
-    <strong style="display:block;margin-top:6px">Target</strong>
-    <p class="help">What you're aiming for, in your own words. It gets its own tab where Claude rates each job as a step toward it. Leave it blank to skip, or tap "Not sure?" for suggestions.</p>
-    <div class="psgrid">
-      <label style="grid-column:1/-1">Target<textarea id="psTarget" placeholder="e.g. Highest-paying role I can land at an AI company, any function"></textarea></label>
-      <label>Companies<select id="psScope"><option value="all">All tracked companies</option><option value="ai">AI companies only</option></select></label>
-      <label style="grid-column:1/-1">What you'd do to get there (time, courses, certifications, projects)<textarea id="psPrep" placeholder="e.g. 5 hours a week for 3 months; one certification; no degree"></textarea></label>
-    </div>
-    <div class="note" id="psTargetState"></div>
-    <div class="row"><button class="btn" type="button" id="psSuggest">Not sure? Suggest targets</button></div>
-    <div id="psSuggestions" class="factlist"></div>
-    <div class="row"><button class="btn primary" type="button" id="psSave">Save settings</button><span class="note" id="psMsg"></span></div>
-    <div class="row rmrow"><span class="note">Add, rename or remove profiles in <a href="/settings#profiles">Settings → Profiles</a>.</span></div>
-  </details>
-  <div id="coBox" hidden>
-    <h2 class="sec">Companies</h2>
-    <p class="help">Which employers this profile's board watches. Changes apply at the next update.</p>
-    <div class="checks" id="coSets"></div>
-    <form class="row" id="coAddForm" style="margin-top:6px">
-      <input type="url" id="coUrl" placeholder="Paste a company's careers or job-list link" aria-label="Careers page link" style="flex:2 1 260px">
-      <input type="text" id="coName" placeholder="Name (optional)" aria-label="Company name" style="flex:1 1 140px;min-width:0;height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px">
-      <select id="coScope" aria-label="Who sees it"><option value="me">Just this profile</option><option value="all">Everyone</option></select>
-      <button class="btn" type="submit">Add company</button>
-    </form>
-    <div class="note" id="coMsg"></div>
-    <div class="factlist" id="coOwn"></div>
-  </div>
-  <div id="factsBox" hidden>
-    <div class="row" style="justify-content:space-between"><h2 class="sec">What you've told me <span class="note" id="factCount"></span></h2>
-      <button class="btn" type="button" id="generalQs">Answer general questions</button></div>
-    <p class="help">Skills and experience your resume leaves out. Scoring and tailoring use these exactly as you stated them; "No" answers are never claimed.</p>
-    <div class="factlist" id="factList"></div>
-  </div>
-
 </div>
 <dialog class="sheet" id="qSheet" aria-labelledby="qTitle">
   <form method="dialog" id="qForm">
@@ -597,25 +526,6 @@ BODY = """<div class="wrap">
     <div class="qfoot" id="qFoot"><button class="btn primary" type="button" id="qGo">Save answers and tailor</button><button class="btn" type="button" id="qSkip">Skip, tailor now</button></div>
   </form>
 </dialog>
-<div class="panel" id="reviewPanel" hidden>
-  <div class="row" style="justify-content:space-between"><strong>Review your profile</strong><span class="note" id="reviewSrc"></span></div>
-  <p class="help">Claude read your resume and drafted this. It decides which jobs you see and what tailoring is allowed. Fix anything that's wrong, then approve.</p>
-  <div class="facts" id="reviewFacts"></div>
-  <label class="f" for="rvSummary">Summary</label>
-  <textarea id="rvSummary"></textarea>
-  <label class="f" for="rvRoles">Roles to search for (one per line)</label>
-  <textarea id="rvRoles"></textarea>
-  <label class="f">Allowed reframings</label>
-  <p class="help">Honest ways to present your experience for other roles. Untick any you're not comfortable claiming.</p>
-  <div id="rvRefr"></div>
-  <label class="f" for="rvLimits">Never claim (one per line)</label>
-  <p class="help">Tailored resumes will never say these.</p>
-  <textarea id="rvLimits"></textarea>
-  <label class="f" for="rvNotes">True things your resume leaves out (optional)</label>
-  <p class="help">For example a certification in progress, a tool you use daily, or a project you led. Tailoring may use these.</p>
-  <textarea id="rvNotes" placeholder="e.g. PMP certification in progress; built weekly sales dashboards in Excel"></textarea>
-  <div class="row"><button class="btn primary" id="rvApprove" type="button">Approve and re-score jobs</button><button class="btn" id="rvDiscard" type="button">Discard draft</button></div>
-</div>
 <div class="panel" id="addPersonPanel" hidden>
   <strong>Add a person</strong>
   <p class="help">Each person gets their own resume, answers, saved jobs, tailored resumes and settings. Next comes a short setup: resume, where, pay, level and what you're aiming for.</p>
@@ -988,7 +898,7 @@ function reqSection(j){
   return `<section class="dsec reqbox"><h3>Requirements</h3><div><b>${head}</b></div>
     <div class="chips">${chips.map(c => `<span class="chip req-${st}">${esc(c)}</span>`).join("")}${soft.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>
     ${(j.req_reasons || []).length ? `<div class="reqwhy">${(j.req_reasons || []).map(esc).join("<br>")}</div>` : ""}
-    ${st !== "ok" ? `<div class="reqwhy">Wrong? Fix your degrees or licenses under My profile and the board re-checks.</div>` : ""}</section>`;
+    ${st !== "ok" ? `<div class="reqwhy">Wrong? Fix your degrees or licenses under <a href="/profile#highlights">My profile</a> and the board re-checks.</div>` : ""}</section>`;
 }
 function drawDetail(){
   const j = jobs.find(x => x.id === SEL);
@@ -1394,7 +1304,7 @@ window.addEventListener("hashchange", route); route();
 // Home: back to the Jobs tab with the detail sheet and side panels closed, keeping search and filters.
 $("homeBtn").addEventListener("click", e => {
   e.preventDefault();
-  $("resumePanel").hidden = true; $("resumeBtn").setAttribute("aria-expanded", "false"); $("addPersonPanel").hidden = true;
+  $("addPersonPanel").hidden = true;
   const onJobs = !location.hash || location.hash === "#jobs";
   if (history.state && history.state.sheet) history.replaceState(null, "", onJobs ? location.pathname + location.hash : "#jobs");  // drop the phone sheet's history entry
   else if (!onJobs) history.pushState(null, "", "#jobs");
@@ -1411,7 +1321,7 @@ try {
     render(); setTimeout(() => scrollTo(0, sv.y || 0), 60);
   }
 } catch(e) {}
-if (!jobs.length && !D.profile) { $("aiBanner").hidden = false; $("aiBanner").textContent = "New profile: open My profile in the menu at the top right to upload a resume. Once it's approved, an update fills this board (about 15 minutes)."; }
+if (!jobs.length && !D.profile) { $("aiBanner").hidden = false; $("aiBanner").innerHTML = `New profile: <a href="/profile#resume">upload a resume on My profile</a>. Once it's approved, an update fills this board (about 15 minutes).`; }
 
 if (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out") { $("aiBanner").hidden = false; if (SERVED) signInOffer($("aiBanner"), "Claude fit scoring is paused because Claude Code is signed out."); else $("aiBanner").textContent = "Claude fit scoring is paused because Claude Code is signed out. Open the board from the server to sign in."; }
 else if (D.ai_status === "no_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude fit scoring is off. Add an Anthropic API key in Settings, then use Update now in the profile menu."; }
@@ -1421,70 +1331,7 @@ if (SERVED) {
   $("tools").hidden = false;
   loadTailored().then(() => { render(); if (location.hash === "#tailored") drawTailored(); });
   fetch("/api/marks").then(r => r.json()).then(m => { status = Object.assign({}, status, m); render(); }).catch(() => {});
-  // Settings live on their own page (/settings, settings_page.py); the gear in TOOLS is a plain link.
-  $("profileClose").addEventListener("click", () => { $("resumePanel").hidden = true; $("resumeBtn").setAttribute("aria-expanded", "false"); });
-
-  // ---- resume upload + profile review
-  const lines = a => (a || []).join("\n");
-  const unlines = s => s.split("\n").map(x => x.trim()).filter(Boolean);
-  let draft = null, ingestWas = false;
-  function loadProfile(){
-    return fetch("/api/profile").then(r => r.json()).then(p => {
-      const a = p.active, ing = p.ingest || {};
-      $("resumeState").textContent = ing.running ? "Reading your resume… this takes about a minute."
-        : ing.error ? "Couldn't use that resume: " + ing.error
-        : a ? `Active: ${a._source_file || "resume"} (approved ${String(a._approved||"").replace("T"," ")}). Upload a new one to replace it.`
-        : "No resume uploaded yet. Jobs are scored against the profile set up earlier.";
-      $("drop").hidden = !!ing.running; $("gdocForm").hidden = !!ing.running;
-      if (ing.running) { ingestWas = true; $("resumePanel").hidden = false; setTimeout(loadProfile, 3000); }
-      draft = p.draft;
-      if (draft) showReview(draft); else $("reviewPanel").hidden = true;
-      if (ingestWas && !ing.running && draft) { ingestWas = false; $("resumePanel").hidden = true; $("reviewPanel").scrollIntoView({behavior: "smooth"}); }
-    });
-  }
-  function showReview(d){
-    $("reviewPanel").hidden = false;
-    $("reviewSrc").textContent = d._source_file || "";
-    const f = [d.name, (d.years_experience ? d.years_experience + " yrs" : ""), (d.clearances||[]).join(", "), (d.education||[]).join("; ")].filter(Boolean).join(" · ");
-    $("reviewFacts").textContent = f + (d.experience && d.experience.length ? " · Roles: " + d.experience.map(e => `${e.title} at ${e.employer}`).join("; ") : "");
-    $("rvSummary").value = d.summary || "";
-    $("rvRoles").value = lines(d.target_roles);
-    $("rvLimits").value = lines(d.hard_limits);
-    $("rvNotes").value = d.notes || "";
-    $("rvRefr").innerHTML = (d.reframings || []).map((r, i) => `<label class="refr"><input type="checkbox" data-i="${i}" checked>
-      <span><b>${esc(r.angle)}</b><br><span class="ev">Opens: ${esc(r.target_titles.join(", "))}<br>Based on: ${esc(r.evidence.join(" / "))}</span></span></label>`).join("");
-  }
-  $("resumeBtn").addEventListener("click", () => {
-    const open = $("resumePanel").hidden; $("resumePanel").hidden = !open; $("resumeBtn").setAttribute("aria-expanded", open); if (open) { loadProfile(); loadFacts(); loadCompanies(); loadHL(); scrollTo(0, 0); }
-  });
-  function sendResume(body){
-    $("resumeState").textContent = "Uploading…";
-    fetch("/api/resume", {method: "POST", headers: H, body: JSON.stringify(body)}).then(r => r.json().then(j => ({ok: r.ok, j})))
-      .then(({ok, j}) => { if (!ok) $("resumeState").textContent = j.error || "Upload failed."; else { ingestWas = true; setTimeout(loadProfile, 800); } });
-  }
-  function readFile(file){
-    if (!file) return;
-    if (file.size > 15 * 1024 * 1024) { $("resumeState").textContent = "That file is over 15 MB."; return; }
-    const fr = new FileReader();
-    fr.onload = () => sendResume({filename: file.name, data_b64: String(fr.result).split(",")[1] || ""});
-    fr.readAsDataURL(file);
-  }
-  $("resumeFile").addEventListener("change", e => readFile(e.target.files[0]));
-  ["dragenter","dragover"].forEach(ev => $("drop").addEventListener(ev, e => { e.preventDefault(); $("drop").classList.add("over"); }));
-  ["dragleave","drop"].forEach(ev => $("drop").addEventListener(ev, e => { e.preventDefault(); $("drop").classList.remove("over"); }));
-  $("drop").addEventListener("drop", e => readFile(e.dataTransfer.files[0]));
-  $("gdocForm").addEventListener("submit", e => { e.preventDefault(); const u = $("gdocUrl").value.trim(); if (u) sendResume({gdoc_url: u}); });
-  $("rvApprove").addEventListener("click", () => {
-    const keep = [...$("rvRefr").querySelectorAll("input[type=checkbox]")].filter(c => c.checked).map(c => draft.reframings[+c.dataset.i]);
-    const edits = {summary: $("rvSummary").value.trim(), target_roles: unlines($("rvRoles").value),
-                   hard_limits: unlines($("rvLimits").value), notes: $("rvNotes").value.trim(), reframings: keep};
-    $("rvApprove").disabled = true;
-    fetch("/api/profile/approve", {method: "POST", headers: H, body: JSON.stringify({edits, rescore: true})})
-      .then(r => r.json()).then(() => { $("reviewPanel").hidden = true; wasRunning = true; poll(); })
-      .finally(() => { $("rvApprove").disabled = false; });
-  });
-  $("rvDiscard").addEventListener("click", () => fetch("/api/profile/discard", {method: "POST", headers: H, body: "{}"}).then(loadProfile));
-  loadProfile();
+  // Settings (/settings, settings_page.py) and My profile (/profile, profile_page.py) are their own pages; their icons in TOOLS are plain links.
 
   // ---- tailoring
   // ---- on-demand Claude ratings
@@ -1509,15 +1356,9 @@ if (SERVED) {
   fetch("/api/people").then(r => r.json()).then(d => {
     curPerson = d.current;
     PREFS = d.prefs || PREFS; applyDisplayDefaults();
-    const s = d.settings, me = d.people.find(p => p.id === d.current) || {};
+    const me = d.people.find(p => p.id === d.current) || {};
     $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
     $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
-    document.querySelector(".ptitle").textContent = "Profile · " + (me.name || "");
-    $("psName").value = me.name || ""; $("psFloor").value = s.salary_floor || ""; $("psBase").value = s.current_base || "";
-    $("psZip").value = s.home_zip || ""; $("psRadius").value = String([10,25,35,50,75].includes(+s.radius_miles) ? s.radius_miles : 35); $("psRemote").checked = s.remote_us !== false;
-    $("psLabel").value = s.current_label || ""; $("psLevel").value = String(s.seniority_mine || 4); $("psGoals").value = s.goals || "";
-    $("psTarget").value = s.target_text || ""; $("psScope").value = s.target_scope || "all"; $("psPrep").value = s.prep_text || "";
-    showTargetState(s, d.target_job);
   }).catch(() => {});
   $("avatarBtn").addEventListener("click", e => { e.stopPropagation(); const h = $("amenu").hidden; $("amenu").hidden = !h; $("avatarBtn").setAttribute("aria-expanded", h); });
   document.addEventListener("click", e => { if (!e.target.closest(".menuWrap")) { $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false"); } });
@@ -1538,159 +1379,16 @@ if (SERVED) {
       location.href = "/setup";
     });
   });
-  try { if (sessionStorage.getItem("jb.openResume")) { sessionStorage.removeItem("jb.openResume"); setTimeout(() => $("resumeBtn").click(), 0); } } catch(e) {}
-  $("psSave").addEventListener("click", () => {
-    const settings = {salary_floor: $("psFloor").value, current_base: $("psBase").value, current_label: $("psLabel").value,
-                      seniority_mine: $("psLevel").value, goals: $("psGoals").value,
-                      home_zip: $("psZip").value, radius_miles: $("psRadius").value, remote_us: $("psRemote").checked,
-                      target_text: $("psTarget").value, target_scope: $("psScope").value, prep_text: $("psPrep").value};
-    fetch("/api/person/settings", {method: "POST", headers: H, body: JSON.stringify({name: $("psName").value, settings})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
-      $("psMsg").textContent = ok ? "Saved. Use Update now in your profile menu to apply (about 30 minutes)." : (d.error || "Couldn't save.");
-      if (ok && d.interpreting) pollTarget();
-    });
-  });
-  function showTargetState(s, tj){
-    if (tj && tj.running) { $("psTargetState").textContent = "Claude is working out which jobs fit this target…"; return; }
-    if (tj && tj.error) { $("psTargetState").textContent = "Couldn't interpret the target: " + tj.error; return; }
-    $("psTargetState").textContent = s.target_text ? (s.target_summary ? `Tab "${s.target_name || "Target"}": ${s.target_summary}` + (s.target_any_title ? " (any job title)" : ` (titles like: ${(s.target_keywords || []).slice(0, 8).join(", ")}…)`) : "") : "No target set.";
-  }
-  function pollTarget(){
-    fetch("/api/people").then(r => r.json()).then(d => { showTargetState(d.settings, d.target_job); if (d.target_job && d.target_job.running) setTimeout(pollTarget, 3000); });
-  }
-  $("psSuggest").addEventListener("click", () => {
-    $("psSuggest").disabled = true; $("psSuggestions").innerHTML = `<div class="note">Claude is reading your resume and the job market… (about a minute)</div>`;
-    const poll = () => fetch("/api/target/suggest").then(r => r.json()).then(s => {
-      if (s.running) return setTimeout(poll, 3000);
-      $("psSuggest").disabled = false;
-      if (s.error) { $("psSuggestions").innerHTML = `<div class="note">${esc(s.error)}</div>`; return; }
-      window.__sugg = s.options || [];
-      $("psSuggestions").innerHTML = window.__sugg.map((o, i) => `<div class="fact"><div><b>${esc(o.name)}</b> · ${esc(o.pay)} · odds now: ${esc(o.odds_now)}<div>${esc(o.why)}</div><div class="fl">Prep: ${esc(o.prep)}</div></div><button type="button" data-use="${i}">Use this</button></div>`).join("");
-    });
-    fetch("/api/target/suggest", {method: "POST", headers: H, body: "{}"}).then(poll);
-  });
-  $("psSuggestions").addEventListener("click", e => {
-    const b = e.target.closest("button[data-use]"); if (!b) return;
-    const o = window.__sugg[+b.dataset.use];
-    $("psTarget").value = o.target_text; $("psScope").value = o.scope; if (o.prep && o.prep.toLowerCase() !== "none" && !$("psPrep").value) $("psPrep").value = o.prep;
-    $("psMsg").textContent = "Filled in. Tap Save settings to use it.";
-  });
-
   // ---- questions before tailoring, and the answer bank
   const slugify = id => id.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
   const LV = {yes: "Yes", some: "Some", no: "No"};
-  let facts = [], hasProfile = !!D.profile;
-  fetch("/api/profile").then(r => r.json()).then(p => { hasProfile = !!p.active; }).catch(() => {});
-  const loadFacts = () => fetch("/api/facts").then(r => r.json()).then(d => { facts = d.facts || []; drawFacts(); return facts; });
-  function drawFacts(){
-    $("factsBox").hidden = !hasProfile;
-    $("factCount").textContent = facts.length ? `(${facts.length})` : "";
-    $("factList").innerHTML = facts.length ? facts.slice().reverse().map(f => `<div class="fact"><div><b>${esc(f.requirement)}</b> · ${LV[f.level] || ""}${f.answer ? ": " + esc(f.answer) : ""}
-      ${f.polished ? `<div class="pol" data-pid="${esc(f.id)}">Resume wording: <span>${esc(f.polished)}</span> <button type="button" class="linkbtn" data-edit="${esc(f.id)}">Edit</button></div>` : ""}
-      <div class="fl">${esc(f.context || "")} · ${esc(f.date || "")}</div></div><button type="button" data-del="${esc(f.id)}">Remove</button></div>`).join("")
-      : `<div class="note">Nothing yet. Tap "Tailor my resume" on a job, or answer general questions.</div>`;
-  }
-  // ---- companies: lists this profile watches + adding a company by link
-  function loadCompanies(){
-    return fetch("/api/companies/mine").then(r => r.json()).then(d => {
-      $("coBox").hidden = false;
-      $("coSets").innerHTML = d.sets.map(x => `<label class="chk"><input type="checkbox" data-set="${esc(x.id)}" ${d.watching.includes(x.id) ? "checked" : ""}> ${esc(x.label)} <span class="note">(${x.count})</span></label>`).join("");
-      $("coOwn").innerHTML = d.own.length ? d.own.map(c => `<div class="fact"><div><b>${esc(c.name)}</b><div class="fl">${esc(c.ats)}${c.everyone ? " · everyone" : " · this profile"}</div></div></div>`).join("") : "";
-    });
-  }
-  // ---- resume highlights (degrees, licenses...) that drive the requirement check
-  let HL = null, hlEditing = false;
-  const LVL = {associate: "Associate's", bachelor: "Bachelor's", master: "Master's", doctorate: "PhD", jd: "JD", md: "MD"};
-  function loadHL(){
-    return fetch("/api/highlights").then(r => r.json()).then(d => { HL = d; drawHL(); if (d.rescoring) setTimeout(loadHL, 5000); }).catch(() => {});
-  }
-  function drawHL(){
-    if (!HL) return;
-    const h = HL.highlights; $("hlBox").hidden = false;
-    if (!h) { $("hlCards").innerHTML = `<div class="note">Nothing pulled yet. Tap "Re-read my resume".</div>`; $("hlBanner").hidden = true; return; }
-    const ed = new Set(HL.edited_fields || []), mark = k => ed.has(k) ? "<em>edited</em>" : "";
-    const card = (k, title, body) => `<div class="hlcard"><div class="k">${title}${mark(k)}</div><div class="v">${body}</div></div>`;
-    const m = h.management || {}, c = h.clearance || {};
-    $("hlCards").innerHTML = [
-      card("degrees", "Education", (h.degrees || []).length ? h.degrees.map(d => `<div><b>${esc(LVL[d.level] || d.level)}</b>${d.field ? " in " + esc(d.field) : ""}${d.school ? `<br><span class="note">${esc(d.school)}${d.year ? " · " + d.year : ""}${d.completed === false ? " · in progress" : ""}</span>` : ""}</div>`).join("") : "No degree listed"),
-      card("licenses", "Licenses & certifications", (h.licenses || []).length ? h.licenses.map(l => `<div>${esc(l.name)}${l.kind === "license" ? " <span class='note'>(license)</span>" : ""}</div>`).join("") : "None listed"),
-      card("years_experience", "Experience", h.years_experience != null ? `${h.years_experience} years` : "Not stated"),
-      card("management", "People you manage", m.manages_people ? (m.direct_reports != null ? `${m.direct_reports} direct report${m.direct_reports === 1 ? "" : "s"}` : "Yes") + (m.note ? `<br><span class="note">${esc(m.note)}</span>` : "") : "None"),
-      card("clearance", "Clearance", c.level ? esc(c.level.replace(/_/g, " ").toUpperCase()) + (c.active === false ? " (inactive)" : "") : "None"),
-      card("languages", "Languages", (h.languages || []).map(x => esc(x.language) + (x.level ? ` <span class="note">(${esc(x.level)})</span>` : "")).join(", ") || "Not listed"),
-    ].join("");
-    $("hlBanner").hidden = !!HL.confirmed;
-    $("hlMsg").textContent = HL.rescoring ? "Re-checking jobs against these… (about a minute; reload after)" : HL.confirmed ? "Confirmed " + String(HL.confirmed).replace("T", " ") : "";
-  }
-  function drawHLEdit(){
-    const h = (HL && HL.highlights) || {}, o = (HL && HL.options) || {};
-    const lvOpts = v => (o.levels || []).map(x => `<option value="${x.id}"${x.id === v ? " selected" : ""}>${esc(x.label)}</option>`).join("");
-    const degRow = d => `<div class="hlrow" data-deg><select aria-label="Degree">${lvOpts(d.level || "bachelor")}</select><input aria-label="Field" placeholder="Field, e.g. Economics" value="${esc(d.field || "")}"><input aria-label="School" placeholder="School" value="${esc(d.school || "")}"><button type="button" class="btn sm" data-rm>Remove</button></div>`;
-    const licRow = l => `<div class="hlrow lic" data-lic><input aria-label="Name" placeholder="e.g. PMP, CPA, RN" value="${esc(l.name || "")}"><select aria-label="Kind"><option value="cert"${l.kind !== "license" ? " selected" : ""}>Certification</option><option value="license"${l.kind === "license" ? " selected" : ""}>License</option></select><button type="button" class="btn sm" data-rm>Remove</button></div>`;
-    const m = h.management || {};
-    $("hlEdit").innerHTML = `<label class="f">Degrees</label><div id="hlDegs">${(h.degrees || []).map(degRow).join("")}</div><button type="button" class="btn ghost sm" id="hlAddDeg" style="align-self:flex-start">+ Add a degree</button>
-      <label class="f">Licenses and certifications</label><div id="hlLics">${(h.licenses || []).map(licRow).join("")}</div><button type="button" class="btn ghost sm" id="hlAddLic" style="align-self:flex-start">+ Add one</button>
-      <div class="psgrid"><label>Years of experience<input id="hlYears" type="number" min="0" max="60" value="${h.years_experience ?? ""}"></label>
-      <label>Direct reports right now<input id="hlReports" type="number" min="0" max="10000" value="${m.direct_reports ?? ""}"></label></div>
-      <div class="row"><button type="button" class="btn primary" id="hlSave">Save and re-check jobs</button><button type="button" class="btn" id="hlCancel">Cancel</button></div>`;
-    window.__degRow = degRow; window.__licRow = licRow;
-  }
-  function openHLEdit(){ hlEditing = true; drawHLEdit(); $("hlEdit").hidden = false; $("hlEdit").scrollIntoView({block: "nearest"}); }
-  $("hlEditBtn").addEventListener("click", openHLEdit); $("hlEditBtn2").addEventListener("click", openHLEdit);
-  $("hlEdit").addEventListener("click", e => {
-    if (e.target.closest("[data-rm]")) { e.target.closest(".hlrow").remove(); return; }
-    if (e.target.id === "hlAddDeg") { $("hlDegs").insertAdjacentHTML("beforeend", window.__degRow({})); return; }
-    if (e.target.id === "hlAddLic") { $("hlLics").insertAdjacentHTML("beforeend", window.__licRow({})); return; }
-    if (e.target.id === "hlCancel") { $("hlEdit").hidden = true; return; }
-    if (e.target.id === "hlSave") {
-      const degrees = [...$("hlDegs").querySelectorAll("[data-deg]")].map(r => { const [lv, f, sc] = r.querySelectorAll("select,input"); return {level: lv.value, field: f.value.trim(), school: sc.value.trim(), completed: true}; }).filter(d => d.level);
-      const licenses = [...$("hlLics").querySelectorAll("[data-lic]")].map(r => { const [n, k] = r.querySelectorAll("input,select"); return {name: n.value.trim(), kind: k.value, active: true}; }).filter(l => l.name);
-      const h = HL.highlights || {}, m = Object.assign({}, h.management || {});
-      const rep = $("hlReports").value; m.direct_reports = rep === "" ? null : +rep; m.manages_people = (m.direct_reports || 0) > 0;
-      const edits = {degrees, licenses, management: m};
-      if ($("hlYears").value !== "") edits.years_experience = +$("hlYears").value;
-      e.target.disabled = true;
-      fetch("/api/highlights", {method: "POST", headers: H, body: JSON.stringify({edits})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
-        e.target.disabled = false;
-        if (!ok) { $("hlMsg").textContent = d.error || "Couldn't save."; return; }
-        HL = d; $("hlEdit").hidden = true; drawHL(); setTimeout(loadHL, 5000);
-      });
-    }
-  });
-  $("hlConfirm").addEventListener("click", () => fetch("/api/highlights", {method: "POST", headers: H, body: JSON.stringify({confirm: true})}).then(r => r.json()).then(d => { HL = d; drawHL(); }));
-  $("hlRefresh").addEventListener("click", () => { $("hlMsg").textContent = "Claude is re-reading your resume… (about a minute)"; fetch("/api/highlights/refresh", {method: "POST", headers: H, body: "{}"}).then(() => setTimeout(loadHL, 45000)); });
-  $("coSets").addEventListener("change", () => {
-    const sets = [...$("coSets").querySelectorAll("input:checked")].map(i => i.dataset.set);
-    fetch("/api/person/settings", {method: "POST", headers: H, body: JSON.stringify({settings: {company_sets: sets.length ? sets : ["tech"]}})})
-      .then(() => { $("coMsg").textContent = "Saved. Use Update now in your profile menu to refresh the board with these lists."; });
-  });
-  $("coAddForm").addEventListener("submit", e => {
-    e.preventDefault();
-    $("coMsg").textContent = "Checking that link…";
-    fetch("/api/companies/add", {method: "POST", headers: H, body: JSON.stringify({url: $("coUrl").value, name: $("coName").value, scope: $("coScope").value})})
-      .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
-        if (!ok) { $("coMsg").textContent = d.error || "Couldn't add it."; return; }
-        $("coMsg").textContent = `${d.existing ? "Already tracked; now on your list" : "Added"}: ${d.name} (${d.open_jobs} open jobs on its board). ` + (d.fetching ? "Fetching its jobs now; they'll appear when the update bar finishes." : "An update is running; its jobs arrive with the next update.");
-        $("coUrl").value = ""; $("coName").value = ""; loadCompanies(); if (d.fetching) setTimeout(poll, 1500);
-      });
-  });
-
-  $("factList").addEventListener("click", e => {
-    const ed = e.target.closest("button[data-edit]");
-    if (ed) {
-      const box = ed.closest(".pol"), cur = box.querySelector("span").textContent;
-      box.innerHTML = `<textarea style="width:100%;min-height:3.5em">${esc(cur)}</textarea><button type="button" class="linkbtn" data-save="${esc(ed.dataset.edit)}">Save</button>`;
-      return;
-    }
-    const sv = e.target.closest("button[data-save]");
-    if (sv) {
-      const text = sv.closest(".pol").querySelector("textarea").value;
-      fetch("/api/facts/polish", {method: "POST", headers: H, body: JSON.stringify({id: sv.dataset.save, polished: text})}).then(r => r.json()).then(d => { facts = d.facts; drawFacts(); });
-      return;
-    }
-    const b = e.target.closest("button[data-del]"); if (!b) return;
-    fetch("/api/facts/delete", {method: "POST", headers: H, body: JSON.stringify({id: b.dataset.del})}).then(r => r.json()).then(d => { facts = d.facts; drawFacts(); });
-  });
-
+  let facts = [], hasProfile = !!D.profile, hasDraft = false;
+  // A new resume that has been read but not approved is checked and approved on My profile.
+  fetch("/api/profile").then(r => r.json()).then(p => {
+    hasProfile = !!p.active; hasDraft = !!p.draft;
+    if (hasDraft && $("aiBanner").hidden) { $("aiBanner").hidden = false; $("aiBanner").innerHTML = `Your new resume has been read. <a href="/profile#about">Review and approve your profile</a> to use it.`; }
+  }).catch(() => {});
+  const loadFacts = () => fetch("/api/facts").then(r => r.json()).then(d => { facts = d.facts || []; return facts; });
   let qCtx = null;  // {id, btn, context, questions}
   function qWait(msg){ $("qList").innerHTML = `<div class="qwait">${esc(msg)}</div>`; $("qGo").disabled = true; }
   function drawQuestions(qs){
@@ -1748,21 +1446,16 @@ if (SERVED) {
     $("qGo").disabled = true;
     const save = answers.length ? fetch("/api/answers", {method: "POST", headers: H, body: JSON.stringify({answers, context})}).then(r => r.json()) : Promise.resolve({added: 0});
     save.then(d => {
-      if (d.facts) { facts = d.facts; drawFacts(); }
+      if (d.facts) facts = d.facts;
       $("qSheet").close();
       if (id) startTailor(id, btn, (d.added || 0) > 0);
     });
   });
   $("qSkip").addEventListener("click", () => { if (qCtx.astra) { continueTailor([]); return; } $("qSheet").close(); startTailor(qCtx.id, qCtx.btn, false); });
-  $("generalQs").addEventListener("click", () => openQuestions(null, null));
 
   function tailorJob(id, btn){
     if (btn.dataset.slug) { window.open("/tailored/" + btn.dataset.slug, "_blank"); return; }
-    if (!hasProfile) {
-      btn.textContent = "Approve your profile first (top of page)";
-      const rp = $("reviewPanel"); if (rp && !rp.hidden) rp.scrollIntoView({behavior: "smooth"});
-      return;
-    }
+    if (!hasProfile) { location.href = hasDraft ? "/profile#about" : "/profile#resume"; return; }  // approve (or upload) the resume first
     const q = PREFS["tailor.questions"], j = jobs.find(x => x.id === id) || {}, m = mode === "pivot" ? j.pv_now : j.ai_fit;
     if (q === "never" || (q === "gaps" && m != null && m >= 70)) { startTailor(id, btn, false); return; }
     openQuestions(id, btn);
@@ -1860,6 +1553,18 @@ if (SERVED) {
   // ---- Re-rate panel. Counts come from the board: ai_rs (per tier: "-" none, "s" older info, "f" current) and ai_bb
   // (Best bets with the best available Match) on every job Claude would rate. The server picks again when it runs.
   const RB = D.rate_batch || {haiku: 25, sonnet: 15, opus: 15};
+  // A board rendered from an older jobs.json has no per-job rating freshness (ai_rs) or batch sizes (rate_batch): the server
+  // rebuilds it once, and until then the panel can't count (it would say "All 0 jobs").
+  const COUNTING = !D.rate_batch && !!D.profile;
+  if (COUNTING) {
+    let tries = 0;
+    (function wait(){
+      fetch("/api/profile/board").then(r => r.json()).then(b => {
+        if (b.counted) { saveFilters(); location.reload(); return; }
+        if (++tries < 60) setTimeout(wait, 5000);
+      }).catch(() => { if (++tries < 60) setTimeout(wait, 5000); });
+    })();
+  }
   const TNAME = {haiku: "Quick check (Haiku)", sonnet: "Careful look (Sonnet)", opus: "Best judgment (Opus)"};
   const ratePool = jobs.filter(j => j.ai_rs);
   const byBB = ratePool.slice().sort((a, b) => (b.ai_bb || 0) - (a.ai_bb || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));  // same order the server picks in
@@ -1869,6 +1574,16 @@ if (SERVED) {
   const intIn = (id, lo, hi) => { const v = Number($(id).value); const ok = $(id).value.trim() !== "" && Number.isInteger(v) && v >= lo && v <= hi; $(id).setAttribute("aria-invalid", ok ? "false" : "true"); return ok ? v : null; };
   function rrCalc(){
     const pct = intIn("rrPct", 1, 100), top = intIn("rrTop", 1, 2000);
+    document.querySelectorAll(".rrTgtN").forEach(e => e.textContent = nf(+(PREFS["claude.per_update"] ?? 300)));
+    if (COUNTING) {
+      ["rrHN", "rrSNn", "rrONn"].forEach(id => $(id).textContent = "Counting…");
+      $("rrHAll").textContent = "Counting… your board is being refreshed for this panel (a minute or so). This page reloads when it's done.";
+      $("rrSN").textContent = $("rrON").textContent = "";
+      $("rrEstFull").textContent = $("rrEst").textContent = "Counting…";
+      document.querySelectorAll("#rrPanel [data-rr]").forEach(b => b.disabled = true);
+      document.querySelectorAll(".rrhint").forEach(e => e.hidden = true);
+      return {pct, top, n: {haiku: 0, sonnet: 0, opus: 0}, all: 0};
+    }
     const stale = (j, i) => j.ai_rs[i] !== "f";
     const hNeed = ratePool.filter(j => stale(j, 0)).length;
     const sTop = pct ? byBB.slice(0, Math.floor(ratePool.length * pct / 100)) : [];
@@ -1903,7 +1618,7 @@ if (SERVED) {
     $("rrTitle").textContent = `Re-rate ${D.person && D.person.name ? D.person.name + "'s" : "your"} jobs`;
     if ($("rrPct").value === "") $("rrPct").value = PREFS["claude.sonnet_pct"] || 15;
     if ($("rrTop").value === "") $("rrTop").value = PREFS["claude.opus_top"] || 300;
-    $("rrTargetWrap").hidden = !D.pivot_enabled;
+    document.querySelectorAll(".rrTgt").forEach(e => e.hidden = !D.pivot_enabled);
     $("rrMsg").textContent = ""; $("rrMsg").classList.remove("bad");
     rrCalc(); rrPlace(); $("rrPanel").hidden = false; $("rerateBtn").setAttribute("aria-expanded", "true");
     $("rrPanel").querySelector("[data-rr=full]").focus();
@@ -1920,9 +1635,13 @@ if (SERVED) {
     if (kind === "haiku") { c.pct = c.pct || +(PREFS["claude.sonnet_pct"] || 15); c.top = c.top || +(PREFS["claude.opus_top"] || 300); }  // not used by the quick check
     if (!(c.pct && c.top)) { $("rrMsg").textContent = "Sonnet looks at 1 to 100% of your jobs; Opus at 1 to 2,000 jobs."; $("rrMsg").classList.add("bad"); return; }
     const only = kind === "full" ? true : $({haiku: "rrHNeed", sonnet: "rrSNeed", opus: "rrONeed"}[kind]).checked;
-    if (kind === "haiku" && !only && !confirm(`Give all ${plural(c.all, "job")} a fresh quick check?\n\nThis also re-rates jobs whose ratings are current: about ${plural(reqs(c.all, "haiku"), "Claude request")} on your Claude plan.`)) return;
-    const body = {tiers: kind === "full" ? ["haiku", "sonnet", "opus"] : [kind], only_needed: only, sonnet_pct: c.pct, opus_top: c.top,
-                  target: !!D.pivot_enabled && $("rrTarget").checked};
+    const tgt = !!D.pivot_enabled && $({full: "rrTgtFull", haiku: "rrTgtHaiku", sonnet: "rrTgtSonnet", opus: "rrTgtOpus"}[kind]).checked;
+    if (kind !== "full" && !only) {  // a forced run re-rates jobs whose ratings are current: say how many first
+      const n = c.n[kind], name = {haiku: "quick check", sonnet: "careful look", opus: "best-judgment look"}[kind];
+      if (!confirm(`Give ${plural(n, "job")} a fresh ${name}?\n\nThis also re-rates jobs whose ratings are current: about ${plural(reqs(n, kind), "Claude request")} on your Claude plan.` +
+                   (tgt ? `\n\nIt also rates up to ${plural(+(PREFS["claude.per_update"] ?? 300), "job")} for your Target tab.` : ""))) return;
+    }
+    const body = {tiers: kind === "full" ? ["haiku", "sonnet", "opus"] : [kind], only_needed: only, sonnet_pct: c.pct, opus_top: c.top, target: tgt};
     b.disabled = true;
     fetch("/api/rerate", {method: "POST", headers: H, body: JSON.stringify(body)}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
       b.disabled = false;

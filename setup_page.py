@@ -632,9 +632,9 @@ SCREENS.highlights = {
     return `
       <p class="eyebrow">Your resume</p>
       <h1 class="q" tabindex="-1">Here’s what we read${h.name ? `, ${esc(h.name.split(" ")[0])}` : ""}.</h1>
-      <p class="lede">${h.cards.length ? "A quick look at what stood out. This is what we’ll match jobs against." : "We couldn’t pull much from that file. You can carry on and fix it later in Profile."}</p>
+      <p class="lede">${h.cards.length ? "A quick look at what stood out. This is what we’ll match jobs against." : "We couldn’t pull much from that file. You can carry on and fix it later on My profile."}</p>
       <div class="hgrid">${h.cards.map(card).join("")}</div>
-      <p class="fine">Something off? You can edit your profile any time from the board. ${errBox("_")}</p>`;
+      <p class="fine">Something off? You can edit your profile any time on My profile (the person icon at the top of the board). ${errBox("_")}</p>`;
   },
   foot: () => ({nextLabel: "Looks right"}),
   collect: () => ({}),

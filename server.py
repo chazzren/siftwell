@@ -63,6 +63,25 @@ def _people_list():
     return [dict(p, profile=os.path.exists(people.pdir("profile.json", pid=p["id"]))) for p in people.load_index()]
 
 
+_BOARD_COUNTS = {}   # pid -> (mtime, size, counts): jobs.json is big, so it is read again only when it changes
+
+def board_counts(pid):
+    """For My profile's status strip: jobs on this person's board and how many Claude has rated."""
+    fp = people.pdir("jobs.json", pid=pid)
+    try:
+        st = os.stat(fp)
+    except OSError:
+        return {"jobs": 0, "rated": 0, "generated": None, "counted": True}
+    hit = _BOARD_COUNTS.get(pid)
+    if hit and hit[:2] == (st.st_mtime_ns, st.st_size):
+        return hit[2]
+    d = read_json(fp, {}) or {}
+    js = d.get("jobs") or []
+    out = {"jobs": len(js), "rated": sum(1 for j in js if j.get("ai_fit") is not None), "generated": d.get("generated"),
+           "counted": "rate_batch" in d}
+    _BOARD_COUNTS[pid] = (st.st_mtime_ns, st.st_size, out)
+    return out
+
 def refresh_stale_boards():
     """After an app update, re-render each board from its saved jobs.json when report.html is older than report.py
     (same output as a rebuild; no fetching, no scoring)."""
@@ -82,6 +101,25 @@ def refresh_stale_boards():
             print(f"board re-rendered for {pid} (app updated)", flush=True)
         except Exception as e:
             print(f"couldn't re-render {pid}'s board: {e}", flush=True)
+
+def _board_has_counts(pid):
+    """False for a board written before the Re-rate panel (jobs.json has no "rate_batch": the panel can't count its jobs).
+    write_person puts rate_batch before the long "jobs" list, so only the start of the file is read. True when unsure."""
+    try:
+        with open(people.pdir("jobs.json", pid=pid), "r", encoding="utf-8") as f:
+            head = f.read(4_000_000)
+    except OSError:
+        return True  # no board at all: nothing to count
+    i = head.find('"jobs":')
+    return i < 0 or '"rate_batch"' in head[:i]
+
+def recount_old_boards():
+    """Once per server start: rebuild (no fetching, no Claude) any board that predates the Re-rate panel's counts, so its
+    jobs carry the rating freshness the panel needs. Until then the panel shows "Counting…"."""
+    old = [p for p in people.ids() if not _board_has_counts(p)]
+    if old:
+        print("recounting boards from an older version:", ", ".join(old), flush=True)
+        request_recompute(old)
 
 # ---- rebuilding boards from the catalog (seconds; no fetching, no Claude)
 _RECOMPUTE = {"running": False, "pending": set(), "all": False, "fails": 0}
@@ -127,7 +165,7 @@ def _recompute_loop():
                                        capture_output=True, text=True, timeout=900, env=joblock.child_env(token))
                 for m in re.finditer(r"^NEW_UNRATED (\{.*\})$", r.stdout or "", re.M):  # new listings Claude hasn't rated
                     try:
-                        nu = json.loads(m.group(1)); note_new_unrated(nu["pid"], nu["ids"])
+                        nu = json.loads(m.group(1)); note_new_unrated(nu["pid"], nu["ids"], bool(nu.get("first")))
                     except Exception as e:
                         print("couldn't queue the quick check of new jobs:", e, flush=True)
                 if r.returncode:
@@ -364,13 +402,13 @@ def bg_suggest():
 def bg_resume(kind, payload):
     import resume
     st = ps()["resume"]
-    st.update(running=True, error=None, finished=None)
+    st.update(running=True, error=None, finished=None, stage="get", started=dt.datetime.now().isoformat(timespec="seconds"))
     try:
         path = resume.fetch_google_doc(payload) if kind == "gdoc" else resume.save_upload(*payload)
-        resume.ingest(path)
+        resume.ingest(path, progress=lambda s: st.update(stage=s))
     except Exception as e:
         st["error"] = str(e)[:400]
-    st.update(running=False, finished=dt.datetime.now().isoformat(timespec="seconds"))
+    st.update(running=False, stage="", finished=dt.datetime.now().isoformat(timespec="seconds"))
 
 def review_loop(s, job, desc):
     """Astra grades; below the threshold, either pause for the candidate's answers or have Claude rework. Keeps the best version."""
@@ -530,7 +568,10 @@ def rate_label(o):
     if not o:
         return "Full re-rate"
     if o.get("ids") is not None:
-        return f"Quick check of {len(o['ids'])} new job{'s' if len(o['ids']) != 1 else ''}"
+        n = len(o["ids"])
+        if o.get("first"):  # a new person's first board: every passing unrated job counts as new (the Haiku cap still applies)
+            return f"First quick check of {n} job{'s' if n != 1 else ''}"
+        return f"Quick check of {n} new job{'s' if n != 1 else ''}"
     t = o.get("tiers") or []
     if len(t) == 3:
         return "Full re-rate"
@@ -626,7 +667,9 @@ def start_rating(pid, o, n=None):
             if o and o.get("ids") is not None:  # merge with a quick check of new jobs that hasn't started yet
                 for x in q:
                     if x and x.get("ids") is not None:
-                        x["ids"] |= set(o["ids"]); return "queued"
+                        x["ids"] |= set(o["ids"]); x["first"] = bool(x.get("first") or o.get("first")); return "queued"
+            if o in q:  # the same run is already waiting: don't do it twice
+                return "queued"
             q.append(o)
             return "queued"
         RERATE[pid] = _rate_state(o)
@@ -658,11 +701,12 @@ def rating_status(pid):
 _AUTO = {}   # pid -> {"ids": set, "due": time}
 AUTO_QUIET = 20
 
-def note_new_unrated(pid, ids):
+def note_new_unrated(pid, ids, first=False):
     import time
     with lock:
-        a = _AUTO.setdefault(pid, {"ids": set(), "due": 0})
+        a = _AUTO.setdefault(pid, {"ids": set(), "due": 0, "first": False})
         a["ids"].update(ids)
+        a["first"] = a["first"] or first
         a["due"] = time.time() + AUTO_QUIET
         if _AUTO.get("_loop"):
             return
@@ -676,14 +720,14 @@ def _auto_loop():
         with lock:
             quiet = not (_RECOMPUTE["running"] or _RECOMPUTE["all"] or _RECOMPUTE["pending"])
             ready = [p for p, a in _AUTO.items() if p != "_loop" and quiet and a["due"] <= time.time()]
-            todo = {p: _AUTO.pop(p)["ids"] for p in ready}
+            todo = {p: _AUTO.pop(p) for p in ready}
             if not [p for p in _AUTO if p != "_loop"] and not todo:
                 _AUTO.pop("_loop", None)
                 return
-        for p, ids in todo.items():
+        for p, a in todo.items():
             try:
                 if people.exists(p) and people.prefs(p).get("claude.auto_rate", True):
-                    start_rating(p, {"ids": set(ids)})
+                    start_rating(p, {"ids": set(a["ids"]), "first": a["first"]})
             except Exception as e:
                 print("automatic quick check failed for", p, e, flush=True)
 
@@ -869,7 +913,7 @@ class H(BaseHTTPRequestHandler):
         if path in getting_started.GET_PATHS and getting_started.handle_get(self, path, pid, self.path.partition("?")[2]):
             return
         if pid is None:  # fresh install: nothing exists until the first person is added
-            if path in ("/", "/index.html", "/setup", "/settings"):
+            if path in ("/", "/index.html", "/setup", "/settings", "/profile"):
                 import welcome_page
                 return self._send(200, welcome_page.render_welcome_html(), "text/html")
             if path == "/api/people":
@@ -882,11 +926,16 @@ class H(BaseHTTPRequestHandler):
         if path == "/settings":
             import settings_page
             return self._send(200, settings_page.render_settings_html(pid), "text/html")
+        if path == "/profile":
+            import profile_page
+            return self._send(200, profile_page.render_profile_html(pid), "text/html")
         if path == "/api/highlights":
             import highlights
             out = highlights.payload(pid)
             out["rescoring"] = _RECOMPUTE["running"]
             return self._send(200, out)
+        if path == "/api/profile/board":
+            return self._send(200, board_counts(pid))
         if path == "/api/setup":
             import setup_flow
             return self._send(200, setup_flow.get_state(pid, ps()["resume"]))
@@ -1142,13 +1191,26 @@ class H(BaseHTTPRequestHandler):
                 hz = str(st["home_zip"] or "").strip()[:60]
                 if hz:
                     import geo
-                    if not geo.geocode_home(hz):
+                    try:
+                        found = geo.geocode_home(hz)
+                    except ValueError:
+                        found = None
+                    if not found:
                         return self._send(400, {"error": f"Couldn't find \"{hz}\". Use a 5-digit ZIP or City, ST."})
                 clean["home_zip"] = hz
             if "radius_miles" in st:
                 try: clean["radius_miles"] = max(5, min(150, int(st["radius_miles"])))
                 except (TypeError, ValueError): return self._send(400, {"error": "Radius must be a number of miles."})
             if "remote_us" in st: clean["remote_us"] = bool(st["remote_us"])
+            if "workplaces" in st:
+                wp = [w for w in ("onsite", "hybrid", "remote") if w in (st["workplaces"] or [])]
+                if not wp:
+                    return self._send(400, {"error": "Pick at least one way of working."})
+                clean["workplaces"] = wp
+            if "travel_max" in st:
+                if st["travel_max"] not in ("none", "light", "moderate", "any"):
+                    return self._send(400, {"error": "Pick how much travel is OK."})
+                clean["travel_max"] = st["travel_max"]
             if "company_sets" in st and isinstance(st["company_sets"], list):
                 clean["company_sets"] = [x for x in st["company_sets"] if x in people.COMPANY_SETS] or ["tech"]
             if body.get("name"): people.rename(pid, str(body["name"]))
@@ -1295,6 +1357,15 @@ class H(BaseHTTPRequestHandler):
                 if not busy:
                     threading.Thread(target=run_update, daemon=True).start()
             return self._send(200, {"ok": True, "hash": prof.get("_hash")})
+        if path == "/api/profile/edit":  # changes to the approved profile (About you, job titles); the board re-checks itself
+            import resume
+            try:
+                prof = resume.edit_active(body.get("edits") or {})
+            except ValueError as e:
+                return self._send(400, {"error": str(e)[:300]})
+            self._act("settings saved", pid, "profile details")
+            request_recompute([pid])
+            return self._send(200, {"ok": True, "profile": {k: v for k, v in prof.items() if k != "_resume_text"}})
         if path == "/api/profile/discard":
             import resume
             resume.discard_draft()
@@ -1421,6 +1492,7 @@ if __name__ == "__main__":
     print(f"Siftwell on http://127.0.0.1:{PORT}" + (f"  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)" if BIND == "0.0.0.0" else "  (this computer only)"), flush=True)
     threading.Thread(target=scheduler, daemon=True).start()
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
+    threading.Thread(target=recount_old_boards, daemon=True).start()
     # start-at-sign-in entry still pointing at an old app folder or runtime? rewrite it (see getting_started.heal_startup)
     threading.Thread(target=getting_started.heal_entries, kwargs={"log": lambda m: print(m, flush=True)}, daemon=True).start()
     try:   # tray icon while Siftwell runs without its window (helper process; see tray.py)

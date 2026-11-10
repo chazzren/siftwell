@@ -170,9 +170,12 @@ def profile_hash_legacy(prof):
     keep = {k: prof.get(k) for k in PROFILE_HASH_KEYS}
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:12]
 
-def ingest(path):
-    """Full pipeline for one uploaded file; writes the draft profile for review."""
+def ingest(path, progress=None):
+    """Full pipeline for one uploaded file; writes the draft profile for review. progress(stage) is called as it goes."""
+    note = progress or (lambda s: None)
+    note("read")
     text = extract_text(path)
+    note("build")
     prof = build_profile(text)
     prof["_source_file"] = os.path.basename(path)
     prof["_resume_text"] = text
@@ -180,18 +183,66 @@ def ingest(path):
     json.dump(prof, open(DRAFT(), "w"), indent=1)
     return prof
 
+EDIT_TEXT = {"summary": 4000, "location": 120, "notes": 4000}
+EDIT_LISTS = ("clearances", "education", "certifications", "skills", "languages", "target_roles", "hard_limits", "title_keywords")
+
+def _strs(v, field):
+    if isinstance(v, str):
+        v = v.split("\n")
+    if not isinstance(v, list):
+        raise ValueError(f"{field} should be a list.")
+    return [" ".join(str(x).split())[:2000] for x in v if str(x).strip()][:200]
+
+def clean_edits(edited):
+    """The fields of a profile a person may change, checked and trimmed. Anything else is ignored."""
+    out = {}
+    for k, n in EDIT_TEXT.items():
+        if k in edited:
+            out[k] = str(edited[k] or "").strip()[:n]
+    for k in EDIT_LISTS:
+        if k in edited:
+            out[k] = _strs(edited[k], k)
+    if "years_experience" in edited and edited["years_experience"] not in (None, ""):
+        try:
+            out["years_experience"] = max(0, min(70, int(edited["years_experience"])))
+        except (TypeError, ValueError):
+            raise ValueError("Years of experience should be a whole number.")
+    if "experience" in edited:
+        if not isinstance(edited["experience"], list):
+            raise ValueError("experience should be a list.")
+        out["experience"] = [{"title": " ".join(str(e.get("title", "")).split())[:200], "employer": " ".join(str(e.get("employer", "")).split())[:200],
+                              "dates": " ".join(str(e.get("dates", "")).split())[:80], "highlights": _strs(e.get("highlights", []), "highlights")}
+                             for e in edited["experience"] if isinstance(e, dict) and (str(e.get("title", "")).strip() or str(e.get("employer", "")).strip())][:40]
+    if "reframings" in edited:
+        if not isinstance(edited["reframings"], list):
+            raise ValueError("reframings should be a list.")
+        out["reframings"] = [{"angle": str(r.get("angle", "")).strip()[:2000], "target_titles": _strs(r.get("target_titles", []), "target_titles"),
+                              "evidence": _strs(r.get("evidence", []), "evidence")}
+                             for r in edited["reframings"] if isinstance(r, dict) and str(r.get("angle", "")).strip()][:20]
+    return out
+
 def approve(edited):
     """Merge the user's edits into the draft and make it the active profile."""
     draft = json.load(open(DRAFT())) if os.path.exists(DRAFT()) else (load_active() or {})
-    for k in ("summary", "target_roles", "hard_limits", "notes", "reframings", "title_keywords"):
-        if k in edited:
-            draft[k] = edited[k]
+    draft.update(clean_edits(edited))
     draft["_approved"] = dt.datetime.now().isoformat(timespec="minutes")
     draft["_hash"] = profile_hash(draft)
     json.dump(draft, open(ACTIVE(), "w"), indent=1)
     if os.path.exists(DRAFT()):
         os.remove(DRAFT())
     return draft
+
+def edit_active(edited):
+    """Change fields of the approved profile in place (no new draft). Returns the profile; raises ValueError for bad input
+    or when there is no approved profile yet."""
+    prof = load_active()
+    if not prof:
+        raise ValueError("There's no approved profile to edit yet. Upload a resume first.")
+    prof.update(clean_edits(edited))
+    prof["_edited"] = dt.datetime.now().isoformat(timespec="minutes")
+    prof["_hash"] = profile_hash(prof)
+    paths.write_atomic(ACTIVE(), json.dumps(prof, indent=1))
+    return prof
 
 def load_active():
     try:

@@ -9,7 +9,7 @@ Answers are written straight into the profile's settings.json. Existing keys are
 (salary_floor, current_base, seniority_mine, seniority_band, target_text, target_scope, company_sets, and the
 display.clearance pref); the new keys live in SETUP_DEFAULTS. people.save_settings() only writes keys listed in
 people.DEFAULT_SETTINGS, so this module writes settings.json itself (people.settings() keeps unknown keys, so
-later saves from the Profile panel preserve them)."""
+later saves from the My profile page preserve them)."""
 import json, os, re, statistics
 
 import catalog

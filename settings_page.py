@@ -5,9 +5,10 @@ rounded grouped sections. The selection lives in the URL hash (/settings#display
 drill-down: the list alone, then one category with a "‹ Settings" back control.
 
 Every control auto-saves on change through POST /api/prefs (people.save_prefs merges partial updates).
-It reuses the board's styles (report.HEAD) and header icon row (report.TOOLS). Update / Re-rate / My profile /
-Add a person hand off to the board: they set sessionStorage "jb.run" (or "jb.openResume") and go to /#jobs, where
-report.py's script picks the request up and runs it with its usual confirm and progress UI."""
+It reuses the board's styles (report.HEAD) and header icon row (report.TOOLS). Update / Re-rate / Add a person
+hand off to the board: they set sessionStorage "jb.run" and go to /#jobs, where report.py's script picks the request up
+and runs it with its usual confirm and progress UI. My profile is its own page (profile_page.py), which shares this
+page's layout CSS, pane helpers and script pieces (fill_script)."""
 import html
 import json
 
@@ -114,8 +115,8 @@ def _group(title, foot, rows):
     return f'<section class="sgsec">{t}<div class="sgroup">{"".join(rows)}</div>{f}</section>'
 
 
-def _pane_head(cid, name):
-    return (f'<div class="sphead"><a class="sback" href="/settings" data-back>‹ Settings</a>'
+def _pane_head(cid, name, back_href="/settings", back_label="Settings"):
+    return (f'<div class="sphead"><a class="sback" href="{back_href}" data-back>‹ {e(back_label)}</a>'
             f'<div class="sprow"><h2 id="h-{cid}">{e(name)}</h2><span class="ssave" role="status" aria-live="polite"></span></div></div>')
 
 
@@ -131,7 +132,8 @@ def _render_parts():
             body = (_group("Everyone in this household", "Removing a profile takes it off the board. Its folder is kept in the people_removed "
                            "folder inside your Siftwell data folder, not deleted.", ['<div id="profList"></div>']) +
                     '<div class="sbtns" style="margin-top:14px"><button class="btn primary" type="button" id="profAdd">Add a person</button></div>'
-                    '<p class="note" id="profMsg" role="status" aria-live="polite" style="margin:8px 14px 0"></p>')
+                    '<p class="note" id="profMsg" role="status" aria-live="polite" style="margin:8px 14px 0"></p>'
+                    '<p class="note" style="margin:8px 14px 0">Resume, search settings, target and companies for the person you are viewing are on <a href="/profile">My profile</a>.</p>')
         elif groups is None:
             body = (_group("Status", "", [_row("<span>Anthropic API key</span>", "", '<span class="note" id="keyState">Checking…</span>')]) +
                     _group("Change key", "Scoring runs through your Claude subscription using the Claude Code app on this computer, so a key is "
@@ -170,7 +172,7 @@ def render_settings_html(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + CSS + getting_started.CSS + "</head><body>" + body + '<script src="/assets/vendor/qrcode.js"></script>\n' +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") +
-            ";</script>\n" + SCRIPT.replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS).replace("/*__THEME__*/", report.THEME_JS) + "</body></html>")
+            ";</script>\n" + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + "</body></html>")
 
 
 CSS = """<style>
@@ -237,6 +239,7 @@ BODY = """<div class="wrap">
 <header class="top">
   <div class="brandline">
     """ + report.MARK + """<h1>Settings · __NAME__</h1>
+    <span class="fresh">App-wide: setup, resume PDFs, tailoring, Claude usage and display</span>
   </div>
   <div class="tools" id="tools">
 __TOOLS__  </div>
@@ -248,9 +251,9 @@ __TOOLS__  </div>
 </div>
 """
 
-SCRIPT = r"""<script>
-(function(){
-const $ = id => document.getElementById(id);
+# ---- Script pieces shared by /settings and /profile (profile_page.py): both are two-pane pages under the same header.
+# Each is spliced into the page script at its /*__NAME__*/ marker by fill_script().
+PRELUDE_JS = r"""const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 const phone = () => matchMedia("(max-width:720px)").matches;
@@ -262,11 +265,18 @@ function applyTheme(){
   themeSync();
 }
 applyTheme();
+// "Saved" / error text beside a pane's title
+let saveTimer = null;
+function saveState(el, text, bad){
+  const s = (el.closest(".spane") || document).querySelector(".ssave"); if (!s) return;
+  s.textContent = text; s.classList.toggle("err", !!bad);
+  clearTimeout(saveTimer); if (!bad && text !== "Saving…") saveTimer = setTimeout(() => { s.textContent = ""; }, 2500);
+}"""
 
-// ---- categories: the URL hash picks one (/settings#display); at phone width no hash means "show the list"
+ROUTER_JS = r"""// ---- categories: the URL hash picks one (/settings#display, /profile#search); at phone width no hash means "show the list"
 const CATS = [...document.querySelectorAll(".spane")].map(p => p.dataset.cat);
 function route(){
-  const h = location.hash.slice(1), sel = CATS.includes(h) ? h : "", shown = sel || "resume";  // the desktop default is the first real setting, not Get started
+  const h = location.hash.slice(1), sel = CATS.includes(h) ? h : "", shown = sel || "resume";  // the desktop default is the first real category
   $("slayout").classList.toggle("atList", !sel);
   document.querySelectorAll(".scat").forEach(a => a.setAttribute("aria-current", a.dataset.cat === shown ? "page" : "false"));
   document.querySelectorAll(".spane").forEach(p => p.hidden = p.dataset.cat !== shown);
@@ -285,19 +295,63 @@ document.querySelector(".spanes").addEventListener("click", e => {
   if (history.state && history.state.fromList) history.back();  // return to the list entry we came from
   else { history.pushState(null, "", location.pathname); route(); }
   scrollTo(0, 0);
-});
+});"""
 
+# Header icon row behaviour. Update / Re-rate run on the board (it has the confirm and progress panel); the page may define
+# onPeople() to react once the household list has loaded.
+HEADER_JS = r"""// ---- header: Update / Re-rate run on the board, which has the confirm and progress panel
+const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
+$("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
+$("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
+$("updateBtn").title = "Update job listings now (opens the board): checks every employer for new jobs (about 40 min)";
+$("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Claude re-rates your jobs, no new listings";
+fetch("/api/status").then(r => r.json()).then(s => {
+  if (!s.running) return;
+  $("updateBtn").disabled = true; $("updateBtn").classList.add("busy"); $("updateBtn").title = "Updating job listings now…";
+}).catch(() => {});
+fetch("/api/rerate").then(r => r.json()).then(s => {
+  if (!s.running) return;
+  $("rerateBtn").disabled = true; $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Re-rating your best jobs now…";
+}).catch(() => {});
+// ---- profile menu
+let curPerson = "", PEOPLE = [];
+function loadPeople(){
+  return fetch("/api/people").then(r => r.json()).then(d => {
+    curPerson = d.current; PEOPLE = d.people;
+    const me = d.people.find(p => p.id === d.current) || {};
+    $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
+    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
+    if (typeof onPeople === "function") onPeople(d);
+  }).catch(() => {});
+}
+$("avatarBtn").addEventListener("click", e => { e.stopPropagation(); const h = $("amenu").hidden; $("amenu").hidden = !h; $("avatarBtn").setAttribute("aria-expanded", h); });
+document.addEventListener("click", e => { if (!e.target.closest(".menuWrap")) { $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false"); } });
+$("amenu").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false");
+  const v = b.dataset.person; if (!v) return;
+  if (v === "__add") return toBoard(["jb.run", "addPerson"]);
+  if (v === "__manage") { location.href = "/settings#profiles"; return; }
+  if (v === curPerson) return;
+  fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => location.reload());
+});"""
+
+
+def fill_script(script):
+    """Splice the shared pieces (and the theme button's script) into a page script."""
+    return (script.replace("/*__PRELUDE__*/", PRELUDE_JS).replace("/*__ROUTER__*/", ROUTER_JS)
+            .replace("/*__HEADER__*/", HEADER_JS).replace("/*__THEME__*/", report.THEME_JS))
+
+
+SCRIPT = r"""<script>
+(function(){
+/*__PRELUDE__*/
+/*__ROUTER__*/
 // ---- preferences: each control saves itself on change (the server merges partial updates)
 const prefInputs = () => [...document.querySelectorAll("[data-pref]")];
 function fillPrefs(){ prefInputs().forEach(el => { const v = PREFS[el.dataset.pref]; if (el.type === "checkbox") el.checked = !!v; else if (v != null) el.value = String(v); }); }
 const valueOf = el => el.type === "checkbox" ? el.checked : el.type === "number" ? +el.value : el.value;
 fillPrefs();
-let saveTimer = null;
-function saveState(el, text, bad){
-  const s = (el.closest(".spane") || document).querySelector(".ssave"); if (!s) return;
-  s.textContent = text; s.classList.toggle("err", !!bad);
-  clearTimeout(saveTimer); if (!bad && text !== "Saving…") saveTimer = setTimeout(() => { s.textContent = ""; }, 2500);
-}
 function post(body, el){
   saveState(el, "Saving…");
   return fetch("/api/prefs", {method: "POST", headers: H, body: JSON.stringify(body)}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
@@ -376,23 +430,7 @@ $("keyForm").addEventListener("submit", e => {
 $("keyClear").addEventListener("click", () => fetch("/api/settings", {method: "POST", headers: H, body: JSON.stringify({clear: true})}).then(keyState));
 
 /*__THEME__*/
-// ---- header: Update / Re-rate run on the board, which has the confirm and progress panel
-const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
-$("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
-$("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
-$("updateBtn").title = "Update job listings now (opens the board): checks every employer for new jobs (about 40 min)";
-$("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Claude re-rates your jobs, no new listings";
-fetch("/api/status").then(r => r.json()).then(s => {
-  if (!s.running) return;
-  $("updateBtn").disabled = true; $("updateBtn").classList.add("busy"); $("updateBtn").title = "Updating job listings now…";
-}).catch(() => {});
-fetch("/api/rerate").then(r => r.json()).then(s => {
-  if (!s.running) return;
-  $("rerateBtn").disabled = true; $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Re-rating your best jobs now…";
-}).catch(() => {});
-
-// ---- My profile (opens the board's panel)
-$("resumeBtn").addEventListener("click", () => toBoard(["jb.openResume", "1"]));
+/*__HEADER__*/
 // ---- Get started (the first category): its missing-required count also shows on the Settings gear; lazy, fails silently
 function setGsBadge(s){
   const n = s && !s.complete && s.missing ? s.missing.length : 0;
@@ -402,17 +440,6 @@ function setGsBadge(s){
 const onStatus = setGsBadge;
 /*__CHECKLIST__*/
 load(false);
-// ---- profile menu
-let curPerson = "", PEOPLE = [];
-function loadPeople(){
-  return fetch("/api/people").then(r => r.json()).then(d => {
-    curPerson = d.current; PEOPLE = d.people;
-    const me = d.people.find(p => p.id === d.current) || {};
-    $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
-    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
-    renderProfiles();
-  }).catch(() => {});
-}
 // ---- Profiles pane: rename inline, remove with a two-tap confirm (the server keeps the folder in people_removed)
 const profMsg = (t, bad) => { const m = $("profMsg"); m.textContent = t || ""; m.style.color = bad ? "var(--bad)" : ""; };
 function renderProfiles(){
@@ -455,18 +482,8 @@ $("profList").addEventListener("keydown", e => {
   else if (e.key === "Escape") renderProfiles();
 });
 $("profAdd").addEventListener("click", () => toBoard(["jb.run", "addPerson"]));
+function onPeople(){ renderProfiles(); }
 loadPeople();
-$("avatarBtn").addEventListener("click", e => { e.stopPropagation(); const h = $("amenu").hidden; $("amenu").hidden = !h; $("avatarBtn").setAttribute("aria-expanded", h); });
-document.addEventListener("click", e => { if (!e.target.closest(".menuWrap")) { $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false"); } });
-$("amenu").addEventListener("click", e => {
-  const b = e.target.closest("button"); if (!b) return;
-  $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false");
-  const v = b.dataset.person; if (!v) return;
-  if (v === "__add") return toBoard(["jb.run", "addPerson"]);
-  if (v === "__manage") { location.href = "/settings#profiles"; return; }
-  if (v === curPerson) return;
-  fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => location.reload());
-});
 })();
 </script>
 """
