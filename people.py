@@ -198,6 +198,12 @@ def add(name):
     people = load_index() + [{"id": pid, "name": name}]
     save_index(people)
     pdir(pid=pid)
+    # New profiles start with no clearance filter (the "secret" default in PREF_SCHEMA is kept only so existing
+    # profiles that never saved this preference don't change behaviour).
+    try:
+        save_prefs({"display.clearance": "all"}, pid=pid)
+    except Exception:
+        pass
     return pid
 
 def rename(pid, name):
