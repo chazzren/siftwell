@@ -1,0 +1,2593 @@
+{
+ "id": "us-large-employers",
+ "name": "Large US employers",
+ "part": "A-L",
+ "companies": [
+  {
+   "name": "3M",
+   "tier": "national",
+   "sector": "Industrial conglomerate",
+   "ats": "workday",
+   "tenant": "3m",
+   "wd": "wd1",
+   "site": "Search",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 788,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Abbott",
+   "tier": "national",
+   "sector": "Medical devices",
+   "ats": "workday",
+   "tenant": "abbott",
+   "wd": "wd5",
+   "site": "abbottcareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2000,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "AbbVie",
+   "tier": "national",
+   "sector": "Pharma",
+   "ats": "jsonld",
+   "list_url": "https://careers.abbvie.com/en/jobs",
+   "sitemap": "https://careers.abbvie.com/sitemap.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1725,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Adobe",
+   "tier": "national",
+   "sector": "Software",
+   "ats": "workday",
+   "tenant": "adobe",
+   "wd": "wd5",
+   "site": "external_experienced",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 276,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "AIG",
+   "tier": "national",
+   "sector": "Insurance",
+   "ats": "workday",
+   "tenant": "aig",
+   "wd": "wd1",
+   "site": "aig",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 415,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Albertsons",
+   "tier": "national",
+   "sector": "Grocery retail",
+   "ats": "oracle",
+   "base": "https://eofd.fa.us6.oraclecloud.com",
+   "site": "CX_1001",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Alcoa",
+   "tier": "national",
+   "sector": "Aluminum",
+   "ats": "workday",
+   "tenant": "alcoa",
+   "wd": "wd5",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 111,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Allstate",
+   "tier": "national",
+   "sector": "Insurance",
+   "ats": "workday",
+   "tenant": "allstate",
+   "wd": "wd5",
+   "site": "allstate_careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 407,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Ally Financial",
+   "tier": "national",
+   "sector": "Banking",
+   "ats": "workday",
+   "tenant": "ally",
+   "wd": "wd1",
+   "site": "ally",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 73,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Ameren",
+   "tier": "national",
+   "sector": "Utilities",
+   "ats": "workday",
+   "tenant": "ameren",
+   "wd": "wd1",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 92,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "American Electric Power",
+   "tier": "national",
+   "sector": "Utilities",
+   "ats": "workday",
+   "tenant": "aep",
+   "wd": "wd1",
+   "site": "AEPCareerSite",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 246,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "American Express",
+   "tier": "national",
+   "sector": "Financial services",
+   "ats": "oracle",
+   "base": "https://egug.fa.us2.oraclecloud.com",
+   "site": "CX_1",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 330,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "American Family Insurance",
+   "tier": "national",
+   "sector": "Insurance",
+   "ats": "workday",
+   "tenant": "amfam",
+   "wd": "wd1",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 46,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Ameriprise Financial",
+   "tier": "national",
+   "sector": "Financial services",
+   "ats": "workday",
+   "tenant": "ameriprise",
+   "wd": "wd5",
+   "site": "ameriprise",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 223,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Amgen",
+   "tier": "national",
+   "sector": "Biotech",
+   "ats": "workday",
+   "tenant": "amgen",
+   "wd": "wd1",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1938,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Analog Devices",
+   "tier": "national",
+   "sector": "Semiconductors",
+   "ats": "workday",
+   "tenant": "analogdevices",
+   "wd": "wd1",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 799,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Applied Materials",
+   "tier": "national",
+   "sector": "Semiconductor equipment",
+   "ats": "workday",
+   "tenant": "amat",
+   "wd": "wd1",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2000,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Arch Capital Group",
+   "tier": "national",
+   "sector": "Insurance",
+   "ats": "workday",
+   "tenant": "archgroup",
+   "wd": "wd1",
+   "site": "careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 196,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Arrow Electronics",
+   "tier": "national",
+   "sector": "Electronics distribution",
+   "ats": "workday",
+   "tenant": "arrow",
+   "wd": "wd1",
+   "site": "AC",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 561,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "AT&T",
+   "tier": "national",
+   "sector": "Telecom",
+   "ats": "workday",
+   "tenant": "att",
+   "wd": "wd1",
+   "site": "ATTGeneral",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1110,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Atmos Energy",
+   "tier": "national",
+   "sector": "Utilities",
+   "ats": "workday",
+   "tenant": "atmosenergy",
+   "wd": "wd108",
+   "site": "External_Career_Site",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 42,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Autodesk",
+   "tier": "national",
+   "sector": "Software",
+   "ats": "workday",
+   "tenant": "autodesk",
+   "wd": "wd1",
+   "site": "Ext",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 4,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "AutoNation",
+   "tier": "national",
+   "sector": "Auto retail",
+   "ats": "workday",
+   "tenant": "autonation",
+   "wd": "wd5",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 728,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Avnet",
+   "tier": "national",
+   "sector": "Electronics distribution",
+   "ats": "workday",
+   "tenant": "avnet",
+   "wd": "wd1",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 335,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Bank of America",
+   "tier": "national",
+   "sector": "Banking",
+   "ats": "workday",
+   "tenant": "ghr",
+   "wd": "wd1",
+   "site": "Lateral-US",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1981,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Baxter International",
+   "tier": "national",
+   "sector": "Medical products",
+   "ats": "workday",
+   "tenant": "baxter",
+   "wd": "wd1",
+   "site": "baxter",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 527,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "BD (Becton Dickinson)",
+   "tier": "national",
+   "sector": "Medical technology",
+   "ats": "workday",
+   "tenant": "bdx",
+   "wd": "wd1",
+   "site": "EXTERNAL_CAREER_SITE_USA",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 571,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Biogen",
+   "tier": "national",
+   "sector": "Biotech",
+   "ats": "workday",
+   "tenant": "biibhr",
+   "wd": "wd3",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 267,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "BJ's Wholesale Club",
+   "tier": "national",
+   "sector": "Warehouse retail",
+   "ats": "workday",
+   "tenant": "bjswholesaleclub",
+   "wd": "wd1",
+   "site": "BJsCareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1373,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "BlackRock",
+   "tier": "national",
+   "sector": "Asset management",
+   "ats": "workday",
+   "tenant": "blackrock",
+   "wd": "wd1",
+   "site": "BlackRock_Professional",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 277,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "BNY (Bank of New York Mellon)",
+   "tier": "national",
+   "sector": "Banking",
+   "ats": "oracle",
+   "base": "https://eofe.fa.us2.oraclecloud.com",
+   "site": "BNY",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Boeing",
+   "tier": "national",
+   "sector": "Aerospace and defense",
+   "ats": "workday",
+   "tenant": "boeing",
+   "wd": "wd1",
+   "site": "EXTERNAL_CAREERS",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 743,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Booz Allen Hamilton",
+   "tier": "national",
+   "sector": "Consulting and defense",
+   "ats": "workday",
+   "tenant": "bah",
+   "wd": "wd1",
+   "site": "BAH_Jobs",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2000,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Bristol-Myers Squibb",
+   "tier": "national",
+   "sector": "Pharma",
+   "ats": "workday",
+   "tenant": "bristolmyerssquibb",
+   "wd": "wd5",
+   "site": "BMS",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 629,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Broadcom",
+   "tier": "national",
+   "sector": "Semiconductors",
+   "ats": "workday",
+   "tenant": "broadcom",
+   "wd": "wd1",
+   "site": "External_Career",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 387,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Broadridge",
+   "tier": "national",
+   "sector": "Fintech",
+   "ats": "workday",
+   "tenant": "broadridge",
+   "wd": "wd5",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 313,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Burlington Stores",
+   "tier": "national",
+   "sector": "Retail",
+   "ats": "workday",
+   "tenant": "burlington",
+   "wd": "wd5",
+   "site": "burlingtonCareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 334,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "C.H. Robinson",
+   "tier": "national",
+   "sector": "Logistics",
+   "ats": "workday",
+   "tenant": "chrobinson",
+   "wd": "wd5",
+   "site": "CHRobinson",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 145,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Capital One",
+   "tier": "national",
+   "sector": "Banking",
+   "ats": "workday",
+   "tenant": "capitalone",
+   "wd": "wd12",
+   "site": "Capital_One",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2064,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Cardinal Health",
+   "tier": "national",
+   "sector": "Healthcare distribution",
+   "ats": "workday",
+   "tenant": "cardinalhealth",
+   "wd": "wd1",
+   "site": "EXT",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 849,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "CarMax",
+   "tier": "national",
+   "sector": "Auto retail",
+   "ats": "workday",
+   "tenant": "carmax",
+   "wd": "wd1",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1185,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Caterpillar",
+   "tier": "national",
+   "sector": "Heavy equipment",
+   "ats": "workday",
+   "tenant": "cat",
+   "wd": "wd5",
+   "site": "CaterpillarCareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1005,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "CDW",
+   "tier": "national",
+   "sector": "IT solutions",
+   "ats": "workday",
+   "tenant": "cdw",
+   "wd": "wd5",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 213,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Centene",
+   "tier": "national",
+   "sector": "Health insurance",
+   "ats": "workday",
+   "tenant": "centene",
+   "wd": "wd5",
+   "site": "Centene_External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 380,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "CenterPoint Energy",
+   "tier": "national",
+   "sector": "Utilities",
+   "ats": "jsonld",
+   "sitemap": "https://careers.centerpointenergy.com/sitemap.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "list_url": "https://careers.centerpointenergy.com/",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 34,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Charles Schwab",
+   "tier": "national",
+   "sector": "Brokerage",
+   "ats": "icims",
+   "base": "https://career-schwab.icims.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 288,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Chevron",
+   "tier": "national",
+   "sector": "Oil and gas",
+   "ats": "workday",
+   "tenant": "chevron",
+   "wd": "wd5",
+   "site": "jobs",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 157,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Chewy",
+   "tier": "national",
+   "sector": "Pet retail",
+   "ats": "workday",
+   "tenant": "chewy",
+   "wd": "wd5",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 234,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Chipotle",
+   "tier": "national",
+   "sector": "Restaurants",
+   "ats": "jsonld",
+   "sitemap": "https://jobs.chipotle.com/sitemap.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "list_url": "https://jobs.chipotle.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 8480,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Chubb",
+   "tier": "national",
+   "sector": "Insurance",
+   "ats": "oracle",
+   "base": "https://fa-ewgu-saasfaprod1.fa.ocs.oraclecloud.com",
+   "site": "CX_2001",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Cigna Group",
+   "tier": "national",
+   "sector": "Health insurance",
+   "ats": "workday",
+   "tenant": "cigna",
+   "wd": "wd5",
+   "site": "cignacareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 563,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Cisco",
+   "tier": "national",
+   "sector": "Networking",
+   "ats": "workday",
+   "tenant": "cisco",
+   "wd": "wd5",
+   "site": "Cisco_Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1471,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Citigroup",
+   "tier": "national",
+   "sector": "Banking",
+   "ats": "workday",
+   "tenant": "citi",
+   "wd": "wd5",
+   "site": "2",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2000,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Citizens Financial Group",
+   "tier": "national",
+   "sector": "Banking",
+   "ats": "oracle",
+   "base": "https://hcgn.fa.us2.oraclecloud.com",
+   "site": "CX_1",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Clorox",
+   "tier": "national",
+   "sector": "Consumer goods",
+   "ats": "workday",
+   "tenant": "clorox",
+   "wd": "wd1",
+   "site": "clorox",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 191,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Coca-Cola",
+   "tier": "national",
+   "sector": "Beverages",
+   "ats": "workday",
+   "tenant": "coke",
+   "wd": "wd1",
+   "site": "coca-cola-careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 240,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Comcast",
+   "tier": "national",
+   "sector": "Media and telecom",
+   "ats": "workday",
+   "tenant": "comcast",
+   "wd": "wd115",
+   "site": "Comcast_Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 706,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "ConocoPhillips",
+   "tier": "national",
+   "sector": "Oil and gas",
+   "ats": "workday",
+   "tenant": "conocophillips",
+   "wd": "wd1",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 21,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Corebridge Financial",
+   "tier": "national",
+   "sector": "Insurance",
+   "ats": "workday",
+   "tenant": "corebridgefinancial",
+   "wd": "wd1",
+   "site": "corebridgefinancial",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 148,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Corteva",
+   "tier": "national",
+   "sector": "Agriculture",
+   "ats": "workday",
+   "tenant": "corteva",
+   "wd": "wd5",
+   "site": "corteva",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 46,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Crown Holdings",
+   "tier": "national",
+   "sector": "Packaging",
+   "ats": "workday",
+   "tenant": "crownholdings",
+   "wd": "wd501",
+   "site": "CrownHoldings",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 285,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "CVS Health",
+   "tier": "national",
+   "sector": "Healthcare",
+   "ats": "workday",
+   "tenant": "cvshealth",
+   "wd": "wd1",
+   "site": "CVS_Health_Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 19026,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Danaher",
+   "tier": "national",
+   "sector": "Life sciences",
+   "ats": "workday",
+   "tenant": "danaher",
+   "wd": "wd1",
+   "site": "DanaherJobs",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1458,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Devon Energy",
+   "tier": "national",
+   "sector": "Oil and gas",
+   "ats": "workday",
+   "tenant": "devonenergy",
+   "wd": "wd5",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 53,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Dollar General",
+   "tier": "national",
+   "sector": "Discount retail",
+   "ats": "oracle",
+   "base": "https://ibxwjb.fa.ocs.oraclecloud.com",
+   "site": "CX_1",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Dover",
+   "tier": "national",
+   "sector": "Industrial",
+   "ats": "workday",
+   "tenant": "dover",
+   "wd": "wd103",
+   "site": "Dover",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 763,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Dow",
+   "tier": "national",
+   "sector": "Chemicals",
+   "ats": "workday",
+   "tenant": "dow",
+   "wd": "wd1",
+   "site": "ExternalCareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 174,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "DTE Energy",
+   "tier": "national",
+   "sector": "Utilities",
+   "ats": "jsonld",
+   "sitemap": "https://careers.dteenergy.com/sitemap.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "list_url": "https://careers.dteenergy.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 86,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "DuPont",
+   "tier": "national",
+   "sector": "Specialty materials",
+   "ats": "jsonld",
+   "sitemap": "https://careers.dupont.com/cz/cz/sitemap.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "list_url": "https://careers.dupont.com/us/en",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 206,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "DXC Technology",
+   "tier": "national",
+   "sector": "IT services",
+   "ats": "workday",
+   "tenant": "dxctechnology",
+   "wd": "wd1",
+   "site": "DXCJobs",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1279,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "eBay",
+   "tier": "national",
+   "sector": "E-commerce",
+   "ats": "workday",
+   "tenant": "ebay",
+   "wd": "wd5",
+   "site": "apply",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 280,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Elevance Health",
+   "tier": "national",
+   "sector": "Health insurance",
+   "ats": "workday",
+   "tenant": "elevancehealth",
+   "wd": "wd1",
+   "site": "ANT",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 275,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Emerson Electric",
+   "tier": "national",
+   "sector": "Industrial automation",
+   "ats": "oracle",
+   "base": "https://hdjq.fa.us2.oraclecloud.com",
+   "site": "CX_1",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Equifax",
+   "tier": "national",
+   "sector": "Credit bureau",
+   "ats": "workday",
+   "tenant": "equifax",
+   "wd": "wd5",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 164,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Equinix",
+   "tier": "national",
+   "sector": "Data centers",
+   "ats": "workday",
+   "tenant": "equinix",
+   "wd": "wd1",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 302,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Expedia Group",
+   "tier": "national",
+   "sector": "Online travel",
+   "ats": "workday",
+   "tenant": "expedia",
+   "wd": "wd108",
+   "site": "search",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 124,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "FedEx",
+   "tier": "national",
+   "sector": "Logistics",
+   "ats": "jsonld",
+   "sitemap": "https://careers.fedex.com/sitemap.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "list_url": "https://careers.fedex.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 3292,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Fifth Third Bancorp",
+   "tier": "national",
+   "sector": "Banking",
+   "ats": "workday",
+   "tenant": "fifththird",
+   "wd": "wd5",
+   "site": "53careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 989,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Fiserv",
+   "tier": "national",
+   "sector": "Fintech",
+   "ats": "workday",
+   "tenant": "fiserv",
+   "wd": "wd5",
+   "site": "EXT",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 385,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Flex",
+   "tier": "national",
+   "sector": "Electronics manufacturing",
+   "ats": "workday",
+   "tenant": "flextronics",
+   "wd": "wd1",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 855,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "GameStop",
+   "tier": "national",
+   "sector": "Retail",
+   "ats": "ukg",
+   "host": "gamestop.rec.pro.ukg.net",
+   "tenant": "GAM1502GMSP",
+   "board": "4a726edc-cff3-44d0-a230-bfeb9bb65328",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Gartner",
+   "tier": "national",
+   "sector": "Research and advisory",
+   "ats": "workday",
+   "tenant": "gartner",
+   "wd": "wd5",
+   "site": "EXT",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 803,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "General Dynamics",
+   "tier": "national",
+   "sector": "Aerospace and defense",
+   "ats": "icims",
+   "base": "https://careers-gdms.icims.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "General Electric (GE Aerospace)",
+   "tier": "national",
+   "sector": "Aerospace",
+   "ats": "workday",
+   "tenant": "geaerospace",
+   "wd": "wd5",
+   "site": "GE_ExternalSite",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 613,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "General Mills",
+   "tier": "national",
+   "sector": "Food",
+   "ats": "workday",
+   "tenant": "genmills",
+   "wd": "wd1",
+   "site": "GMI_External_Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 389,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "General Motors",
+   "tier": "national",
+   "sector": "Automotive",
+   "ats": "workday",
+   "tenant": "generalmotors",
+   "wd": "wd5",
+   "site": "Careers_GM",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 695,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Genuine Parts",
+   "tier": "national",
+   "sector": "Auto parts distribution",
+   "ats": "workday",
+   "tenant": "genpt",
+   "wd": "wd1",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2000,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Gilead Sciences",
+   "tier": "national",
+   "sector": "Biotech",
+   "ats": "workday",
+   "tenant": "gilead",
+   "wd": "wd1",
+   "site": "gileadcareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 420,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Global Payments",
+   "tier": "national",
+   "sector": "Fintech",
+   "ats": "workday",
+   "tenant": "tsys",
+   "wd": "wd1",
+   "site": "tsys",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 466,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Goodyear",
+   "tier": "national",
+   "sector": "Tires",
+   "ats": "workday",
+   "tenant": "goodyear",
+   "wd": "wd1",
+   "site": "goodyearCareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 96,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Graybar Electric",
+   "tier": "national",
+   "sector": "Electrical distribution",
+   "ats": "workday",
+   "tenant": "graybar",
+   "wd": "wd1",
+   "site": "Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 429,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Guardian Life",
+   "tier": "national",
+   "sector": "Insurance",
+   "ats": "workday",
+   "tenant": "guardianlife",
+   "wd": "wd5",
+   "site": "Guardian-Life-Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 111,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Hartford (The Hartford)",
+   "tier": "national",
+   "sector": "Insurance",
+   "ats": "workday",
+   "tenant": "thehartford",
+   "wd": "wd5",
+   "site": "Careers_External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 221,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Hershey",
+   "tier": "national",
+   "sector": "Food",
+   "ats": "jsonld",
+   "sitemap": "https://careers.thehersheycompany.com/sitemap.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "list_url": "https://careers.thehersheycompany.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 345,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Hewlett Packard Enterprise",
+   "tier": "national",
+   "sector": "Technology",
+   "ats": "workday",
+   "tenant": "hpe",
+   "wd": "wd5",
+   "site": "Jobsathpe",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1755,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Hilton",
+   "tier": "national",
+   "sector": "Hotels",
+   "ats": "oracle",
+   "base": "https://efet.fa.us2.oraclecloud.com",
+   "site": "CX_1",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Home Depot",
+   "tier": "national",
+   "sector": "Home improvement retail",
+   "ats": "workday",
+   "tenant": "homedepot",
+   "wd": "wd5",
+   "site": "CareerDepot",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 936,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Honeywell",
+   "tier": "national",
+   "sector": "Industrial technology",
+   "ats": "oracle",
+   "base": "https://ibqbjb.fa.ocs.oraclecloud.com",
+   "site": "Honeywell",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Hormel Foods",
+   "tier": "national",
+   "sector": "Food",
+   "ats": "oracle",
+   "base": "https://ekkh.fa.us2.oraclecloud.com",
+   "site": "CX_2002",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 215,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Host Hotels & Resorts",
+   "tier": "national",
+   "sector": "Hotel REIT",
+   "ats": "workday",
+   "tenant": "hosthotels",
+   "wd": "wd5",
+   "site": "HostHotels",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "HP Inc.",
+   "tier": "national",
+   "sector": "Technology",
+   "ats": "workday",
+   "tenant": "hp",
+   "wd": "wd5",
+   "site": "ExternalCareerSite",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 928,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Humana",
+   "tier": "national",
+   "sector": "Health insurance",
+   "ats": "workday",
+   "tenant": "humana",
+   "wd": "wd5",
+   "site": "Humana_External_Career_Site",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 315,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Illinois Tool Works",
+   "tier": "national",
+   "sector": "Industrial",
+   "ats": "workday",
+   "tenant": "itw",
+   "wd": "wd5",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 756,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Ingram Micro",
+   "tier": "national",
+   "sector": "Technology distribution",
+   "ats": "workday",
+   "tenant": "ingrammicro",
+   "wd": "wd5",
+   "site": "ingrammicro",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 371,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Intel",
+   "tier": "national",
+   "sector": "Semiconductors",
+   "ats": "workday",
+   "tenant": "intel",
+   "wd": "wd1",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 853,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Intuit",
+   "tier": "national",
+   "sector": "Software",
+   "ats": "jsonld",
+   "sitemap": "https://jobs.intuit.com/sitemap.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "list_url": "https://jobs.intuit.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 610,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Jabil",
+   "tier": "national",
+   "sector": "Electronics manufacturing",
+   "ats": "workday",
+   "tenant": "jabil",
+   "wd": "wd5",
+   "site": "Jabil_Careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2000,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "JetBlue",
+   "tier": "national",
+   "sector": "Airlines",
+   "ats": "jsonld",
+   "sitemap": "https://careers.jetblue.com/sitemap.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "list_url": "https://careers.jetblue.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 62,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Johnson & Johnson",
+   "tier": "national",
+   "sector": "Healthcare",
+   "ats": "workday",
+   "tenant": "jj",
+   "wd": "wd5",
+   "site": "JJ",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1774,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Johnson Controls",
+   "tier": "national",
+   "sector": "Building technology",
+   "ats": "workday",
+   "tenant": "jci",
+   "wd": "wd5",
+   "site": "jci",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2787,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Jones Lang LaSalle (JLL)",
+   "tier": "national",
+   "sector": "Commercial real estate",
+   "ats": "workday",
+   "tenant": "jll",
+   "wd": "wd1",
+   "site": "jllcareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2000,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "JPMorgan Chase",
+   "tier": "national",
+   "sector": "Banking",
+   "ats": "oracle",
+   "base": "https://jpmc.fa.oraclecloud.com",
+   "site": "CX_1001",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 400,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Juniper Networks",
+   "tier": "national",
+   "sector": "Networking",
+   "ats": "workday",
+   "tenant": "hpe",
+   "wd": "wd5",
+   "site": "Jobsathpe",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1755,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "KLA",
+   "tier": "national",
+   "sector": "Semiconductor equipment",
+   "ats": "workday",
+   "tenant": "kla",
+   "wd": "wd1",
+   "site": "Search",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1156,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Kohl's",
+   "tier": "national",
+   "sector": "Retail",
+   "ats": "workday",
+   "tenant": "kohls",
+   "wd": "wd504",
+   "site": "kohlscareers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2000,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "L3Harris Technologies",
+   "tier": "national",
+   "sector": "Aerospace and defense",
+   "ats": "jsonld",
+   "list_url": "https://careers.l3harris.com/en",
+   "link_prefix": "/en/job/fort-wayne/l3harris-engineering-hiring-event-for-fort-wayne-in-virtual/4832/",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Labcorp",
+   "tier": "national",
+   "sector": "Diagnostics",
+   "ats": "workday",
+   "tenant": "labcorp",
+   "wd": "wd1",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1734,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Land O'Lakes",
+   "tier": "national",
+   "sector": "Agriculture cooperative",
+   "ats": "workday",
+   "tenant": "landolakes",
+   "wd": "wd1",
+   "site": "landolakes",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 175,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Leidos",
+   "tier": "national",
+   "sector": "Defense and IT",
+   "ats": "workday",
+   "tenant": "leidos",
+   "wd": "wd5",
+   "site": "External",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2000,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Loews",
+   "tier": "national",
+   "sector": "Conglomerate",
+   "ats": "workday",
+   "tenant": "loewscorp",
+   "wd": "wd1",
+   "site": "loewscorp",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 2,
+   "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Lowe's",
+   "tier": "national",
+   "sector": "Home improvement retail",
+   "ats": "workday",
+   "tenant": "lowes",
+   "wd": "wd5",
+   "site": "LWS_External_CS",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 13034,
+   "verified_at": "2026-11-10T16:22:25Z"
+  }
+ ],
+ "unsupported": [
+  {
+   "name": "ADM (Archer-Daniels-Midland)",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.e-adm.com/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Advance Auto Parts",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Advanced Micro Devices (AMD)",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "AECOM",
+   "platform": "custom/unknown",
+   "careers_url": "https://aecom.jobs",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Aflac",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "AGCO",
+   "platform": "SuccessFactors",
+   "careers_url": "https://careers.agcocorp.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Agilent Technologies",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Air Products",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Alaska Air Group",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Allegiant Travel",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Alliant Energy",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Alphabet (Google)",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.google.com/about/careers/applications/jobs/results",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Altria Group",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Amazon",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "AMC Entertainment",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "American Airlines",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "American Financial Group",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "American Tower",
+   "platform": "Oracle Recruiting (unmatched)",
+   "careers_url": "https://careers.americantower.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "American Water Works",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Ametek",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Amphenol",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Aon",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "APA Corporation",
+   "platform": "custom/unknown",
+   "careers_url": "https://apacorp.com/careers/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Apple",
+   "platform": "custom/unknown",
+   "careers_url": "https://jobs.apple.com/en-us/search?location=united-states-USA",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Aramark",
+   "platform": "custom/unknown",
+   "careers_url": "https://careers.aramark.com/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Arista Networks",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.arista.com/en/careers/jobs",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Arthur J. Gallagher",
+   "platform": "iCIMS",
+   "careers_url": "https://jobs.ajg.com/ajg-home",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Asbury Automotive Group",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Ashland",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Assurant",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Auto-Owners Insurance",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "AutoZone",
+   "platform": "Oracle Recruiting (unmatched)",
+   "careers_url": "https://careers.autozone.com/hcmUI/CandidateExperience/en/sites/CX_1",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Avantor",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Avery Dennison",
+   "platform": "custom/unknown",
+   "careers_url": "https://averydennison.jobs/jobs/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Avis Budget Group",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Ball Corporation",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Bechtel",
+   "platform": "Phenom",
+   "careers_url": "https://jobs.bechtel.com/us/en",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Berkshire Hathaway",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.berkshirehathaway.com/subs/sublinks.html",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Best Buy",
+   "platform": "custom/unknown",
+   "careers_url": "https://jobs.bestbuy.com/bby",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Block",
+   "platform": "custom/unknown",
+   "careers_url": "https://block.xyz/careers/jobs",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Booking Holdings",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "BorgWarner",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.borgwarner.com/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Boston Scientific",
+   "platform": "SuccessFactors",
+   "careers_url": "https://jobs.bostonscientific.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Boyd Gaming",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.boydgaming.com/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Brinker International",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Brown-Forman",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.brown-forman.com/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Brunswick",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Caesars Entertainment",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Campbell Soup",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Cargill",
+   "platform": "SuccessFactors",
+   "careers_url": "https://careers.cargill.com/en",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Carnival Corporation",
+   "platform": "Radancy/TMP",
+   "careers_url": "https://jobs.carnivalcorp.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Carrier Global",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Casey's General Stores",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "CBRE Group",
+   "platform": "custom/unknown",
+   "careers_url": "https://careers.cbre.com",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Celanese",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Cencora",
+   "platform": "Phenom",
+   "careers_url": "https://careers.cencora.com/us/en",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Charter Communications",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Cincinnati Financial",
+   "platform": "Taleo",
+   "careers_url": "https://www.cinfin.com/cincinnati-insurance-careers",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Cintas",
+   "platform": "SuccessFactors",
+   "careers_url": "https://careers.cintas.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "CME Group",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "CMS Energy",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Cognizant",
+   "platform": "custom/unknown",
+   "careers_url": "https://careers.cognizant.com/global-en/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Colgate-Palmolive",
+   "platform": "SuccessFactors",
+   "careers_url": "https://jobs.colgate.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Comerica",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.53.com/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Conagra Brands",
+   "platform": "Phenom",
+   "careers_url": "https://careers.conagrabrands.com/us/en",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Consolidated Edison",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Constellation Brands",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Corning",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Costco",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "CSX",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Cummins",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.cummins.com/en-na/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "D.R. Horton",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Dana",
+   "platform": "SuccessFactors",
+   "careers_url": "https://jobs.dana.com:443/",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Darden Restaurants",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "DaVita",
+   "platform": "Phenom",
+   "careers_url": "https://careers.davita.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Deere & Company",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Dell Technologies",
+   "platform": "custom/unknown",
+   "careers_url": "https://enterpriseplatform.dell.com/hcmUI/CandidateExperience/en/sites/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Delta Air Lines",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Dick's Sporting Goods",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Dillard's",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Discover Financial",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Disney",
+   "platform": "Phenom",
+   "careers_url": "https://join.disneycareers.com/global/en",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Dollar Tree",
+   "platform": "Phenom",
+   "careers_url": "https://careers.dollartree.com/us/en",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Dominion Energy",
+   "platform": "SuccessFactors",
+   "careers_url": "https://careers.dominionenergy.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Domino's",
+   "platform": "custom/unknown",
+   "careers_url": "https://jobs.dominos.com/us/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Duke Energy",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Eastman Chemical",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.eastman.com/en/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Eaton",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Ecolab",
+   "platform": "Phenom",
+   "careers_url": "https://jobs.ecolab.com/global/en",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Edison International",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Electronic Arts",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Eli Lilly",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Entergy",
+   "platform": "SuccessFactors",
+   "careers_url": "https://jobs.entergy.com/",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Enterprise Holdings",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Enterprise Products Partners",
+   "platform": "Taleo",
+   "careers_url": "https://enterpriseproducts.com/careers/",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "EOG Resources",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.eogresources.com/careers/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Estee Lauder",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Evergy",
+   "platform": "Taleo",
+   "careers_url": "https://www.evergy.com/careers",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Exelon",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Expeditors International",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.expeditors.com/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "ExxonMobil",
+   "platform": "SuccessFactors",
+   "careers_url": "https://jobs.exxonmobil.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Fidelity Investments",
+   "platform": "Workday (unmatched)",
+   "careers_url": "https://jobs.fidelity.com/en/",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "First American Financial",
+   "platform": "Phenom",
+   "careers_url": "https://careers.firstam.com/us/en",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "FirstEnergy",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.firstenergycorp.com/careers.html",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Fluor",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.fluor.com/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Ford Motor",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Fox Corporation",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.foxcareers.com/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Freeport-McMoRan",
+   "platform": "custom/unknown",
+   "careers_url": "https://fcx.com/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Frontier Communications",
+   "platform": "custom/unknown",
+   "careers_url": "https://careers.frontier.com/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Gap Inc.",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.gapinc.com/en-us/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Goldman Sachs",
+   "platform": "Avature",
+   "careers_url": "https://www.goldmansachs.com/careers",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "H&R Block",
+   "platform": "iCIMS",
+   "careers_url": "https://careers.hrblock.com/careers-home",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Halliburton",
+   "platform": "SuccessFactors",
+   "careers_url": "https://jobs.halliburton.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Hasbro",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "HCA Healthcare",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Henry Schein",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Hertz",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Hess",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Hologic",
+   "platform": "custom/unknown",
+   "careers_url": "https://careers.hologic.com",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Huntington Bancshares",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Huntington Ingalls Industries",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Hyatt Hotels",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "IBM",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.ibm.com/careers/search",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Ingersoll Rand",
+   "platform": "SuccessFactors",
+   "careers_url": "https://careers.irco.com",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Insight Enterprises",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.insight.com/en_US/careers.html",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Intercontinental Exchange",
+   "platform": "iCIMS",
+   "careers_url": "https://careers.ice.com/jobs",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "International Paper",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Intuitive Surgical",
+   "platform": "SmartRecruiters",
+   "careers_url": "https://careers.intuitive.com/en/",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Jacobs",
+   "platform": "custom/unknown",
+   "careers_url": "https://careers.jacobs.com",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Kaiser Permanente",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Kellanova",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Keurig Dr Pepper",
+   "platform": "Eightfold",
+   "careers_url": "https://careers.keurigdrpepper.com/en",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "KeyCorp",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Kimberly-Clark",
+   "platform": "custom/unknown",
+   "careers_url": "https://careers.kimberly-clark.com",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Kinder Morgan",
+   "platform": "custom/unknown",
+   "careers_url": "https://kindermorgan.com/Careers/charlestonjobs",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "KKR",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.kkr.com/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Koch Industries",
+   "platform": "Avature",
+   "careers_url": "https://www.kochinc.com/career-opportunities",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Kraft Heinz",
+   "platform": "custom/unknown",
+   "careers_url": "https://careers.kraftheinzcompany.com/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Kroger",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Lam Research",
+   "platform": "SuccessFactors",
+   "careers_url": "https://careers.lamresearch.com/careers",
+   "note": "Job system not supported yet."
+  },
+  {
+   "name": "Las Vegas Sands",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Lear Corporation",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.lear.com/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Lennar",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Levi Strauss",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Liberty Mutual",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Lincoln National",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Lithia Motors",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "LKQ",
+   "platform": "unresolved",
+   "careers_url": "",
+   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
+  },
+  {
+   "name": "Lockheed Martin",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.lockheedmartinjobs.com/cgi-bin/ext_redir.pl",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Lumen Technologies",
+   "platform": "custom/unknown",
+   "careers_url": "https://jobs.lumen.com/global/en/",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  },
+  {
+   "name": "Lyft",
+   "platform": "custom/unknown",
+   "careers_url": "https://www.lyft.com/careers",
+   "note": "Custom or JavaScript-only careers site; no standard feed found."
+  }
+ ]
+}
