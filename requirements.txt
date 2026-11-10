@@ -7,3 +7,5 @@ python-docx==1.2.0
 pillow-heif; sys_platform == "win32"
 # Siftwell's own window (Windows: Edge WebView2 through pythonnet, which installs as ready-made wheels; Mac: WKWebView). Not used on Linux.
 pywebview==6.2.1; sys_platform != "linux"
+# The system-tray icon shown while Siftwell runs without its window (pure Python; uses Pillow). Not used on Linux.
+pystray==0.19.5; sys_platform != "linux"

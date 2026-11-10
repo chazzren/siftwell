@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 12 80 92" width="80" height="92" role="img" aria-label="Siftwell">
+  <g fill="currentColor"><circle cx="38" cy="20" r="4"/><circle cx="56" cy="20" r="4"/><circle cx="74" cy="20" r="4"/></g>
+  <polygon points="22,32 90,32 64,62 64,78 48,78 48,62" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/>
+  <circle cx="56" cy="94" r="6" fill="#FAC775"/>
+</svg>

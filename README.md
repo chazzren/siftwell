@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/siftwell-logo-dark.svg">
+    <img src="assets/brand/siftwell-logo.svg" alt="Siftwell" width="320">
+  </picture>
+</p>
+
 # Siftwell
 
 **Your own job search assistant that runs on your computer.**
@@ -111,7 +118,7 @@ Coming soon: **Find employers near me**, where Claude researches employers in yo
 
 ## Using it day to day
 
-- **Starting and stopping:** double-click **Start Siftwell** any time; it opens the Siftwell window (if it's already running, it just opens a window on it, or brings the open one to the front). **Closing the Siftwell window stops Siftwell**, including the nightly update, so leave the window open (minimized is fine) if you want Siftwell to keep working in the background. If an update or re-rate is running, Siftwell asks before it stops. The exception is **Keep Siftwell available to my phone when the window is closed** in **Settings → Get started** (off by default): when it's on, Siftwell keeps running quietly after you close the window, so your phone and the nightly update keep working, and **Start Siftwell** later just opens a window again. To stop it completely at any time, double-click **Stop Siftwell** (it also closes the window). If Siftwell was started by **Start Siftwell when I sign in**, it is already running when you open a window, and closing the window leaves it running. Siftwell remembers the window's size and position.
+- **Starting and stopping:** double-click **Start Siftwell** any time; it opens the Siftwell window (if it's already running, it just opens a window on it, or brings the open one to the front). **Closing the Siftwell window stops Siftwell**, including the nightly update, so leave the window open (minimized is fine) if you want Siftwell to keep working in the background. If an update or re-rate is running, Siftwell asks before it stops. The exception is **Keep Siftwell available to my phone when the window is closed** in **Settings → Get started** (off by default): when it's on, Siftwell keeps running in the background after you close the window (a little memory used, reachable on your home network; a Siftwell icon appears in the system tray near the clock, and right-clicking it lets you open Siftwell, copy the phone link, or stop Siftwell) until you turn the switch off, double-click **Stop Siftwell**, or restart your computer, so your phone and the nightly update keep working, and **Start Siftwell** later just opens a window again. To stop it completely at any time, double-click **Stop Siftwell** (it also closes the window). If Siftwell was started by **Start Siftwell when I sign in**, it is already running when you open a window, and closing the window leaves it running. Siftwell remembers the window's size and position.
 - **The board** shows your matching jobs with **Appeal** and **Match** scores. Click a job for Claude's read on it, then **Save**, **Mark applied**, **Not for me**, or **Tailor my resume**.
 - **Header icons:** Home · Update job listings (checks every company, ~40 min) · Re-rate (Claude re-scores your best jobs after you change your resume or settings) · **My profile** (your resume, search settings, target and companies) · **Theme** (click to cycle Auto, Light and Dark; Auto follows your device, and it is the same choice as Settings → Display → Theme) · Settings (display, resume PDF, Claude usage, and the **Get started** setup checklist as its first item; a small number on the gear shows how many required setup steps are still missing, and it disappears once you're set up) · your profile menu at the top right (switch person, add a person, manage profiles).
 - **Adding, renaming and removing people:** open **Settings → Profiles**. It lists everyone in your household with **Rename** and **Remove** buttons (Remove asks you to tap twice) and an **Add a person** button. Siftwell won't remove the last profile, or anyone while an update is running. A removed person isn't deleted: their folder is moved to `people_removed` inside your data folder, so it can be recovered by hand.
@@ -122,7 +129,7 @@ Coming soon: **Find employers near me**, where Claude researches employers in yo
 
 ## Your data stays on your computer
 
-Everything Siftwell creates or learns is stored only on your computer, outside the app folder:
+Your information stays on this computer. Siftwell keeps your resume, profiles, saved jobs and ratings in a folder on your PC (not in the cloud). If you connect Claude, job descriptions and your resume are sent to Claude only to rate jobs and tailor resumes. Everything Siftwell creates or learns is stored only on your computer, outside the app folder:
 - **Windows:** `%APPDATA%\JobBoard`
 - **Mac:** `~/Library/Application Support/JobBoard`
 

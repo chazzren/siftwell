@@ -770,7 +770,13 @@ def status(fresh=False):
 
 
 # ---------------------------------------------------------------- routes
-ASSET_FILES = {"/assets/vendor/qrcode.js": ("qrcode.js", "application/javascript")}
+ASSET_FILES = {  # exact-match allowlist: URL path -> (file under assets/, content type)
+    "/assets/vendor/qrcode.js": ("vendor/qrcode.js", "application/javascript"),
+    "/assets/brand/siftwell-mark.svg": ("brand/siftwell-mark.svg", "image/svg+xml"),
+    "/assets/brand/favicon-16.png": ("brand/favicon-16.png", "image/png"),
+    "/assets/brand/favicon-32.png": ("brand/favicon-32.png", "image/png"),
+    "/assets/brand/apple-touch-icon.png": ("brand/apple-touch-icon.png", "image/png"),
+}
 GET_PATHS = ("/getting-started", "/api/setup-status", "/api/getting-started/install", *ASSET_FILES)
 
 
@@ -781,7 +787,7 @@ def ping():
 def handle_get(h, path, pid, query=""):
     if path in ASSET_FILES:
         name, ctype = ASSET_FILES[path]
-        data = open(os.path.join(paths.ASSETS, "vendor", name), "rb").read()
+        data = open(os.path.join(paths.ASSETS, *name.split("/")), "rb").read()
         h._send(200, data, ctype, cache="max-age=86400")
         return True
     if path == "/getting-started":
@@ -885,6 +891,7 @@ CSS = """<style>
 .gsrun{color:var(--muted);font-size:13px;margin:4px 0 0}
 .gsopt{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:26px 0 0}
 .gsoptp{margin:2px 0 0;color:var(--muted);font-size:13px}
+.gsfoot{margin-top:20px;word-break:break-all}
 .gsl{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
 .gsr{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:28px minmax(0,1fr);gap:4px 12px}
 .gsst{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:14px;font-weight:700;color:var(--muted);margin-top:1px}
@@ -926,12 +933,13 @@ PANE_HTML = """<div class="gs">
   <h3 class="gsopt">Optional</h3>
   <p class="gsoptp">Nice to have. These never count toward setup.</p>
   <ul class="gsl" id="listOpt"></ul>
+  <p class="gsoptp gsfoot">Your information stays on this computer: your resume, profiles, saved jobs and ratings live in a folder on this PC, not in the cloud. Your data folder: <code>""" + html.escape(paths.DATA) + """</code></p>
 </div>"""
 
 BODY = """<div class="wrap">
 <header class="top">
   <div class="brandline">
-    <h1>Get started</h1>
+    """ + report.MARK + """<h1>Get started</h1>
   </div>
 </header>
 <main>
@@ -1027,9 +1035,9 @@ function rowPhone(){
 }
 function rowKeep(){
   const k = S.keep, p = S.phone;
-  let desc = k.on ? "On. When you close the Siftwell window, Siftwell keeps running in the background so your phone can still open it. Use Stop Siftwell to end it."
-                  : "Off. Closing the Siftwell window stops Siftwell. Turn this on if you want your phone to keep working after you close the window.";
+  let desc = "When this is on, Siftwell keeps running in the background after you close its window, with no window or icon showing, until you turn this off, double-click Stop Siftwell, or restart your computer. It uses a little memory and stays reachable on your home network so your phone can open it. A Siftwell icon appears in the system tray (near the clock) while it runs in the background; right-click it to open or stop Siftwell.";
   let body = `<label class="gsw"><input type="checkbox" class="sw" role="switch" id="swKeep" ${k.on ? "checked" : ""} ${ui.busy.keep ? "disabled" : ""}><span>${k.on ? "On" : "Off"}</span></label>`;
+  if (k.on) body += `<span class="gsmsg">Siftwell is running in the background. Turn this off to have it stop when you close the window.</span>`;
   if (k.on && !p.on) body += `<span class="gsmsg">Phone access above is off, so only this computer can open Siftwell while it runs in the background.</span>`;
   return {desc, body: body + msgHtml("keep")};
 }

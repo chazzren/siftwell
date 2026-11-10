@@ -41,6 +41,9 @@ TITLE = "Siftwell"
 DEFAULT_SIZE = (1280, 860)
 MIN_SIZE = (520, 480)
 NOWIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+ICON_ICO = os.path.join(APP, "assets", "brand", "siftwell.ico")
+ICON_PNG = os.path.join(APP, "assets", "brand", "icon-512.png")
+APP_ID = "Siftwell.App"
 
 LOG = os.path.join(paths.DATA, "window.log")
 GEOM = os.path.join(paths.DATA, "window.json")
@@ -431,6 +434,63 @@ def _busy_reason(port):
     return ""
 
 
+# ---------------------------------------------------------------- window / taskbar icon
+def set_window_icon(window=None):
+    """pywebview ignores icons on Windows, so send WM_SETICON (big + small) to our own top-level window. Returns True
+    when both icons were sent. Mac: sets the Dock icon through AppKit when PyObjC is there (it is, with pywebview)."""
+    try:
+        if WINDOWS:
+            import ctypes
+            from ctypes import wintypes
+            if not os.path.exists(ICON_ICO):
+                return False
+            user32 = ctypes.windll.user32
+            user32.LoadImageW.restype = wintypes.HANDLE
+            user32.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+            user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+            user32.SendMessageW.restype = ctypes.c_ssize_t
+            hwnds = []
+            me = os.getpid()
+
+            @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            def cb(hwnd, _):
+                p = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(p))
+                if p.value == me and user32.IsWindowVisible(hwnd):
+                    buf = ctypes.create_unicode_buffer(64)
+                    user32.GetWindowTextW(hwnd, buf, 64)
+                    if buf.value == TITLE:
+                        hwnds.append(hwnd)
+                return True
+            user32.EnumWindows(cb, 0)
+            if not hwnds:
+                return False
+            # LR_LOADFROMFILE 0x10; IMAGE_ICON 1; WM_SETICON 0x80; ICON_SMALL 0, ICON_BIG 1
+            big = user32.LoadImageW(None, ICON_ICO, 1, user32.GetSystemMetrics(11), user32.GetSystemMetrics(12), 0x10)   # SM_CXICON
+            small = user32.LoadImageW(None, ICON_ICO, 1, user32.GetSystemMetrics(49), user32.GetSystemMetrics(50), 0x10)  # SM_CXSMICON
+            if not big or not small:
+                log("window icon: couldn't load the .ico")
+                return False
+            for h in hwnds:
+                user32.SendMessageW(h, 0x80, 1, big)
+                user32.SendMessageW(h, 0x80, 0, small)
+            _ICONS.extend([big, small])      # keep the handles for the life of the process
+            log(f"window icon set on {len(hwnds)} window(s)")
+            return True
+        if MAC and os.path.exists(ICON_PNG):
+            from AppKit import NSApplication, NSImage
+            img = NSImage.alloc().initWithContentsOfFile_(ICON_PNG)
+            if img is not None:
+                NSApplication.sharedApplication().setApplicationIconImage_(img)
+                return True
+    except Exception as e:
+        log(f"couldn't set the window icon: {e}")
+    return False
+
+
+_ICONS = []
+
+
 # ---------------------------------------------------------------- the window
 def _fallback_to_browser(url, why):
     log(f"no window ({why}); opening the browser")
@@ -477,7 +537,7 @@ def main(argv=None, ready=None):
     if WINDOWS:
         try:
             import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Siftwell.Desktop")   # own taskbar button
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)   # own taskbar button (and the funnel, not Python's icon)
         except Exception:
             pass
 
@@ -507,7 +567,12 @@ def main(argv=None, ready=None):
         state["max"] = state["min"] = False
         remember()
 
+    def on_shown(*_):
+        set_window_icon(window)
+
     def on_loaded(*_):
+        if not _ICONS:
+            set_window_icon(window)
         try:
             window.evaluate_js(EXTERNAL_LINK_JS)
         except Exception as e:
@@ -528,6 +593,7 @@ def main(argv=None, ready=None):
     window.events.maximized += on_max
     window.events.minimized += on_min
     window.events.restored += on_restore
+    window.events.shown += on_shown
     window.events.loaded += on_loaded
     window.events.closing += on_closing
 

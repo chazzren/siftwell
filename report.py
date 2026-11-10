@@ -3,7 +3,13 @@ import json
 
 CURRENT = {}  # current pay comes from each profile's settings (payload["current"])
 
+MARK = '<svg class="mk" viewBox="16 12 80 92" aria-hidden="true"><g fill="currentColor"><circle cx="38" cy="20" r="4"/><circle cx="56" cy="20" r="4"/><circle cx="74" cy="20" r="4"/></g><polygon points="22,32 90,32 64,62 64,78 48,78 48,62" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><circle cx="56" cy="94" r="6" fill="#FAC775"/></svg>'  # = assets/brand/siftwell-mark-mono.svg
+
 HEAD = """<title>Siftwell</title>
+<link rel="icon" type="image/svg+xml" href="/assets/brand/siftwell-mark.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/brand/favicon-16.png">
+<link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png">
 <script>try{var t=localStorage.getItem("jb.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -291,6 +297,7 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
 .wrap{max-width:1360px}
 header.top{align-items:center}
 .brandline{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brandline .mk{width:24px;height:24px;flex:none;align-self:center;color:var(--ink);margin-right:-4px}
 .fresh{color:var(--muted);font-size:12.5px}
 .avatarBtn{display:inline-flex;align-items:center;gap:8px;height:var(--h);border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 12px 0 4px;font-weight:600;cursor:pointer;color:var(--ink)}
 .avatarBtn .av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:13px}
@@ -448,7 +455,7 @@ TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-l
 BODY = """<div class="wrap">
 <header class="top">
   <div class="brandline">
-    <h1>Siftwell</h1>
+    """ + MARK + """<h1>Siftwell</h1>
     <span class="fresh" id="sub"></span><span class="fresh" id="nextRun"></span>
   </div>
   <div class="tools" id="tools" hidden>
