@@ -80,7 +80,8 @@ def empty_board(pid):
     report.build({"generated": dt.datetime.now().isoformat(timespec="minutes"), "salary_floor": st["salary_floor"],
                   "ai_status": "no_profile", "pivot_status": "", "pivot_name": "AI pivot", "pivot_enabled": bool(st["pivot_ai"]),
                   "claude_ready": _claude_ready(),
-                  "seniority": {"mine": st["seniority_mine"], "band": st["seniority_band"]}, "ai_scored": 0,
+                  "seniority": {"mine": st["seniority_mine"], "band": st["seniority_band"]},
+                  "travel_max": st.get("travel_max") or "any", "ai_scored": 0,
                   "person": {"id": pid, "name": people.name(pid)}, "people": people.load_index(),
                   "current": {"base": st.get("current_base"), "label": st.get("current_label") or ""},
                   "profile": None, "companies": [], "jobs": []}, people.pdir("report.html", pid=pid))
@@ -1017,7 +1018,17 @@ class H(BaseHTTPRequestHandler):
             out["rescoring"] = _RECOMPUTE["running"]
             return self._send(200, out)
         if path == "/api/profile/board":
-            return self._send(200, board_counts(pid))
+            # The board page names its own profile; it waits for board_at to change (and no rebuild to be queued or
+            # running) after a My search change, then reloads. My profile sends no person and gets the cookie's.
+            bp = self._page_person(_qarg(self.path, "person"))
+            out = dict(board_counts(bp))
+            try:
+                out["board_at"] = os.stat(people.pdir("report.html", pid=bp)).st_mtime_ns
+            except OSError:
+                out["board_at"] = None
+            with lock:
+                out["rebuilding"] = bool(_RECOMPUTE["running"] or _RECOMPUTE["all"] or bp in _RECOMPUTE["pending"])
+            return self._send(200, out)
         if path == "/api/setup":
             import setup_flow
             return self._send(200, setup_flow.get_state(pid, ps()["resume"]))
@@ -1152,7 +1163,8 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/target/suggest":
             return self._send(200, ps().get("suggest") or {"running": False, "missing": True})
         if path == "/api/people":
-            return self._send(200, {"people": _people_list(), "current": pid, "settings": people.settings(), "prefs": people.prefs(),
+            sp = self._page_person(_qarg(self.path, "person"))  # the board asks for its own profile's settings (My search)
+            return self._send(200, {"people": _people_list(), "current": pid, "settings": people.settings(sp), "prefs": people.prefs(sp),
                                     "target_job": ps().get("target") or {"running": False}})
         if path == "/api/companies/mine":
             import company_add
@@ -1318,6 +1330,7 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True, "prefs": people.save_prefs({k: d for k, (d, _) in people.PREF_SCHEMA.items()})})
             return self._send(200, {"ok": True, "prefs": people.save_prefs(body.get("prefs") or {})})
         if path == "/api/person/settings":
+            pid = self._page_person(body.get("person"))  # the board's My search names its profile; My profile uses the cookie's
             self._act("settings saved", pid, "profile")
             st = body.get("settings") or {}
             clean = {}

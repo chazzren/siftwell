@@ -245,6 +245,11 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
 .field input[type=number]{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;width:100%}
 .fgroup{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);border-top:1px solid var(--line);padding-top:10px}
 .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:12px}
+.fgroup.first{border-top:0;padding-top:0}
+.fhint{margin:-6px 0 0;font-size:13px;color:var(--muted)}
+.fhint:empty{display:none}
+.fhint.err{color:var(--bad)}
+.field input[type=text]{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;width:100%;min-width:0}
 .filters:has(.fpanel:not([hidden])){position:static}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .field select{width:100%}
@@ -291,6 +296,8 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
   .frow select{flex:1 1 auto}
   .fgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .fgrid .field:first-child,.fgrid .field:last-child{grid-column:1/-1}
+  .msgrid .field:first-child,.fview .field:first-child{grid-column:auto}
+  .msgrid .field.wide{grid-column:1/-1}
   nav.tabs{gap:16px;overflow-x:auto;scrollbar-width:none}
   nav.tabs::-webkit-scrollbar{display:none}
 }
@@ -564,19 +571,33 @@ BODY = """<div class="wrap">
     <div class="nlbar" id="nlBar" role="status" aria-live="polite" hidden></div>
     <div class="quick" id="quick"></div>
     <div class="fpanel" id="fPanel" hidden>
-      <div class="fgrid">
-        <div class="field"><span class="flabel">Workplace</span>
-          <div class="seg" id="wp" role="group" aria-label="Workplace"><button data-v="all" aria-pressed="true">All</button><button data-v="remote" aria-pressed="false">Remote</button><button data-v="dmv" aria-pressed="false">Near me</button></div></div>
+      <div id="msWrap" hidden>
+      <div class="fgroup first">My search</div>
+      <p class="fhint">These decide which jobs reach your board. They are saved with your profile.</p>
+      <div class="fgrid msgrid" id="msGrid">
+        <label class="field"><span class="flabel">Home ZIP or City, ST</span><input type="text" id="msZip" data-ms="home_zip" placeholder="e.g. 20170" autocomplete="postal-code"></label>
+        <label class="field"><span class="flabel">Search radius</span><select id="msRadius" data-ms="radius_miles">
+          <option value="10">10 miles</option><option value="25">25 miles</option><option value="35">35 miles</option><option value="50">50 miles</option><option value="75">75 miles</option></select></label>
+        <div class="field wide"><span class="flabel" id="msWpLbl">Ways of working</span>
+          <div class="checks" role="group" aria-labelledby="msWpLbl"><label class="chk"><input type="checkbox" data-mswp="onsite"> On-site</label>
+          <label class="chk"><input type="checkbox" data-mswp="hybrid"> Hybrid</label>
+          <label class="chk"><input type="checkbox" data-mswp="remote"> Remote</label></div></div>
+        <div class="field wide"><span class="flabel">Nationwide</span>
+          <div class="checks"><label class="chk"><input type="checkbox" id="msRemoteUs" data-ms="remote_us"> Remote jobs anywhere in the US</label></div></div>
+        <label class="field"><span class="flabel">Travel limit</span><select id="msTravel" data-ms="travel_max">
+          <option value="none">None</option><option value="light">Light (under 10%)</option><option value="moderate">Some (up to 25%)</option><option value="any">Any</option></select></label>
+        <label class="field"><span class="flabel">Lowest base ($)</span><input type="number" inputmode="numeric" step="5000" min="30000" id="msFloor" data-ms="salary_floor"></label>
+        <label class="field wide"><span class="flabel">Your level</span><select id="msLevel" data-ms="seniority_mine">
+          <option value="2">Mid-level</option><option value="3">Senior</option><option value="4">Lead / Manager</option><option value="5">Principal / Sr. Manager</option><option value="6">Director</option><option value="7">VP / Executive</option></select></label>
+      </div>
+      <p class="fhint" id="msState" role="status" aria-live="polite"></p>
+      <div class="fgroup">Narrow the list</div>
+      </div>
+      <div class="fgrid fview">
         <label class="field"><span class="flabel">Fit</span><select id="lbl"></select></label>
-        <label class="field"><span class="flabel">Seniority</span><select id="lvl">
-          <option value="near" selected>Near my level</option><option value="mine">My level</option>
-          <option value="above">Above my level</option><option value="below">Below my level</option><option value="all">Any level</option></select></label>
         <label class="field"><span class="flabel">Clearance</span><select id="clr">
           <option value="all">Any clearance</option><option value="none">No clearance mentioned</option>
           <option value="nopoly">No TS/SCI + poly</option><option value="secret" selected>Secret or less</option></select></label>
-        <label class="field"><span class="flabel">Travel</span><select id="trv">
-          <option value="all">Any travel</option><option value="no25">Under 25%</option>
-          <option value="low">10% or less</option><option value="unmentioned">Not mentioned</option></select></label>
         <label class="field"><span class="flabel">Company</span><select id="co"><option value="all">All companies</option></select></label>
         <label class="field"><span class="flabel">Show</span><select id="st">
           <option value="active">Not hidden</option><option value="saved">Saved</option><option value="applied">Applied</option><option value="hidden">Hidden</option><option value="all">Everything</option></select></label>
@@ -698,7 +719,7 @@ $("cListField").hidden = LISTS.options.length < 2;
 const cos = [...new Set(jobs.map(j=>j.company))].sort();
 $("co").insertAdjacentHTML("beforeend", cos.map(c => `<option>${esc(c)}</option>`).join(""));
 
-let shown = 100, wp = "all", mode = "current", gapSel = "";
+let shown = 100, wp = "all", mode = "current", gapSel = "";  // wp: the "Remote" quick filter ("all" or "remote")
 let NL = null, NL_PREV_SORT = "score", nlSeq = 0;  // natural-language search result from /api/search
 const PVL = {apply_now: "Apply now", after_prep: "After prep", after_portfolio: "After prep", long_shot: "Long shot", skip: "Skip"};
 const pvLab = j => j.pv_label === "after_portfolio" ? "after_prep" : j.pv_label;
@@ -726,13 +747,73 @@ function drawPivotPanel(){
 }
 $("pvCounts").addEventListener("click", e => { const b = e.target.closest("button[data-lbl]"); if (!b) return; $("lbl").value = b.dataset.lbl; gapSel = ""; shown = 100; drawPivotPanel(); render(); });
 $("pvGaps").addEventListener("click", e => { const b = e.target.closest("button[data-gap]"); if (!b) return; gapSel = gapSel === b.dataset.gap ? "" : b.dataset.gap; if (gapSel) $("lbl").value = "noskip"; shown = 100; drawPivotPanel(); render(); });
-$("wp").addEventListener("click", e => {
-  const b = e.target.closest("button"); if (!b) return;
-  wp = b.dataset.v; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x === b)); shown = 100; render();
-});
-["q","clr","co","st","sort","paidonly","newonly","reqall","lbl","trv","nowide","lvl","cList","cType","cSize","cVal","cAge","cGd","cLay","cEq"].forEach(id => $(id).addEventListener("input", () => { shown = 100; render(); }));
+["q","clr","co","st","sort","paidonly","newonly","reqall","lbl","nowide","cList","cType","cSize","cVal","cAge","cGd","cLay","cEq"].forEach(id => $(id).addEventListener("input", () => { shown = 100; render(); }));
 $("more").addEventListener("click", () => { shown += 100; render(); });
 $("count").addEventListener("click", e => { if (e.target.id === "reqShow") { $("reqall").checked = true; shown = 100; render(); } });
+// ---- My search (top of the Filters panel): this profile's saved search settings, the same ones /setup asks for.
+// They decide which jobs reach the board: home ZIP / radius / ways of working / remote anywhere / pay floor are applied
+// when the board is built (jobfinder.select_for_person); level and travel limit are applied here (mySearchOk).
+// Each change saves through POST /api/person/settings, like My profile used to: the server re-checks this board (and
+// queues the automatic quick check of new jobs), and the page reloads itself once the rebuilt board is ready.
+// None of these reset Claude's ratings (the pay floor only matters to the Target tab's ratings).
+let MYS = null, msBase, msTimer = null;
+const msNow = () => MYS || {seniority_band: (D.seniority && D.seniority.band) || [3, 5], travel_max: D.travel_max || "any"};
+function mySearchOk(j){
+  const s = msNow(), SB = s.seniority_band || [3, 5], L = j.level, t = j.travel || "", tm = s.travel_max || "any";
+  if (L != null && (L < SB[0] || L > SB[1])) return false;
+  if (tm === "moderate" && t === "heavy") return false;
+  if (tm === "light" && !["", "none", "light"].includes(t)) return false;
+  if (tm === "none" && !["", "none"].includes(t)) return false;
+  return true;
+}
+function msFill(){
+  if (!MYS) return;
+  document.querySelectorAll("[data-ms]").forEach(el => {
+    const k = el.dataset.ms, v = MYS[k];
+    if (el.type === "checkbox") { el.checked = !!v; return; }
+    if (el.tagName === "SELECT" && v != null && ![...el.options].some(o => o.value === String(v))) el.add(new Option(k === "radius_miles" ? `${v} miles` : String(v), String(v)));
+    if (document.activeElement !== el) el.value = v == null ? "" : String(v);
+  });
+  document.querySelectorAll("[data-mswp]").forEach(el => el.checked = (MYS.workplaces || []).includes(el.dataset.mswp));
+}
+function msSay(t, err){ $("msState").textContent = t; $("msState").classList.toggle("err", !!err); }
+function msLoaded(st){
+  if (!SERVED || !st) return;
+  MYS = st; $("msWrap").hidden = false; msFill();
+}
+const msBoard = () => fetch("/api/profile/board" + pq()).then(r => r.json());
+if (SERVED) msBoard().then(b => { if (msBase === undefined) msBase = b.board_at || null; }).catch(() => {});
+function msAwaitBoard(){
+  let tries = 0;
+  clearTimeout(msTimer);
+  const tick = () => msBoard().then(b => {
+    if (b.board_at && b.board_at !== msBase && !b.rebuilding) { saveFilters(); location.reload(); return; }
+    if (++tries < 90) msTimer = setTimeout(tick, 2000);
+    else msSay("Saved. Your board re-checks as soon as the current update or re-rate finishes.");
+  }).catch(() => { msTimer = setTimeout(tick, 4000); });
+  msTimer = setTimeout(tick, 1500);
+}
+function msSave(settings){
+  msSay("Saving…");
+  fetch("/api/person/settings", {method: "POST", headers: H, body: JSON.stringify({person: PID, settings})})
+    .then(r => r.json().then(d => ({ok: r.ok, d})))
+    .then(({ok, d}) => {
+      if (!ok) { msFill(); msSay(d.error || "Couldn't save that.", true); return; }
+      MYS = Object.assign({}, MYS, d.settings); msFill();
+      if (MYS.salary_floor) D.salary_floor = MYS.salary_floor;
+      shown = 100; render();
+      msSay("Saved. Re-checking your board…"); msAwaitBoard();
+    }).catch(() => { msFill(); msSay("Couldn't reach Siftwell, so that wasn't saved.", true); });
+}
+$("msGrid").addEventListener("change", e => {
+  const el = e.target;
+  if (el.dataset.mswp) {
+    const wps = [...document.querySelectorAll("[data-mswp]")].filter(x => x.checked).map(x => x.dataset.mswp);
+    if (!wps.length) { el.checked = true; msSay("Pick at least one way of working.", true); return; }
+    msSave({workplaces: wps}); return;
+  }
+  if (el.dataset.ms) msSave({[el.dataset.ms]: el.type === "checkbox" ? el.checked : el.value});
+});
 
 function payBar(j){
   if (j.salary_max == null) return `<div class="pay"><span class="amt">Not listed</span><div>No salary range in posting</div></div>`;
@@ -764,11 +845,8 @@ function travelChip(j){
 }
 
 // ---- preferences (from the server; defaults until loaded)
-let PREFS = {"display.level": "near", "display.clearance": "secret", "display.sort": "score", "display.theme": "system", "tailor.questions": "always"};
+let PREFS = {"display.clearance": "secret", "display.sort": "score", "display.theme": "system", "tailor.questions": "always"};
 let RESTORED = false;  // true when filters came back from a page refresh, so defaults don't override them
-// The person's saved travel limit (profile > Job search) is where the Travel filter starts; "none" has no exact option, so it uses the strictest one.
-const TRV_FROM_LIMIT = {any: "all", moderate: "no25", light: "low", none: "low"};
-let TRV_DEFAULT = "all";
 function applyTheme(){
   const t = PREFS["display.theme"];
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
@@ -779,7 +857,7 @@ try { const t = localStorage.getItem("jb.theme"); if (t === "light" || t === "da
 function applyDisplayDefaults(){
   applyTheme();
   if (!RESTORED) {
-    $("lvl").value = PREFS["display.level"]; $("clr").value = PREFS["display.clearance"]; $("sort").value = PREFS["display.sort"]; $("trv").value = TRV_DEFAULT;
+    $("clr").value = PREFS["display.clearance"]; $("sort").value = PREFS["display.sort"];
     if (!jobs.some(j => j.ai_fit != null) && ["score", "odds", "odds_later"].includes($("sort").value)) $("sort").value = "appeal";  // nothing to rank by Match yet
     if (!location.hash && PREFS["display.start_tab"] && PREFS["display.start_tab"] !== "jobs") { location.hash = "#" + PREFS["display.start_tab"]; return; }
   }
@@ -974,7 +1052,8 @@ function drawDetail(){
 }
 // The details panel sits below the sticky search/filter bar on wide screens: keep --fbar equal to the bar's height
 // (the bar grows with search notes, quick filters and filter chips, so it is measured again whenever it changes).
-function syncFbar(){ const b = document.querySelector("#view-jobs .filters"); if (b && b.offsetHeight) document.documentElement.style.setProperty("--fbar", b.offsetHeight + "px"); }
+// While the Filters panel is open the bar scrolls away with the page (position:static), so nothing sits above the details then.
+function syncFbar(){ const b = document.querySelector("#view-jobs .filters"); if (b && b.offsetHeight) document.documentElement.style.setProperty("--fbar", (getComputedStyle(b).position === "sticky" ? b.offsetHeight : 0) + "px"); }
 if (window.ResizeObserver && document.querySelector("#view-jobs .filters")) new ResizeObserver(syncFbar).observe(document.querySelector("#view-jobs .filters"));
 window.addEventListener("resize", syncFbar);
 syncFbar();
@@ -1036,7 +1115,7 @@ function render(){
   window.__reqHidden = 0;
   let r = jobs.filter(j => {
     if (wp === "remote" && j.workplace !== "remote") return false;
-    if (wp === "dmv" && !j.dmv_locations.length) return false;
+    if (!mySearchOk(j)) return false;
     if (co !== "all" && j.company !== co) return false;
     const lb = $("lbl").value;
     if (mode === "pivot") {
@@ -1053,15 +1132,6 @@ function render(){
     }
     if ($("paidonly").checked && j.salary_max == null) return false;
     if ($("nowide").checked && j.wide_band) return false;
-    const lv = $("lvl").value, L = j.level, SB = (D.seniority && D.seniority.band) || [3,5], MY = (D.seniority && D.seniority.mine) || 4;
-    if (lv === "near" && L != null && (L < SB[0] || L > SB[1])) return false;
-    if (lv === "mine" && L !== MY) return false;
-    if (lv === "above" && !(L > MY)) return false;
-    if (lv === "below" && !(L != null && L < MY)) return false;
-    const tv = $("trv").value;
-    if (tv === "no25" && j.travel === "heavy") return false;
-    if (tv === "low" && !["", "none", "light"].includes(j.travel || "")) return false;
-    if (tv === "unmentioned" && j.travel) return false;
     if (!companyOk(j)) return false;
     if ($("newonly").checked && !j.new) return false;
     if (j.req_status === "unmet" && !$("reqall").checked) { window.__reqHidden++; return false; }
@@ -1151,10 +1221,10 @@ $("nlBar").addEventListener("click", e => {
   const b = e.target.closest("button[data-nl]"); if (!b) return;
   if (b.dataset.nl === "clear") { $("q").value = ""; nlClear(); }
   else {
-    ["lvl", "clr", "trv", "co", "lbl"].forEach(id => $(id).value = "all");
+    ["clr", "co", "lbl"].forEach(id => $(id).value = "all");
     ["paidonly", "nowide", "newonly"].forEach(id => $(id).checked = false); $("reqall").checked = true;
     CF_IDS.forEach(id => $(id).value = "all"); gapSel = "";
-    wp = "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === "all"));
+    wp = "all";
   }
   shown = 100; render();
 });
@@ -1245,7 +1315,7 @@ $("quick").addEventListener("click", e => {
   const b = e.target.closest("button[data-qk]"); if (!b) return;
   const k = b.dataset.qk, on = !quickOn(k);
   if (k === "good") $("lbl").value = on ? "good" : "all";
-  if (k === "remote") { wp = on ? "remote" : "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === wp)); }
+  if (k === "remote") wp = on ? "remote" : "all";
   if (k === "nonprofit") $("cList").value = on ? "nonprofit" : "all";
   if (k === "paid") $("paidonly").checked = on;
   if (k === "new") $("newonly").checked = on;
@@ -1264,6 +1334,10 @@ $("cos").innerHTML = D.companies.slice().sort((a,b)=>b.matched-a.matched || a.co
 
 let PIN = "";
 function route(){
+  if (location.hash === "#filters") {  // My profile links here: the Jobs tab with the Filters panel (and its My search group) open
+    history.replaceState(null, "", location.pathname + location.search + "#jobs");
+    $("fPanel").hidden = false; $("filtersBtn").setAttribute("aria-expanded", "true"); syncFbar();
+  }
   const v = {"#companies": "companies", "#pivot": "pivot", "#tailored": "tailored", "#saved": "saved", "#applied": "applied"}[location.hash] || "jobs";
   PIN = v === "saved" || v === "applied" ? v : "";
   closeDetail(true);
@@ -1335,12 +1409,12 @@ function companyOk(j){
 }
 
 // ---- filters panel and active-filter chips
-const FDEF = () => ({clr: PREFS["display.clearance"] || "secret", lvl: PREFS["display.level"] || "near", st: "active", trv: TRV_DEFAULT, co: "all", lbl: mode === "pivot" ? "noskip" : "all"});
+const FDEF = () => ({clr: PREFS["display.clearance"] || "secret", st: "active", co: "all", lbl: mode === "pivot" ? "noskip" : "all"});
 const optText = id => { const o = $(id).selectedOptions[0]; return o ? o.textContent : ""; };
 function activeFilters(){
   const out = [];
-  if (wp !== "all") out.push(["wp", wp === "remote" ? "Remote" : "Near me"]);
-  for (const id of ["lbl", "lvl", "clr", "trv", "co"]) if ($(id).value !== "all") out.push([id, optText(id)]);
+  if (wp === "remote") out.push(["wp", "Remote"]);
+  for (const id of ["lbl", "clr", "co"]) if ($(id).value !== "all") out.push([id, optText(id)]);
   for (const id of CF_IDS) if ($(id).value !== "all") out.push([id, CF_LABEL[id] + optText(id)]);
   if ($("st").value !== "active") out.push(["st", "Show: " + optText("st")]);
   for (const [id, t] of [["paidonly", "Salary listed"], ["nowide", "No wide bands"], ["newonly", "New"], ["reqall", "Including requirements I don't meet"]]) if ($(id).checked) out.push([id, t]);
@@ -1355,25 +1429,25 @@ function drawChips(){
 $("fChips").addEventListener("click", e => {
   const b = e.target.closest("button[data-f]"); if (!b) return;
   const id = b.dataset.f;
-  if (id === "wp") { wp = "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === "all")); }
+  if (id === "wp") wp = "all";
   else if (id === "gap") { gapSel = ""; if (mode === "pivot") drawPivotPanel(); }
   else if ($(id).type === "checkbox") $(id).checked = false;
   else $(id).value = id === "st" ? "active" : "all";
   shown = 100; render();
 });
-$("filtersBtn").addEventListener("click", () => { const open = $("fPanel").hidden; $("fPanel").hidden = !open; $("filtersBtn").setAttribute("aria-expanded", open); });
-$("fDone").addEventListener("click", () => { $("fPanel").hidden = true; $("filtersBtn").setAttribute("aria-expanded", "false"); });
+$("filtersBtn").addEventListener("click", () => { const open = $("fPanel").hidden; $("fPanel").hidden = !open; $("filtersBtn").setAttribute("aria-expanded", open); syncFbar(); });
+$("fDone").addEventListener("click", () => { $("fPanel").hidden = true; $("filtersBtn").setAttribute("aria-expanded", "false"); syncFbar(); });
 $("fReset").addEventListener("click", () => {
   const d = FDEF(); Object.entries(d).forEach(([k, v]) => $(k).value = v);
   ["paidonly", "nowide", "newonly", "reqall"].forEach(id => $(id).checked = false);
   CF_IDS.forEach(id => $(id).value = "all");
-  wp = "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === "all")); gapSel = "";
+  wp = "all"; gapSel = "";
   shown = 100; if (mode === "pivot") drawPivotPanel(); render();
 });
 
-const FILTER_IDS = ["q","clr","co","st","sort","paidonly","newonly","reqall","trv","nowide","lvl","cList","cType","cSize","cVal","cAge","cGd","cLay","cEq"];
+const FILTER_IDS = ["q","clr","co","st","sort","paidonly","newonly","reqall","nowide","cList","cType","cSize","cVal","cAge","cGd","cLay","cEq"];
 function saveFilters(){
-  try { sessionStorage.setItem("jb.filters", JSON.stringify({f: Object.fromEntries(FILTER_IDS.map(id => [id, $(id).type === "checkbox" ? $(id).checked : $(id).value])), lbl: $("lbl").value, wp, y: scrollY, nl: nlOn() ? NL.raw : null})); } catch(e) {}
+  try { sessionStorage.setItem("jb.filters", JSON.stringify({f: Object.fromEntries(FILTER_IDS.map(id => [id, $(id).type === "checkbox" ? $(id).checked : $(id).value])), lbl: $("lbl").value, wp, y: scrollY, nl: nlOn() ? NL.raw : null, fp: !$("fPanel").hidden})); } catch(e) {}
 }
 setLabelOptions();
 window.addEventListener("hashchange", route); route();
@@ -1394,7 +1468,8 @@ try {
     FILTER_IDS.forEach(id => { if (id in sv.f) { if ($(id).type === "checkbox") $(id).checked = sv.f[id]; else $(id).value = sv.f[id]; } });
     if (sv.nl && $("q").value.trim() === sv.nl.q) nlSet(sv.nl);
     if (!(NL ? ["rel"] : []).concat(["score","appeal","odds","odds_later","pay","gd","new"]).includes($("sort").value)) $("sort").value = "score";
-    $("lbl").value = sv.lbl; wp = sv.wp || "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === wp));
+    $("lbl").value = sv.lbl; wp = sv.wp === "remote" ? "remote" : "all";  // an older "Near me" (dmv) value is ignored
+    if (sv.fp) { $("fPanel").hidden = false; $("filtersBtn").setAttribute("aria-expanded", "true"); syncFbar(); }
     render(); setTimeout(() => scrollTo(0, sv.y || 0), 60);
   }
 } catch(e) {}
@@ -1467,9 +1542,9 @@ if (SERVED) {
 
   // ---- profiles
   let curPerson = D.person ? D.person.id : "";
-  fetch("/api/people").then(r => r.json()).then(d => {
+  fetch("/api/people" + pq()).then(r => r.json()).then(d => {
     curPerson = d.current;
-    PREFS = d.prefs || PREFS; TRV_DEFAULT = TRV_FROM_LIMIT[(d.settings || {}).travel_max] || "all"; applyDisplayDefaults();
+    PREFS = d.prefs || PREFS; msLoaded(d.settings); applyDisplayDefaults();
     const me = d.people.find(p => p.id === d.current) || {};
     $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
     $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
