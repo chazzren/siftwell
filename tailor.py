@@ -1,6 +1,7 @@
 """Tailor the active resume to one job: Claude rewrites within the facts, every bullet cites its source line.
 Writes DATA/people/<id>/tailored/<slug>.json and .docx; server renders an HTML view (printable to PDF)."""
 import datetime as dt, html, json, os, re
+import frozen
 import osdeps
 
 import claude_cli, people, resume
@@ -467,7 +468,7 @@ def make_pdf(s):
     out = pdf_path(s)
     pr = people.prefs()
     rprefs = {k: v for k, v in pr.items() if k.startswith("resume.")}
-    key = hashlib.sha256(json.dumps([rprefs, os.path.getmtime(src), os.path.getmtime(__file__)], sort_keys=True).encode()).hexdigest()[:16]
+    key = hashlib.sha256(json.dumps([rprefs, os.path.getmtime(src), frozen.code_mtime(__file__)], sort_keys=True).encode()).hexdigest()[:16]
     keyfile = out + ".key"
     if os.path.exists(out) and os.path.exists(keyfile) and open(keyfile).read() == key:
         return out

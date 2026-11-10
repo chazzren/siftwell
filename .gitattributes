@@ -9,6 +9,7 @@
 # Dev-only files: left out of the release ZIP (git archive).
 .github/ export-ignore
 scripts/ export-ignore
+installer/ export-ignore
 CLAUDE.md export-ignore
 RELEASING.md export-ignore
 .gitattributes export-ignore

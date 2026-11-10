@@ -95,7 +95,7 @@ def ensure_utf8():
     """Windows Python defaults to a legacy code page for files; the data is UTF-8. Restart in UTF-8 mode if needed,
     and make every child process (updates, re-rates) inherit it."""
     os.environ["PYTHONUTF8"] = "1"
-    if WINDOWS and not sys.flags.utf8_mode:
+    if WINDOWS and not sys.flags.utf8_mode and not getattr(sys, "frozen", False):  # (the installed exe is UTF-8 already)
         import subprocess
         sys.exit(subprocess.call([sys.executable, "-X", "utf8"] + sys.argv))
     # pythonw (no console window) has no stdout; send prints to a log instead of crashing

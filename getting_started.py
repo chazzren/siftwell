@@ -41,6 +41,7 @@ import subprocess
 import threading
 import time
 
+import frozen
 import osdeps
 import paths
 import people
@@ -206,6 +207,8 @@ def lan_ip():
 def _app_python():
     """The interpreter a start-at-sign-in entry should use, without a console window: the launcher's runtime venv
     (paths.RUNTIME, outside the app folder), else an older install's <app>/.venv, else whatever runs us now."""
+    if frozen.FROZEN:
+        return sys.executable          # the installed Siftwell.exe (started with --server)
     for p in (paths.runtime_python(windowed=True), paths.legacy_python(windowed=True)):
         if p:
             return p
@@ -424,11 +427,20 @@ def _launcher():
 
 
 def _win_args():
+    if frozen.FROZEN:
+        return "--server"
     return f'-X utf8 "{_launcher()}" --serve'
 
 
 def _mac_args(py):
+    if frozen.FROZEN:
+        return [py, "--server"]
     return [py, "-X", "utf8", _launcher(), "--serve"]
+
+
+def _entry_dir():
+    """Working folder of the start-at-sign-in entry: the app folder, or the install folder of the installed program."""
+    return os.path.dirname(sys.executable) if frozen.FROZEN else APP
 
 
 def _linux_entry(py):
@@ -437,7 +449,7 @@ def _linux_entry(py):
             s = s.replace(ch, "\\" + ch)
         return '"' + s.replace("%", "%%") + '"'
     return ("[Desktop Entry]\nType=Application\nName=Siftwell\nComment=Start the Siftwell job board\n"
-            f"Exec={q(py)} -X utf8 {q(_launcher())} --serve\nPath={APP}\nTerminal=false\n"
+            f"Exec={q(py)} {'--server' if frozen.FROZEN else '-X utf8 ' + q(_launcher()) + ' --serve'}\nPath={_entry_dir()}\nTerminal=false\n"
             "X-GNOME-Autostart-enabled=true\n")
 
 
@@ -447,7 +459,7 @@ def _write_mac_plist(py, reload=True):
     os.makedirs(os.path.dirname(pl), exist_ok=True)
     with open(pl, "wb") as f:
         plistlib.dump({"Label": MAC_LABEL, "ProgramArguments": _mac_args(py),
-                       "WorkingDirectory": APP, "RunAtLoad": True, "KeepAlive": False,
+                       "WorkingDirectory": _entry_dir(), "RunAtLoad": True, "KeepAlive": False,
                        "StandardOutPath": os.path.join(paths.data(), "server.log"),
                        "StandardErrorPath": os.path.join(paths.data(), "server.log")}, f)
     if reload:
@@ -481,7 +493,7 @@ def set_startup(on, why="", h=None):
         script = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:SW_LNK);"
                   "$s.TargetPath=$env:SW_EXE;$s.Arguments=$env:SW_ARGS;$s.WorkingDirectory=$env:SW_DIR;"
                   "$s.Description='Siftwell';$s.Save()")
-        env = dict(os.environ, SW_LNK=lnk, SW_EXE=py, SW_DIR=APP, SW_ARGS=_win_args())
+        env = dict(os.environ, SW_LNK=lnk, SW_EXE=py, SW_DIR=_entry_dir(), SW_ARGS=_win_args())
         r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], env=env,
                            capture_output=True, text=True, timeout=60, creationflags=NOWIN)
         if r.returncode != 0 or not os.path.exists(lnk):
@@ -533,7 +545,7 @@ def heal_startup(log=print):
     <app>/.venv (a stray interpreter must never become the sign-in shortcut)."""
     if os.environ.get("JOBBOARD_DATA") or os.environ.get("SIFTWELL_NO_SELFHEAL") or os.environ.get("SIFTWELL_RUNTIME"):
         return "skipped"
-    if not (_under(sys.executable, paths.RUNTIME) or _under(sys.executable, os.path.join(APP, ".venv"))):
+    if not (frozen.FROZEN or _under(sys.executable, paths.RUNTIME) or _under(sys.executable, os.path.join(APP, ".venv"))):
         return "skipped"
     py = _app_python()
     try:
@@ -546,7 +558,7 @@ def heal_startup(log=print):
             r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
                                env=dict(os.environ, SW_LNK=lnk), capture_output=True, text=True, timeout=60, creationflags=NOWIN)
             cur = json.loads(r.stdout) if r.stdout.strip() else {}
-            ok = (_same_path(cur.get("t"), py) and _same_path(cur.get("w"), APP)
+            ok = (_same_path(cur.get("t"), py) and _same_path(cur.get("w"), _entry_dir())
                   and os.path.normcase(" ".join((cur.get("a") or "").split())) == os.path.normcase(" ".join(_win_args().split())))
         elif osdeps.MAC:
             import plistlib
@@ -555,7 +567,7 @@ def heal_startup(log=print):
                 return "off"
             with open(pl, "rb") as f:
                 cur = plistlib.load(f)
-            ok = cur.get("ProgramArguments") == _mac_args(py) and _same_path(cur.get("WorkingDirectory"), APP)
+            ok = cur.get("ProgramArguments") == _mac_args(py) and _same_path(cur.get("WorkingDirectory"), _entry_dir())
         else:
             df = _linux_desktop()
             if not os.path.exists(df):
@@ -686,7 +698,7 @@ if os.name == "nt":
     flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
 f = open(log, "ab")
 p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=f, stderr=f, creationflags=flags,
-                     start_new_session=(os.name != "nt"), cwd=os.path.dirname(cmd[-2]))
+                     start_new_session=(os.name != "nt"), cwd=os.environ.get("SIFTWELL_WAITER_CWD") or os.path.dirname(cmd[-2]))
 try:
     os.makedirs(os.path.dirname(pidf), exist_ok=True)
     open(pidf, "w").write(str(p.pid))
@@ -702,14 +714,15 @@ def restart_now():
         raise RuntimeError("Siftwell is run by the Windows scheduled task \"Job Board server\", which can't be restarted from "
                            "here. Sign out of Windows and back in (or restart the computer) to apply this change.")
     py = sys.executable
-    server = os.path.join(APP, "server.py")
-    cmd = [py, "-X", "utf8", server, str(CTX["port"])]
+    cmd = frozen.command("server", CTX["port"], utf8=True)
     flags = 0
     if osdeps.WINDOWS:
         flags = NOWIN | subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen([py, "-X", "utf8", "-c", _WAITER, str(CTX["port"]), os.path.join(paths.data(), "server.log"),
-                      paths.PID_FILE, *cmd], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, creationflags=flags, start_new_session=not osdeps.WINDOWS, cwd=APP)
+    waiter = frozen.command("waiter", CTX["port"], os.path.join(paths.data(), "server.log"), paths.PID_FILE, *cmd) if frozen.FROZEN \
+        else [py, "-X", "utf8", "-c", _WAITER, str(CTX["port"]), os.path.join(paths.data(), "server.log"), paths.PID_FILE, *cmd]
+    subprocess.Popen(waiter, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     creationflags=flags, start_new_session=not osdeps.WINDOWS, cwd=APP,
+                     env=dict(os.environ, SIFTWELL_WAITER_CWD=APP) if frozen.FROZEN else None)
 
 
 def exit_soon():

@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import gzip
 
 import paths
+import frozen
 HERE, DATA = paths.APP, paths.DATA
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8766
 SECRETS = paths.SECRETS
@@ -106,7 +107,7 @@ def refresh_stale_boards():
     """After an app update, re-render each board from its saved jobs.json when report.html is older than report.py
     (same output as a rebuild; no fetching, no scoring)."""
     import report
-    code = os.path.getmtime(os.path.join(HERE, "report.py"))
+    code = frozen.code_mtime(os.path.join(HERE, "report.py"))
     for pid in people.ids():
         try:
             people.set_current(pid)
@@ -182,7 +183,7 @@ def _recompute_loop():
             failed, why = None, ""
             try:
                 with joblock.hold("recompute") as token, jobs_file_lock:
-                    r = subprocess.run([sys.executable, os.path.join(HERE, "jobfinder.py"), "--recompute", *pids], cwd=HERE,
+                    r = subprocess.run(frozen.command("jobfinder", "--recompute", *pids), cwd=HERE,
                                        capture_output=True, text=True, timeout=900, env=joblock.child_env(token))
                 for m in re.finditer(r"^NEW_UNRATED (\{.*\})$", r.stdout or "", re.M):  # new listings Claude hasn't rated
                     try:
@@ -608,7 +609,7 @@ def rate_label(o):
     return name + ("" if o.get("only_needed", True) else " (fresh look at all)")
 
 def _rate_cmd(pid, n, o):
-    cmd = [sys.executable, os.path.join(HERE, "jobfinder.py"), "--rerate", pid, "--n", str(n)]
+    cmd = frozen.command("jobfinder", "--rerate", pid, "--n", n)
     if o and o.get("ids") is not None:
         f = os.path.join(DATA, f"rerate-{pid}-ids.json")
         with open(f, "w") as fh:
@@ -807,7 +808,7 @@ def scheduler():
             time.sleep(90)
 
 def run_update(only=None):
-    cmd = [sys.executable, os.path.join(HERE, "jobfinder.py")] + (["--only", only] if only else [])
+    cmd = frozen.command("jobfinder", *(["--only", only] if only else []))
     osdeps.keep_awake(True)
     with lock:
         state.update(running=True, started=dt.datetime.now().isoformat(timespec="seconds"), finished=None,
