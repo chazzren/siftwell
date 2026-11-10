@@ -74,7 +74,7 @@ Want to run Siftwell from a USB stick, a Dropbox folder, or a computer where you
 - **Trying a new version side by side:** unzip the portable version into a test folder and, if you like, copy your data folder into its `data` folder first. It runs on its own port (the window title reads "Siftwell (test copy, port 8767)") and never stops, reuses or opens your main copy. **Settings → About & updates** shows which data folder a copy is using.
 
 ### Mac (Apple silicon): use the .dmg (recommended)
-This is the normal way to install Siftwell on a Mac made since late 2020 (an M1, M2, M3 or newer chip; **Apple menu → About This Mac** says "Chip: Apple M…") running macOS 12 or newer. No Terminal, no Python install and no administrator password needed. (A Mac with an Intel chip uses the ZIP below.)
+This is the normal way to install Siftwell on a Mac made since late 2020 (an M1, M2, M3 or newer chip; **Apple menu → About This Mac** says "Chip: Apple M…") running macOS 13 or newer. No Terminal, no Python install and no administrator password needed. (A Mac with an Intel chip uses the ZIP below.)
 1. On this page, open **Releases** (on the right side, or under the repository name on a phone), click the **latest** release, and under **Assets** download **Siftwell-x.y.z.dmg** (for example `Siftwell-0.4.0.dmg`).
 2. Open the downloaded file (double-click it in your Downloads folder). A window shows the **Siftwell** app next to an **Applications** folder. **Drag Siftwell onto Applications.**
 3. Close that window, then eject the disk image (click the eject button next to **Siftwell** in the Finder sidebar) and delete the .dmg if you like.

@@ -69,7 +69,7 @@ app = BUNDLE(
         "CFBundleShortVersionString": VERSION,
         "CFBundleVersion": VERSION,
         "CFBundlePackageType": "APPL",
-        "LSMinimumSystemVersion": "12.0",
+        "LSMinimumSystemVersion": "13.0",
         "LSUIElement": False,                       # a normal app with a Dock icon (the menu-bar helper hides its own, see tray.py)
         "NSHighResolutionCapable": True,
         "NSHumanReadableCopyright": "Siftwell, MIT license",

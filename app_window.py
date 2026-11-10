@@ -343,7 +343,8 @@ def verify_siftwell(pid, kind, pidfile):
     if written and info["created"] and info["created"] > written + PID_SLACK:
         return False, "started after the pid file was written (reused pid)"
     if frozen.FROZEN:
-        if _norm_path(os.path.abspath(info["exe"])) != _norm_path(os.path.abspath(sys.executable)):
+        # realpath on both sides: on a Mac the same program shows up as /var/... or /private/var/... depending on who asks
+        if _norm_path(os.path.realpath(info["exe"])) != _norm_path(os.path.realpath(sys.executable)):
             return False, "not this Siftwell.exe"
         rest = info["cmd"][len(info["exe"]):] if info["cmd"].startswith(info["exe"]) else " ".join(info["cmd"].split()[1:])
         mode = next((w for w in rest.split() if w.startswith("--")), "")
