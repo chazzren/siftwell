@@ -9,6 +9,8 @@
 
 **Your own job search assistant that runs on your computer.** Siftwell reads job openings straight from employers' career sites, filters them to your location, pay and level, and (optionally, with Claude) rates how well each one fits your resume and tailors your resume for the best ones.
 
+<p align="center"><img src="docs/img/board.png" alt="The Siftwell board" width="820"></p>
+
 > Early preview. Free and open source (MIT).
 
 ## Download
