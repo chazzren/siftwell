@@ -25,7 +25,7 @@ Siftwell is a self-hosted household job board: it fetches listings from employer
 - Never commit, push, or change git config unless the project manager asks. Don't commit user data (it lives outside the repo anyway).
 
 ## README must always match the app
-`README.md` is the user-facing manual for people who barely know GitHub. **Any change that alters what users see or do (install steps, pages, buttons, settings, defaults, requirements, where data lives) must update README.md in the same change**, in plain language. Don't describe features that aren't built yet except in the clearly marked "coming next" status line. Reviewers check this too.
+`README.md` is the short front page (keep it ~60 lines: pitch, downloads, 3 steps, a few bullets, links) and `docs/GUIDE.md` is the full user manual, both for people who barely know GitHub. **Any change that alters what users see or do (install steps, pages, buttons, settings, defaults, requirements, where data lives) must update docs/GUIDE.md in the same change**, in plain language, and README.md only if the essentials change. Don't describe features that aren't built yet except in the clearly marked "coming next" status line. Reviewers check this too.
 
 ## Testing
 - Run a test server on its own port with its own data: `JOBBOARD_DATA=<scratch dir> python -X utf8 server.py <port>`. Never point tests at a real user's data folder.
