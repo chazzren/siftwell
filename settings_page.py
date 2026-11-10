@@ -75,6 +75,11 @@ CATEGORIES = [
             ("toggle", "claude.auto_rate", "Rate new jobs during updates", ""),
             ("toggle", "claude.auto_rerate", "Re-rate overnight when my info changes", ""),
         ]),
+        ("Company facts", "At the end of each update Claude (Haiku, with web search) looks up facts such as size, funding, "
+         "layoffs and Glassdoor rating for companies on your board, and looks each one up again after about six months. "
+         "Facts are shared by everyone in the household, so an update uses the highest number any profile sets here.", [
+            ("number", "claude.facts_per_update", "Company facts per update", "0 to 200 companies. 0 turns it off."),
+        ]),
     ]),
     ("display", "Display", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>', [
         ("Board", "", [

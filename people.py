@@ -74,6 +74,7 @@ PREF_SCHEMA = {
     "claude.haiku_per_night": (4000, (0, 20000)),
     "claude.auto_rerate": (True, [True, False]),
     "claude.auto_rate": (True, [True, False]),
+    "claude.facts_per_update": (40, (0, 200)),   # shared facts: an update uses the highest value any profile sets
     "display.start_tab": ("jobs", ["jobs", "pivot", "tailored", "companies"]),
     "display.sort": ("score", ["score", "odds", "odds_later", "pay", "gd", "new"]),
     "display.level": ("near", ["near", "mine", "above", "below", "all"]),

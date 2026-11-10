@@ -854,7 +854,7 @@ function coPanel(j){
   return `<details class="copanel" open><summary>About ${esc(j.company)}</summary>
     ${c.blurb ? `<p>${esc(c.blurb)}</p>` : ""}<dl>${facts}</dl>
     <div class="colinks">${safeUrl(c.levels_url) ? `<a href="${esc(safeUrl(c.levels_url))}" target="_blank" rel="noopener">Pay on Levels.fyi</a>` : ""}<a href="${glass}" target="_blank" rel="noopener">Reviews on Glassdoor</a></div>
-    ${c.ownership ? "" : `<p class="asof">Company facts not researched yet.</p>`}</details>`;
+    ${c.researched_at ? `<p class="asof">Facts looked up by Claude on ${esc(new Date(String(c.researched_at).slice(0, 10) + "T12:00:00").toLocaleDateString([], {month: "short", day: "numeric", year: "numeric"}))}; they can be wrong, so check the sources.</p>` : c.ownership ? "" : `<p class="asof">Company facts not researched yet.</p>`}</details>`;
 }
 
 const ago = d => { if (!d) return ""; const t = Date.parse(d); if (!t) return ""; const n = Math.round((Date.now() - t) / 864e5); return n <= 0 ? "today" : n === 1 ? "yesterday" : n < 7 ? n + "d ago" : n < 45 ? Math.round(n / 7) + "w ago" : Math.round(n / 30) + "mo ago"; };
@@ -1566,7 +1566,7 @@ if (SERVED) {
   }
 
   let wasRunning = false, bgShown = false;
-  const PH = {fetch: "Checking company job boards", ai: "Claude is scoring new jobs", pivot: "Claude is rating AI-pivot jobs"};
+  const PH = {fetch: "Checking company job boards", ai: "Claude is scoring new jobs", pivot: "Claude is rating AI-pivot jobs", facts: "Claude is looking up company facts"};
   function poll(){
     fetch("/api/status").then(r => r.json()).then(s => {
       $("updateBtn").disabled = s.running; $("updateBtn").classList.toggle("busy", !!s.running);

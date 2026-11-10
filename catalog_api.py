@@ -91,14 +91,23 @@ def handle_get(h, path, pid):
         import catalog_page
         return h._send(200, catalog_page.render(pid), "text/html")
     if path == "/api/catalog/companies":
+        import company_research
+        try:
+            facts = company_research.status_for()
+        except Exception:
+            facts = {}
         cos = []
         for c in catalog.companies():
             f = c["_fetch"]
             status = "paused" if c["_paused"] else (f["status"] or "new")
             cos.append({"name": c["name"], "ats": c["ats"], "sets": c.get("sets") or [], "paused": c["_paused"],
                         "status": status, "fetch_status": f["status"], "reason": f["error"], "last": f["at"], "open": f["open"] or 0,
-                        "raw": f["raw"], "secs": f["secs"], "sector": c.get("sector") or "", "added_by": c.get("added_by")})
-        return h._send(200, {"companies": cos, "lists": lists(), "current": pid, "stats": catalog.stats()})
+                        "raw": f["raw"], "secs": f["secs"], "sector": c.get("sector") or "", "added_by": c.get("added_by"),
+                        "facts": facts.get(c["name"])})
+        return h._send(200, {"companies": cos, "lists": lists(), "current": pid, "stats": catalog.stats(),
+                             "facts_job": facts_status()})
+    if path == "/api/catalog/facts":
+        return h._send(200, facts_status())
     if path == "/api/catalog/listings":
         ppl = people.load_index()
         boards = {p["id"]: _board(p["id"]) for p in ppl}
@@ -197,6 +206,38 @@ def _start_fetch(only=None):
                 S.state["queued"] = False
     threading.Thread(target=go, daemon=True).start()
     return True, None
+
+
+FACTS = {"running": None, "last": None}   # the Catalog's "Look up facts" button: company being looked up, last result
+
+
+def facts_status():
+    import company_research
+    with _FLOCK:
+        out = {"running": FACTS["running"], "last": FACTS["last"]}
+    try:
+        out["claude"] = bool(company_research.ready())
+    except Exception:
+        out["claude"] = False
+    return out
+
+
+def _facts_thread(name, pid):
+    import company_research, joblock
+    ok, msg = False, ""
+    try:
+        with joblock.hold("company facts", timeout=30):
+            ok, msg = company_research.research_and_save(name)
+    except joblock.Busy as e:
+        msg = f"Waiting too long for the running {e} to finish. Try again later."
+    except Exception as e:
+        msg = f"{type(e).__name__}: {str(e)[:200]}"
+    with _FLOCK:
+        FACTS["running"] = None
+        FACTS["last"] = {"name": name, "ok": ok, "message": "" if ok else msg, "at": dt.datetime.now().isoformat(timespec="seconds")}
+    S._actlog("company facts looked up" if ok else "company facts failed", pid, name)
+    if ok:
+        S.request_recompute()  # Appeal and the Companies view pick up the new facts
 
 
 def _start_find_thread(run_id):
@@ -327,6 +368,27 @@ def handle_post(h, path, body, pid):
             h._act("company removed", pid, name)
         S.request_recompute()
         return h._send(200, {"ok": True})
+    if path == "/api/catalog/facts":
+        import company_research, joblock
+        name = str(body.get("name") or "")
+        if name not in {c["name"] for c in catalog.companies()}:
+            return h._send(404, {"error": "That company isn't in the catalog."})
+        if not company_research.ready():
+            return h._send(409, {"error": "Connect Claude to get company facts: Settings, then Get started.", "needs_claude": True})
+        if name in company_research.hand_names():
+            return h._send(400, {"error": "This company's facts were researched by hand and are kept as they are."})
+        if S._busy():
+            return h._send(409, {"error": "An update, re-rate or employer search is running. Try again when it finishes."})
+        job = joblock.info()
+        if job and job.get("alive"):
+            return h._send(409, {"error": f"A background job is running ({job.get('kind') or 'another job'}). Try again when it finishes."})
+        with _FLOCK:
+            if FACTS["running"]:
+                return h._send(409, {"error": f"Claude is already looking up {FACTS['running']}. Try again when it finishes."})
+            FACTS["running"] = name
+        h._act("company facts started", pid, name)
+        threading.Thread(target=_facts_thread, args=(name, pid), daemon=True, name="company-facts").start()
+        return h._send(202, {"ok": True})
     if path == "/api/catalog/find/start":
         import employer_finder as ef
         if find_live():

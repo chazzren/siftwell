@@ -58,6 +58,7 @@ NEEDS_CLAUDE = {
     "/api/rate": "Rating jobs", "/api/rerate": "Re-rating", "/api/tailor": "Tailoring a resume",
     "/api/tailor/resume": "The Astra review", "/api/tailor/continue": "Tailoring a resume", "/api/questions": "Asking tailoring questions",
     "/api/target/suggest": "Suggesting targets", "/api/resume": "Reading a resume with Claude",
+    "/api/catalog/facts": "Looking up company facts",
 }
 
 _NO_CLAUDE_NOTE = {"logged": False}

@@ -184,10 +184,25 @@ Don't know where to start? Use **Catalog → Find employers near me** (see **The
 
 The **Catalog** (the database icon at the top) is the household's shared list of every company Siftwell watches and every job listing it has found. Everyone's board is built from it, so a change here updates everyone's board within a minute. On a phone it shows the list of sections first; tap one to open it.
 
-- **Companies:** every company with its job system, which lists it's in, when it was last checked, how many listings are open, and a status: **OK**; **Suspect** (the last check returned far fewer jobs than before, so Siftwell kept the old ones open rather than trust it); **Capped** (the job site only shows its first few thousand jobs, so nothing was closed); **Error** (with the reason); **Paused**; or **Not fetched yet**. Search and filter by status, list or job system. **Add a company** takes a careers page link and the list to put it in. Each company has **Fetch now** (checks just that company, a minute or so; it waits its turn if something else is running), **Pause** / **Resume** (a paused company isn't checked and its jobs leave the boards until you resume it) and **Remove** (tap twice; its listings are kept as closed, so adding it back later keeps their history).
+- **Companies:** every company with its job system, which lists it's in, when it was last checked, how many listings are open, and a status: **OK**; **Suspect** (the last check returned far fewer jobs than before, so Siftwell kept the old ones open rather than trust it); **Capped** (the job site only shows its first few thousand jobs, so nothing was closed); **Error** (with the reason); **Paused**; or **Not fetched yet**. Search and filter by status, list or job system. **Add a company** takes a careers page link and the list to put it in. Each company has **Fetch now** (checks just that company, a minute or so; it waits its turn if something else is running), **Pause** / **Resume** (a paused company isn't checked and its jobs leave the boards until you resume it) and **Remove** (tap twice; its listings are kept as closed, so adding it back later keeps their history). Under each name you also see its **company facts** status ("Facts looked up Nov 10, 2026", "No company facts yet", "Facts researched by hand", or "Facts: none found" with the date), and a **Look up facts** / **Refresh facts** button (see **Company facts** below).
 - **Listings:** every listing in the catalog, 50 per page, searchable by title, company or location, open or closed, with when it was first and last seen. Under each one you see who it currently passes the filters for and Claude's rating for them ("not rated yet", "Opus 82", and so on). **On someone's board** / **On <name>'s board** narrows the list to listings that made it onto a board.
 - **Runs & updates:** the history of updates, board rebuilds, re-rates and employer searches (how many companies, new and closed listings, problems, and how long each Claude model took). This is also where you choose the **automatic job update** (off, while Siftwell is running, or even when it is closed) and its time, the same control as **Settings → Updates**, and where **Fetch everything now** checks every company (about 40 minutes, with a progress bar; Claude then rates the new listings, which uses your Claude plan).
 - **Rating:** for each person, how many listings pass their filters, how many Claude has rated (and how many got a careful or best-judgment look), and how many are waiting for a rating or need a fresh one. **Open Re-rate for <name>** switches to that person and opens the board's Re-rate panel.
+
+### Company facts
+
+When you open a job, **About <company>** shows facts about the employer: who owns it, its value (market cap or latest valuation), funding, headcount, founding year, headquarters, what employees usually get as equity, recent layoffs, and its Glassdoor rating, each with a link to where it came from. The Glassdoor rating and layoffs also count toward the company part of **Appeal**.
+
+Siftwell gathers these facts itself, using Claude (the quick Haiku model, searching the web), so **it uses your Claude plan** (a small amount per company: Claude reads a few web pages for each one).
+
+- **During each update:** after the listings are fetched and rated, Claude looks up facts for the companies that need them most: first the ones with jobs on someone's board (the more good jobs there, the sooner), then the rest of the catalog. The progress bar shows "Claude is looking up company facts". The boards are refreshed afterwards so Appeal and the company details use the new facts.
+- **How many per update:** **Settings → Claude usage → Company facts per update** (40 unless you change it; 0 to 200, and 0 turns it off). Facts are shared by the whole household, so an update uses the highest number any profile has set.
+- **Refreshing:** each company is looked up again after about six months. If Claude can't find facts for a company, Siftwell waits two weeks before trying it again.
+- **Right now, for one company:** **Catalog → Companies** has a **Look up facts** button on each company (**Refresh facts** once it has some). It usually takes under a minute. If an update, re-rate or employer search is running, it asks you to try again when that finishes.
+- **Hand-researched facts win:** companies whose facts were researched by hand (files in the `company_facts` folder of your data folder) keep those facts; Claude doesn't look them up, and they show "Facts researched by hand" with no button.
+- Facts Claude looked up say so under **About <company>** with the date. They can be wrong or out of date, so check the source links before you rely on them.
+
+Without Claude connected, nothing is looked up: updates skip this step, and the Catalog shows "Connect Claude to get company facts: Settings, then Get started" instead of the buttons. Privacy: Claude is sent only the company's name, its sector, and a few of its job titles and locations from the catalog; nothing from your profile.
 
 ### Find employers near me
 
@@ -226,6 +241,7 @@ Claude is an optional upgrade. Without it Siftwell still fetches listings, filte
 **What needs Claude**
 - **Match** ratings, the verdicts and **Claude's read** on each job, the **Re-rate** panel and automatic rating after updates (these quietly skip).
 - **Tailor my resume**, the Astra review, tailoring questions, **Target** suggestions and ratings, reading a resume with Claude, and plain-English search that understands what you mean.
+- Looking up **company facts** (updates skip it quietly; facts already gathered still show).
 
 Where something needs Claude, Siftwell shows one note ("Connect Claude to get Match ratings and tailoring → Settings → Get started") and a dash where the Match number would be, instead of an error. Once you connect Claude, upload your resume and Claude reads it to improve the profile you filled in.
 
@@ -269,7 +285,7 @@ After a restore the boards refresh by themselves (no restart). Your phone link k
 
 ## Good to know
 
-- **Claude usage:** ratings run on your Claude plan. Settings → Claude usage controls how many jobs get rated and how carefully. Large first-time ratings can take a while and use a noticeable share of your plan's limits. If a new version shows many ratings as needing a fresh rating even though you haven't changed your resume or answers, press **Keep my current ratings** on that page (two taps) to mark them as up to date instead of re-rating them; it doesn't use Claude.
+- **Claude usage:** ratings and company facts run on your Claude plan. Settings → Claude usage controls how many jobs get rated and how carefully, and how many companies get their facts looked up per update. Large first-time ratings can take a while and use a noticeable share of your plan's limits. If a new version shows many ratings as needing a fresh rating even though you haven't changed your resume or answers, press **Keep my current ratings** on that page (two taps) to mark them as up to date instead of re-rating them; it doesn't use Claude.
 - **Job sites:** Siftwell reads the public job listings employers publish on their career sites, at a polite pace, for your personal job search. Use it responsibly and respect each site's terms.
 - **Not affiliated** with Anthropic, OpenAI, or any job-board provider.
 

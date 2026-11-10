@@ -49,6 +49,7 @@ BODIES = {
   <select id="coAts" aria-label="Job system"><option value="">Any job system</option></select>
 </div>
 <p class="count" id="coCount">Loading…</p>
+<p class="notice" id="factsNote" hidden></p>
 <div class="clist" id="coRows"></div>
 <div class="cmore"><button class="btn sm" type="button" id="coMore" hidden>Show more</button></div>""",
     "listings": """
@@ -314,7 +315,7 @@ function pollStatus(){
   clearTimeout(statusTimer);
   return get("/api/status").then(s => {
     const run = !!s.running, pct = s.total ? Math.round(100 * s.done / s.total) : 0;
-    const phase = s.phase === "fetch" && s.total && s.done >= s.total ? "Updating everyone's boards" : s.phase === "fetch" ? "Fetching job listings" : s.phase === "ai" ? "Claude is rating new listings" : "Working";
+    const phase = s.phase === "fetch" && s.total && s.done >= s.total ? "Updating everyone's boards" : s.phase === "fetch" ? "Fetching job listings" : s.phase === "ai" ? "Claude is rating new listings" : s.phase === "facts" ? "Claude is looking up company facts" : "Working";
     const line = (s.lines || []).filter(Boolean).slice(-1)[0] || "";
     [["fetch", $("fetchBar")], ["all", $("allBar")]].forEach(([k, bar]) => {
       if (!bar) return;
@@ -336,7 +337,8 @@ function pollStatus(){
 let COS = [], coShown = 100;
 function loadCompanies(){
   return get("/api/catalog/companies").then(d => {
-    COS = d.companies; LISTS = d.lists;
+    COS = d.companies; LISTS = d.lists; FJ = d.facts_job || FJ;
+    factsNote(); if (FJ.running) pollFacts();
     if (!$("addList").options.length) fillListSelect($("addList"), "own-" + ME.id);
     const lf = $("coListF"), cur = lf.value;
     lf.innerHTML = `<option value="">All lists</option>` + LISTS.filter(l => COS.some(c => c.sets.includes(l.id))).map(l => `<option value="${esc(l.id)}">${esc(l.label)}</option>`).join("");
@@ -353,13 +355,45 @@ function coFiltered(){
   return COS.filter(c => (!q || c.name.toLowerCase().includes(q) || atsName(c.ats).toLowerCase().includes(q)) && (!st || c.status === st)
     && (!li || c.sets.includes(li)) && (!at || c.ats === at));
 }
+// ---- company facts (looked up by Claude; the button looks one company up now)
+let FJ = {running: null, last: null, claude: true}, factsTimer = null;
+const day = s => { const d = new Date(String(s).slice(0, 10) + "T12:00:00"); return isNaN(d) ? String(s) : d.toLocaleDateString([], {month: "short", day: "numeric", year: "numeric"}); };
+function factsText(c){
+  const f = c.facts;
+  if (FJ.running === c.name) return "Facts: Claude is looking them up…";
+  if (!f) return "No company facts yet";
+  if (f.at === "hand") return "Facts researched by hand";
+  if (f.failed) return `Facts: none found ${day(f.failed)}` + (f.at ? ` (last found ${day(f.at)})` : "");
+  return `Facts looked up ${day(f.at)}`;
+}
+function factsBtn(c){
+  const f = c.facts || {};
+  if (!FJ.claude || f.at === "hand") return "";
+  return `<button class="btn sm" type="button" data-act="facts"${FJ.running ? " disabled" : ""}>${f.at ? "Refresh facts" : "Look up facts"}</button>`;
+}
+function factsNote(){
+  const el = $("factsNote"), L = FJ.last;
+  if (!FJ.claude) { el.hidden = false; el.innerHTML = 'Connect Claude to get company facts: <a href="/settings#get-started">Settings, then Get started</a>.'; return; }
+  if (FJ.running) { el.hidden = false; el.textContent = `Claude is looking up facts for ${FJ.running} (usually a minute or two)…`; return; }
+  if (L && !L.ok && L.message) { el.hidden = false; el.textContent = `Couldn't get facts for ${L.name}: ${L.message}`; return; }
+  el.hidden = true; el.textContent = "";
+}
+function pollFacts(){
+  clearTimeout(factsTimer);
+  get("/api/catalog/facts").then(s => {
+    const was = FJ.running; FJ = s;
+    if (s.running) { factsNote(); renderCompanies(); factsTimer = setTimeout(pollFacts, 3000); }
+    else if (was) loadCompanies();
+    else factsNote();
+  }).catch(() => { factsTimer = setTimeout(pollFacts, 8000); });
+}
 function coRow(c){
   const lists = c.sets.map(listLabel).join(", ");
   const reason = c.reason ? `<small>${esc(c.reason)}</small>` : "";
-  return `<div class="crow" data-name="${esc(c.name)}"><div><b>${esc(c.name)}</b><small>${esc(atsName(c.ats))}${lists ? " · " + esc(lists) : ""}</small></div>
+  return `<div class="crow" data-name="${esc(c.name)}"><div><b>${esc(c.name)}</b><small>${esc(atsName(c.ats))}${lists ? " · " + esc(lists) : ""}</small><small>${esc(factsText(c))}</small></div>
   <div><span class="pill ${esc(c.status)}">${esc(STATUS[c.status] || c.status)}</span>${c.paused && c.fetch_status && c.fetch_status !== "ok" ? ` <span class="pill ${esc(c.fetch_status)}">${esc(STATUS[c.fetch_status] || c.fetch_status)}</span>` : ""}${reason}</div>
   <div><span>${n(c.open)} open</span><small>${c.last ? "Fetched " + esc(when(c.last)) : "Never fetched"}</small></div>
-  <div class="cact"><button class="btn sm" type="button" data-act="fetch"${c.paused ? " disabled" : ""}>Fetch now</button><button class="btn sm" type="button" data-act="pause">${c.paused ? "Resume" : "Pause"}</button><button class="btn sm" type="button" data-act="remove">Remove</button></div></div>`;
+  <div class="cact"><button class="btn sm" type="button" data-act="fetch"${c.paused ? " disabled" : ""}>Fetch now</button>${factsBtn(c)}<button class="btn sm" type="button" data-act="pause">${c.paused ? "Resume" : "Pause"}</button><button class="btn sm" type="button" data-act="remove">Remove</button></div></div>`;
 }
 function renderCompanies(){
   const list = coFiltered();
@@ -381,6 +415,11 @@ $("coRows").addEventListener("click", ev => {
     clearTimeout(rmTimer); rmTimer = setTimeout(() => { b.dataset.armed = ""; b.textContent = "Remove"; say(""); }, 6000); return;
   }
   b.disabled = true;
+  if (act === "facts") {
+    post("/api/catalog/facts", {name}).then(() => { FJ.running = name; FJ.last = null; factsNote(); renderCompanies(); pollFacts(); })
+      .catch(err => { b.disabled = false; say(errText(err), true); if (err.data && err.data.needs_claude) { FJ.claude = false; factsNote(); renderCompanies(); } });
+    return;
+  }
   const url = act === "fetch" ? "/api/catalog/fetch" : act === "pause" ? "/api/catalog/pause" : "/api/catalog/remove";
   post(url, {name, paused: !c.paused}).then(() => {
     if (act === "fetch") { say("Fetching now. Its new listings reach the boards when it finishes."); wasRunning = true; pollStatus(); b.disabled = false; return; }

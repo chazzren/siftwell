@@ -747,7 +747,7 @@ def fetch(args):
         return 0
     rid = catalog.start_run("fetch", details={"only": args.only})
     totals = {"new": 0, "changed": 0, "reopened": 0, "closed": 0, "unchanged": 0}
-    errors, flagged, n_ok, futs, boards, status = [], [], 0, {}, None, "error"
+    errors, flagged, n_ok, futs, boards, status, facts = [], [], 0, {}, None, "error", None
     try:
         # Workday tenants share one per-IP rate limit, so they get their own small lane; everything else runs wide.
         with cf.ThreadPoolExecutor(12) as fast, cf.ThreadPoolExecutor(4) as slow:
@@ -785,12 +785,16 @@ def fetch(args):
               f"{totals['changed']} changed, {totals['reopened']} back again, {len(errors)} companies failed, "
               f"{len(flagged)} kept open (suspect or incomplete fetch)", flush=True)
         boards = recompute(None, rate=True, pool=pool)
+        if not args.only:  # last: Claude looks up facts for companies that need them (capped in Settings, Claude usage)
+            facts, fboards = research_company_facts()
+            for p in _failed(fboards):
+                boards[p] = fboards[p]
         status = "ok" if not (errors or _failed(boards)) else "partial"
     finally:
         catalog.finish_run(rid, status=status, companies=len(futs), fetched=n_ok,
                            new=totals["new"], closed=totals["closed"], changed=totals["changed"], reopened=totals["reopened"],
                            errors=(errors + flagged + [{"person": p, "error": boards[p]["error"]} for p in _failed(boards)])[:200],
-                           details={"boards": boards})
+                           details={"boards": boards, **({"facts": facts} if facts else {})})
     print(f"boards rebuilt for {len(boards) - len(_failed(boards))} profile(s)", flush=True)
     return 3 if _failed(boards) else 0
 
@@ -945,25 +949,28 @@ def score_person(jobs, prof, new_claude=True, refresh=False, opts=None):
     return ai_status, pv_status
 
 def merge_company_facts():
-    """Combine researched company facts (data/company_facts/part*.json) into data/company_facts.json."""
-    import glob
-    out = {}
-    for f in sorted(glob.glob(os.path.join(DATA, "company_facts", "part*.json"))):
-        try:
-            out.update(json.load(open(f)))
-        except Exception as e:
-            print(f"skipping {os.path.basename(f)}: {e}", flush=True)
-    for f in sorted(glob.glob(os.path.join(DATA, "company_facts", "gd*.json"))):
-        if os.path.basename(f).startswith("gdtodo"):
-            continue
-        try:
-            for co, g in json.load(open(f)).items():
-                out.setdefault(co, {}).update(g)  # Glassdoor ratings, looked up once by hand-style search
-        except Exception as e:
-            print(f"skipping {os.path.basename(f)}: {e}", flush=True)
-    if out:
-        json.dump(out, open(os.path.join(DATA, "company_facts.json"), "w"), indent=1)
+    """Combine company facts into data/company_facts.json: hand-researched ones (company_facts/part*.json, Glassdoor
+    gd*.json) and the ones Claude looked up (company_facts/auto.json). Hand facts always win (company_research.merge)."""
+    import company_research
+    out = company_research.merge()
+    _FACTS.clear()  # (Appeal reads the new facts from here on)
     return out
+
+def research_company_facts():
+    """Update's last step: Claude looks up facts for the companies that need them most (company_research.run), then
+    every board is rebuilt from the catalog (no network) so Appeal and the Companies view use the new facts."""
+    import company_research
+    try:
+        res = company_research.run(log=lambda m: print(m, flush=True),
+                                   progress=lambda d, t: print(f"PROGRESS facts {d}/{t}", flush=True))
+    except Exception as e:  # (run() doesn't raise; belt and braces: never fail the update over company facts)
+        print(f"Company facts skipped: {type(e).__name__}: {e}", flush=True)
+        return {"status": "error", "saved": 0, "failed": 0}, None
+    boards = None
+    if res.get("saved"):
+        merge_company_facts()
+        boards = recompute(None)
+    return res, boards
 
 def company_info(jobs):
     """Researched facts plus live hiring stats (from this person's board) for each company on it."""

@@ -1041,7 +1041,7 @@ SCREENS.board = {
       try {
         if (st.target === "run") { const p = await api("GET", "/api/people"); if (!(p.target_job || {}).running) st.target = "done"; }
         const s = await api("GET", "/api/status");
-        if (s.running) {
+        if (s.running && s.phase !== "facts") {  // (the facts step comes after the board is built: it keeps going in the background)
           sawRun = true;
           if (s.phase === "fetch") { st.fetch = "run"; sub = {done: s.done, total: s.total, fetch: s.total ? `${s.done} of ${s.total} companies checked` : "Starting…"}; }
           else { st.fetch = "done"; st.score = "run"; sub = {done: s.done, total: s.total, score: s.total ? `Batch ${s.done} of ${s.total}` : "Starting…"}; }
