@@ -85,7 +85,7 @@ class CLIAuthError(Exception):
 
 def cli_logged_in(path):
     try:
-        r = subprocess.run([*osdeps.cmd(path), "auth", "status"], capture_output=True, text=True, timeout=30)
+        r = osdeps.run_hidden([*osdeps.cmd(path), "auth", "status"], capture_output=True, text=True, timeout=30)
         return bool(json.loads(r.stdout).get("loggedIn"))
     except Exception:
         return False
@@ -99,7 +99,7 @@ def _score_batch_cli(path, cfg, profile, batch):
     cmd = [*osdeps.cmd(path), "-p", "--model", cfg["model"], "--effort", cfg.get("effort", "low"), "--tools", "",
            "--system-prompt", SYSTEM + "\n\n" + profile, "--json-schema", json.dumps(SCHEMA),
            "--output-format", "json", "--no-session-persistence"]
-    r = subprocess.run(cmd, input=msg, capture_output=True, text=True, timeout=600, cwd=work)
+    r = osdeps.run_hidden(cmd, input=msg, capture_output=True, text=True, timeout=600, cwd=work)
     try:
         out = json.loads(r.stdout)
     except Exception:

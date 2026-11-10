@@ -21,7 +21,7 @@ def codex_ready():
     if not p:
         return False, "The Codex app isn't installed on this Mac."
     try:
-        r = subprocess.run([*osdeps.cmd(p), "login", "status"], capture_output=True, text=True, timeout=30)
+        r = osdeps.run_hidden([*osdeps.cmd(p), "login", "status"], capture_output=True, text=True, timeout=30)
         if "Logged in" in (r.stdout + r.stderr):
             return True, ""
     except Exception:
@@ -162,7 +162,7 @@ def astra(t, pdf, desc, facts_text, timeout=420):
                "--output-schema", os.path.join(d, "schema.json"), "-o", out]
         for png in pngs:
             cmd += ["-i", png]
-        r = subprocess.run(cmd + ["-"], input=PROMPT, capture_output=True, text=True, timeout=timeout)  # prompt via stdin (-i takes many values)
+        r = osdeps.run_hidden(cmd + ["-"], input=PROMPT, capture_output=True, text=True, timeout=timeout)  # prompt via stdin (-i takes many values)
         if not os.path.exists(out):
             tail = (r.stderr or r.stdout or "")[-300:]
             if "login" in tail.lower() or "auth" in tail.lower():

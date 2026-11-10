@@ -437,7 +437,7 @@ def _chrome_pdf(page_html, out):
     with tempfile.TemporaryDirectory() as d:
         page = os.path.join(d, "resume.html")
         open(page, "w").write(page_html)
-        p = subprocess.Popen([CHROME, "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+        p = osdeps.popen_hidden([CHROME, "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
                               "--use-mock-keychain", "--password-store=basic", f"--user-data-dir={os.path.join(d, 'profile')}",
                               "--no-pdf-header-footer", f"--print-to-pdf={tmp}", osdeps.file_url(page)],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

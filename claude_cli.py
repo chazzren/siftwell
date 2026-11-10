@@ -49,7 +49,7 @@ def logged_in():
     if not p:
         return False
     try:
-        r = subprocess.run([*osdeps.cmd(p), "auth", "status"], capture_output=True, text=True, timeout=30)
+        r = osdeps.run_hidden([*osdeps.cmd(p), "auth", "status"], capture_output=True, text=True, timeout=30)
         return bool(json.loads(r.stdout).get("loggedIn"))
     except Exception:
         return False
@@ -113,7 +113,7 @@ def _kill(proc):
     """End a claude process and everything it started (on Windows it may run under cmd /c)."""
     try:
         if osdeps.WINDOWS:
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=20)
+            osdeps.run_hidden(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=20)
         else:
             proc.kill()
     except Exception:
@@ -145,11 +145,11 @@ def run_json(system, prompt, schema, model="claude-opus-5-5", effort="low", read
     else:
         cmd += ["--tools", ""]
     if cancel is None:
-        r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout, cwd=WORK)
+        r = osdeps.run_hidden(cmd, input=prompt, capture_output=True, text=True, timeout=timeout, cwd=WORK)
         stdout, stderr = r.stdout, r.stderr
     else:
         import time
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        proc = osdeps.popen_hidden(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                 encoding="utf-8", errors="replace", cwd=WORK)
         deadline, inp = time.time() + timeout, prompt
         while True:

@@ -30,6 +30,27 @@ def find_exe(name, extra=()):
     return None
 
 
+def _hidden(kw):
+    """On Windows, start child processes without a console window (Siftwell itself runs windowless, so every console
+    program it starts, like `claude` or `codex`, would otherwise flash its own window)."""
+    if WINDOWS and not kw.get("creationflags"):
+        import subprocess
+        kw["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return kw
+
+
+def run_hidden(*args, **kw):
+    """subprocess.run without a console window on Windows."""
+    import subprocess
+    return subprocess.run(*args, **_hidden(kw))
+
+
+def popen_hidden(*args, **kw):
+    """subprocess.Popen without a console window on Windows."""
+    import subprocess
+    return subprocess.Popen(*args, **_hidden(kw))
+
+
 def cmd(path):
     """Command prefix for running an app found by find_exe (batch wrappers go through cmd /c on Windows)."""
     if WINDOWS and path and path.lower().endswith((".cmd", ".bat")):

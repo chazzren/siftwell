@@ -188,7 +188,7 @@ def _recompute_loop():
             failed, why = None, ""
             try:
                 with joblock.hold("recompute") as token, jobs_file_lock:
-                    r = subprocess.run(frozen.command("jobfinder", "--recompute", *pids), cwd=HERE,
+                    r = osdeps.run_hidden(frozen.command("jobfinder", "--recompute", *pids), cwd=HERE,
                                        capture_output=True, text=True, timeout=900, env=joblock.child_env(token))
                 for m in ([] if quiet else re.finditer(r"^NEW_UNRATED (\{.*\})$", r.stdout or "", re.M)):  # new listings Claude hasn't rated
                     try:
@@ -645,7 +645,7 @@ def _run_one(pid, n, o):
         with joblock.hold("rerate", on_wait=waiting) as token:
             if os.path.exists(_stop_file(pid)):
                 return None  # stopped while waiting for its turn
-            p = subprocess.Popen(_rate_cmd(pid, n, o), cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            p = osdeps.popen_hidden(_rate_cmd(pid, n, o), cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                  bufsize=1, env={**joblock.child_env(token), "SIFTWELL_STOP_FILE": _stop_file(pid)})
             with open(os.path.join(DATA, f"rerate-{pid}.log"), "w") as log:  # full output incl. per-tier TIMING lines
                 for line in p.stdout:
@@ -835,7 +835,7 @@ def run_update(only=None, defer_running=False):
                     state.update(running=True, **{**fresh, "started": dt.datetime.now().isoformat(timespec="seconds"),
                                                   "lines": state["lines"]})
             with open(LOG, "w") as log:
-                p = subprocess.Popen(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+                p = osdeps.popen_hidden(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                                      env=joblock.child_env(token))
                 for line in p.stdout:
                     log.write(line); log.flush()
