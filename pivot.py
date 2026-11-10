@@ -58,10 +58,9 @@ def _job_text(j):
             f'Description:\n{(j.get("desc") or j.get("snippet") or "")[:3500]}\n</job>')
 
 def load_cache():
-    try:
-        return json.load(open(CACHE))
-    except Exception:
-        return {}
+    """Missing -> {}; unreadable -> paths.CacheUnreadable (never an empty cache that would then be saved)."""
+    d = paths.load_json_cache(CACHE)
+    return d if isinstance(d, dict) else {}
 
 def _batch(cfg, system, profile, batch):
     msg = "Assess these postings. Return one result per job id.\n\n" + "\n\n".join(_job_text(j) for j in batch)
@@ -153,7 +152,7 @@ def score_jobs(jobs, cfg, log=print):
         ai_score.TIMINGS.append({"tier": "target", "jobs": len(todo), "batches": len(batches), "failed": failed,
                                  "secs": round(time.time() - t0, 1), "status": status})
         log(f"TIMING target: {len(todo)} jobs, {len(batches)} batches, {failed} failed, {time.time() - t0:.1f}s ({status})")
-        json.dump(allc, open(CACHE, "w"))
+        paths.dump_json_atomic(CACHE, allc)
     for j in jobs:
         if j["id"] in cache:
             apply(j, cache[j["id"]])

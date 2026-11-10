@@ -25,7 +25,12 @@ def f_amazon(c):
                 yield J(c, j.get("title"), "https://www.amazon.jobs" + j.get("job_path", ""), locs, "", None, desc,
                         j.get("posted_date", ""), j.get("job_category", ""), j["id"])
             off += 100
-            if off >= min(d.get("hits", 0), 3000) or not d.get("jobs"):
+            if off >= min(d.get("hits", 0), 3000):
+                if d.get("hits", 0) > 3000:
+                    c["_truncated"] = f"Amazon search stops at 3000 of {d.get('hits')}"
+                break
+            if not d.get("jobs"):
+                c["_truncated"] = f"empty page at {off - 100} of {d.get('hits', 0)}"
                 break
 
 def f_phenom(c):
@@ -43,7 +48,10 @@ def f_phenom(c):
             yield J(c, j.get("title"), url, locs, "", None, j.get("descriptionTeaser", ""),
                     (j.get("postedDate") or "")[:10], j.get("category", ""), j.get("jobId"))
         off += 50
-        if off >= d.get("totalHits", 0) or not jobs:
+        if off >= d.get("totalHits", 0):
+            break
+        if not jobs:
+            c["_truncated"] = f"empty page at {off - 50} of {d.get('totalHits', 0)}"
             break
 
 def f_oracle(c):
@@ -59,7 +67,10 @@ def f_oracle(c):
             yield J(c, r.get("Title"), f'{c["base"]}/en/sites/{c["site"]}/job/{r["Id"]}', locs, wp, None,
                     (r.get("ShortDescriptionStr") or ""), r.get("PostedDate", ""), "", r["Id"])
         off += 25
-        if off >= item.get("TotalJobsCount", 0) or not reqs:
+        if off >= item.get("TotalJobsCount", 0):
+            break
+        if not reqs:
+            c["_truncated"] = f"empty page at {off - 25} of {item.get('TotalJobsCount', 0)}"
             break
 
 def f_jibe(c):

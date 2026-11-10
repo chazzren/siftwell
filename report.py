@@ -1814,4 +1814,5 @@ def build(payload, path, fragment=False):
         body = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
                 HEAD + "</head><body>" + BODY + data + SCRIPT + "</body></html>")
-    open(path, "w").write(body)
+    import paths
+    paths.write_atomic(path, body)  # temp file + replace: the server never serves a half-written board

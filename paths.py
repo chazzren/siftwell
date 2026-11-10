@@ -52,6 +52,63 @@ def asset(*parts):
     return os.path.join(ASSETS, *parts)
 
 
+def write_atomic(path, text, encoding=None, newline=None):
+    """Write a text file so readers see either the old or the new version, never half of one: write a temp file in
+    the same folder, then os.replace it over the target. On Windows the replace fails while another process has the
+    target open, so it is retried for a few seconds."""
+    import tempfile, time
+    d = os.path.dirname(os.path.abspath(path))
+    os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix="." + os.path.basename(path) + ".", suffix=".tmp", dir=d)
+    try:
+        with os.fdopen(fd, "w", encoding=encoding, newline=newline) as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        for i in range(40):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if i == 39:
+                    raise
+                time.sleep(0.25)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def dump_json_atomic(path, obj, **kw):
+    write_atomic(path, json.dumps(obj, **kw))
+
+
+class CacheUnreadable(Exception):
+    """A cache file exists but can't be read or parsed. Callers must not carry on with an empty cache and save it
+    (that would wipe every rating); they abort that rating run instead."""
+
+
+def load_json_cache(path, tries=4, delay=0.5):
+    """A JSON cache file: missing -> None (start empty); unreadable or corrupt -> retried briefly (a writer may be
+    replacing it), then CacheUnreadable."""
+    import time
+    err = None
+    for i in range(tries):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as e:
+            err = e
+            if i < tries - 1:
+                time.sleep(delay)
+    raise CacheUnreadable(f"{os.path.basename(path)} can't be read ({type(err).__name__}: {str(err)[:120]}); "
+                          f"left it untouched. Fix or restore the file, then try again.")
+
+
 def _merge(base, over):
     out = dict(base)
     for k, v in (over or {}).items():

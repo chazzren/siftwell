@@ -22,7 +22,7 @@ TOKEN = open(TOKEN_FILE).read().strip()
 sys.path.insert(0, HERE)
 import people
 people.ensure_migrated()
-import catalog
+import catalog, joblock
 try:
     _CATALOG_MIGRATED = catalog.migrate()  # one-time: build DATA/catalog.db from the old file-based data (here, in the server process)
 except Exception as e:
@@ -66,7 +66,7 @@ def refresh_stale_boards():
             jp, rp = people.pdir("jobs.json", pid=pid), people.pdir("report.html", pid=pid)
             if os.path.exists(rp) and os.path.getmtime(rp) >= code:
                 continue
-            with jobs_file_lock:
+            with joblock.hold("re-render"), jobs_file_lock:
                 if os.path.exists(jp):
                     report.build(json.load(open(jp)), rp)
                 else:
@@ -76,7 +76,8 @@ def refresh_stale_boards():
             print(f"couldn't re-render {pid}'s board: {e}", flush=True)
 
 # ---- rebuilding boards from the catalog (seconds; no fetching, no Claude)
-_RECOMPUTE = {"running": False, "pending": set(), "all": False}
+_RECOMPUTE = {"running": False, "pending": set(), "all": False, "fails": 0}
+RECOMPUTE_RETRIES = 3
 
 def _busy():
     return state["running"] or any(v.get("running") for v in RERATE.values())
@@ -88,7 +89,7 @@ def request_recompute(pids=None):
         if pids is None:
             _RECOMPUTE["all"] = True
         else:
-            _RECOMPUTE["pending"].update(pids)
+            _RECOMPUTE["pending"].update(p for p in pids if p)
     flush_recompute()
 
 def flush_recompute():
@@ -99,24 +100,53 @@ def flush_recompute():
     threading.Thread(target=_recompute_loop, daemon=True).start()
 
 def _recompute_loop():
+    """Runs queued rebuilds one at a time. A request is only dropped once its rebuild succeeded; a failed one is
+    queued again (people named on a RECOMPUTE_FAILED line, else the whole request), up to RECOMPUTE_RETRIES times."""
+    import time
     try:
         while True:
             with lock:
                 if _busy() or not (_RECOMPUTE["all"] or _RECOMPUTE["pending"]):
                     return
-                pids = [] if _RECOMPUTE["all"] else sorted(_RECOMPUTE["pending"])
+                was_all = _RECOMPUTE["all"]
+                pids = [] if was_all else sorted(_RECOMPUTE["pending"])
                 _RECOMPUTE["all"] = False
                 _RECOMPUTE["pending"].clear()
-            with jobs_file_lock:
-                r = subprocess.run([sys.executable, os.path.join(HERE, "jobfinder.py"), "--recompute", *pids], cwd=HERE,
-                                   capture_output=True, text=True, timeout=900)
-            if r.returncode:
-                print("board rebuild failed:", (r.stdout or "")[-400:], (r.stderr or "")[-1500:], flush=True)
+            failed, why = None, ""
+            try:
+                with joblock.hold("recompute") as token, jobs_file_lock:
+                    r = subprocess.run([sys.executable, os.path.join(HERE, "jobfinder.py"), "--recompute", *pids], cwd=HERE,
+                                       capture_output=True, text=True, timeout=900, env=joblock.child_env(token))
+                if r.returncode:
+                    m = re.search(r"^RECOMPUTE_FAILED (\S+)", r.stdout or "", re.M)
+                    failed = m.group(1).split(",") if m else None
+                    why = ((r.stdout or "")[-400:] + " " + (r.stderr or "")[-1500:]).strip()
+                    if not failed:
+                        failed = "all" if was_all else pids
+            except Exception as e:
+                failed, why = ("all" if was_all else pids), f"{type(e).__name__}: {e}"
+            with lock:
+                if not failed:
+                    _RECOMPUTE["fails"] = 0
+                    continue
+                _RECOMPUTE["fails"] += 1
+                n = _RECOMPUTE["fails"]
+                if n <= RECOMPUTE_RETRIES:
+                    if failed == "all":
+                        _RECOMPUTE["all"] = True
+                    else:
+                        _RECOMPUTE["pending"].update(failed)
+                else:
+                    _RECOMPUTE["fails"] = 0
+            print(f"board rebuild failed ({'will retry' if n <= RECOMPUTE_RETRIES else 'giving up after retries'}):", why, flush=True)
+            if n <= RECOMPUTE_RETRIES:
+                time.sleep(min(60, 5 * n))
     except Exception as e:
         print(f"board rebuild failed: {type(e).__name__}: {e}", flush=True)
     finally:
         with lock:
             _RECOMPUTE["running"] = False
+        flush_recompute()  # a request that arrived while this loop was finishing up
 
 # ---- Claude Code sign-in from the board (works from any device).
 # `claude auth login` prints a sign-in link, then waits for the code that the sign-in page shows.
@@ -181,6 +211,7 @@ def claude_login(action, code=""):
                 if p.poll() is None:
                     p.kill()
                 LOGIN["proc"] = None
+                request_recompute()  # rebuilds re-check a kept "signed out" status, so the banner clears
                 return 200, {"ok": True}
             if p.poll() is not None:
                 LOGIN["proc"] = None
@@ -222,7 +253,9 @@ def bg_highlights(pid):
 def apply_rescore(job_id, desc):
     """Re-score one job with Claude and write the new numbers into jobs.json and the page (skipped mid-update)."""
     import ai_score, jobfinder, report
-    with jobs_file_lock:
+    if state["running"]:
+        return
+    with joblock.hold("rate", timeout=600), jobs_file_lock:
         if state["running"]:
             return
         path = people.pdir("jobs.json")
@@ -236,7 +269,7 @@ def apply_rescore(job_id, desc):
             return
         jobfinder.combine(job)
         payload["jobs"].sort(key=lambda j: -j["score"])
-        json.dump(payload, open(path, "w"), indent=1)
+        paths.dump_json_atomic(path, payload, indent=1)
         report.build(payload, people.pdir("report.html"))
 
 def bg_rate(ids, mode):
@@ -245,41 +278,56 @@ def bg_rate(ids, mode):
     st = ps()
     st["rate"] = {"running": True, "error": None, "n": len(ids)}
     try:
-        with jobs_file_lock:
-            if state["running"]:
-                raise ValueError("An update is running. Try again when it finishes.")
-            pc, prof, _ = jobfinder.person_cfg(people.current())
-            if not prof:
-                raise ValueError("Approve a resume profile first.")
-            path = people.pdir("jobs.json")
-            payload = read_json(path, None)
-            want = set(ids)
-            sel = [j for j in payload["jobs"] if j["id"] in want]
-            descs = catalog.descriptions(want)
-            for j in sel:
-                j["desc"] = descs.get(j["id"]) or j.get("snippet", "")
-            if mode == "pivot":
-                status = pivot.score_jobs([j for j in sel if "ai" in j.get("tracks", [])], {**pc["pivot"], "max_new_per_run": len(sel), "refresh_stale": True}, log=lambda m: None)
-            else:
-                status = ai_score.score_jobs(sel, {**pc["ai"], "max_new_per_run": len(sel), "refresh_stale": True}, log=lambda m: None)
-                for j in sel:
-                    jobfinder.combine(j)
-                    if "ai" in j.get("tracks", []):
-                        pivot.combine(j)
-            for j in sel:
-                j.pop("desc", None)
-            if status not in ("ok", ""):
-                raise ValueError({"cli_logged_out": "Claude Code is signed out on the Mac.", "partial": "Some ratings failed; try again."}.get(status, status))
-            payload["jobs"].sort(key=lambda j: -j["score"])
-            payload["ai_scored"] = sum(1 for j in payload["jobs"] if j.get("ai_fit") is not None)
-            json.dump(payload, open(path, "w"), indent=1)
-            report.build(payload, people.pdir("report.html"))
+        if state["running"]:
+            raise ValueError("An update is running. Try again when it finishes.")
+        try:
+            held = joblock.hold("rate", timeout=1200)  # waits for a board rebuild or re-rate to finish
+            held.__enter__()
+        except joblock.Busy as e:
+            raise ValueError(f"Another job ({e}) is still running. Try again when it finishes.")
+        try:
+            with jobs_file_lock:
+                _rate_now(ids, mode)
+        finally:
+            held.__exit__(None, None, None)
         st["rate"] = {"running": False, "error": None, "done": True}
     except Exception as e:
         st["rate"] = {"running": False, "error": str(e)[:300]}
 
+def _rate_now(ids, mode):
+    import ai_score, pivot, jobfinder, report
+    if state["running"]:
+        raise ValueError("An update is running. Try again when it finishes.")
+    pc, prof, _ = jobfinder.person_cfg(people.current())
+    if not prof:
+        raise ValueError("Approve a resume profile first.")
+    path = people.pdir("jobs.json")
+    payload = read_json(path, None)
+    want = set(ids)
+    sel = [j for j in payload["jobs"] if j["id"] in want]
+    descs = catalog.descriptions(want)
+    for j in sel:
+        j["desc"] = descs.get(j["id"]) or j.get("snippet", "")
+    if mode == "pivot":
+        status = pivot.score_jobs([j for j in sel if "ai" in j.get("tracks", [])], {**pc["pivot"], "max_new_per_run": len(sel), "refresh_stale": True}, log=lambda m: None)
+    else:
+        status = ai_score.score_jobs(sel, {**pc["ai"], "max_new_per_run": len(sel), "refresh_stale": True}, log=lambda m: None)
+        for j in sel:
+            jobfinder.combine(j)
+            if "ai" in j.get("tracks", []):
+                pivot.combine(j)
+    for j in sel:
+        j.pop("desc", None)
+    if status not in ("ok", ""):
+        raise ValueError({"cli_logged_out": "Claude Code is signed out on the Mac.", "partial": "Some ratings failed; try again."}.get(status, status))
+    payload["jobs"].sort(key=lambda j: -j["score"])
+    payload["ai_scored"] = sum(1 for j in payload["jobs"] if j.get("ai_fit") is not None)
+    paths.dump_json_atomic(path, payload, indent=1)
+    report.build(payload, people.pdir("report.html"))
+
 def bg_interpret():
     import target
+    pid = people.current()
     st = people.settings()
     ps()["target"] = {"running": True, "error": None}
     try:
@@ -289,6 +337,8 @@ def bg_interpret():
         ps()["target"] = {"running": False, "error": None, **derived}
     except Exception as e:
         ps()["target"] = {"running": False, "error": str(e)[:300]}
+    finally:
+        request_recompute([pid])  # the board's Target filter depends on what was just worked out (or cleared)
 
 def bg_suggest():
     import target
@@ -440,23 +490,34 @@ def run_rerate(pid, n):
         RERATE[pid] = {"running": True, "done": 0, "total": 0, "lines": [], "error": None, "finished": None,
                        "started": dt.datetime.now().isoformat(timespec="seconds")}
     r = RERATE[pid]
-    p = subprocess.Popen([sys.executable, os.path.join(HERE, "jobfinder.py"), "--rerate", pid, "--n", str(n)], cwd=HERE,
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    with open(os.path.join(DATA, f"rerate-{pid}.log"), "w") as log:  # full output incl. per-tier TIMING lines
-        for line in p.stdout:
-            log.write(line); log.flush()
-            line = line.rstrip()
-            m = re.match(r"PROGRESS ai (\d+)/(\d+)", line)  # the Target ratings run alongside; the bar follows the main funnel
-            with lock:
-                if m:
-                    r["done"], r["total"] = int(m.group(1)), int(m.group(2))
-                elif line and not line.startswith("PROGRESS"):
-                    r["lines"] = (r["lines"] + [line])[-8:]
-        p.wait()
-    with lock:
-        r.update(running=False, finished=dt.datetime.now().isoformat(timespec="seconds"),
-                 error=None if p.returncode == 0 else (r["lines"][-1] if r["lines"] else "failed"))
-    flush_recompute()
+    def waiting(kind):
+        with lock:
+            r["lines"] = (r["lines"] + [f"Waiting for the running {kind} to finish..."])[-8:]
+    rc = None
+    try:
+        with joblock.hold("rerate", on_wait=waiting) as token:
+            p = subprocess.Popen([sys.executable, os.path.join(HERE, "jobfinder.py"), "--rerate", pid, "--n", str(n)], cwd=HERE,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=joblock.child_env(token))
+            with open(os.path.join(DATA, f"rerate-{pid}.log"), "w") as log:  # full output incl. per-tier TIMING lines
+                for line in p.stdout:
+                    log.write(line); log.flush()
+                    line = line.rstrip()
+                    m = re.match(r"PROGRESS ai (\d+)/(\d+)", line)  # the Target ratings run alongside; the bar follows the main funnel
+                    with lock:
+                        if m:
+                            r["done"], r["total"] = int(m.group(1)), int(m.group(2))
+                        elif line and not line.startswith("PROGRESS"):
+                            r["lines"] = (r["lines"] + [line])[-8:]
+                p.wait()
+            rc = p.returncode
+    except Exception as e:
+        with lock:
+            r["lines"] = (r["lines"] + [f"Re-rating couldn't start: {type(e).__name__}: {e}"])[-8:]
+    finally:
+        with lock:
+            r.update(running=False, finished=dt.datetime.now().isoformat(timespec="seconds"),
+                     error=None if rc == 0 else (r["lines"][-1] if r["lines"] else "failed"))
+        flush_recompute()
 
 # ---- nightly job-listing update
 SCHEDULE_FILE = os.path.join(DATA, "schedule.json")
@@ -490,7 +551,7 @@ def scheduler():
                 state["trigger"] = "scheduled"
                 run_update()
                 # separate step, after the listings are in: re-rate anyone whose info changed (cheap when nothing did)
-                if state.get("exit") == 0:
+                if state.get("exit") in (0, 3):
                     for pid in people.ids():
                         try:
                             if people.prefs(pid).get("claude.auto_rerate", True):
@@ -507,22 +568,34 @@ def run_update(only=None):
     with lock:
         state.update(running=True, started=dt.datetime.now().isoformat(timespec="seconds"), finished=None,
                      exit=None, phase="fetch", done=0, total=0, lines=[])
-    with open(LOG, "w") as log:
-        p = subprocess.Popen(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        for line in p.stdout:
-            log.write(line); log.flush()
-            line = line.rstrip()
-            m = re.match(r"PROGRESS (\w+) (\d+)/(\d+)", line)
-            with lock:
-                if m:
-                    state.update(phase=m.group(1), done=int(m.group(2)), total=int(m.group(3)))
-                elif line:
-                    state["lines"] = (state["lines"] + [line])[-12:]
-        p.wait()
-    with lock:
-        state.update(running=False, exit=p.returncode, finished=dt.datetime.now().isoformat(timespec="seconds"))
-    osdeps.keep_awake(False)
-    flush_recompute()
+    def waiting(kind):
+        with lock:
+            state["lines"] = (state["lines"] + [f"Waiting for the running {kind} to finish..."])[-12:]
+    rc = None
+    try:
+        with joblock.hold("fetch", on_wait=waiting) as token:
+            with open(LOG, "w") as log:
+                p = subprocess.Popen(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+                                     env=joblock.child_env(token))
+                for line in p.stdout:
+                    log.write(line); log.flush()
+                    line = line.rstrip()
+                    m = re.match(r"PROGRESS (\w+) (\d+)/(\d+)", line)
+                    with lock:
+                        if m:
+                            state.update(phase=m.group(1), done=int(m.group(2)), total=int(m.group(3)))
+                        elif line:
+                            state["lines"] = (state["lines"] + [line])[-12:]
+                p.wait()
+            rc = p.returncode
+    except Exception as e:
+        with lock:
+            state["lines"] = (state["lines"] + [f"The update couldn't start: {type(e).__name__}: {e}"])[-12:]
+    finally:
+        with lock:
+            state.update(running=False, exit=rc if rc is not None else -1, finished=dt.datetime.now().isoformat(timespec="seconds"))
+        osdeps.keep_awake(False)
+        flush_recompute()
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):

@@ -72,9 +72,12 @@ def db():
         con.close()
 
 
+DESC_MAX = 12000  # stored text is cut here, and the hash covers the same slice so a re-parse from stored text matches
+
+
 def listing_hash(title, text):
     """Changes when a posting's title or text changes (then it is parsed again)."""
-    return hashlib.sha1(((title or "") + "\n" + (text or "")).encode("utf-8", "replace")).hexdigest()[:16]
+    return hashlib.sha1(((title or "") + "\n" + (text or "")[:DESC_MAX]).encode("utf-8", "replace")).hexdigest()[:16]
 
 
 def get_meta(k, default=None):
@@ -152,39 +155,79 @@ def known_hashes(company):
         return {r["id"]: r["desc_hash"] for r in con.execute("SELECT id, desc_hash FROM listings WHERE company=? AND partial=0", (company,))}
 
 
+def known(company):
+    """{listing id: (desc_hash, partial, has_text)} for one company's stored listings (open or closed)."""
+    with db() as con:
+        return {r["id"]: (r["desc_hash"], bool(r["partial"]), bool(r["has_text"])) for r in con.execute(
+            "SELECT id, desc_hash, partial, (desc IS NOT NULL AND desc<>'') AS has_text FROM listings WHERE company=?", (company,))}
+
+
+# Closing guard: a fetch that "succeeds" but returns far fewer postings than the company has open is more likely a
+# broken or truncated fetch (empty page, rate limit, site change, Workday's 2000 cap) than a mass closure.
+SUSPECT_MIN_PREV = 5      # the percentage rule needs at least this many open listings before the fetch
+SUSPECT_RATIO = 0.5       # returning fewer than half of them is suspect
+STALE_DAYS = 14           # when a fetch can't be trusted to close, still close listings unseen this long
+
+
 def record_fetch(company, summary, listings, con):
     """Store one company's fetch. listings: parsed dicts (jobfinder.prepare_listing) or {"id":..., "_unchanged": True}
-    for postings whose text didn't change. On success, postings not returned this time are closed.
+    for postings whose text didn't change. On a trustworthy success, open postings not returned this time are closed.
+    Not trustworthy (nothing closed, company marked last_status "suspect"): the fetch returned 0 while the company had
+    open listings, or under SUSPECT_RATIO of them (when it had >= SUSPECT_MIN_PREV). Truncated fetches
+    (summary["truncated"]: capped / stopped early) close nothing either (last_status "capped"). In both cases, if
+    the fetch returned something, listings not seen for STALE_DAYS are still closed.
     Returns counts {new, changed, reopened, closed, unchanged}."""
     t = today()
     counts = {"new": 0, "changed": 0, "reopened": 0, "closed": 0, "unchanged": 0}
     ok = summary.get("status") == "ok"
+    open_before = {r[0] for r in con.execute("SELECT id FROM listings WHERE company=? AND closed_at IS NULL", (company,))}
+    returned = set()
     for j in listings:
         jid = j["id"]
+        returned.add(jid)
         prev = con.execute("SELECT closed_at, partial FROM listings WHERE id=?", (jid,)).fetchone()
         if j.get("_unchanged") and prev and not prev["partial"]:
             con.execute("UPDATE listings SET last_seen=?, closed_at=NULL WHERE id=?", (t, jid))
             counts["reopened" if prev["closed_at"] else "unchanged"] += 1
             continue
+        if j.get("_unchanged"):
+            continue  # (can't happen: unchanged is only reported for complete rows)
         fs = con.execute("SELECT first_seen FROM seen WHERE id=?", (jid,)).fetchone()
         first = fs["first_seen"] if fs else t
         if not fs:
             con.execute("INSERT INTO seen(id, first_seen) VALUES(?, ?)", (jid, first))
-        put_listing(con, j, first_seen=first, last_seen=t)
+        put_listing(con, j, first_seen=first, last_seen=t, partial=bool(j.get("_partial")))
         if not prev:
             counts["new"] += 1
         elif prev["closed_at"]:
             counts["reopened"] += 1
         else:
             counts["changed"] += 1
+    status, note = ("ok", None) if ok else ("error", summary.get("status"))
     if ok:
-        cur = con.execute("UPDATE listings SET closed_at=? WHERE company=? AND closed_at IS NULL AND (last_seen IS NULL OR last_seen<?)",
-                          (t, company, t))
-        counts["closed"] = cur.rowcount
-    open_n = con.execute("SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL", (company,)).fetchone()[0]
+        n_prev, n_got = len(open_before), len(returned)
+        if n_prev and not n_got:
+            status, note = "suspect", f"suspect: the fetch returned no postings but {n_prev} were open; kept them open"
+        elif n_prev >= SUSPECT_MIN_PREV and n_got < SUSPECT_RATIO * n_prev:
+            status, note = "suspect", f"suspect: the fetch returned {n_got} postings but {n_prev} were open; kept them open"
+        elif summary.get("truncated"):
+            status, note = "capped", f"incomplete fetch ({summary['truncated']}); missing postings kept open"
+        gone = open_before - returned
+        if status != "ok" and n_got:
+            cutoff = (dt.date.today() - dt.timedelta(days=STALE_DAYS)).isoformat()
+            gone = {g for g in gone if (con.execute("SELECT last_seen FROM listings WHERE id=?", (g,)).fetchone()[0] or "") < cutoff}
+        elif status != "ok":
+            gone = set()
+        gone = sorted(gone)
+        for k in range(0, len(gone), 500):
+            chunk = gone[k:k + 500]
+            cur = con.execute("UPDATE listings SET closed_at=? WHERE closed_at IS NULL AND id IN (%s)" % ",".join("?" * len(chunk)),
+                              (t, *chunk))
+            counts["closed"] += cur.rowcount
+    open_n = con.execute("SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL AND partial=0", (company,)).fetchone()[0]
     con.execute("""UPDATE companies SET last_fetch_at=?, last_status=?, last_error=?, raw_count=?, open_count=?, fetch_secs=?
-                   WHERE name=?""", (now(), "ok" if ok else "error", None if ok else summary.get("status"),
-                                     summary.get("raw_jobs"), open_n, summary.get("secs"), company))
+                   WHERE name=?""", (now(), status, note, summary.get("raw_jobs"), open_n, summary.get("secs"), company))
+    counts["status"] = status
     return counts
 
 
@@ -203,7 +246,7 @@ def put_listing(con, j, first_seen, last_seen, partial=False, closed_at=None):
                      desc=excluded.desc, desc_hash=excluded.desc_hash""",
                 (j["id"], j["company"], j.get("title", ""), j.get("url"), json.dumps(j.get("locations") or []), j.get("workplace", ""),
                  j.get("salary_min"), j.get("salary_max"), j.get("salary_mid"), j.get("dept", ""), j.get("posted", ""),
-                 first_seen, last_seen, closed_at, 1 if partial else 0, json.dumps(data), desc[:12000], listing_hash(j.get("title"), desc)))
+                 first_seen, last_seen, closed_at, 1 if partial else 0, json.dumps(data), desc[:DESC_MAX], listing_hash(j.get("title"), desc)))
 
 
 def open_listings():
@@ -309,50 +352,59 @@ def migrate(log=print):
             stats[s["company"]] = s
     rid = start_run("migrate")
     n_list = n_partial = 0
-    with db() as con:
-        for c in cos:
-            save_company(c, con)
-            s = stats.get(c["name"])
-            if s:
-                con.execute("UPDATE companies SET last_fetch_at=?, last_status=?, last_error=?, raw_count=?, fetch_secs=? WHERE name=?",
-                            (fetched, "ok" if s.get("status") == "ok" else "error", None if s.get("status") == "ok" else s.get("status"),
-                             s.get("raw_jobs"), s.get("secs"), c["name"]))
-        con.executemany("INSERT OR IGNORE INTO seen(id, first_seen) VALUES(?, ?)", list(seen.items()))
-        merged = {}
-        for b in boards:
-            for j in b.get("jobs") or []:
-                merged[j["id"]] = j
-        for jid, j in merged.items():
-            j = dict(j)
-            wp = j.get("workplace") or ""
-            dl = j.get("dmv_locations") or []
-            j.setdefault("base_wp", wp)
-            j["remote_strict"] = wp == "remote"
-            j["remote_bare"] = False
-            j["local_unnamed"] = bool(dl) and all(str(l).endswith("(DC area)") for l in dl)
-            j["desc"] = descs.get(jid) or ""
-            first = j.get("first_seen") or seen.get(jid) or fetched
-            con.execute("INSERT OR IGNORE INTO seen(id, first_seen) VALUES(?, ?)", (jid, first))
-            put_listing(con, j, first_seen=first, last_seen=fetched)
-            n_list += 1
-        # postings from the last fetch that no board kept: only title/company/pay/workplace survive (market.json),
-        # so they're stored as partial and filled in by the next fetch
-        if len(market) == len(descs):
-            for jid, row in zip(descs, market):
-                if jid in merged or jid.split("::", 1)[0] != row.get("c"):
-                    continue
-                j = {"id": jid, "company": row["c"], "title": row.get("t") or "", "salary_mid": row.get("m"),
-                     "workplace": row.get("w") or "", "level": row.get("l"), "ai_track": row.get("a") or "",
-                     "url": jid.split("::", 1)[1] if jid.split("::", 1)[1].startswith("http") else "", "locations": [],
-                     "desc": descs[jid]}
-                put_listing(con, j, first_seen=seen.get(jid) or fetched, last_seen=fetched, partial=True)
-                n_partial += 1
-        for c in cos:
-            con.execute("UPDATE companies SET open_count=(SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL AND partial=0) WHERE name=?",
-                        (c["name"], c["name"]))
-        set_meta("last_full_fetch", fetched, con)
-        set_meta("migrated_at", now(), con)
-    finish_run(rid, companies=len(cos), fetched=n_list, new=0, closed=0, changed=0,
-               details={"listings": n_list, "partial": n_partial, "boards": len(boards), "seen": len(seen), "last_full_fetch": fetched})
+    status = "error"
+    try:
+        with db() as con:
+            # checked again inside the write transaction, so two processes starting at once can't both migrate
+            con.execute("BEGIN IMMEDIATE")
+            if con.execute("SELECT 1 FROM meta WHERE k='migrated_at'").fetchone():
+                status = "skipped"
+                return False
+            for c in cos:
+                save_company(c, con)
+                s = stats.get(c["name"])
+                if s:
+                    con.execute("UPDATE companies SET last_fetch_at=?, last_status=?, last_error=?, raw_count=?, fetch_secs=? WHERE name=?",
+                                (fetched, "ok" if s.get("status") == "ok" else "error", None if s.get("status") == "ok" else s.get("status"),
+                                 s.get("raw_jobs"), s.get("secs"), c["name"]))
+            con.executemany("INSERT OR IGNORE INTO seen(id, first_seen) VALUES(?, ?)", list(seen.items()))
+            merged = {}
+            for b in boards:
+                for j in b.get("jobs") or []:
+                    merged[j["id"]] = j
+            for jid, j in merged.items():
+                j = dict(j)
+                wp = j.get("workplace") or ""
+                dl = j.get("dmv_locations") or []
+                j.setdefault("base_wp", wp)
+                j["remote_strict"] = wp == "remote"
+                j["remote_bare"] = False
+                j["local_unnamed"] = bool(dl) and all(str(l).endswith("(DC area)") for l in dl)
+                j["desc"] = descs.get(jid) or ""
+                first = j.get("first_seen") or seen.get(jid) or fetched
+                con.execute("INSERT OR IGNORE INTO seen(id, first_seen) VALUES(?, ?)", (jid, first))
+                put_listing(con, j, first_seen=first, last_seen=fetched)
+                n_list += 1
+            # postings from the last fetch that no board kept: only title/company/pay/workplace survive (market.json),
+            # so they're stored as partial and filled in by the next fetch
+            if len(market) == len(descs):
+                for jid, row in zip(descs, market):
+                    if jid in merged or jid.split("::", 1)[0] != row.get("c"):
+                        continue
+                    j = {"id": jid, "company": row["c"], "title": row.get("t") or "", "salary_mid": row.get("m"),
+                         "workplace": row.get("w") or "", "level": row.get("l"), "ai_track": row.get("a") or "",
+                         "url": jid.split("::", 1)[1] if jid.split("::", 1)[1].startswith("http") else "", "locations": [],
+                         "desc": descs[jid]}
+                    put_listing(con, j, first_seen=seen.get(jid) or fetched, last_seen=fetched, partial=True)
+                    n_partial += 1
+            for c in cos:
+                con.execute("UPDATE companies SET open_count=(SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL AND partial=0) WHERE name=?",
+                            (c["name"], c["name"]))
+            set_meta("last_full_fetch", fetched, con)
+            set_meta("migrated_at", now(), con)
+        status = "ok"
+    finally:
+        finish_run(rid, status, companies=len(cos), fetched=n_list, new=0, closed=0, changed=0,
+                   details={"listings": n_list, "partial": n_partial, "boards": len(boards), "seen": len(seen), "last_full_fetch": fetched})
     log(f"catalog: migrated {len(cos)} companies, {n_list} listings (+{n_partial} partial), {len(seen)} first-seen dates")
     return True

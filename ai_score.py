@@ -114,11 +114,8 @@ def _score_batch_cli(path, cfg, profile, batch):
 def load_all():
     """Cache: {"v": 3, "by_profile": {phash: {job_id: {"haiku": r, "sonnet": r, "opus": r}}}}.
     Each rating r carries fp (core info fingerprint), hl (highlights fingerprint) and facts (answer ids it knew)."""
-    try:
-        d = json.load(open(CACHE))
-    except Exception:
-        return {"v": 3, "by_profile": {}}
-    if "by_profile" not in d:
+    d = paths.load_json_cache(CACHE)  # missing -> None; unreadable -> CacheUnreadable (never treated as empty)
+    if not isinstance(d, dict) or "by_profile" not in d:
         return {"v": 3, "by_profile": {}}
     if d.get("v") != 3:  # older single-rating format: those ratings were all made by Opus
         for ph, jobs in d["by_profile"].items():
@@ -309,7 +306,7 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print)
     def save():
         os.makedirs(os.path.dirname(CACHE), exist_ok=True)
         with _lock:
-            json.dump(allc, open(CACHE, "w"))
+            paths.dump_json_atomic(CACHE, allc)
     def need(j, tier):
         r = (cache.get(j["id"]) or {}).get(tier)
         f = freshness(r, j, inf)
@@ -386,7 +383,7 @@ def score_jobs(jobs, cfg, log=print):
             for jid, r in _rate(todo, "opus", inf, log).items():
                 cache.setdefault(jid, {})["opus"] = r
             with _lock:
-                json.dump(allc, open(CACHE, "w"))
+                paths.dump_json_atomic(CACHE, allc)
         except CLIAuthError:
             status = "cli_logged_out"
     apply(jobs, cache, inf)
@@ -406,7 +403,7 @@ def rescore_one(job, description, cfg):
     with _lock:
         allc = load_all()
         allc["by_profile"].setdefault(inf["phash"], {}).setdefault(job["id"], {})["opus"] = a
-        json.dump(allc, open(CACHE, "w"))
+        paths.dump_json_atomic(CACHE, allc)
     job["ai_fit"], job["ai_asis"], job["ai_label"] = a["fit"], a["asis"], a["label"]
     job["ai_level"], job["ai_reason"], job["ai_tailor"] = a["level"], a["reason"], a["tailor"]
     job["ai_tier"], job["ai_stale"], job["ai_at"] = "opus", False, a["at"]
