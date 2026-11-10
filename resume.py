@@ -146,8 +146,13 @@ def build_profile(text):
     prof["notes"] = ""
     return prof
 
-PROFILE_HASH_KEYS = ("summary", "experience", "reframings", "hard_limits", "target_roles", "notes", "clearances",
+# What the person's rating key is made from: resume content, reframings, notes. NOT the job titles to search for
+# (target_roles): those are a board filter, so editing them must not reset ratings.
+PROFILE_HASH_KEYS = ("summary", "experience", "reframings", "hard_limits", "notes", "clearances",
                      "certifications", "skills")
+# The same list as older versions hashed it (it included target_roles). Frozen: only used to adopt old ratings.
+PROFILE_HASH_KEYS_V1 = ("summary", "experience", "reframings", "hard_limits", "target_roles", "notes", "clearances",
+                        "certifications", "skills")
 
 def _norm_ws(v):
     """Same content -> same value: collapse runs of whitespace and trim, recursively (key order is handled by sort_keys)."""
@@ -166,9 +171,29 @@ def profile_hash(prof):
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:12]
 
 def profile_hash_legacy(prof):
-    """profile_hash before whitespace was normalized; ratings stored under it are adopted by ai_score/pivot. Frozen."""
-    keep = {k: prof.get(k) for k in PROFILE_HASH_KEYS}
+    """profile_hash before whitespace was normalized and before job titles left it; ratings stored under it are adopted
+    by ai_score/pivot. Frozen."""
+    keep = {k: prof.get(k) for k in PROFILE_HASH_KEYS_V1}
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:12]
+
+def profile_hash_v1(prof):
+    """profile_hash as it was when job titles were part of it (whitespace-normalized). Frozen: adoption only."""
+    keep = {k: _norm_ws(prof.get(k)) for k in PROFILE_HASH_KEYS_V1}
+    return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:12]
+
+def hash_aliases(before, after):
+    """Older rating keys of this same person to remember when a profile is saved. If only things that are not part of the
+    rating key changed (job titles), the keys the profile had before (its stored _hash, and the older formulas applied to
+    the old data) still point at this person's ratings, so they are kept as _hash_aliases and adopted by
+    ai_score.profile_keys. If the resume content changed, the ratings were made from different data: no aliases."""
+    if not before or profile_hash(before) != profile_hash(after):
+        return []
+    new = profile_hash(after)
+    out = []
+    for h in [*(before.get("_hash_aliases") or []), before.get("_hash"), profile_hash_v1(before), profile_hash_legacy(before)]:
+        if h and h != new and h not in out:
+            out.append(h)
+    return out
 
 def ingest(path, progress=None):
     """Full pipeline for one uploaded file; writes the draft profile for review. progress(stage) is called as it goes."""
@@ -224,9 +249,13 @@ def clean_edits(edited):
 def approve(edited):
     """Merge the user's edits into the draft and make it the active profile."""
     draft = json.load(open(DRAFT())) if os.path.exists(DRAFT()) else (load_active() or {})
+    before = load_active()
     draft.update(clean_edits(edited))
     draft["_approved"] = dt.datetime.now().isoformat(timespec="minutes")
     draft["_hash"] = profile_hash(draft)
+    draft.pop("_hash_aliases", None)
+    if hash_aliases(before, draft):
+        draft["_hash_aliases"] = hash_aliases(before, draft)
     json.dump(draft, open(ACTIVE(), "w"), indent=1)
     if os.path.exists(DRAFT()):
         os.remove(DRAFT())
@@ -238,9 +267,13 @@ def edit_active(edited):
     prof = load_active()
     if not prof:
         raise ValueError("There's no approved profile to edit yet. Upload a resume first.")
+    before = dict(prof)
     prof.update(clean_edits(edited))
     prof["_edited"] = dt.datetime.now().isoformat(timespec="minutes")
     prof["_hash"] = profile_hash(prof)
+    prof.pop("_hash_aliases", None)
+    if hash_aliases(before, prof):
+        prof["_hash_aliases"] = hash_aliases(before, prof)
     paths.write_atomic(ACTIVE(), json.dumps(prof, indent=1))
     return prof
 

@@ -736,6 +736,9 @@ function travelChip(j){
 // ---- preferences (from the server; defaults until loaded)
 let PREFS = {"display.level": "near", "display.clearance": "secret", "display.sort": "score", "display.theme": "system", "tailor.questions": "always"};
 let RESTORED = false;  // true when filters came back from a page refresh, so defaults don't override them
+// The person's saved travel limit (profile > Job search) is where the Travel filter starts; "none" has no exact option, so it uses the strictest one.
+const TRV_FROM_LIMIT = {any: "all", moderate: "no25", light: "low", none: "low"};
+let TRV_DEFAULT = "all";
 function applyTheme(){
   const t = PREFS["display.theme"];
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
@@ -746,7 +749,7 @@ try { const t = localStorage.getItem("jb.theme"); if (t === "light" || t === "da
 function applyDisplayDefaults(){
   applyTheme();
   if (!RESTORED) {
-    $("lvl").value = PREFS["display.level"]; $("clr").value = PREFS["display.clearance"]; $("sort").value = PREFS["display.sort"];
+    $("lvl").value = PREFS["display.level"]; $("clr").value = PREFS["display.clearance"]; $("sort").value = PREFS["display.sort"]; $("trv").value = TRV_DEFAULT;
     if (!location.hash && PREFS["display.start_tab"] && PREFS["display.start_tab"] !== "jobs") { location.hash = "#" + PREFS["display.start_tab"]; return; }
   }
   render();
@@ -1259,7 +1262,7 @@ function companyOk(j){
 }
 
 // ---- filters panel and active-filter chips
-const FDEF = () => ({clr: PREFS["display.clearance"] || "secret", lvl: PREFS["display.level"] || "near", st: "active", trv: "all", co: "all", lbl: mode === "pivot" ? "noskip" : "all"});
+const FDEF = () => ({clr: PREFS["display.clearance"] || "secret", lvl: PREFS["display.level"] || "near", st: "active", trv: TRV_DEFAULT, co: "all", lbl: mode === "pivot" ? "noskip" : "all"});
 const optText = id => { const o = $(id).selectedOptions[0]; return o ? o.textContent : ""; };
 function activeFilters(){
   const out = [];
@@ -1356,7 +1359,7 @@ if (SERVED) {
   let curPerson = D.person ? D.person.id : "";
   fetch("/api/people").then(r => r.json()).then(d => {
     curPerson = d.current;
-    PREFS = d.prefs || PREFS; applyDisplayDefaults();
+    PREFS = d.prefs || PREFS; TRV_DEFAULT = TRV_FROM_LIMIT[(d.settings || {}).travel_max] || "all"; applyDisplayDefaults();
     const me = d.people.find(p => p.id === d.current) || {};
     $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
     $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
