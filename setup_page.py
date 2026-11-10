@@ -6,6 +6,8 @@ report.py). It talks to GET /api/setup, POST /api/setup/step, POST /api/setup/fi
 Open it with ?mock=1 (or from a file:// URL) to run against an in-page fake server for previewing."""
 import json
 
+import claude_cli
+import manual_profile
 import people
 import setup_flow
 
@@ -14,7 +16,9 @@ def render_setup_html() -> str:
     boot = {"levels": {str(k): v for k, v in setup_flow._levels().items()},
             "sets": [{"id": k, "label": v} for k, v in people.COMPANY_SETS.items()],
             "radii": setup_flow.RADII, "industries": setup_flow.INDUSTRY_IDEAS, "steps": setup_flow.STEPS}
-    return PAGE.replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
+    boot["claude_ready"] = claude_cli.claude_ready()
+    return (PAGE.replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
+            .replace("/*__MANUAL_CSS__*/", manual_profile.CSS).replace("/*__MANUAL_JS__*/", manual_profile.JS))
 
 
 PAGE = r"""<!doctype html>
@@ -176,6 +180,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .idea{height:34px;padding:0 12px;border-radius:999px;border:1.5px dashed var(--line);background:transparent;color:var(--muted);font-weight:600;font-size:14px;cursor:pointer}
 .idea:hover{border-color:var(--accent);color:var(--accent)}
 
+/*__MANUAL_CSS__*/
 /* resume */
 .drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:40px 20px;border:2px dashed var(--line);border-radius:16px;background:var(--surface);transition:border-color .15s,background .15s}
 .drop.over{border-color:var(--accent);background:var(--accent-soft)}
@@ -362,6 +367,10 @@ async function api(method, path, body){
   return d;
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+/*__MANUAL_JS__*/
+// Claude is optional: false when it isn't installed / signed in (the server says so in /api/setup and in BOOT).
+const NOCL = () => !MOCK && ((S && S.claude) ? S.claude.ready === false : BOOT.claude_ready === false);
+const NEED_CL = "Needs Claude. You can connect it later in Settings, then Get started.";
 
 // ------------------------------------------------------------------ state
 let S = null;          // last state from the server
@@ -523,10 +532,16 @@ SCREENS.resume = {
         <p>Pulling out your experience, education, certifications and skills. This usually takes about a minute. You can keep this page open or come back later.</p></div>`;
     if (r.status !== "none" && !local.replace) return `
       <p class="eyebrow">Your resume</p>
-      <h1 class="q" tabindex="-1">We already have your resume.</h1>
-      <p class="lede">Use it as is, or upload a newer one.</p>
-      <div class="have"><span class="ico">${I.doc}</span><div><b>${esc((r.file || "Resume").replace(/^\d{8}-\d{6}_/, ""))}</b><small>Read and ready</small></div></div>
-      <div class="alt"><button type="button" class="linkbtn" id="replace">Upload a different resume</button></div>`;
+      <h1 class="q" tabindex="-1">${r.manual ? "We have your profile." : "We already have your resume."}</h1>
+      <p class="lede">${r.manual ? "You filled it in yourself. Use it as is, or change it." : "Use it as is, or upload a newer one."}</p>
+      <div class="have"><span class="ico">${I.doc}</span><div><b>${esc((r.file || "Resume").replace(/^\d{8}-\d{6}_/, ""))}</b><small>${r.manual ? "Filled in by you" : "Read and ready"}</small></div></div>
+      <div class="alt"><button type="button" class="linkbtn" id="replace">${r.manual ? "Change it" : "Upload a different resume"}</button></div>`;
+    if (local.mode === "manual" || (NOCL() && !local.mode)) return `
+      <p class="eyebrow">Your profile</p>
+      <h1 class="q" tabindex="-1">Tell us about your work.</h1>
+      <p class="lede">${NOCL() ? "Claude isn’t connected, so we can’t read a resume for you. Fill in this short form instead (a Word or text resume can fill it in for you). You can connect Claude later in Settings." : "Fill in the short form below instead of uploading a resume."} Your answers stay on this computer.</p>
+      <div id="mpRoot"></div>${errBox("_")}
+      ${NOCL() ? "" : `<div class="alt"><button type="button" class="linkbtn" id="modeFile">Upload a resume instead</button></div>`}`;
     return `
       <p class="eyebrow">Your resume</p>
       <h1 class="q" tabindex="-1">Add your resume.</h1>
@@ -549,22 +564,32 @@ SCREENS.resume = {
           <input type="file" id="file" class="sr" accept=".pdf,.doc,.docx,.rtf,.odt,.txt,.md,.png,.jpg,.jpeg,.heic" tabindex="-1">
         </div>
         ${errBox("file")}
-        <div class="alt"><button type="button" class="linkbtn" id="modePaste">Paste text instead</button><button type="button" class="linkbtn" id="modeGdoc">Use a Google Docs link</button></div>`}
+        <div class="alt"><button type="button" class="linkbtn" id="modePaste">Paste text instead</button><button type="button" class="linkbtn" id="modeGdoc">Use a Google Docs link</button><button type="button" class="linkbtn" id="modeManual">Fill in my profile myself</button></div>`}
       ${errBox("_")}`;
   },
   foot: () => {
     const r = S.resume;
     if (r.status === "reading" || local.reading) return {next: false, back: false};
-    if (r.status !== "none" && !local.replace) return {nextLabel: "Use this resume"};
+    if (r.status !== "none" && !local.replace) return {nextLabel: r.manual ? "Use this profile" : "Use this resume"};
+    if (local.mode === "manual" || (NOCL() && !local.mode)) return {nextLabel: "Save my profile", skip: true, skipLabel: "Skip for now"};
     if (local.mode === "paste" || local.mode === "gdoc") return {nextLabel: "Read my resume", skip: true, skipLabel: "Skip for now"};
     return {next: false, skip: true, skipLabel: "Skip for now"};
   },
   mount(){
     const on = (id, fn) => $(id) && $(id).addEventListener("click", fn);
-    on("replace", () => { local.replace = true; render(); });
+    on("replace", async () => {
+      local.replace = true;
+      if (S.resume.manual) {  // change the hand-filled profile: start from what they entered
+        try { const d = await api("GET", "/api/profile"); ManualProfile.load(d.active); } catch(e) {}
+        local.mode = "manual";
+      }
+      render();
+    });
     on("modePaste", () => { local = {...local, mode: "paste"}; render(); });
     on("modeGdoc", () => { local = {...local, mode: "gdoc"}; render(); });
     on("modeFile", () => { local = {...local, mode: ""}; render(); });
+    on("modeManual", () => { local = {...local, mode: "manual"}; render(); });
+    if ($("mpRoot")) ManualProfile.mount($("mpRoot"), {name: S.name});
     if ($("pick")) $("pick").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
     if ($("file")) $("file").addEventListener("change", e => e.target.files[0] && this.sendFile(e.target.files[0]));
     const drop = $("drop");
@@ -600,7 +625,13 @@ SCREENS.resume = {
     }
   },
   pollId: 0,
-  next(){
+  async next(){
+    if (local.mode === "manual" || (NOCL() && !local.mode && (S.resume.status === "none" || local.replace))) {
+      busy(true, "Saving your profile");
+      try { await ManualProfile.submit(); }
+      catch(e) { busy(false); footer(this.foot()); return showErr("_", e.message); }
+      return saveAndNext("resume", {}, "highlights");
+    }
     if (local.mode === "paste") {
       const t = $("paste").value.trim();
       if (t.length < 200) return showErr("paste", "That looks too short to be a full resume. Paste the whole thing.");
@@ -769,8 +800,9 @@ SCREENS.direction = {
       <div class="choices" role="radiogroup" aria-label="Direction" data-field="direction">
         ${radioCard("dir", "keep", d === "keep", "Keep doing what I do", "More of the same work, ideally with better pay or conditions.", {icon: I.arrow})}
         ${radioCard("dir", "specific", d === "specific", "Aim at something specific", "A role, industry or kind of company you have in mind.", {icon: I.target})}
-        ${radioCard("dir", "unsure", d === "unsure", "I’m not sure yet", "We’ll suggest a few directions based on your resume and what’s hiring.", {icon: I.compass})}
+        ${radioCard("dir", "unsure", d === "unsure", "I’m not sure yet", NOCL() ? NEED_CL : "We’ll suggest a few directions based on your resume and what’s hiring.", {icon: I.compass, disabled: NOCL()})}
       </div>${errBox("direction")}
+      ${NOCL() ? `<p class="fine">Without Claude, a direction you type is saved and starts working once you connect it.</p>` : ""}
       <div id="dirMore" style="margin-top:20px"></div>`;
   },
   mount(){
@@ -883,6 +915,10 @@ SCREENS.questions = {
   title: "A few questions",
   html: () => {
     const q = local.q;
+    if (!q && NOCL()) return `
+      <p class="eyebrow">Optional</p>
+      <h1 class="q" tabindex="-1">Tailoring questions need Claude.</h1>
+      <p class="lede">Siftwell can ask a few quick questions about skills and tools your resume doesn’t show, but that part needs Claude. You can connect it later (Settings, then Get started) and answer them then.</p>`;
     if (!q) return `
       <p class="eyebrow">Optional</p>
       <h1 class="q" tabindex="-1">Got experience your resume doesn’t show?</h1>
@@ -905,6 +941,7 @@ SCREENS.questions = {
   },
   foot(){
     const q = local.q;
+    if (!q && NOCL()) return {nextLabel: "Continue"};
     if (!q) return {nextLabel: "Ask me", skip: true, skipLabel: "Skip"};
     if (q.running) return {next: false, skip: true, skipLabel: "Skip"};
     if (q.error || !(q.questions || []).length) return {nextLabel: "Continue"};
@@ -925,6 +962,7 @@ SCREENS.questions = {
   },
   async next(){
     const q = local.q;
+    if (!q && NOCL()) return saveAndNext("questions", {skipped: true});
     if (!q) return this.start();
     if (q.error || !(q.questions || []).length) return saveAndNext("questions", {});
     this.keep();
@@ -973,7 +1011,7 @@ SCREENS.board = {
       {id: "save", t: "Saving your answers"},
       {id: "target", t: "Working out which jobs fit your direction", only: () => !!(this.kick && this.kick.interpret_target)},
       {id: "fetch", t: "Gathering openings from the companies you picked"},
-      {id: "score", t: "Reading the best matches against your resume"},
+      {id: "score", t: "Reading the best matches against your resume", only: () => !NOCL()},
       {id: "build", t: "Building your board"},
     ];
     const st = {save: "run"}; let sub = {};

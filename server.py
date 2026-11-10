@@ -47,12 +47,32 @@ def spawn(fn, *args):
         fn(*args)
     threading.Thread(target=run, daemon=True).start()
 
+def _claude_ready():
+    import claude_cli
+    return bool(claude_cli.claude_ready())
+
+# POST routes that need Claude. Without it they answer 409 with a friendly "needs_claude" error instead of starting
+# something that would fail; the pages show the same prompt in place of the control.
+NEEDS_CLAUDE = {
+    "/api/rate": "Rating jobs", "/api/rerate": "Re-rating", "/api/tailor": "Tailoring a resume",
+    "/api/tailor/resume": "The Astra review", "/api/tailor/continue": "Tailoring a resume", "/api/questions": "Asking tailoring questions",
+    "/api/target/suggest": "Suggesting targets", "/api/resume": "Reading a resume with Claude",
+}
+
+_NO_CLAUDE_NOTE = {"logged": False}
+def note_no_claude():
+    """One log line per stretch without Claude (not one per skipped automatic run)."""
+    if not _NO_CLAUDE_NOTE["logged"]:
+        _NO_CLAUDE_NOTE["logged"] = True
+        print("Claude isn't connected: automatic Match ratings are skipped until it is (Settings, Get started).", flush=True)
+
 def empty_board(pid):
     """A board with no jobs yet, so a new profile can upload a resume right away."""
     import report
     st = people.settings(pid)
     report.build({"generated": dt.datetime.now().isoformat(timespec="minutes"), "salary_floor": st["salary_floor"],
                   "ai_status": "no_profile", "pivot_status": "", "pivot_name": "AI pivot", "pivot_enabled": bool(st["pivot_ai"]),
+                  "claude_ready": _claude_ready(),
                   "seniority": {"mine": st["seniority_mine"], "band": st["seniority_band"]}, "ai_scored": 0,
                   "person": {"id": pid, "name": people.name(pid)}, "people": people.load_index(),
                   "current": {"base": st.get("current_base"), "label": st.get("current_label") or ""},
@@ -210,7 +230,8 @@ def claude_login(action, code=""):
     with LOGIN["lock"]:
         p = LOGIN["proc"]
         if action == "status":
-            return 200, {"logged_in": claude_cli.logged_in(), "installed": bool(claude_cli.path())}
+            s = claude_cli.state()
+            return 200, {"logged_in": s == "ready", "installed": s != "not_installed", "ready": s == "ready"}
         if action == "cancel":
             if p and p.poll() is None:
                 p.kill()
@@ -259,7 +280,8 @@ def claude_login(action, code=""):
                     break
                 time.sleep(0.25)
             said = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", LOGIN["out"][before:]).strip()
-            if claude_cli.logged_in():
+            claude_cli.invalidate()
+            if claude_cli.claude_ready(fresh=True):
                 if p.poll() is None:
                     p.kill()
                 LOGIN["proc"] = None
@@ -294,10 +316,10 @@ def bg_questions(key, job_id):
 
 
 def bg_highlights(pid):
-    import highlights
+    import highlights, claude_cli
     people.set_current(pid)
     try:
-        highlights.refresh(pid)
+        highlights.refresh(pid, use_claude=claude_cli.claude_ready())
     except Exception as e:
         print("highlights refresh failed:", e, flush=True)
     request_recompute([pid])
@@ -382,6 +404,11 @@ def bg_interpret():
     pid = people.current()
     st = people.settings()
     ps()["target"] = {"running": True, "error": None}
+    import claude_cli
+    if people.target_on(st) and not claude_cli.claude_ready():
+        ps()["target"] = {"running": False, "error": None, "needs_claude": True}  # stays as typed until Claude is connected
+        request_recompute([pid])
+        return
     try:
         derived = target.interpret(st["target_text"], st["target_scope"]) if people.target_on(st) else \
             {"target_name": "", "target_any_title": False, "target_keywords": [], "target_summary": ""}
@@ -659,7 +686,13 @@ def _rating_worker(pid, n, o):
         flush_recompute()
 
 def start_rating(pid, o, n=None):
-    """Start a rating job for this person, or queue it behind the one running. Returns "started" or "queued"."""
+    """Start a rating job for this person, or queue it behind the one running. Returns "started" or "queued"
+    ("skipped" when Claude isn't connected: nothing to rate with)."""
+    import claude_cli
+    if not claude_cli.claude_ready():
+        note_no_claude()
+        return "skipped"
+    _NO_CLAUDE_NOTE["logged"] = False
     n = n or int(people.prefs(pid).get("claude.per_update") or 300)
     with lock:
         r = RERATE.get(pid)
@@ -1106,6 +1139,37 @@ class H(BaseHTTPRequestHandler):
             return self._send(*claude_login(str(body.get("action") or ""), str(body.get("code") or "")))
         if pid is None and path != "/api/people/add":
             return self._send(409, {"error": "Add a person first."})
+        if path in NEEDS_CLAUDE:
+            import claude_cli
+            if not claude_cli.claude_ready():
+                return self._send(409, {"error": f"{NEEDS_CLAUDE[path]} needs Claude. {claude_cli.NOT_READY_MSG}", "needs_claude": True})
+        if path == "/api/profile/manual":  # "Fill in my profile myself": the form's fields become the approved profile
+            import resume
+            try:
+                prof = resume.save_manual(body.get("profile") or {})
+            except ValueError as e:
+                return self._send(400, {"error": str(e)[:300]})
+            self._act("profile filled in by hand", pid)
+            threading.Thread(target=bg_highlights, args=(pid,), daemon=True).start()  # also rebuilds the board
+            return self._send(200, {"ok": True, "hash": prof.get("_hash")})
+        if path == "/api/resume/prefill":  # fill the form from a .docx / .txt by plain text extraction (no AI)
+            import resume
+            try:
+                if body.get("text"):
+                    fields = resume.prefill_from_text(str(body["text"])[:200000])
+                elif body.get("data_b64") and body.get("filename"):
+                    try:
+                        raw = base64.b64decode(body["data_b64"])
+                    except Exception:
+                        return self._send(400, {"error": "bad file data"})
+                    fields = resume.prefill_from_file(str(body["filename"]), raw)
+                else:
+                    return self._send(400, {"error": "Send a .docx or .txt file, or paste the resume text."})
+            except ValueError as e:
+                return self._send(400, {"error": str(e)[:300]})
+            except Exception as e:
+                return self._send(400, {"error": f"Couldn't read that file ({type(e).__name__}). Fill in the form by hand."})
+            return self._send(200, {"ok": True, "fields": fields})
         if path.startswith("/api/catalog/"):
             import catalog_api
             return catalog_api.handle_post(self, path, body, pid)
@@ -1301,6 +1365,8 @@ class H(BaseHTTPRequestHandler):
             if not q:
                 return self._send(400, {"error": "Type what you're looking for."})
             jobs = read_json(people.pdir("jobs.json"), {"jobs": []}).get("jobs") or []
+            if not claude_cli.claude_ready():
+                return self._send(200, nlsearch.keyword_search(q, jobs, catalog.descriptions(j["id"] for j in jobs)))
             try:
                 crit = nlsearch.interpret(q, {j["company"] for j in jobs if j.get("company")},
                                           {j["sector"] for j in jobs if j.get("sector")})

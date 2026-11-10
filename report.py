@@ -66,6 +66,9 @@ ol.jobs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .score.match.hi{background:var(--good-soft);color:var(--good);border-color:transparent}
 .score.match.mid{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .score.match.lo{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.nocl{color:var(--muted);font-size:12.5px}.nocl a,.acts .nocl a{color:var(--accent);font-weight:600;border:0!important;background:none!important;padding:0!important;min-height:0!important;display:inline!important}
+.rsc .m.na{color:var(--muted);font-weight:400}
+.rrno{font-size:13.5px}.rrno p{margin:0 0 8px}
 .score{font-family:var(--mono);font-size:20px;font-weight:500;text-align:center;border-radius:6px;padding:6px 0;background:var(--accent-soft);color:var(--accent);font-variant-numeric:tabular-nums;cursor:help}
 .score small{display:block;font-size:10px;letter-spacing:.05em;color:var(--muted)}
 .title{font-weight:600;font-size:15px;color:var(--ink);text-decoration:none}
@@ -481,6 +484,7 @@ BODY = """<div class="wrap">
 </div>
 <div class="rrpop" id="rrPanel" role="dialog" aria-labelledby="rrTitle" hidden>
   <div class="rrhead"><strong id="rrTitle">Re-rate jobs</strong><button class="btn ghost sm" type="button" id="rrClose">Close</button></div>
+  <div class="rrno" id="rrNo" hidden><p><b>Re-rating needs Claude.</b> Claude reads each posting against your resume to give the Match rating. Without it, Siftwell still finds, filters and ranks jobs by Appeal.</p><a class="btn primary sm" href="/settings#get-started">Settings, then Get started</a></div>
   <div class="rrrow rec">
     <div class="rrtxt"><span><b>Full re-rate</b><span class="rrtag">recommended</span></span>
       <small>Quick check of jobs that need it, then Sonnet on your best <span class="rrPctTxt"></span>%, then Opus on your top <span class="rrTopTxt"></span>. Only ratings made with older info are redone.</small>
@@ -650,6 +654,12 @@ const LBL_HELP = {apply_now: "Apply with your resume as it is.", tailor: "A good
 const TIER = {dmv_hq:"HQ near you", dmv_office:"Office near you", remote_first:"Remote-first", remote_friendly:"Remote-friendly"};
 
 const jobs = D.jobs;
+// Claude is optional: when it isn't connected the board says so once (banner) and shows "-" where Match would be.
+let NOAI = D.claude_ready === false;
+const NOAI_MSG = "Connect Claude to get Match ratings and tailoring";
+const NOAI_LINK = `<a href="/settings#get-started">Settings → Get started</a>`;
+const hasMatch = jobs.some(j => j.ai_fit != null || j.pv_now != null);  // ratings made earlier still show and sort
+const noClaude = what => `<span class="nocl">${what} needs Claude. ${NOAI_LINK}</span>`;
 const nNew = jobs.filter(j => j.new).length;
 const updatedAt = (() => { try { return new Date(D.generated).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"}); } catch(e) { return D.generated.replace("T", " "); } })();
 $("sub").textContent = "Updated " + updatedAt;
@@ -682,7 +692,7 @@ function drawPivotPanel(){
   const pj = pvJobs(), scored = pj.filter(j => j.pv_label);
   const n = f => scored.filter(f).length;
   $("pvTitle").textContent = D.target_name || "Target";
-  $("pvHelp").textContent = (D.target_summary ? D.target_summary + " " : "") + "Tap a number to filter.";
+  $("pvHelp").innerHTML = esc((D.target_summary ? D.target_summary + " " : "") + "Tap a number to filter.") + (NOAI ? ` ${noClaude("Rating jobs for your target")}` : "");
   const counts = [["apply_now", n(j => pvLab(j)==="apply_now"), "Apply now", "a genuine shot today"],
     ["after_prep", n(j => pvLab(j)==="after_prep"), "After prep", "once you've done the prep"],
     ["long_shot", n(j => pvLab(j)==="long_shot"), "Long shots", "possible, but a reach"],
@@ -750,6 +760,7 @@ function applyDisplayDefaults(){
   applyTheme();
   if (!RESTORED) {
     $("lvl").value = PREFS["display.level"]; $("clr").value = PREFS["display.clearance"]; $("sort").value = PREFS["display.sort"]; $("trv").value = TRV_DEFAULT;
+    if (!jobs.some(j => j.ai_fit != null) && ["score", "odds", "odds_later"].includes($("sort").value)) $("sort").value = "appeal";  // nothing to rank by Match yet
     if (!location.hash && PREFS["display.start_tab"] && PREFS["display.start_tab"] !== "jobs") { location.hash = "#" + PREFS["display.start_tab"]; return; }
   }
   render();
@@ -852,9 +863,9 @@ function card(j){
   const sc = pvm ? (j.pv_score ?? j.score) : j.score, m = pvm ? j.pv_now : j.ai_fit, v = verdict(j);
   return `<li class="jrow ${s==="hidden"?"hidden-by-user":""}" role="option" tabindex="0" data-id="${esc(j.id)}" aria-selected="${SEL === j.id}">
     <div class="rtitle">${j.new ? '<span class="ndot" title="New this week"></span>' : ""}${esc(j.title)}</div>
-    <div class="rsc"><div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}" title="${pvm ? "" : tierName(j)}">${m ?? "–"}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
+    <div class="rsc"><div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}${m == null && NOAI ? " na" : ""}" title="${m == null && NOAI ? "Match ratings need Claude" : pvm ? "" : tierName(j)}">${m ?? (NOAI ? "—" : "–")}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
     <div class="rco">${esc(j.company)} · ${esc(whereTxt(j))}</div>
-    <div class="rmeta">${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : `<span class="vpill">Not rated yet</span>`}<span class="amt">${payTxt(j)}</span>${j.posted ? `<span>${ago(j.posted)}</span>` : ""}${(pvm ? j.pv_stale : j.ai_stale) ? '<span class="old" title="Rated before your latest info">Older info</span>' : ""}${j.req_status === "unmet" ? '<span class="rq un">Requirement not met</span>' : j.req_status === "flag" ? '<span class="rq">Check requirements</span>' : ""}${TAILORED[j.id] ? "<span>Resume ready</span>" : ""}${s === "applied" ? "<span>Applied</span>" : s === "saved" ? "<span>★ Saved</span>" : ""}</div>
+    <div class="rmeta">${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : NOAI ? "" : `<span class="vpill">Not rated yet</span>`}<span class="amt">${payTxt(j)}</span>${j.posted ? `<span>${ago(j.posted)}</span>` : ""}${(pvm ? j.pv_stale : j.ai_stale) ? '<span class="old" title="Rated before your latest info">Older info</span>' : ""}${j.req_status === "unmet" ? '<span class="rq un">Requirement not met</span>' : j.req_status === "flag" ? '<span class="rq">Check requirements</span>' : ""}${TAILORED[j.id] ? "<span>Resume ready</span>" : ""}${s === "applied" ? "<span>Applied</span>" : s === "saved" ? "<span>★ Saved</span>" : ""}</div>
     <div class="racts"><button type="button" data-k="saved" aria-pressed="${s==="saved"}" title="Save" aria-label="Save">★</button><button type="button" data-k="hidden" aria-pressed="${s==="hidden"}" title="Not for me" aria-label="Hide">✕</button></div>
   </li>`;
 }
@@ -871,8 +882,8 @@ function detail(j){
   const locs = (j.dmv_locations.length ? j.dmv_locations : j.locations).slice(0,4).map(l => `<span class="chip">${esc(l)}</span>`).join("");
   const clr = j.clearance ? `<span class="chip ${j.clearance.includes("poly")?"poly":""}">${esc(j.clearance)}</span>` : "";
   const tl = TAILORED[j.id];
-  const tailorBtns = !SERVED ? "" : tl ? `<a class="btn primary" href="/tailored/${tl}.pdf">Download resume PDF</a><a class="btn" href="/tailored/${tl}" target="_blank" rel="noopener">Review resume</a><button class="btn" type="button" data-tailor="1" data-again="1">Re-tailor</button>`
-    : `<button class="btn primary" type="button" data-tailor="1">Tailor my resume</button>`;
+  const tailorBtns = !SERVED ? "" : tl ? `<a class="btn primary" href="/tailored/${tl}.pdf">Download resume PDF</a><a class="btn" href="/tailored/${tl}" target="_blank" rel="noopener">Review resume</a><button class="btn" type="button" data-tailor="1" data-again="1"${NOAI ? ' disabled title="Needs Claude"' : ""}>Re-tailor</button>`
+    : NOAI ? `<button class="btn primary" type="button" disabled title="Needs Claude">Tailor my resume</button>${noClaude("Tailoring")}` : `<button class="btn primary" type="button" data-tailor="1">Tailor my resume</button>`;
   return `<div class="dpane" data-id="${esc(j.id)}">
     <button class="dback" type="button" id="dBack">‹ All jobs</button>
     <div><h2 class="dtitle">${esc(j.title)}</h2>
@@ -885,9 +896,9 @@ function detail(j){
     <section class="dsec"><h3>How you stack up</h3><div class="dscores">
       ${pvm ? `<div class="dsc"><div class="ring" style="--p:${sc}"><b>${sc}</b></div><p><strong>Overall</strong>Odds, pay and quality of life combined.</p></div>`
         : `<div class="dsc"><div class="ring" style="--p:${j.appeal ?? 0}"><b>${j.appeal ?? "–"}</b></div><p><strong>Appeal</strong>How well this job gives you what you want.${j.appeal_parts ? `<br>Pay ${j.appeal_parts.pay} · Place ${j.appeal_parts.place} · Level ${j.appeal_parts.level} · Company ${j.appeal_parts.company} · Travel ${j.appeal_parts.burden}` : ""}</p></div>`}
-      <div class="dsc"><div class="ring" style="--p:${m ?? 0}"><b>${m ?? "–"}</b></div><p><strong>Match</strong>${m == null ? "Not rated yet." : pvm ? `Your shot today with an honest tailored resume (after prep: ${j.pv_later}).` : `How well your resume matches what they want${asis != null && asis !== m ? ` (${asis} as written today)` : ""}.<br><span class="tiertag t-${j.ai_tier}">${esc(tierName(j))}</span>`}</p></div>
+      <div class="dsc"><div class="ring" style="--p:${m ?? 0}"><b>${m ?? "–"}</b></div><p><strong>Match</strong>${m == null ? (NOAI ? "Needs Claude." : "Not rated yet.") : pvm ? `Your shot today with an honest tailored resume (after prep: ${j.pv_later}).` : `How well your resume matches what they want${asis != null && asis !== m ? ` (${asis} as written today)` : ""}.<br><span class="tiertag t-${j.ai_tier}">${esc(tierName(j))}</span>`}</p></div>
     </div></section>
-    <section class="dsec dread"><h3>Claude's read</h3>${!unrated && (pvm ? j.pv_stale : j.ai_stale) && SERVED ? `<div class="ratefresh"><span class="old">Rated before your latest info</span><button class="btn sm" type="button" data-rate="1">Re-rate this job</button></div>` : ""}${unrated ? `<p>Claude hasn't read this one yet.</p>${SERVED && D.profile ? `<button class="btn" type="button" data-rate="1">Get Claude's take (about 30 seconds)</button>` : ""}` : read}</section>
+    <section class="dsec dread"><h3>Claude's read</h3>${!unrated && (pvm ? j.pv_stale : j.ai_stale) && SERVED ? `<div class="ratefresh"><span class="old">Rated before your latest info</span><button class="btn sm" type="button" data-rate="1">Re-rate this job</button></div>` : ""}${unrated && NOAI ? `<p>${noClaude("Claude's read")}</p>` : unrated ? `<p>Claude hasn't read this one yet.</p>${SERVED && D.profile ? `<button class="btn" type="button" data-rate="1">Get Claude's take (about 30 seconds)</button>` : ""}` : read}</section>
     ${reqSection(j)}
     <section class="dsec"><h3>Pay</h3>${payBar(j)}</section>
     <section class="dsec"><h3>Details</h3><div class="chips">${levelChip(j)}${wpChip}${locs}${clr}${j.scif ? `<span class="chip onsite">SCIF</span>` : ""}${travelChip(j)}</div></section>
@@ -1016,13 +1027,13 @@ function render(){
   r.sort((a,b) => by[key](a) - by[key](b));
   const base = mode === "pivot" ? pvJobs().length : jobs.length;
   $("count").innerHTML = `${r.length.toLocaleString()} of ${base.toLocaleString()} jobs` + (r.length > shown ? ` · showing ${shown}` : "") +
-    (D.ratings && (D.ratings.stale + D.ratings.unrated) ? ` · <span title="Rated with older info or not rated yet. Use the Re-rate (sparkle) icon at the top.">${D.ratings.stale + D.ratings.unrated} of your top ${D.ratings.top} need a fresh rating</span>` : "") +
+    (!NOAI && D.ratings && (D.ratings.stale + D.ratings.unrated) ? ` · <span title="Rated with older info or not rated yet. Use the Re-rate (sparkle) icon at the top.">${D.ratings.stale + D.ratings.unrated} of your top ${D.ratings.top} need a fresh rating</span>` : "") +
     (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "");
   drawChips();
   const unrated = r.filter(j => mode === "pivot" ? j.pv_label == null : j.ai_fit == null);
   window.__unrated = unrated.slice(0, 45).map(j => j.id);
   $("rateMore").hidden = !SERVED || !D.profile || !unrated.length;
-  $("rateMore").textContent = `Get Claude's take on the next ${Math.min(45, unrated.length)} unrated here`;
+  $("rateMore").textContent = `Get Claude's take on the next ${Math.min(45, unrated.length)} unrated here` + (NOAI ? " (needs Claude)" : "");
   const page = r.slice(0, shown);
   window.__shownIds = page.map(j => j.id);
   if (!page.some(j => j.id === SEL)) { SEL = !window.matchMedia("(max-width:900px)").matches && page[0] ? page[0].id : null; if (!SEL) OPENED = false; }
@@ -1048,18 +1059,19 @@ function nlDraw(total){
   const parts = [...c.role_terms.slice(0, 4), ...c.companies.slice(0, 4), ...c.sectors.slice(0, 3), ...c.topic_terms.slice(0, 5)];
   if (c.workplace === "remote") parts.push("remote"); if (c.workplace === "dmv") parts.push("Near me");
   if (c.min_salary) parts.push("$" + Math.round(c.min_salary / 1000) + "k+");
+  const fb = !!(NL.raw && NL.raw.fallback);  // no Claude: a plain keyword search
   $("nlBar").className = "nlbar"; $("nlBar").hidden = false;
-  $("nlBar").innerHTML = `<span>Claude searched for <b>${esc(c.summary)}</b>: ${n.toLocaleString()} match${n === 1 ? "" : "es"}${hid > 0 ? `, ${hid.toLocaleString()} hidden by your filters` : ""}.</span>` +
+  $("nlBar").innerHTML = `<span>${fb ? "Keyword search for" : "Claude searched for"} <b>${esc(c.summary)}</b>: ${n.toLocaleString()} match${n === 1 ? "" : "es"}${hid > 0 ? `, ${hid.toLocaleString()} hidden by your filters` : ""}.</span>` +
     (hid > 0 ? `<button type="button" class="linkbtn" data-nl="all">Show all matches</button>` : "") +
     `<button type="button" class="linkbtn" data-nl="clear">Clear search</button>` +
-    (parts.length ? `<span class="nlterms">Matching on: ${esc(parts.join(", "))}</span>` : "");
+    (fb ? `<span class="nlterms">${esc(NL.raw.note || "")} ${NOAI_LINK}</span>` : parts.length ? `<span class="nlterms">Matching on: ${esc(parts.join(", "))}</span>` : "");
 }
 function runNL(){
   const q = $("q").value.trim();
   if (!q || !SERVED || nlOn()) return;
   const seq = ++nlSeq;
   $("nlBar").className = "nlbar"; $("nlBar").hidden = false;
-  $("nlBar").innerHTML = `<span class="spin" aria-hidden="true"></span><span>Claude is reading “${esc(q)}”…</span>`;
+  $("nlBar").innerHTML = `<span class="spin" aria-hidden="true"></span><span>${NOAI ? "Searching" : "Claude is reading"} “${esc(q)}”…</span>`;
   fetch("/api/search", {method: "POST", headers: H, body: JSON.stringify({q})})
     .then(r => r.json().then(d => ({ok: r.ok, d})))
     .then(({ok, d}) => {
@@ -1132,7 +1144,10 @@ document.addEventListener("click", e => {
   if (act === "cancel") { clPost({action: "cancel"}); box.hidden = true; }
 });
 if (SERVED) clPost({action: "status"}).then(({d}) => {
-  if (d.installed && !d.logged_in && $("aiBanner").hidden) signInOffer($("aiBanner"), "Claude Code is signed out on the computer running the board, so ratings, tailoring and search are paused.");
+  const ready = !!d.logged_in && d.installed !== false;
+  if (!ready && !NOAI) { NOAI = true; applyNoAI(!!d.installed); }  // Claude went away since this board was built
+  else if (!ready && d.installed && NOAI) noClaudeBanner(true);  // installed but signed out: offer the sign-in button
+  else if (ready && NOAI) { NOAI = false; applyNoAI(false); $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude is connected. Use Update now in the profile menu (or the Re-rate sparkle icon) to get Match ratings."; }
   if (d.logged_in && (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out")) $("aiBanner").textContent = "Claude Code is signed in. Ratings pick up again with the next update, or use Update now in the profile menu.";
 }).catch(() => {});
 // Settings gear badge: number of missing required Get started items (hidden when none); settings_page.py has the same logic.
@@ -1166,7 +1181,8 @@ function quickOn(k){
 }
 function drawQuick(){
   const hasNP = LISTS.options.some(o => o.id === "nonprofit");
-  $("quick").innerHTML = QUICK.filter(([k]) => (k !== "nonprofit" || hasNP) && (k !== "good" || mode !== "pivot")).map(([k, l]) => `<button type="button" class="qc" data-qk="${k}" aria-pressed="${!!quickOn(k)}">${l}</button>`).join("");
+  $("lbl").closest(".field").hidden = NOAI && !hasMatch;  // the Fit filter is about Claude's verdicts
+  $("quick").innerHTML = QUICK.filter(([k]) => (k !== "nonprofit" || hasNP) && (k !== "good" || (mode !== "pivot" && !(NOAI && !hasMatch)))).map(([k, l]) => `<button type="button" class="qc" data-qk="${k}" aria-pressed="${!!quickOn(k)}">${l}</button>`).join("");
 }
 $("quick").addEventListener("click", e => {
   const b = e.target.closest("button[data-qk]"); if (!b) return;
@@ -1325,9 +1341,31 @@ try {
     render(); setTimeout(() => scrollTo(0, sv.y || 0), 60);
   }
 } catch(e) {}
-if (!jobs.length && !D.profile) { $("aiBanner").hidden = false; $("aiBanner").innerHTML = `New profile: <a href="/profile#resume">upload a resume on My profile</a>. Once it's approved, an update fills this board (about 15 minutes).`; }
+if (!jobs.length && !D.profile) { $("aiBanner").hidden = false; $("aiBanner").innerHTML = `New profile: <a href="/profile#resume">${NOAI ? "fill in your profile" : "upload a resume"} on My profile</a>. Once it's approved, an update fills this board (about 15 minutes).`; }
 
-if (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out") { $("aiBanner").hidden = false; if (SERVED) signInOffer($("aiBanner"), "Claude fit scoring is paused because Claude Code is signed out."); else $("aiBanner").textContent = "Claude fit scoring is paused because Claude Code is signed out. Open the board from the server to sign in."; }
+function noClaudeBanner(signIn){
+  if (!jobs.length && !D.profile) return;  // the "New profile" prompt is more useful until there is a profile
+  const b = $("aiBanner"); b.hidden = false;
+  b.innerHTML = `<span><b>${NOAI_MSG}</b> → ${NOAI_LINK}. Siftwell still finds and filters jobs and ranks them by Appeal.</span>` +
+    (signIn && SERVED ? ` <button class="btn sm primary" type="button" data-cl="start">Sign in to Claude</button>` : "");
+}
+// Re-applies everything that depends on whether Claude is connected (also when the live check disagrees with the board).
+function applyNoAI(signIn){
+  ["odds", "odds_later"].forEach(v => { const o = $("sort").querySelector(`option[value=${v}]`); o.hidden = o.disabled = NOAI && !hasMatch; });
+  if (NOAI && !hasMatch && ["odds", "odds_later"].includes($("sort").value)) $("sort").value = "appeal";
+  if (NOAI) noClaudeBanner(signIn);
+  const panel = $("rrPanel");
+  [...panel.children].forEach(c => {
+    if (c.classList.contains("rrhead")) return;
+    if (c.id === "rrNo") { c.hidden = !NOAI; return; }
+    if (NOAI) { if (c.dataset.nh === undefined) c.dataset.nh = c.hidden ? "1" : "0"; c.hidden = true; }
+    else if (c.dataset.nh !== undefined) { c.hidden = c.dataset.nh === "1"; delete c.dataset.nh; }
+  });
+  render();
+}
+if (NOAI) applyNoAI(false);
+else if (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out") { $("aiBanner").hidden = false; if (SERVED) signInOffer($("aiBanner"), "Claude fit scoring is paused because Claude Code is signed out."); else $("aiBanner").textContent = "Claude fit scoring is paused because Claude Code is signed out. Open the board from the server to sign in."; }
+else if (D.ai_status === "no_claude") { NOAI = true; applyNoAI(false); }
 else if (D.ai_status === "no_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude fit scoring is off. Add an Anthropic API key in Settings, then use Update now in the profile menu."; }
 else if (D.ai_status === "bad_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "The saved Anthropic API key was rejected. Replace it in Settings, then use Update now in the profile menu."; }
 
@@ -1353,7 +1391,10 @@ if (SERVED) {
       check();
     });
   }
-  $("rateMore").addEventListener("click", () => rateJobs(window.__unrated || [], $("rateMore")));
+  $("rateMore").addEventListener("click", () => {
+    if (NOAI) { $("rateMsg").innerHTML = `Match ratings need Claude. ${NOAI_LINK}`; return; }
+    rateJobs(window.__unrated || [], $("rateMore"));
+  });
 
   // ---- profiles
   let curPerson = D.person ? D.person.id : "";
@@ -1550,8 +1591,8 @@ if (SERVED) {
     }).catch(() => setTimeout(poll, 5000));
   }
   const RR = D.ratings || {};
-  const need = (RR.stale || 0) + (RR.unrated || 0);
-  $("rrSmall").textContent = need ? `${need} of your top ${RR.top} need a fresh rating` : "all top jobs current";
+  const need = NOAI ? 0 : (RR.stale || 0) + (RR.unrated || 0);
+  $("rrSmall").textContent = NOAI ? "needs Claude" : need ? `${need} of your top ${RR.top} need a fresh rating` : "all top jobs current";
   $("rerateBtn").title = "Re-rate: choose how Claude re-rates your jobs, no new listings" + (need ? ` (${need} of your top ${RR.top} need a fresh rating)` : " (all top jobs current)");
   if (need) { $("rrBadge").hidden = false; $("rrBadge").textContent = need > 99 ? "99+" : need; }
   // ---- Re-rate panel. Counts come from the board: ai_rs (per tier: "-" none, "s" older info, "f" current) and ai_bb

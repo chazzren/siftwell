@@ -277,6 +277,201 @@ def edit_active(edited):
     paths.write_atomic(ACTIVE(), json.dumps(prof, indent=1))
     return prof
 
+# ------------------------------------------------------------------ no Claude: fill in the profile by hand
+CLEARANCE_LEVELS = ["Public Trust", "Secret", "Top Secret", "TS/SCI", "TS/SCI + poly"]
+_LEVEL_WORDS = re.compile(r"^(senior|sr\.?|junior|jr\.?|lead|principal|staff|chief|head of|associate|assistant|vice president of|vp of|director of|manager of)\s+", re.I)
+
+def _title_keywords(titles):
+    out = []
+    for t in titles:
+        t = " ".join(str(t).lower().split())
+        for v in (t, _LEVEL_WORDS.sub("", t).strip()):
+            if len(v) >= 3 and v not in out:
+                out.append(v)
+    return out[:30]
+
+def _years_from(experience):
+    ys = [int(y) for e in experience for y in re.findall(r"\b(?:19|20)\d\d\b", e.get("dates", ""))]
+    return max(0, min(70, dt.date.today().year - min(ys))) if ys else None
+
+def build_manual_profile(f):
+    """The same profile.json structure the resume reader produces, from the "Fill in my profile myself" form.
+    f: name, location, current_title, years_experience, summary, experience [{title, employer, dates, highlights}],
+    skills, education, certifications, clearance (one of CLEARANCE_LEVELS or ""). Raises ValueError on an empty form."""
+    f = f or {}
+    clr = str(f.get("clearance") or "").strip()
+    p = clean_edits({k: f[k] for k in ("summary", "location", "skills", "education", "certifications", "experience", "years_experience")
+                     if k in f})
+    title = " ".join(str(f.get("current_title") or "").split())[:200]
+    exp = p.get("experience") or []
+    if not (title or p.get("summary") or exp or p.get("skills")):
+        raise ValueError("Add at least your current job title, a few skills, or one role, so Siftwell knows what to look for.")
+    roles = []
+    for t in [title] + [e["title"] for e in exp]:
+        if t and t.lower() not in [r.lower() for r in roles]:
+            roles.append(t)
+    years = p.get("years_experience")
+    if years is None:
+        years = _years_from(exp)
+    skills = p.get("skills") or []
+    prof = {"name": " ".join(str(f.get("name") or "").split())[:80], "summary": p.get("summary", ""), "location": p.get("location", ""),
+            "years_experience": years if years is not None else 0,
+            "clearances": [clr] if clr and clr.lower() != "none" else [], "education": p.get("education", []),
+            "certifications": p.get("certifications", []), "skills": skills, "languages": [], "experience": exp,
+            "reframings": [], "hard_limits": [], "target_roles": roles[:15], "title_keywords": _title_keywords(roles),
+            "fit_keywords": [s.lower() for s in skills][:30], "notes": ""}
+    return prof
+
+def save_manual(f):
+    """Make the hand-filled profile the approved, active one (replacing any draft). Returns the profile."""
+    prof = build_manual_profile(f)
+    prof["_source_file"] = "Filled in by hand"
+    prof["_manual"] = True
+    now = dt.datetime.now().isoformat(timespec="minutes")
+    prof["_created"] = prof["_approved"] = now
+    prof["_hash"] = profile_hash(prof)
+    paths.write_atomic(ACTIVE(), json.dumps(prof, indent=1))
+    if os.path.exists(DRAFT()):
+        os.remove(DRAFT())
+    return prof
+
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+_PHONE = re.compile(r"(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)")
+_URL = re.compile(r"(?:https?://|www\.)\S+|\b(?:linkedin|github)\.com\S*", re.I)
+_MON = r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?"
+_RANGE = re.compile(rf"((?:{_MON}\s+)?(?:19|20)\d\d)\s*(?:-|\u2013|\u2014|to)\s*((?:{_MON}\s+)?(?:19|20)\d\d|present|current|now)", re.I)
+_HEADS = {
+    "summary": r"(professional |career )?(summary|profile|objective)|about( me)?|summary of qualifications",
+    "experience": r"(professional |work |relevant |employment )?(experience|history)|employment|work history|career history",
+    "skills": r"((technical|core|key) )?(skills|competencies|technologies|expertise)(?: (?:and|&) .*)?",
+    "education": r"education(?: (?:and|&) .*)?|academic background",
+    "certifications": r"(?:certifications?|licenses?|licensure|certificates?)(?: (?:and|&) .*)?|licenses? (?:and|&) certifications?",
+    "clearance": r"(security )?clearances?",
+    "other": r"projects|awards|publications|references|volunteer.*|interests|languages|training|activities|honors.*|affiliations",
+}
+_BULLET = re.compile(r"^\s*(?:[\u2022\u25cf\u25aa\u25e6\u00b7*\u2013\u2014-]|o(?=\s))\s+(.*\S)")
+_ORG = re.compile(r"\b(inc|llc|ltd|corp|corporation|company|co\.|university|college|agency|department|dept|group|bank|systems|technologies|"
+                  r"solutions|labs?|associates|partners|consulting|services|foundation|institute|hospital|school|army|navy|command)\b", re.I)
+
+def _scrub(s):
+    return " ".join(_URL.sub(" ", _PHONE.sub(" ", _EMAIL.sub(" ", s))).split())
+
+def _heading(line):
+    s = line.strip().rstrip(":").strip()
+    if not s or len(s) > 42 or s.endswith("."):
+        return None
+    for k, rx in _HEADS.items():
+        if re.fullmatch(rx, s.lower()):
+            return k
+    return None
+
+def _split_head(text):
+    """(title, employer) from one line such as "Senior Engineer, Acme Corp" or "Acme Corp | Senior Engineer"."""
+    parts = [p.strip() for p in re.split(r"\s+[|\u2013\u2014-]\s+|\s+at\s+|\s*\|\s*|,\s+", text) if p.strip()]
+    if len(parts) >= 2:
+        a, b = parts[0], parts[1]
+        return (b, a) if _ORG.search(a) and not _ORG.search(b) else (a, b)
+    return (parts[0] if parts else "", "")
+
+def prefill_from_text(text):
+    """Best-effort fields for the "Fill in my profile myself" form from the plain text of a resume (no AI): headings,
+    date ranges and bullets. Phone numbers, emails and links are dropped. The person checks everything."""
+    lines = [l.rstrip() for l in (text or "").replace("\r", "\n").split("\n")]
+    head, sec, cur = [], {k: [] for k in _HEADS}, "head"
+    for l in lines:
+        if not l.strip():
+            continue
+        h = _heading(l)
+        if h:
+            cur = h
+            continue
+        (head if cur == "head" else sec[cur]).append(l.strip())
+    out = {"name": "", "location": "", "current_title": "", "summary": "", "experience": [], "skills": [], "education": [],
+           "certifications": [], "clearance": "", "years_experience": None}
+    for l in head[:6]:
+        c = _scrub(l)
+        if c and len(c.split()) <= 5 and not re.search(r"\d|resume|curriculum", c, re.I):
+            out["name"] = c.title() if c.isupper() else c
+            break
+    for l in head[:8]:
+        m = re.search(r"([A-Z][A-Za-z.' -]+,\s*[A-Z]{2})\b", _scrub(l))
+        if m:
+            out["location"] = m.group(1).strip()
+            break
+    out["summary"] = " ".join(_scrub(l) for l in sec["summary"])[:2000]
+    # experience: a line holding a date range starts a role; the one or two short lines above it are its title / employer
+    entries, pending = [], []
+    for l in sec["experience"]:
+        b = _BULLET.match(l)
+        m = _RANGE.search(l)
+        if b:
+            if entries:
+                entries[-1]["highlights"].append(_scrub(b.group(1)))
+            pending = []
+        elif m and len(l) < 200:
+            rest = _scrub((l[:m.start()] + " " + l[m.end():]).strip(" |,-\u2013\u2014()\t"))
+            heads = pending[-2:] + ([rest] if rest else [])
+            if entries and pending:  # those header lines were taken as the last role's text: give them back
+                for _ in pending[-2:]:
+                    if entries[-1]["highlights"]:
+                        entries[-1]["highlights"].pop()
+            if len(heads) >= 2:
+                a, b2 = heads[0], heads[1]
+                title, emp = (b2, a) if _ORG.search(a) and not _ORG.search(b2) else (a, b2)
+            else:
+                title, emp = _split_head(heads[0]) if heads else ("", "")
+            entries.append({"title": title[:200], "employer": emp[:200], "dates": m.group(0), "highlights": []})
+            pending = []
+        else:
+            c = _scrub(l)
+            if entries:
+                entries[-1]["highlights"].append(c)
+            if len(c) <= 90 and not c.endswith("."):
+                pending.append(c)
+            else:
+                pending = []
+    if not entries and sec["experience"]:
+        entries = [{"title": "", "employer": "", "dates": "", "highlights": [_scrub(l) for l in sec["experience"]][:20]}]
+    out["experience"] = entries[:15]
+    if entries and entries[0]["title"]:
+        out["current_title"] = entries[0]["title"]
+    out["years_experience"] = _years_from(entries)
+    sk = []
+    for l in sec["skills"]:
+        b = _BULLET.match(l)
+        l = (b.group(1) if b else l)
+        if ":" in l:
+            l = l.split(":", 1)[1]
+        for p in re.split(r"[,;|\u2022\u00b7]", l):
+            p = _scrub(p).strip(" .")
+            if p and len(p) <= 40 and p.lower() not in [x.lower() for x in sk]:
+                sk.append(p)
+    out["skills"] = sk[:60]
+    def plain(ls):
+        return [_scrub(_BULLET.match(l).group(1) if _BULLET.match(l) else l) for l in ls if _scrub(l)][:15]
+    out["education"], out["certifications"] = plain(sec["education"]), plain(sec["certifications"])
+    blob = " ".join(lines)
+    if re.search(r"ts\s*/\s*sci.{0,40}poly|poly.{0,40}ts\s*/\s*sci|full[- ]scope", blob, re.I):
+        out["clearance"] = "TS/SCI + poly"
+    elif re.search(r"ts\s*/\s*sci|top secret\s*/\s*sci", blob, re.I):
+        out["clearance"] = "TS/SCI"
+    elif re.search(r"top secret|\bTS\b(?=.{0,30}clearance)|clearance.{0,25}\bTS\b", blob, re.I):
+        out["clearance"] = "Top Secret"
+    elif re.search(r"secret(?=.{0,25}clearance)|clearance.{0,25}secret|\bsecret clearance", blob, re.I):
+        out["clearance"] = "Secret"
+    elif re.search(r"public trust", blob, re.I):
+        out["clearance"] = "Public Trust"
+    return out
+
+def prefill_from_file(filename, data: bytes):
+    """Fields from an uploaded .docx / .txt resume by plain text extraction. Raises ValueError (friendly) for other types."""
+    ext = os.path.splitext(filename or "")[1].lower()
+    if ext not in TEXT_EXT | TEXTUTIL_EXT:
+        raise ValueError("Without Claude, Siftwell can read Word (.docx) and text (.txt) resumes. For a PDF or photo, "
+                         "copy its text into a .txt file, or fill in the form by hand.")
+    path = save_upload(filename, data)
+    return prefill_from_text(extract_text(path))
+
 def load_active():
     try:
         return json.load(open(ACTIVE()))

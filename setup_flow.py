@@ -214,6 +214,13 @@ def _band_offsets(mine, band):
     offs = [o for o in (-1, 0, 1) if lo <= mine + o <= hi]
     return offs or [0]
 
+def _claude_ready():
+    try:
+        import claude_cli
+        return bool(claude_cli.claude_ready())
+    except Exception:
+        return True
+
 def get_state(pid, ingest=None):
     """Everything the page needs to render any step. ingest is server.ps(pid)["resume"] (running/error)."""
     s = _settings(pid)
@@ -251,7 +258,8 @@ def get_state(pid, ingest=None):
         "optional": sorted(OPTIONAL),
         "theme": pr.get("display.theme", "system"),
         "resume": {"status": rstatus, "error": ingest.get("error"),
-                   "file": (prof or {}).get("_source_file", "")},
+                   "file": (prof or {}).get("_source_file", ""), "manual": bool((prof or {}).get("_manual"))},
+        "claude": {"ready": _claude_ready()},
         "highlights": highlights(prof),
         "inferred": {"level": guess, "current_employer": emp},
         "market": market_hint(prof, mine),

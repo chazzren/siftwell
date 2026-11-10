@@ -1,7 +1,8 @@
 """The "Get started" checklist (GET /getting-started) and its actions, so setup happens in the browser, not a terminal.
 
-Required checks (counted, drive the banner): Claude Code installed, signed in, a browser for resume PDFs.
-Optional (listed apart, never counted): start at sign-in, phone access, Codex for Astra.
+Required checks (counted, drive the banner): a browser for resume PDFs.
+Optional (listed apart, never counted): Claude Code installed and signed in (an optional upgrade: Siftwell works without it),
+start at sign-in, phone access, Codex for Astra.
 server.py only routes here (handle_get / handle_post / ping) and asks bind_host() which address to listen on.
 
 Phone access is a saved setting, DATA/network.json {"lan": bool, "keep": bool}; "keep" (default off) means the server keeps
@@ -650,6 +651,7 @@ def _run_install():
     _status_cache.clear()
     _slow.clear()
     with _ilock:
+        claude_cli.invalidate()
         INSTALL.update(running=False, exit=code, finished=time.time(), found=bool(claude_cli.path()))
 
 
@@ -734,6 +736,7 @@ def status(fresh=False):
     import claude_cli
     if fresh:
         _slow.clear()
+        claude_cli.invalidate()
     port = CTX["port"]
     cpath = claude_cli.path()
     signed = _signed_in(bool(cpath), fresh)
@@ -745,8 +748,8 @@ def status(fresh=False):
     url = f"http://{ip}:{port}/?k={CTX['token']}" if lan and ip else None
     codex = _cached("codex", lambda: osdeps.find_exe("codex"))
     items = [
-        {"id": "claude", "title": "Claude Code installed", "done": bool(cpath), "optional": False},
-        {"id": "signin", "title": "Signed in to Claude", "done": bool(signed), "optional": False},
+        {"id": "claude", "title": "Claude Code installed", "done": bool(cpath), "optional": True, "group": "claude"},
+        {"id": "signin", "title": "Signed in to Claude", "done": bool(signed), "optional": True, "group": "claude"},
         {"id": "browser", "title": "Browser for resume PDFs", "done": bool(chrome), "optional": False},
         {"id": "startup", "title": "Start Siftwell when I sign in", "done": st["on"], "optional": True},
         {"id": "phone", "title": "Use Siftwell on my phone", "done": lan, "optional": True},
@@ -930,7 +933,10 @@ PANE_HTML = """<div class="gs">
   <div class="gsum"><b id="sumText">Checking this computer…</b><div class="gsbar" aria-hidden="true"><i id="sumBar"></i></div>
     <p class="gsrun" id="runLine"></p></div>
   <ul class="gsl" id="list"></ul>
-  <h3 class="gsopt">Optional</h3>
+  <h3 class="gsopt">Claude (optional)</h3>
+  <p class="gsoptp">Optional: connect Claude to unlock Match ratings, resume reading and tailoring. Siftwell works without it.</p>
+  <ul class="gsl" id="listClaude"></ul>
+  <h3 class="gsopt">Other options</h3>
   <p class="gsoptp">Nice to have. These never count toward setup.</p>
   <ul class="gsl" id="listOpt"></ul>
   <p class="gsoptp gsfoot">Your information stays on this computer: your resume, profiles, saved jobs and ratings live in a folder on this PC, not in the cloud. Your data folder: <code>""" + html.escape(paths.DATA) + """</code></p>
@@ -960,7 +966,7 @@ const msgHtml = k => ui.msg[k] ? `<span class="gsmsg ${ui.msg[k].cls}" role="sta
 // ---- rows: [id, title, optional] -> {desc, body}
 function rowClaude(){
   const i = S.install, c = S.claude;
-  let desc = c.installed ? "Claude Code is on this computer. Siftwell uses it to rate jobs and tailor resumes on your Claude plan." : "Siftwell uses Claude Code (free to install) to rate jobs and tailor resumes with your Claude plan.";
+  let desc = c.installed ? "Claude Code is on this computer. Siftwell uses it to rate jobs, read resumes and tailor them on your Claude plan." : "Optional. Claude Code (free to install) lets Siftwell rate jobs, read resumes and tailor them with your Claude plan. Siftwell works without it.";
   let body = "";
   if (i.running) {
     body = `<div class="gsmsg">Installing… ${i.elapsed}s. This can take a minute or two.</div><pre class="gslog" id="ilog">${esc(i.lines.join("\n"))}</pre>`;
@@ -1074,7 +1080,7 @@ function render(only){
     if (only && only !== it.id) return;
     if (it.id === "signin" && ui.login && !only) return;  // keep a half-typed sign-in code
     let li = $("row-" + it.id);
-    if (!li) { li = document.createElement("li"); li.id = "row-" + it.id; (it.optional ? $("listOpt") : list).appendChild(li); }
+    if (!li) { li = document.createElement("li"); li.id = "row-" + it.id; (it.group === "claude" ? $("listClaude") : it.optional ? $("listOpt") : list).appendChild(li); }
     const r = ROWS[it.id]();
     li.className = "gsr" + (it.done ? " done" : "");
     li.innerHTML = `<span class="gsst" aria-hidden="true">${it.done ? "✓" : "○"}</span><div><h2>${esc(it.title)}${it.optional ? '' : ""}<span class="vh">${it.done ? " (done)" : " (not done)"}</span></h2><p>${esc(r.desc)}</p></div><div class="gsb">${r.body}</div>`;

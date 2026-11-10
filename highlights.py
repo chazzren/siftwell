@@ -250,7 +250,17 @@ def from_profile_rules(profile):
                      "year": int(yr[-1]) if yr else None, "completed": True})
     lic = [{"name": c, "kind": "license" if re.search(r"licen|\bRN\b|\bCPA\b|\bbar\b|\bP\.?E\.?\b", c) else "cert",
             "active": None} for c in profile.get("certifications") or []]
+    clr = "none"
+    for c in profile.get("clearances") or []:
+        cl = str(c).lower()
+        lv = ("ts/sci + poly" if "poly" in cl else "ts/sci" if ("sci" in cl) else "top secret" if ("top secret" in cl or cl.strip() == "ts")
+              else "secret" if "secret" in cl else "public trust" if "public trust" in cl else None)
+        if lv and ["none", "public trust", "secret", "top secret", "ts/sci", "ts/sci + poly"].index(lv) > \
+                ["none", "public trust", "secret", "top secret", "ts/sci", "ts/sci + poly"].index(clr):
+            clr = lv
     return normalize({"degrees": degs, "licenses": lic, "years_experience": profile.get("years_experience"),
+                      "clearance": {"level": clr, "active": None, "note": ""},
+                      "top_skills": [str(s) for s in (profile.get("skills") or [])[:12]],
                       "languages": [{"language": l.split("(")[0].strip(), "level": ""} for l in profile.get("languages") or []]})
 
 # ------------------------------------------------------------------ storage

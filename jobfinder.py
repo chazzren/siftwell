@@ -981,6 +981,13 @@ def ratings_summary(jobs):
 
 BOARD_HIDDEN = ("desc", "base_wp", "remote_strict", "remote_bare", "local_unnamed", "last_seen")
 
+def _claude_ready():
+    try:
+        import claude_cli
+        return bool(claude_cli.claude_ready())
+    except Exception:
+        return True  # can't tell: don't show the "connect Claude" prompts
+
 def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     import ai_score, collections, report
     for j in jobs:
@@ -992,6 +999,7 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     sums = [dict(s, matched=per_co.get(s["company"], 0)) for s in summaries if sets.get(s["company"], {"tech"}) & watch]
     payload = {"generated": dt.datetime.now().isoformat(timespec="minutes"), "salary_floor": CFG["salary_floor"],
                "ai_status": ai_status, "pivot_status": pv_status, "pivot_name": CFG["pivot"]["name"],
+               "claude_ready": _claude_ready(),
                "pivot_enabled": CFG["pivot_enabled"], "seniority": CFG["seniority"],
                "target_name": st.get("target_name") or "Target", "target_summary": st.get("target_summary") or st.get("target_text", ""),
                "ai_scored": sum(1 for j in jobs if j.get("ai_fit") is not None),
@@ -1038,11 +1046,12 @@ def _kept_status(pid, prof=None):
             st = ["ok", ""]
     if st[0] in ("no_profile",):
         st = ["ok", st[1]]
-    if "cli_logged_out" in st:
+    away = ("cli_logged_out", "no_claude")
+    if any(x in st for x in away):
         try:
             import claude_cli
-            if claude_cli.logged_in():
-                st = ["ok" if st[0] == "cli_logged_out" else st[0], "ok" if st[1] == "cli_logged_out" else st[1]]
+            if claude_cli.claude_ready():
+                st = ["ok" if st[0] in away else st[0], "ok" if st[1] in away else st[1]]
                 catalog.set_meta(f"board_status:{pid}", st)
         except Exception:
             pass

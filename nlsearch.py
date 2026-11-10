@@ -134,3 +134,45 @@ def rank(jobs, descs, crit):
         out.append((j["id"], round(score, 2)))
     out.sort(key=lambda x: -x[1])
     return out
+
+
+# ---- no Claude: plain keyword search (every word must appear somewhere in the posting)
+_STOP = set("a an and or the of for in at to with on by from near me my i want looking look find jobs job roles role positions position "
+            "work working that are is be any some like who which about as".split())
+
+def keyword_search(q, jobs, descs):
+    """The plain-English search without Claude: every meaningful word of the query must appear in the title, company,
+    sector, place or description. Returns the same shape as the Claude search, marked "fallback"."""
+    ql = q.lower()
+    remote = bool(re.search(r"\bremote\b", ql))
+    words = [w for w in re.findall(r"[a-z0-9+#&/.-]+", ql) if w not in _STOP and w != "remote" and len(w) > 1]
+    terms = []
+    for w in words:
+        w = w.strip(".-/")
+        if w and w not in terms:
+            terms.append(w)
+    out = []
+    for j in jobs:
+        if remote and j.get("workplace") != "remote":
+            continue
+        title = (j.get("title") or "").lower()
+        meta = " ".join([j.get("company") or "", j.get("sector") or "", " ".join(j.get("locations") or [])]).lower()
+        body = (descs.get(j["id"]) or j.get("snippet") or "")[:20000].lower()
+        score, ok = 0.0, True
+        for t in terms:
+            if t in title:
+                score += 10
+            elif t in meta:
+                score += 5
+            elif t in body:
+                score += min(body.count(t), 8) * 0.75
+            else:
+                ok = False
+                break
+        if ok and (terms or remote):
+            out.append((j["id"], round(score + (1 if remote else 0), 2)))
+    out.sort(key=lambda x: -x[1])
+    crit = {"summary": (" ".join(terms) + (" (remote)" if remote and terms else "")).strip() or "remote jobs", "role_terms": [], "topic_terms": terms[:12], "companies": [], "sectors": [],
+            "exclude_terms": [], "workplace": "remote" if remote else "any", "min_salary": 0}
+    return {"q": q, "criteria": crit, "ids": [i for i, _ in out], "scores": [s for _, s in out], "fallback": True,
+            "note": "Claude isn't connected, so this is a plain keyword search: every word has to appear in the posting."}
