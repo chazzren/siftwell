@@ -1019,7 +1019,7 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     payload = {"generated": dt.datetime.now().isoformat(timespec="minutes"), "salary_floor": CFG["salary_floor"],
                "ai_status": ai_status, "pivot_status": pv_status, "pivot_name": CFG["pivot"]["name"],
                "claude_ready": _claude_ready(),
-               "pivot_enabled": CFG["pivot_enabled"], "seniority": CFG["seniority"],
+               "pivot_enabled": CFG["pivot_enabled"], "seniority": CFG["seniority"], "travel_max": st.get("travel_max") or "any",
                "target_name": st.get("target_name") or "Target", "target_summary": st.get("target_summary") or st.get("target_text", ""),
                "ai_scored": sum(1 for j in jobs if j.get("ai_fit") is not None),
                "person": {"id": pid, "name": people.name(pid)}, "people": people.load_index(),

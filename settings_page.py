@@ -85,7 +85,6 @@ CATEGORIES = [
         ("Board", "", [
             ("select", "display.start_tab", "Start on", [("jobs", "Jobs"), ("pivot", "Target tab"), ("tailored", "Resumes"), ("companies", "Companies")], ""),
             ("select", "display.sort", "Default sort", [("score", "Best overall"), ("odds", "Best match"), ("odds_later", "Best match (alt)"), ("pay", "Highest pay"), ("gd", "Best Glassdoor"), ("new", "Newest")], ""),
-            ("select", "display.level", "Default seniority", [("near", "Near my level"), ("mine", "My level"), ("above", "Above my level"), ("below", "Below my level"), ("all", "Any level")], ""),
             ("select", "display.clearance", "Default clearance", [("secret", "Secret or less"), ("nopoly", "No TS/SCI + poly"), ("none", "No clearance mentioned"), ("all", "Any clearance")], ""),
         ]),
         ("Appearance", "", [

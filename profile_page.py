@@ -31,10 +31,6 @@ CATEGORIES = [
     ("companies", "Companies", '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>'),
 ]
 
-LEVELS = [(2, "Mid-level"), (3, "Senior"), (4, "Lead / Manager"), (5, "Principal / Sr. Manager"), (6, "Director"), (7, "VP / Executive")]
-RADII = [10, 25, 35, 50, 75]
-TRAVEL = [("none", "None"), ("light", "Light (under 10%)"), ("moderate", "Some (up to 25%)"), ("any", "Any")]
-WORKPLACES = [("onsite", "On-site"), ("hybrid", "Hybrid"), ("remote", "Remote")]
 FILE_TYPES = ".pdf,.doc,.docx,.rtf,.odt,.txt,.md,.html,.png,.jpg,.jpeg,.heic,.webp"
 
 
@@ -104,32 +100,21 @@ def _pane_highlights():
 
 
 def _pane_search():
-    where = [
-        _row_ps("Home ZIP (or City, ST)", "Commutes are measured from here. Blank uses the DC-area list.", "ps-home_zip",
-                '<input type="text" id="ps-home_zip" data-ps="home_zip" placeholder="e.g. 20170" autocomplete="postal-code">'),
-        _row_ps("Search radius", "", "ps-radius_miles", _select("ps-radius_miles", "radius_miles", [(r, f"{r} miles") for r in RADII])),
-    ]
-    where += [_row(f'<label for="ps-wp-{k}">{e(t)}</label>', "Ways of working you would consider." if k == "onsite" else "",
-                   f'<input type="checkbox" role="switch" class="sw" id="ps-wp-{k}" data-wp="{k}">') for k, t in WORKPLACES]
-    where += [
-        _row_ps("Remote jobs anywhere in the US", "Include them even when they are far from your ZIP.", "ps-remote_us",
-                '<input type="checkbox" role="switch" class="sw" id="ps-remote_us" data-ps="remote_us">'),
-        _row_ps("Travel limit", "The most travel you would do for a job.", "ps-travel_max", _select("ps-travel_max", "travel_max", TRAVEL)),
-    ]
+    # Home ZIP / radius, ways of working, remote anywhere, travel limit, pay floor and level live in the board's
+    # Filters panel (My search, report.py); this pane keeps only what Filters doesn't cover.
     pay = [
-        _row_ps("Lowest base salary you'd take ($)", "Jobs that pay clearly less are marked down.", "ps-salary_floor",
-                '<input type="number" inputmode="numeric" step="5000" min="30000" id="ps-salary_floor" data-ps="salary_floor">'),
         _row_ps("Current base ($, optional)", "Shown on each job's pay bar.", "ps-current_base",
                 '<input type="number" inputmode="numeric" step="5000" id="ps-current_base" data-ps="current_base">'),
         _row_ps("Current package, one line (optional)", "", "ps-current_label",
                 '<input type="text" id="ps-current_label" data-ps="current_label" placeholder="e.g. $120k base, hybrid, 4 weeks PTO">'),
     ]
-    level = [_row_ps("Your level", "Jobs near this level rank highest.", "ps-seniority_mine", _select("ps-seniority_mine", "seniority_mine", LEVELS))]
-    return (_group("Where", "", where) + _group("Pay", "", pay) + _group("Level", "", level) +
+    return ('<p class="sfoot pmoved" id="psMoved">Location, ways of working, travel, pay floor and level are set in the board\'s Filters. '
+            '<a href="/#filters">Open Filters on the board</a></p>' +
             _group("Job titles to search for", "", [_pad('<p class="note" id="ttNote">One per line. Claude searches for these and roles like them.</p>'
                                                           '<textarea id="ps-titles" rows="6" aria-label="Job titles to search for, one per line"></textarea>')]) +
             _group("Goals for Claude to weigh", "Pay, commute, what to avoid. Claude reads this when it rates a job.",
                    [_textarea("ps-goals", "goals", "Goals for Claude to weigh", 4)]) +
+            _group("Your current pay", "", pay) +
             '<p class="sfoot">Each change re-checks your board right away (no new listings). Jobs that newly appear get a quick Claude check automatically.</p>')
 
 
@@ -196,6 +181,7 @@ def render_profile_html(pid=None) -> str:
 
 
 CSS = """<style>
+.pmoved{margin:0 14px 16px;font-size:13.5px}
 .pstrip{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin:10px 0 0;font-size:13px}
 .pchip{display:inline-flex;gap:5px;align-items:baseline;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 11px;color:var(--muted)}
 .pchip b{color:var(--ink);font-weight:600}
@@ -299,7 +285,7 @@ function drawStrip(){
   }
   if (a && HL && HL.highlights && !HL.confirmed) miss.push({go: "highlights", text: "Check the facts we pulled from your resume"});
   const wps = SET.workplaces || ["onsite", "hybrid", "remote"];
-  if (!(SET.home_zip || "").trim() && wps.some(w => w !== "remote")) miss.push({go: "search", text: "Add your home ZIP (blank uses the DC-area list)"});
+  if (!(SET.home_zip || "").trim() && wps.some(w => w !== "remote")) miss.push({href: "/#filters", text: "Add your home ZIP in the board's Filters (blank uses the DC-area list)"});
   if (ING.error) miss.push({go: "resume", text: "Fix the resume problem"});
   $("pstrip").innerHTML = chips.map(([k, t, v]) => `<span class="pchip ${k}"><b>${t}</b> ${esc(v)}</span>`).join("") +
     `<span class="pmiss">${miss.length ? "Missing: " + miss.map(m => m.go ? `<a href="#${m.go}" data-go="${m.go}">${esc(m.text)}</a>` : `<a href="${m.href}">${esc(m.text)}</a>`).join("") : "Nothing missing."}</span>`;
@@ -431,13 +417,12 @@ $("rvApprove").addEventListener("click", () => {
 $("rvDiscard").addEventListener("click", () => jpost("/api/profile/discard", {}).then(() => { $("abNote").textContent = ""; loadProfile(); }));
 
 // ---- Job search and Target: every control saves on change
-const SEL_NUM = ["radius_miles", "seniority_mine"];
 function fillOne(el){
   if (el.dataset.wp) { el.checked = (SET.workplaces || []).includes(el.dataset.wp); return; }
   const v = SET[el.dataset.ps];
   if (el.type === "checkbox") el.checked = !!v;
   else {
-    if (el.tagName === "SELECT" && v != null && ![...el.options].some(o => o.value === String(v))) el.add(new Option(SEL_NUM.includes(el.dataset.ps) ? `${v}${el.dataset.ps === "radius_miles" ? " miles" : ""}` : String(v), String(v)));
+    if (el.tagName === "SELECT" && v != null && ![...el.options].some(o => o.value === String(v))) el.add(new Option(String(v), String(v)));
     el.value = v == null ? "" : String(v);
   }
 }

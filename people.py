@@ -77,7 +77,7 @@ PREF_SCHEMA = {
     "claude.facts_per_update": (40, (0, 200)),   # shared facts: an update uses the highest value any profile sets
     "display.start_tab": ("jobs", ["jobs", "pivot", "tailored", "companies"]),
     "display.sort": ("score", ["score", "odds", "odds_later", "pay", "gd", "new"]),
-    "display.level": ("near", ["near", "mine", "above", "below", "all"]),
+    # (display.level, the board's old Seniority filter default, is gone: "Your level" in the board's My search decides it.)
     "display.clearance": ("secret", ["all", "none", "nopoly", "secret"]),
     "display.theme": ("system", ["system", "light", "dark"]),
 }
