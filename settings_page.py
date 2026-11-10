@@ -162,7 +162,7 @@ def render_settings_html(pid=None) -> str:
     nav, panes = _render_parts()
     tools = report.TOOLS.replace('id="prefsBtn" href="/settings"', 'id="prefsBtn" href="/settings" aria-current="page"')
     head = report.HEAD.replace("<title>Siftwell</title>", "<title>Settings · " + name + "</title>")
-    body = BODY.replace("__TOOLS__", tools).replace("__NAV__", nav).replace("__PANES__", panes).replace("__NAME__", name)
+    body = BODY.replace("__TOOLS__", tools).replace("__NAV__", nav).replace("__PANES__", panes).replace("__NAME__", name).replace("__VERSION__", e(getting_started.VERSION))
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             # Apply the saved theme before first paint so the page doesn't flash the wrong colours.
@@ -213,6 +213,7 @@ CSS = """<style>
 .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
 .sw:checked{background:var(--accent)}
 .sw:checked::after{transform:translateX(18px)}
+.sver{margin:10px 12px 0;color:var(--muted);font-size:11.5px}
 .sreset{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
 .sreset .note{color:var(--muted);font-size:12.5px}
 .sreset [data-reset][data-armed="1"]{color:var(--bad)}
@@ -241,7 +242,7 @@ BODY = """<div class="wrap">
 __TOOLS__  </div>
 </header>
 <div class="slayout atList" id="slayout">
-  <nav class="snav" aria-label="Settings categories">__NAV__</nav>
+  <nav class="snav" aria-label="Settings categories">__NAV__<div class="sver" id="siftVersion">Siftwell __VERSION__</div></nav>
   <div class="spanes">__PANES__</div>
 </div>
 </div>

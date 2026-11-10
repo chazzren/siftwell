@@ -513,6 +513,10 @@ def run_accept(pid):
 
 # ---- re-rating with the latest info: its own action, separate from fetching job listings
 RERATE = {}   # pid -> {running, done, total, lines, error, finished}
+def _actlog(action, pid=None, detail=""):
+    import actionlog
+    actionlog.log(action, pid, None, detail)
+
 def run_rerate(pid, n):
     with lock:
         RERATE[pid] = {"running": True, "done": 0, "total": 0, "lines": [], "error": None, "finished": None,
@@ -545,6 +549,7 @@ def run_rerate(pid, n):
         with lock:
             r.update(running=False, finished=dt.datetime.now().isoformat(timespec="seconds"),
                      error=None if rc == 0 else (r["lines"][-1] if r["lines"] else "failed"))
+        _actlog("re-rate stopped" if rc != 0 else "re-rate finished", pid)
         flush_recompute()
 
 # ---- nightly job-listing update
@@ -622,6 +627,7 @@ def run_update(only=None):
     finally:
         with lock:
             state.update(running=False, exit=rc if rc is not None else -1, finished=dt.datetime.now().isoformat(timespec="seconds"))
+        _actlog("update finished" if rc in (0, 3) else "update stopped", None, f"exit {rc}")
         osdeps.keep_awake(False)
         flush_recompute()
 
@@ -653,6 +659,11 @@ class H(BaseHTTPRequestHandler):
             return True
         c = SimpleCookie(self.headers.get("Cookie") or "")
         return "jb_key" in c and hmac.compare_digest(c["jb_key"].value, TOKEN)
+
+    def _act(self, action, pid=None, detail=""):
+        """One line in DATA/actions.log for a user-triggered action (never pass secrets in detail)."""
+        import actionlog
+        actionlog.log(action, pid, self, detail)
 
     def _person(self):
         """Profile chosen with the jb_person cookie (falls back to the first profile)."""
@@ -764,6 +775,7 @@ class H(BaseHTTPRequestHandler):
             s["next_run"] = nr.isoformat(timespec="minutes") if nr else None
             s["schedule"] = schedule()
             s["recomputing"] = _RECOMPUTE["running"]
+            s["job"] = joblock.info()  # whoever holds the job lock, even a job this server didn't start
             return self._send(200, s)
         if path == "/api/rerate":
             with lock:
@@ -908,6 +920,7 @@ class H(BaseHTTPRequestHandler):
                 new = people.add(body.get("name"))
             except ValueError as e:
                 return self._send(400, {"error": str(e)})
+            self._act("profile added", new)
             people.save_settings({}, pid=new)
             empty_board(new)
             import setup_flow
@@ -970,14 +983,17 @@ class H(BaseHTTPRequestHandler):
                 busy = state["running"]
                 if not busy:
                     state["running"] = True
+            self._act("company added", pid, res.get("name"))
             if not busy:
                 threading.Thread(target=run_update, args=(res["name"],), daemon=True).start()
             return self._send(200, {"ok": True, **res, "fetching": not busy})
         if path == "/api/prefs":
+            self._act("settings saved", pid, "reset to defaults" if body.get("reset") else "preferences")
             if body.get("reset"):
                 return self._send(200, {"ok": True, "prefs": people.save_prefs({k: d for k, (d, _) in people.PREF_SCHEMA.items()})})
             return self._send(200, {"ok": True, "prefs": people.save_prefs(body.get("prefs") or {})})
         if path == "/api/person/settings":
+            self._act("settings saved", pid, "profile")
             st = body.get("settings") or {}
             clean = {}
             try:
@@ -1026,6 +1042,7 @@ class H(BaseHTTPRequestHandler):
                     return self._send(409, {"error": "Already re-rating."})
                 RERATE[pid] = {"running": True, "done": 0, "total": 0, "lines": [], "error": None}
             n = people.prefs(pid).get("claude.per_update") or 300
+            self._act("re-rate started", pid)
             threading.Thread(target=run_rerate, args=(pid, int(n)), daemon=True).start()
             return self._send(202, {"ok": True, "n": n})
         if path == "/api/ratings/accept":
@@ -1033,6 +1050,7 @@ class H(BaseHTTPRequestHandler):
                 if (ACCEPT.get(pid) or {}).get("running"):
                     return self._send(409, {"error": "Already working on it."})
                 ACCEPT[pid] = {"running": True, "result": None, "error": None}
+            self._act("keep my current ratings", pid)
             threading.Thread(target=run_accept, args=(pid,), daemon=True).start()
             return self._send(202, {"ok": True})
         if path == "/api/schedule":
@@ -1042,6 +1060,7 @@ class H(BaseHTTPRequestHandler):
                 if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(body["time"])):
                     return self._send(400, {"error": "Use a time like 05:30."})
                 s["time"] = body["time"]
+            self._act("settings saved", pid, "schedule")
             json.dump(s, open(SCHEDULE_FILE, "w"))
             nr = next_run()
             return self._send(200, {"ok": True, "schedule": s, "next_run": nr.isoformat(timespec="minutes") if nr else None})
@@ -1052,6 +1071,7 @@ class H(BaseHTTPRequestHandler):
                 if state["running"]:
                     return self._send(409, {"error": "already running"})
                 state["running"] = True
+            self._act("update started", pid, "one company" if body.get("only") else "all")
             threading.Thread(target=run_update, args=(body.get("only"),), daemon=True).start()
             return self._send(202, {"ok": True})
         if path == "/api/search":
@@ -1075,6 +1095,7 @@ class H(BaseHTTPRequestHandler):
                 return self._send(404, {"error": "No such profile."})
             if not nm:
                 return self._send(400, {"error": "Type a name first."})
+            self._act("profile renamed", who)
             people.rename(who, nm)
             return self._send(200, {"ok": True, "people": _people_list(), "current": pid})
         if path == "/api/people/remove":
@@ -1087,6 +1108,7 @@ class H(BaseHTTPRequestHandler):
                 busy = state["running"] or (RERATE.get(gone) or {}).get("running")
             if busy:
                 return self._send(409, {"error": "An update is running. Try again when it finishes."})
+            self._act("profile removed", gone)
             people.remove(gone)
             _pstate.pop(gone, None)
             nxt = pid if pid != gone else people.first()
@@ -1202,6 +1224,7 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"facts": interview.load_facts()})
         if path == "/api/settings":
             key = (body.get("anthropic_api_key") or "").strip()
+            self._act("settings saved", pid, "API key " + ("saved" if key else "removed" if body.get("clear") else "unchanged"))
             sec = read_json(SECRETS, {})
             if key:
                 sec["anthropic_api_key"] = key
@@ -1218,15 +1241,13 @@ def busy_reason():
             return "An update is running"
         if any(r.get("running") for r in RERATE.values()):
             return "A re-rate is running"
-    if _RESCORE["running"]:
-        return "Ratings are being recomputed"
     if _RECOMPUTE["running"]:
         return "Boards are being rebuilt"
     try:
         import joblock
-        h = joblock.holder()
-        if h:
-            return f"A background job is running ({h.get('kind', 'job')})"
+        h = joblock.info()
+        if h and h["alive"]:
+            return f"A background job is running ({h['kind']})"
     except Exception:
         pass
     for p in list(_pstate.values()):
