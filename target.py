@@ -87,10 +87,13 @@ SSCHEMA = {
     "additionalProperties": False,
 }
 
-SSYSTEM = """You are a candid career strategist. The person isn't sure what to aim for. Using their resume profile, the answers they've given, their goals and constraints, and a snapshot of what the local job market (DMV area plus remote) actually has open and pays, propose 4 to 6 distinct career targets worth pursuing.
+SSYSTEM = """You are a candid career strategist. The person isn't sure what to aim for. Using their resume profile, the answers they've given, their goals and constraints, and a snapshot of what the job market near them ({area}) actually has open and pays, propose 4 to 6 distinct career targets worth pursuing.
 
 Mix: at least one they're strong for today, at least one higher-ceiling direction that needs some preparation, and anything unusual their background makes easier than it looks. Ground pay and demand in the market snapshot; don't invent numbers. Respect their constraints (pay floor, location, things they want to avoid).
 For each: name (2 to 5 words); target_text (one or two sentences in the first person, ready to paste as their target); scope ("ai" only if the target is specifically about AI companies, else "all"); why (one or two sentences, specific to them); pay (typical range from the snapshot); odds_now; prep (what it would take, briefly; "none" if ready)."""
+
+def suggest_system(st):
+    return SSYSTEM.replace("{area}", __import__("geo").area_phrase(st))
 
 def suggest():
     prof = resume.load_active()
@@ -99,4 +102,4 @@ def suggest():
     st = people.settings()
     msg = (f"PROFILE\n{resume.profile_text(prof, st.get('goals', ''))[:9000]}\n\nPay floor: ${st['salary_floor']:,} base\n\n"
            f"MARKET SNAPSHOT (title family | openings | median pay midpoint | % remote | how many at AI companies)\n{market_summary()}")
-    return claude_cli.run_json(SSYSTEM, msg, SSCHEMA, effort="medium", timeout=600).get("options", [])
+    return claude_cli.run_json(suggest_system(st), msg, SSCHEMA, effort="medium", timeout=600).get("options", [])

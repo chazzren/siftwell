@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline US geocoding for job-location strings: real distance instead of a hard-coded DMV place list.
+"""Offline US geocoding for job-location strings: real distance instead of a hard-coded place list.
 
 Data (data/geo/, ~4 MB, built once by data/agent_work/geo/build_gazetteer.py from public-domain Census files:
 https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_Gaz_{place,cousubs,zcta,counties}_national.zip,
@@ -9,7 +9,7 @@ https://download.geonames.org/export/zip/US.zip, CC BY 4.0 - keep the attributio
                z=postal city name only, e.g. "Hanover, MD")
   zcta.tsv     ZIP (ZCTA) internal points + postal city label
   states.tsv   state centroids
-  aliases.json hand-curated aliases (Tysons Corner, Pentagon, Fort Meade, NYC...), metro phrases (DMV, Bay Area...),
+  aliases.json hand-curated aliases (Fort Meade, NYC...), metro phrases (Bay Area, Twin Cities...),
                foreign markers
 
 API
@@ -319,6 +319,26 @@ def geocode_home(q):
     h = max(hs, key=lambda h: h.conf)
     return (h.lat, h.lon, h.label)
 
+def area_phrase(st):
+    """Words for a person's search area, for Claude prompts: 'within 35 miles of Columbus, OH, or remote'.
+    Built from their home ZIP/place, radius and remote setting; 'their area' when no home is set."""
+    place = ""
+    z = str((st or {}).get("home_zip") or "").strip()
+    if z:
+        try:
+            lbl = geocode_home(z)[2]
+            m = re.fullmatch(r"\d{5}(?:-\d{4})? \((.+)\)", lbl)
+            place = m.group(1) if m else lbl
+        except ValueError:
+            place = ""
+    if place:
+        miles_ = int((st or {}).get("radius_miles") or 35)
+        area = f"within {miles_} miles of {place}"
+    else:
+        area = "their area"
+    remote = bool((st or {}).get("remote_us", True)) and "remote" in ((st or {}).get("workplaces") or ["remote"])
+    return area + (", or remote" if remote and place else " or remote" if remote else ", no remote" if place else " only")
+
 def _home(home):
     if isinstance(home, (tuple, list)) and len(home) >= 2 and isinstance(home[0], (int, float)):
         return home[0], home[1]
@@ -327,7 +347,7 @@ def _home(home):
 
 def within(job_locations, home, radius_miles):
     """Is any job location within radius of home?  -> (bool, nearest_miles or None, [matched location strings]).
-    home: (lat, lon[, label]) or a ZIP / 'City, ST'. Metro phrases ("DMV", "Washington DC Metro Area") match when
+    home: (lat, lon[, label]) or a ZIP / 'City, ST'. Metro phrases ("Bay Area", "Greater Boston") match when
     home is inside the metro or its center is within the radius; their distance is to the metro center.
     State-only and remote strings never match (remote handling stays in classify())."""
     hla, hlo = _home(home)

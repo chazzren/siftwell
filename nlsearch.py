@@ -40,7 +40,7 @@ Return:
   company they named, like "AI labs" or "big banks"). Empty if they didn't name or describe companies.
 - sectors: names copied EXACTLY from the sector list that fit the industry they described. Empty if none fit.
 - exclude_terms: title phrases they said to avoid ("not sales" -> "sales"). Usually empty.
-- workplace: "remote" if they asked for remote, "dmv" if they asked for an office in DC / Maryland / Virginia, else "any".
+- workplace: "remote" if they asked for remote, "dmv" if they asked for an office near where they live (not remote), else "any".
 - min_salary: lowest annual pay they asked for in dollars (e.g. "over 200k" -> 200000), else 0.
 Keep each term list under 15 short phrases. Prefer phrases specific enough not to match unrelated jobs."""
 

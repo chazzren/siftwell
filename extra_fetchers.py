@@ -131,7 +131,7 @@ def http_text(url, timeout=30):
                 raise
 
 def _icims_loc(s):
-    """'US-DC-Washington' -> 'Washington, DC'; 'US-VA-Arlington | US-MD-Bethesda' handled by the caller."""
+    """'US-TX-Austin' -> 'Austin, TX'; 'US-OH-Columbus | US-OH-Dayton' handled by the caller."""
     s = _html.unescape(s).strip()
     m = re.match(r"^(?:US|USA)-([A-Z]{2})-(.+)$", s)
     return f"{m.group(2).strip()}, {m.group(1)}" if m else s
