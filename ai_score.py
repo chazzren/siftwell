@@ -270,11 +270,17 @@ def _person_highlights():
 
 
 def profile_keys(prof):
-    """(key, older keys) for the person's rating caches: the approved profile's stored _hash (or its data hash), plus
-    the pre-normalization hash so ratings stored under it are adopted rather than lost."""
+    """(key, older keys) for the person's rating caches. The key is the hash of the person's own profile data (job
+    titles are not part of it). Older keys of the same person are adopted so no stored rating is lost: the _hash stored
+    in the profile (made by an older version, so it may include job titles), and the older formulas applied to today's
+    data (with job titles; before whitespace was normalized)."""
     import resume
-    key = prof.get("_hash") or resume.profile_hash(prof)
-    old = [] if prof.get("_hash") else [h for h in {resume.profile_hash_legacy(prof)} if h != key]
+    key = resume.profile_hash(prof)
+    old = []
+    for h in (prof.get("_hash"), *(prof.get("_hash_aliases") or []), resume.profile_hash_v1(prof),
+              resume.profile_hash_legacy(prof)):
+        if h and h != key and h not in old:
+            old.append(h)
     return key, old
 
 

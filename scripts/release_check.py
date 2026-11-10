@@ -408,6 +408,23 @@ assert resume.profile_hash(p2) == base["phash"], "profile key depends on whitesp
 # 3. a real data change must change the fingerprint
 p3 = dict(prof, summary="Completely different summary")
 assert ai_score.fingerprints(p3)["fp"] != base["fp"], "fingerprint ignores the resume summary"
+# 3b. job titles are a board filter: changing them must not change any fingerprint or key (nor orphan any rating)
+p_titles = dict(prof, target_roles=["Chief of Staff", "Operations Director", "Program Manager"])
+ft = ai_score.fingerprints(p_titles)
+for k in ("phash", "fp", "hl", "hl_old", "pfp", "pfp_old"):
+    assert ft[k] == ai_score.fingerprints(prof)[k], "changing target_roles changed fingerprint/key " + k
+assert resume.profile_hash(p_titles) == resume.profile_hash(prof), "profile hash depends on job titles"
+assert pivot.cache_keys(ft, people.settings_strict(), people.read_saved_strict())[0] == base["pivot_key"], \
+    "changing target_roles changed the Target key"
+resume.edit_active({"target_roles": ["Chief of Staff", "Operations Director"]})
+assert snap() == base, "saving new job titles changed a fingerprint/key"
+w("people/pat/profile.json", prof)
+# ...and ratings stored under the key older versions made (which included the titles) are adopted, not lost
+old_key = resume.profile_hash_v1(prof)
+assert old_key != base["phash"] and old_key in ai_score.profile_keys(dict(prof, _hash=old_key))[1], "old key not adopted"
+by = {old_key: {"j1": {"opus": {"fp": "x"}}}}
+ai_score.adopt(by, base["phash"], ai_score.profile_keys(dict(prof, _hash=old_key))[1])
+assert by == {base["phash"]: {"j1": {"opus": {"fp": "x"}}}}, "ratings under the old key were not adopted"
 # 4. goals, notes, an answers edit and a highlights edit must each change the fingerprint they feed
 assert ai_score.fingerprints(dict(prof, notes="Some SQL and Python."))["fp"] != base["fp"], "fingerprint ignores notes"
 sp = os.path.join(D, "people/pat/settings.json")
