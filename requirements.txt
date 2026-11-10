@@ -1,0 +1,7 @@
+# Job Board: Python 3.12+ packages (same on macOS and Windows)
+anthropic==2.6.0
+pillow==13.0.0
+pypdf==7.0.0
+pypdfium2==5.15.2
+python-docx==1.2.0
+pillow-heif; sys_platform == "win32"

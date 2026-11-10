@@ -1,0 +1,1494 @@
+{
+ "_doc": "Hand-curated additions to the Census gazetteer. places: name -> [state, lat, lon] (wins over gazetteer places of the same name when no other state is given). metros: regional phrases -> center + radius_mi; a metro phrase counts as 'within' for homes inside the radius. foreign: words that mark a non-US location when no US city+state pair is found. Names are matched after geo.norm() (lowercase, no accents/punctuation, 'st.'->'saint', 'ft'->'fort', 'mt'->'mount', 'd.c.'/'district of columbia'->'dc').",
+ "places": {
+  "dc": [
+   "DC",
+   38.9042,
+   -77.0165
+  ],
+  "washington dc": [
+   "DC",
+   38.9042,
+   -77.0165
+  ],
+  "washington dc dc": [
+   "DC",
+   38.9042,
+   -77.0165
+  ],
+  "navy yard": [
+   "DC",
+   38.8748,
+   -76.995
+  ],
+  "foggy bottom": [
+   "DC",
+   38.9006,
+   -77.05
+  ],
+  "joint base anacostia bolling": [
+   "DC",
+   38.8429,
+   -77.0164
+  ],
+  "bolling afb": [
+   "DC",
+   38.8429,
+   -77.0164
+  ],
+  "jbab": [
+   "DC",
+   38.8429,
+   -77.0164
+  ],
+  "tysons corner": [
+   "VA",
+   38.9187,
+   -77.2311
+  ],
+  "tysons": [
+   "VA",
+   38.9187,
+   -77.2311
+  ],
+  "pentagon": [
+   "VA",
+   38.8719,
+   -77.0563
+  ],
+  "the pentagon": [
+   "VA",
+   38.8719,
+   -77.0563
+  ],
+  "pentagon city": [
+   "VA",
+   38.8625,
+   -77.0594
+  ],
+  "national landing": [
+   "VA",
+   38.8564,
+   -77.0517
+  ],
+  "crystal city": [
+   "VA",
+   38.8564,
+   -77.0517
+  ],
+  "rosslyn": [
+   "VA",
+   38.8966,
+   -77.0716
+  ],
+  "ballston": [
+   "VA",
+   38.8821,
+   -77.1113
+  ],
+  "clarendon": [
+   "VA",
+   38.8868,
+   -77.0953
+  ],
+  "fort myer": [
+   "VA",
+   38.8808,
+   -77.0767
+  ],
+  "joint base myer henderson hall": [
+   "VA",
+   38.8808,
+   -77.0767
+  ],
+  "fort belvoir": [
+   "VA",
+   38.7119,
+   -77.1459
+  ],
+  "quantico": [
+   "VA",
+   38.5221,
+   -77.293
+  ],
+  "marine corps base quantico": [
+   "VA",
+   38.5221,
+   -77.3053
+  ],
+  "mcb quantico": [
+   "VA",
+   38.5221,
+   -77.3053
+  ],
+  "dulles": [
+   "VA",
+   38.9531,
+   -77.4565
+  ],
+  "washington dulles": [
+   "VA",
+   38.9531,
+   -77.4565
+  ],
+  "fort meade": [
+   "MD",
+   39.1057,
+   -76.7433
+  ],
+  "fort george g meade": [
+   "MD",
+   39.1057,
+   -76.7433
+  ],
+  "fort george meade": [
+   "MD",
+   39.1057,
+   -76.7433
+  ],
+  "joint base andrews": [
+   "MD",
+   38.8108,
+   -76.867
+  ],
+  "andrews afb": [
+   "MD",
+   38.8108,
+   -76.867
+  ],
+  "andrews air force base": [
+   "MD",
+   38.8108,
+   -76.867
+  ],
+  "patuxent river": [
+   "MD",
+   38.2861,
+   -76.4119
+  ],
+  "pax river": [
+   "MD",
+   38.2861,
+   -76.4119
+  ],
+  "nas patuxent river": [
+   "MD",
+   38.2861,
+   -76.4119
+  ],
+  "white oak": [
+   "MD",
+   39.0398,
+   -76.993
+  ],
+  "bethesda row": [
+   "MD",
+   38.9817,
+   -77.0967
+  ],
+  "nyc": [
+   "NY",
+   40.7128,
+   -74.006
+  ],
+  "new york city": [
+   "NY",
+   40.7128,
+   -74.006
+  ],
+  "manhattan": [
+   "NY",
+   40.7831,
+   -73.9712
+  ],
+  "brooklyn": [
+   "NY",
+   40.6782,
+   -73.9442
+  ],
+  "sf": [
+   "CA",
+   37.7749,
+   -122.4194
+  ],
+  "sf hq": [
+   "CA",
+   37.7749,
+   -122.4194
+  ],
+  "research triangle park": [
+   "NC",
+   35.8992,
+   -78.8636
+  ],
+  "rtp": [
+   "NC",
+   35.8992,
+   -78.8636
+  ],
+  "redstone arsenal": [
+   "AL",
+   34.684,
+   -86.6476
+  ],
+  "wright patterson afb": [
+   "OH",
+   39.8261,
+   -84.0484
+  ],
+  "kennedy space center": [
+   "FL",
+   28.5729,
+   -80.649
+  ],
+  "annapolis junction": [
+   "MD",
+   39.119,
+   -76.7769
+  ],
+  "san francisco": [
+   "CA",
+   37.7749,
+   -122.4194
+  ],
+  "fort detrick": [
+   "MD",
+   39.4364,
+   -77.4265
+  ],
+  "fort huachuca": [
+   "AZ",
+   31.5547,
+   -110.3497
+  ],
+  "hill afb": [
+   "UT",
+   41.1239,
+   -111.9731
+  ],
+  "hill air force base": [
+   "UT",
+   41.1239,
+   -111.9731
+  ],
+  "joint base lewis mcchord": [
+   "WA",
+   47.1043,
+   -122.5531
+  ],
+  "jblm": [
+   "WA",
+   47.1043,
+   -122.5531
+  ],
+  "joint base pearl harbor hickam": [
+   "HI",
+   21.3469,
+   -157.9397
+  ],
+  "pearl harbor": [
+   "HI",
+   21.3649,
+   -157.9497
+  ],
+  "schofield barracks": [
+   "HI",
+   21.495,
+   -158.0631
+  ],
+  "camp h m smith": [
+   "HI",
+   21.3866,
+   -157.917
+  ],
+  "fort liberty": [
+   "NC",
+   35.139,
+   -79.006
+  ],
+  "fort bragg": [
+   "NC",
+   35.139,
+   -79.006
+  ],
+  "fort hood": [
+   "TX",
+   31.135,
+   -97.776
+  ],
+  "fort cavazos": [
+   "TX",
+   31.135,
+   -97.776
+  ],
+  "fort campbell": [
+   "KY",
+   36.662,
+   -87.474
+  ],
+  "fort gordon": [
+   "GA",
+   33.42,
+   -82.14
+  ],
+  "fort eisenhower": [
+   "GA",
+   33.42,
+   -82.14
+  ],
+  "fort bliss": [
+   "TX",
+   31.813,
+   -106.422
+  ],
+  "fort carson": [
+   "CO",
+   38.7375,
+   -104.7889
+  ],
+  "fort leavenworth": [
+   "KS",
+   39.348,
+   -94.922
+  ],
+  "fort sill": [
+   "OK",
+   34.65,
+   -98.4
+  ],
+  "fort knox": [
+   "KY",
+   37.891,
+   -85.963
+  ],
+  "fort eustis": [
+   "VA",
+   37.159,
+   -76.579
+  ],
+  "joint base langley eustis": [
+   "VA",
+   37.083,
+   -76.36
+  ],
+  "langley afb": [
+   "VA",
+   37.083,
+   -76.36
+  ],
+  "naval station norfolk": [
+   "VA",
+   36.946,
+   -76.303
+  ],
+  "dam neck": [
+   "VA",
+   36.779,
+   -75.962
+  ],
+  "wallops island": [
+   "VA",
+   37.94,
+   -75.466
+  ],
+  "scott afb": [
+   "IL",
+   38.543,
+   -89.85
+  ],
+  "offutt afb": [
+   "NE",
+   41.118,
+   -95.912
+  ],
+  "peterson sfb": [
+   "CO",
+   38.823,
+   -104.7
+  ],
+  "peterson afb": [
+   "CO",
+   38.823,
+   -104.7
+  ],
+  "schriever sfb": [
+   "CO",
+   38.803,
+   -104.526
+  ],
+  "schriever afb": [
+   "CO",
+   38.803,
+   -104.526
+  ],
+  "buckley sfb": [
+   "CO",
+   39.702,
+   -104.752
+  ],
+  "buckley afb": [
+   "CO",
+   39.702,
+   -104.752
+  ],
+  "vandenberg sfb": [
+   "CA",
+   34.742,
+   -120.572
+  ],
+  "vandenberg afb": [
+   "CA",
+   34.742,
+   -120.572
+  ],
+  "patrick sfb": [
+   "FL",
+   28.235,
+   -80.61
+  ],
+  "macdill afb": [
+   "FL",
+   27.849,
+   -82.521
+  ],
+  "eglin afb": [
+   "FL",
+   30.483,
+   -86.525
+  ],
+  "hurlburt field": [
+   "FL",
+   30.428,
+   -86.689
+  ],
+  "joint base san antonio": [
+   "TX",
+   29.385,
+   -98.581
+  ],
+  "lackland afb": [
+   "TX",
+   29.385,
+   -98.581
+  ],
+  "kirtland afb": [
+   "NM",
+   35.049,
+   -106.548
+  ],
+  "white sands missile range": [
+   "NM",
+   32.38,
+   -106.48
+  ],
+  "camp pendleton": [
+   "CA",
+   33.385,
+   -117.565
+  ],
+  "china lake": [
+   "CA",
+   35.688,
+   -117.69
+  ],
+  "point mugu": [
+   "CA",
+   34.12,
+   -119.12
+  ],
+  "naval base san diego": [
+   "CA",
+   32.684,
+   -117.13
+  ],
+  "los angeles afb": [
+   "CA",
+   33.919,
+   -118.38
+  ],
+  "beale afb": [
+   "CA",
+   39.136,
+   -121.436
+  ],
+  "travis afb": [
+   "CA",
+   38.263,
+   -121.927
+  ],
+  "edwards afb": [
+   "CA",
+   34.905,
+   -117.884
+  ],
+  "nellis afb": [
+   "NV",
+   36.236,
+   -115.034
+  ],
+  "creech afb": [
+   "NV",
+   36.587,
+   -115.673
+  ],
+  "davis monthan afb": [
+   "AZ",
+   32.166,
+   -110.883
+  ],
+  "luke afb": [
+   "AZ",
+   33.535,
+   -112.383
+  ],
+  "robins afb": [
+   "GA",
+   32.64,
+   -83.592
+  ],
+  "maxwell afb": [
+   "AL",
+   32.379,
+   -86.362
+  ],
+  "barksdale afb": [
+   "LA",
+   32.502,
+   -93.663
+  ],
+  "tinker afb": [
+   "OK",
+   35.415,
+   -97.387
+  ],
+  "whiteman afb": [
+   "MO",
+   38.73,
+   -93.548
+  ],
+  "wright patterson": [
+   "OH",
+   39.8261,
+   -84.0484
+  ],
+  "hanscom afb": [
+   "MA",
+   42.462,
+   -71.289
+  ],
+  "naval station newport": [
+   "RI",
+   41.525,
+   -71.315
+  ],
+  "kings bay": [
+   "GA",
+   30.798,
+   -81.565
+  ],
+  "naval station mayport": [
+   "FL",
+   30.392,
+   -81.424
+  ],
+  "nas pensacola": [
+   "FL",
+   30.352,
+   -87.319
+  ],
+  "nsa crane": [
+   "IN",
+   38.864,
+   -86.838
+  ],
+  "nswc crane": [
+   "IN",
+   38.864,
+   -86.838
+  ],
+  "nswc dahlgren": [
+   "VA",
+   38.333,
+   -77.037
+  ],
+  "fort walker": [
+   "VA",
+   38.07,
+   -77.33
+  ],
+  "fort a p hill": [
+   "VA",
+   38.07,
+   -77.33
+  ],
+  "fort lee": [
+   "VA",
+   37.248,
+   -77.333
+  ],
+  "fort gregg adams": [
+   "VA",
+   37.248,
+   -77.333
+  ],
+  "fort novosel": [
+   "AL",
+   31.343,
+   -85.715
+  ],
+  "fort rucker": [
+   "AL",
+   31.343,
+   -85.715
+  ],
+  "fort moore": [
+   "GA",
+   32.359,
+   -84.949
+  ],
+  "fort benning": [
+   "GA",
+   32.359,
+   -84.949
+  ],
+  "fort stewart": [
+   "GA",
+   31.869,
+   -81.609
+  ],
+  "fort drum": [
+   "NY",
+   44.055,
+   -75.719
+  ],
+  "fort polk": [
+   "LA",
+   31.046,
+   -93.208
+  ],
+  "fort johnson": [
+   "LA",
+   31.046,
+   -93.208
+  ],
+  "fort riley": [
+   "KS",
+   39.055,
+   -96.764
+  ],
+  "fort wainwright": [
+   "AK",
+   64.828,
+   -147.643
+  ],
+  "joint base elmendorf richardson": [
+   "AK",
+   61.251,
+   -149.806
+  ],
+  "aberdeen proving ground": [
+   "MD",
+   39.466,
+   -76.13
+  ],
+  "apg": [
+   "MD",
+   39.466,
+   -76.13
+  ],
+  "woodlands": [
+   "TX",
+   30.1658,
+   -95.4613
+  ],
+  "the woodlands": [
+   "TX",
+   30.1658,
+   -95.4613
+  ],
+  "westfields": [
+   "VA",
+   38.888,
+   -77.447
+  ],
+  "daytona": [
+   "FL",
+   29.2108,
+   -81.0228
+  ],
+  "abbott park": [
+   "IL",
+   42.302,
+   -87.893
+  ],
+  "patuxent": [
+   "MD",
+   38.2861,
+   -76.4119
+  ]
+ },
+ "metros": [
+  {
+   "label": "Washington DC metro",
+   "center": [
+    38.9072,
+    -77.0369
+   ],
+   "radius_mi": 30,
+   "phrases": [
+    "dmv",
+    "dc metro",
+    "dc metropolitan",
+    "metro dc",
+    "washington metro",
+    "washington dc metro",
+    "washington metropolitan",
+    "washington dc metropolitan",
+    "dc area",
+    "washington dc area",
+    "washington area",
+    "greater washington",
+    "greater dc",
+    "national capital region",
+    "ncr",
+    "dc region",
+    "washington region",
+    "dc md va",
+    "dc va md",
+    "va dc md",
+    "md dc va",
+    "baltimore washington",
+    "washington baltimore",
+    "capital area",
+    "capitol region"
+   ]
+  },
+  {
+   "label": "Northern Virginia",
+   "center": [
+    38.86,
+    -77.28
+   ],
+   "radius_mi": 20,
+   "phrases": [
+    "northern virginia",
+    "n virginia",
+    "northern va",
+    "no va"
+   ]
+  },
+  {
+   "label": "Suburban Maryland",
+   "center": [
+    39.05,
+    -77.0
+   ],
+   "radius_mi": 20,
+   "phrases": [
+    "suburban maryland",
+    "montgomery county md",
+    "montgomery county maryland",
+    "prince georges county"
+   ]
+  },
+  {
+   "label": "Baltimore metro",
+   "center": [
+    39.2904,
+    -76.6122
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "baltimore metro",
+    "greater baltimore",
+    "baltimore area",
+    "baltimore metropolitan"
+   ]
+  },
+  {
+   "label": "New York metro",
+   "center": [
+    40.7128,
+    -74.006
+   ],
+   "radius_mi": 30,
+   "phrases": [
+    "new york metro",
+    "nyc metro",
+    "ny metro",
+    "greater new york",
+    "tri state area",
+    "tristate area",
+    "new york city metro",
+    "nyc area",
+    "new york area"
+   ]
+  },
+  {
+   "label": "SF Bay Area",
+   "center": [
+    37.6,
+    -122.2
+   ],
+   "radius_mi": 40,
+   "phrases": [
+    "bay area",
+    "sf bay area",
+    "san francisco bay area",
+    "silicon valley",
+    "san francisco metro",
+    "sf metro",
+    "south bay",
+    "peninsula ca"
+   ]
+  },
+  {
+   "label": "Los Angeles metro",
+   "center": [
+    34.0522,
+    -118.2437
+   ],
+   "radius_mi": 35,
+   "phrases": [
+    "greater los angeles",
+    "los angeles metro",
+    "la metro",
+    "los angeles area",
+    "la area"
+   ]
+  },
+  {
+   "label": "Chicago metro",
+   "center": [
+    41.8781,
+    -87.6298
+   ],
+   "radius_mi": 30,
+   "phrases": [
+    "chicagoland",
+    "greater chicago",
+    "chicago metro",
+    "chicago area"
+   ]
+  },
+  {
+   "label": "Boston metro",
+   "center": [
+    42.3601,
+    -71.0589
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "greater boston",
+    "boston metro",
+    "boston area"
+   ]
+  },
+  {
+   "label": "Seattle metro",
+   "center": [
+    47.6062,
+    -122.3321
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "greater seattle",
+    "seattle metro",
+    "seattle area",
+    "puget sound"
+   ]
+  },
+  {
+   "label": "Philadelphia metro",
+   "center": [
+    39.9526,
+    -75.1652
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "greater philadelphia",
+    "philadelphia metro",
+    "philadelphia area",
+    "philly area"
+   ]
+  },
+  {
+   "label": "Atlanta metro",
+   "center": [
+    33.749,
+    -84.388
+   ],
+   "radius_mi": 30,
+   "phrases": [
+    "metro atlanta",
+    "atlanta metro",
+    "greater atlanta",
+    "atlanta area"
+   ]
+  },
+  {
+   "label": "Dallas-Fort Worth",
+   "center": [
+    32.85,
+    -97.0
+   ],
+   "radius_mi": 35,
+   "phrases": [
+    "dfw",
+    "dallas fort worth",
+    "dallas metro",
+    "dallas area",
+    "metroplex"
+   ]
+  },
+  {
+   "label": "Houston metro",
+   "center": [
+    29.7604,
+    -95.3698
+   ],
+   "radius_mi": 30,
+   "phrases": [
+    "greater houston",
+    "houston metro",
+    "houston area"
+   ]
+  },
+  {
+   "label": "Denver metro",
+   "center": [
+    39.7392,
+    -104.9903
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "denver metro",
+    "greater denver",
+    "denver area"
+   ]
+  },
+  {
+   "label": "Austin metro",
+   "center": [
+    30.2672,
+    -97.7431
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "austin metro",
+    "greater austin",
+    "austin area"
+   ]
+  },
+  {
+   "label": "Phoenix metro",
+   "center": [
+    33.4484,
+    -112.074
+   ],
+   "radius_mi": 30,
+   "phrases": [
+    "phoenix metro",
+    "greater phoenix",
+    "valley of the sun",
+    "phoenix area"
+   ]
+  },
+  {
+   "label": "Twin Cities",
+   "center": [
+    44.9778,
+    -93.265
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "twin cities",
+    "minneapolis saint paul",
+    "minneapolis metro"
+   ]
+  },
+  {
+   "label": "Detroit metro",
+   "center": [
+    42.3314,
+    -83.0458
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "metro detroit",
+    "detroit metro",
+    "greater detroit"
+   ]
+  },
+  {
+   "label": "Research Triangle",
+   "center": [
+    35.85,
+    -78.8
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "research triangle",
+    "triangle area",
+    "raleigh durham",
+    "raleigh metro"
+   ]
+  },
+  {
+   "label": "San Diego metro",
+   "center": [
+    32.7157,
+    -117.1611
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "san diego metro",
+    "greater san diego",
+    "san diego area"
+   ]
+  },
+  {
+   "label": "South Florida",
+   "center": [
+    26.1,
+    -80.25
+   ],
+   "radius_mi": 40,
+   "phrases": [
+    "south florida",
+    "miami metro",
+    "greater miami"
+   ]
+  },
+  {
+   "label": "Tampa Bay",
+   "center": [
+    27.95,
+    -82.55
+   ],
+   "radius_mi": 30,
+   "phrases": [
+    "tampa bay",
+    "tampa metro",
+    "greater tampa"
+   ]
+  },
+  {
+   "label": "Hampton Roads",
+   "center": [
+    36.9,
+    -76.3
+   ],
+   "radius_mi": 30,
+   "phrases": [
+    "hampton roads",
+    "tidewater"
+   ]
+  },
+  {
+   "label": "Richmond metro",
+   "center": [
+    37.5407,
+    -77.436
+   ],
+   "radius_mi": 20,
+   "phrases": [
+    "richmond metro",
+    "greater richmond",
+    "richmond area"
+   ]
+  },
+  {
+   "label": "Portland metro",
+   "center": [
+    45.5152,
+    -122.6784
+   ],
+   "radius_mi": 25,
+   "phrases": [
+    "portland metro",
+    "greater portland"
+   ]
+  }
+ ],
+ "foreign": [
+  "abu dhabi",
+  "abuja",
+  "addis ababa",
+  "afghanistan",
+  "africa",
+  "ahmedabad",
+  "albania",
+  "alberta",
+  "algeria",
+  "algiers",
+  "alta verapaz",
+  "amman",
+  "amsterdam",
+  "angola",
+  "apac",
+  "argentina",
+  "armenia",
+  "aruba",
+  "asia",
+  "athens greece",
+  "auckland",
+  "aus",
+  "australia",
+  "austria",
+  "azerbaijan",
+  "bahamas",
+  "bahia",
+  "bahrain",
+  "baku",
+  "bali",
+  "ballarat",
+  "bangalore",
+  "bangkok",
+  "bangladesh",
+  "barbados",
+  "barcelona",
+  "batam",
+  "beijing",
+  "beirut",
+  "belarus",
+  "belem",
+  "belgium",
+  "belgrade",
+  "belo horizonte",
+  "bengaluru",
+  "benin",
+  "berlin",
+  "bermuda",
+  "betim",
+  "bhutan",
+  "bialystok",
+  "birr",
+  "blagnac",
+  "bogota",
+  "bolivia",
+  "bosnia",
+  "botswana",
+  "brasilia",
+  "bratislava",
+  "brazil",
+  "brisbane",
+  "british columbia",
+  "brussels",
+  "bucharest",
+  "budapest",
+  "buenos aires",
+  "bulgaria",
+  "burkina faso",
+  "cairo",
+  "calgary",
+  "cambodia",
+  "cambridgeshire",
+  "cameroon",
+  "campina grande",
+  "campinas",
+  "canada",
+  "canberra",
+  "canoas",
+  "cape town",
+  "caracas",
+  "casablanca",
+  "cayman",
+  "ceara",
+  "cebu",
+  "central african republic",
+  "chalfont saint giles",
+  "chennai",
+  "chile",
+  "china",
+  "colombia",
+  "comayagua",
+  "congo",
+  "copan",
+  "copenhagen",
+  "costa rica",
+  "cote divoire",
+  "croatia",
+  "cuba",
+  "curitiba",
+  "cyberjaya",
+  "cyprus",
+  "cze",
+  "czech",
+  "daerah khusus",
+  "dakar",
+  "dalian",
+  "delhi",
+  "denmark",
+  "deu",
+  "distrito federal",
+  "djibouti",
+  "doha",
+  "dominican republic",
+  "dubai",
+  "dublin",
+  "ecuador",
+  "edinburgh",
+  "edmonton",
+  "egypt",
+  "el salvador",
+  "elblag",
+  "emea",
+  "emirates",
+  "england",
+  "eritrea",
+  "esp",
+  "espirito santo",
+  "estonia",
+  "eswatini",
+  "ethiopia",
+  "europe",
+  "fiji",
+  "finland",
+  "florianopolis",
+  "fortaleza",
+  "france",
+  "francisco morazan",
+  "frankfurt",
+  "gbr",
+  "gdansk",
+  "geneva",
+  "georgia tbilisi",
+  "germany",
+  "ghana",
+  "great britain",
+  "greece",
+  "guadalajara",
+  "guangzhou",
+  "guantanamo",
+  "guatemala",
+  "guinea",
+  "gurgaon",
+  "gurugram",
+  "guyana",
+  "haifa",
+  "haiti",
+  "hamburg",
+  "hanoi",
+  "harrogate",
+  "helsinki",
+  "hnd",
+  "honduras",
+  "hong kong",
+  "huehuetenango",
+  "hungary",
+  "hyderabad",
+  "iceland",
+  "india",
+  "indonesia",
+  "intibuca",
+  "iraq",
+  "ireland",
+  "israel",
+  "istanbul",
+  "itajuba",
+  "italy",
+  "ivory coast",
+  "jakarta",
+  "jamaica",
+  "japan",
+  "jiangsu",
+  "johannesburg",
+  "jordan amman",
+  "kampala",
+  "katowice",
+  "kazakhstan",
+  "kenya",
+  "kigali",
+  "kolkata",
+  "korea",
+  "kosovo",
+  "krakow",
+  "kuala lumpur",
+  "kuwait",
+  "kwajalein",
+  "kyiv",
+  "lagos",
+  "laos",
+  "latam",
+  "latvia",
+  "lebanon beirut",
+  "liberia",
+  "lilongwe",
+  "lima",
+  "lisbon",
+  "lithuania",
+  "ljubljana",
+  "lodz",
+  "london",
+  "lublin",
+  "luxembourg",
+  "lyon",
+  "macao",
+  "macedonia",
+  "madagascar",
+  "madrid",
+  "malawi",
+  "malaysia",
+  "maldives",
+  "mali",
+  "malta",
+  "manchester",
+  "mandaluyong",
+  "manila",
+  "manitoba",
+  "maranhao",
+  "marshall islands",
+  "mbabane",
+  "medellin",
+  "melbourne",
+  "mex",
+  "mexico",
+  "mexico city",
+  "milan",
+  "minas gerais",
+  "minsk",
+  "mississauga",
+  "moldova",
+  "monaco",
+  "mongolia",
+  "montenegro",
+  "monterrey",
+  "montevideo",
+  "montpellier",
+  "montreal",
+  "morocco",
+  "mozambique",
+  "mumbai",
+  "munich",
+  "myanmar",
+  "nairobi",
+  "namibia",
+  "nampula",
+  "nepal",
+  "netherlands",
+  "new delhi",
+  "new zealand",
+  "nga",
+  "nicaragua",
+  "niger",
+  "nigeria",
+  "noida",
+  "norway",
+  "nova lima",
+  "nova scotia",
+  "ocotepeque",
+  "oman",
+  "ontario",
+  "osaka",
+  "oslo",
+  "ostrava",
+  "ottawa",
+  "pakistan",
+  "panama",
+  "papua new guinea",
+  "paraguay",
+  "paraiba",
+  "parana",
+  "parauapebas",
+  "paris",
+  "pernambuco",
+  "perth",
+  "peru",
+  "philippines",
+  "phuket",
+  "pol",
+  "poland",
+  "porto alegre",
+  "portugal",
+  "poznan",
+  "prague",
+  "pune",
+  "qatar",
+  "quebec",
+  "queretaro",
+  "quezon",
+  "quito",
+  "recife",
+  "rio de janeiro",
+  "rio grande do sul",
+  "riyadh",
+  "romania",
+  "rome",
+  "rwanda",
+  "rzeszow",
+  "santa catarina",
+  "santo andre",
+  "sao paulo",
+  "sarajevo",
+  "saudi",
+  "scotland",
+  "semarang",
+  "senegal",
+  "seoul",
+  "serbia",
+  "sesto san giovanni",
+  "shanghai",
+  "shenzhen",
+  "sierra leone",
+  "singapore",
+  "skopje",
+  "slovakia",
+  "slovenia",
+  "sofia",
+  "somalia",
+  "south africa",
+  "spain",
+  "sri lanka",
+  "stockholm",
+  "sudan",
+  "suzhou",
+  "sweden",
+  "switzerland",
+  "sydney",
+  "syria",
+  "szczecin",
+  "taguig",
+  "taipei",
+  "taiwan",
+  "tanzania",
+  "tbilisi",
+  "tegucigalpa",
+  "tel aviv",
+  "tha",
+  "thailand",
+  "thessaloniki",
+  "thimphu",
+  "tirana",
+  "tokyo",
+  "toronto",
+  "trinidad",
+  "tunisia",
+  "turkey",
+  "turkiye",
+  "uae",
+  "uberlandia",
+  "uganda",
+  "uk",
+  "ukraine",
+  "united arab emirates",
+  "united kingdom",
+  "uruguay",
+  "venezuela",
+  "vienna austria",
+  "viet nam",
+  "vietnam",
+  "vitoria",
+  "wales",
+  "warsaw",
+  "wilayah persekutuan",
+  "winnipeg",
+  "wroclaw",
+  "yemen",
+  "zagreb",
+  "zambezia",
+  "zambia",
+  "zimbabwe",
+  "zurich"
+ ]
+}

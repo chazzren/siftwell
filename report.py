@@ -1,0 +1,1817 @@
+"""Render data/jobs.json into a self-contained HTML report."""
+import json
+
+CURRENT = {}  # current pay comes from each profile's settings (payload["current"])
+
+HEAD = """<title>Job Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a sticky filter rail over a dense ranked list; companies live on a second tab. */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --ink:#152033; --muted:#5b6678; --line:#dde1e8;
+  --accent:#23468f; --accent-soft:#e6ecf8; --new:#a35a00; --new-soft:#fbefdc;
+  --good:#1d7a4f; --good-soft:#e2f3ea; --warn:#9a5b00; --warn-soft:#fbf0dc; --bad:#a63232; --bad-soft:#f8e4e4;
+  --bar:#cfd6e2; --bar-fill:#23468f;
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141c; --surface:#171e29; --ink:#e4e9f1; --muted:#97a2b4; --line:#2a3342;
+  --accent:#8fb0f0; --accent-soft:#1f2c45; --new:#f0b25e; --new-soft:#3a2b14;
+  --good:#6fcf9c; --good-soft:#163527; --warn:#f0b25e; --warn-soft:#3a2b14; --bad:#ef8b8b; --bad-soft:#3d1c1c;
+  --bar:#2f3a4c; --bar-fill:#8fb0f0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141c; --surface:#171e29; --ink:#e4e9f1; --muted:#97a2b4; --line:#2a3342;
+  --accent:#8fb0f0; --accent-soft:#1f2c45; --new:#f0b25e; --new-soft:#3a2b14;
+  --good:#6fcf9c; --good-soft:#163527; --warn:#f0b25e; --warn-soft:#3a2b14; --bad:#ef8b8b; --bad-soft:#3d1c1c;
+  --bar:#2f3a4c; --bar-fill:#8fb0f0; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;margin-top:2px}
+.stats{display:flex;gap:20px;flex-wrap:wrap}
+.stat b{display:block;font-family:var(--mono);font-size:18px;font-weight:500;font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+nav.tabs{display:flex;gap:4px;margin:14px 0 0}
+nav.tabs a{padding:7px 12px;border-radius:6px;color:var(--muted);text-decoration:none;font-weight:600}
+nav.tabs a[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.filters{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.filters input[type=search]{flex:1 1 220px;min-width:0}
+input,select,button{font:inherit;color:var(--ink)}
+input[type=search],select{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:6px 10px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+label.chk{display:inline-flex;gap:6px;align-items:center;color:var(--muted);font-size:13px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.count{color:var(--muted);font-size:13px;margin:10px 0}
+ol.jobs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.job{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;grid-template-columns:58px minmax(0,1fr) 230px;gap:4px 16px;align-items:start}
+.job.hidden-by-user{opacity:.45}
+.scores{grid-row:span 2;display:flex;flex-direction:column;gap:6px}
+.score.match{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+.score.match.hi{background:var(--good-soft);color:var(--good);border-color:transparent}
+.score.match.mid{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.score.match.lo{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.score{font-family:var(--mono);font-size:20px;font-weight:500;text-align:center;border-radius:6px;padding:6px 0;background:var(--accent-soft);color:var(--accent);font-variant-numeric:tabular-nums;cursor:help}
+.score small{display:block;font-size:10px;letter-spacing:.05em;color:var(--muted)}
+.title{font-weight:600;font-size:15px;color:var(--ink);text-decoration:none}
+.title:hover{text-decoration:underline}
+.meta{color:var(--muted);font-size:13px;display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip{font-size:11.5px;padding:2px 7px;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip.remote{background:var(--good-soft);color:var(--good);border-color:transparent}
+.chip.hybrid{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.chip.onsite{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.poly{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.chip.trv-heavy{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.chip.trv-moderate,.chip.trv-some{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.new{background:var(--new-soft);color:var(--new);border-color:transparent;font-weight:600}
+.pay{grid-row:span 2;font-size:12px;color:var(--muted)}
+.pay .amt{font-family:var(--mono);font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
+.bar{position:relative;height:8px;background:var(--bar);border-radius:4px;margin:6px 0 3px}
+.bar i{position:absolute;top:0;bottom:0;background:var(--bar-fill);border-radius:4px}
+.bar .mk{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.bar .mk.cur{background:var(--muted)}
+.bar .mid{position:absolute;top:1px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--bg);border:1.5px solid var(--ink)}
+.bar.wide i{background:repeating-linear-gradient(135deg,var(--bar-fill) 0 4px,transparent 4px 7px)}
+.pay .note{color:var(--warn)}
+.axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.acts{display:flex;gap:6px;margin-top:8px}
+.acts button{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--muted)}
+.acts button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.more2{grid-column:2 / 3;display:flex;flex-direction:column;gap:4px;min-width:0}
+details.snip{font-size:12.5px;color:var(--muted)}
+.coname{color:var(--ink);font-weight:600}
+.meta .gd{font-weight:600;color:var(--ink)}
+.meta .gd.hi{color:var(--good)}
+.meta .gd.lo{color:var(--warn)}
+details.copanel{font-size:12.5px;color:var(--muted)}
+details.copanel summary{cursor:pointer;width:max-content}
+details.copanel[open]{background:var(--bg);border:1px solid var(--line);border-radius:var(--r,8px);padding:8px 10px}
+details.copanel p{margin:6px 0;color:var(--ink);max-width:70ch}
+details.copanel dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:3px 12px;margin:6px 0}
+details.copanel dt{color:var(--muted)}
+details.copanel dd{margin:0;color:var(--ink);min-width:0;overflow-wrap:anywhere}
+details.copanel a{color:var(--accent)}
+.asof{color:var(--muted);font-size:11.5px}
+.colinks{display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
+details.snip summary{cursor:pointer;width:max-content}
+details.snip p{margin:6px 0 0;max-width:70ch;white-space:pre-line}
+.more{display:block;margin:14px auto;padding:8px 16px;border:1px solid var(--line);background:var(--surface);border-radius:6px;cursor:pointer}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-top:14px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+td.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+td.err{color:var(--bad);white-space:normal;min-width:200px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:600;color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn:disabled{opacity:.6;cursor:default}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.panel .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.panel input[type=password]{flex:1 1 260px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+.panel small,.panel .note{color:var(--muted);font-size:12.5px}
+.prog{height:6px;background:var(--bar);border-radius:3px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--bar-fill);width:0;transition:width .4s}
+.loglines{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:pre-wrap;max-height:9em;overflow:auto}
+.why{font-size:13px;color:var(--ink);margin-top:6px;max-width:75ch}
+.why b{font-weight:600;color:var(--accent)}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:6px;padding:8px 12px;font-size:13px;margin-top:12px}
+.clsteps{margin:8px 0 2px 20px;padding:0;color:var(--ink)}
+.clsteps li{margin:6px 0}
+.clrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.clrow input{flex:1 1 220px;min-width:0;height:var(--h);border:1px solid var(--line);border-radius:var(--r);padding:0 10px;background:var(--surface);color:var(--ink);font:inherit}
+.clmsg{display:block;margin-top:4px;color:var(--bad)}
+.clok{color:var(--good)}
+.drop{border:1.5px dashed var(--line);border-radius:8px;padding:16px;text-align:center;color:var(--muted);cursor:pointer}
+.drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.panel input[type=url]{flex:1 1 260px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+.panel textarea{width:100%;min-height:5.5em;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;resize:vertical}
+.panel label.f{font-weight:600;font-size:13px;display:block;margin-top:4px}
+.panel .help{font-size:12.5px;color:var(--muted);margin:0 0 4px}
+.refr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
+.refr .ev{font-size:12.5px;color:var(--muted)}
+.facts{font-size:13px;color:var(--muted)}
+.chip.lbl-apply_now{background:var(--good-soft);color:var(--good);border-color:transparent;font-weight:600}
+.chip.lbl-tailor{background:var(--accent-soft);color:var(--accent);border-color:transparent;font-weight:600}
+.chip.lbl-stretch{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.lbl-skip{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.chip.lab{background:var(--ink);color:var(--surface);border-color:transparent;font-weight:600}
+.chip.bridge{background:var(--good-soft);color:var(--good);border-color:transparent}
+.chip.lbl-after_prep{background:var(--accent-soft);color:var(--accent);border-color:transparent;font-weight:600}
+.chip.lbl-long_shot{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.gap{border-style:dashed}
+.pv{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px;margin-top:12px}
+.pv .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+.pv h3{margin:0 0 4px;font-size:14px}
+.pv .help{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+.pvcounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pvcounts button{text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:8px 10px;cursor:pointer;color:var(--ink)}
+.pvcounts b{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums}
+.pvcounts span{font-size:12px;color:var(--muted)}
+.gaprow{display:grid;grid-template-columns:minmax(0,11rem) minmax(0,1fr) 2.5rem;gap:8px;align-items:center;font-size:12.5px;padding:3px 0;border:0;background:none;width:100%;text-align:left;cursor:pointer;color:var(--ink)}
+.gaprow[aria-pressed="true"]{font-weight:700}
+.gaprow i{display:block;height:8px;border-radius:4px;background:var(--bar-fill)}
+.gaprow em{font-style:normal;font-family:var(--mono);color:var(--muted);text-align:right}
+.tl{font-size:12.5px;color:var(--muted);margin-top:3px;max-width:75ch}
+.legend{color:var(--muted);font-size:12.5px;max-width:75ch;margin:14px 0 0}
+dialog.sheet{border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);padding:0;width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 24px)}
+dialog.sheet::backdrop{background:rgba(0,0,0,.45)}
+.sheet form{display:flex;flex-direction:column;max-height:calc(100dvh - 26px)}
+.sheet .qhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.sheet .qbody{overflow:auto;padding:4px 14px 12px;display:flex;flex-direction:column}
+.sheet .qfoot{display:flex;gap:8px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line)}
+.q{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-bottom:1px solid var(--line)}
+.q:last-child{border-bottom:0}
+.q .qreq{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);font-weight:600}
+.q .qtext{font-weight:600;font-size:14px}
+.q .qwhy{font-size:12.5px;color:var(--muted)}
+.q textarea{width:100%;min-height:4.2em;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;color:var(--ink);resize:vertical}
+.ans{display:flex;gap:6px}
+.ans button{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer}
+.ans button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.qwait{padding:24px 0;color:var(--muted)}
+.psgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px 12px;margin:8px 0}
+.psgrid label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
+.psgrid label.chk{flex-direction:row;align-items:center}
+.psgrid input[type=text],.psgrid input[type=number],.psgrid select,.psgrid textarea,#newPersonName{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;color:var(--ink);min-width:0}
+#newPersonName{flex:1 1 200px}
+.countrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.factlist{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.fact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;padding:6px 0;border-top:1px solid var(--line)}
+.linkbtn{border:0;background:none;color:var(--accent);font:inherit;font-size:12px;cursor:pointer;padding:0 2px}
+.fact .pol{color:var(--ink);font-size:12.5px;margin-top:2px;padding-left:8px;border-left:2px solid var(--accent-soft)}
+.fact .fl{color:var(--muted);font-size:12px}
+.fact button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:5px;padding:2px 8px;font-size:12px;cursor:pointer}
+@media (max-width:760px){
+  .job{grid-template-columns:52px minmax(0,1fr)}
+  .scores{grid-row:auto}
+  .pay{grid-column:1 / -1;grid-row:auto}
+  .more2{grid-column:1 / -1}
+}
+
+/* ---- v2: one control system. Every control is --h tall, --r rounded; spacing on a 4/8/12/16 scale. */
+:root{--h:36px;--h-sm:28px;--r:8px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 16px;padding-bottom:12px;border-bottom:0}
+.brand{min-width:0}
+h1{font-size:20px}
+.sub{font-size:12.5px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn,input[type=search],select,.seg,#personSel{height:var(--h);border-radius:var(--r);font-size:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--accent)}
+.btn.ghost:hover{background:var(--accent-soft)}
+.btn.sm{height:var(--h-sm);padding:0 10px;font-size:13px}
+input[type=search],select,#personSel{background:var(--surface);border:1px solid var(--line);padding:0 10px;color:var(--ink)}
+select{padding-right:28px}
+#personSel{font-weight:600;max-width:12rem}
+.seg{display:inline-flex;align-items:stretch;padding:2px;gap:2px;border:1px solid var(--line);background:var(--surface)}
+.seg button{border:0;border-radius:6px;padding:0 10px;background:transparent;color:var(--muted);font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+nav.tabs{gap:20px;margin:4px 0 0;border-bottom:1px solid var(--line)}
+nav.tabs a{padding:10px 0;border-radius:0;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;flex:0 0 auto}
+nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-color:var(--accent)}
+.filters{display:block;padding:10px 0 8px;border-bottom:1px solid var(--line)}
+.frow{display:flex;gap:8px;align-items:center}
+.frow input[type=search]{flex:1 1 auto;min-width:0}
+.frow select{flex:0 0 auto}
+.rmrow{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.rmbtn{color:var(--bad);background:transparent;border:1px solid var(--line)}
+.rmbtn[data-armed="1"]{background:var(--bad-soft);border-color:var(--bad)}
+.nlbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:7px 10px;border-radius:var(--r);background:var(--accent-soft);color:var(--ink);font-size:13px}
+.nlbar b{color:var(--accent);font-weight:600}
+.nlbar .nlterms{color:var(--muted);font-size:12px;flex-basis:100%}
+.nlbar.err{background:var(--bad-soft);color:var(--bad)}
+.nlbar .spin{width:12px;height:12px;border:2px solid var(--accent);border-right-color:transparent;border-radius:50%;animation:nlspin .8s linear infinite}
+@keyframes nlspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.nlbar .spin{animation:none}}
+.badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--surface);font-size:11px;font-weight:700}
+.fpanel{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);display:flex;flex-direction:column;gap:12px}
+.btn.icon{width:var(--h);padding:0}
+.field input[type=number]{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;width:100%}
+.fgroup{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);border-top:1px solid var(--line);padding-top:10px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:12px}
+.filters:has(.fpanel:not([hidden])){position:static}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field select{width:100%}
+.flabel{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.checks{display:flex;flex-wrap:wrap;gap:4px 12px;min-height:var(--h);align-items:center}
+.fchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.fchips:empty{display:none}
+.fchip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 6px 0 10px;border-radius:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:12.5px;cursor:pointer}
+.fchip span{color:var(--muted);font-size:15px;line-height:1}
+.fchip:hover{border-color:var(--muted)}
+.countrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:8px 0}
+.count{margin:0}
+.pvbar{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.pvbar .pvcounts{display:flex;flex-wrap:wrap;gap:6px}
+.pvbar .pvcounts button{height:var(--h-sm);display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:13px;cursor:pointer;text-align:left}
+.pvbar .pvcounts button b{font-family:var(--mono);font-size:13px;display:inline}
+.pvbar .pvcounts button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.pvgaps summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:13px;width:max-content}
+.pvgaps[open]{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.panel{border-radius:var(--r);gap:10px}
+.panel h2.sec{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:6px 0 0}
+.panel details>summary{cursor:pointer;font-weight:600;padding:6px 0}
+.panel details{border-top:1px solid var(--line);padding-top:6px}
+.acts{flex-wrap:wrap}
+.acts a{display:inline-flex;align-items:center;height:var(--h-sm);padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--muted);font-size:12px;text-decoration:none;white-space:nowrap}
+.acts button.danger{margin-left:auto;color:var(--bad);border-color:transparent;background:transparent}
+.acts button.danger[data-armed="1"]{background:var(--bad-soft);border-color:var(--bad)}
+.acts a.pri,.acts button.pri{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
+.tl2{font-size:12.5px;color:var(--muted);margin-top:4px;max-width:75ch}
+.job.tlcard{grid-template-columns:58px minmax(0,1fr)}
+.acts button{height:var(--h-sm);border-radius:6px;white-space:nowrap}
+@media (max-width:640px){
+  .wrap{padding-block:12px 40px}
+  header.top{gap:8px}
+  .tools{width:100%}
+  #personSel{flex:1 1 auto;max-width:none}
+  .frow{flex-wrap:wrap}
+  .frow input[type=search]{flex:1 1 100%}
+  .frow select{flex:1 1 auto}
+  .fgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .fgrid .field:first-child,.fgrid .field:last-child{grid-column:1/-1}
+  nav.tabs{gap:16px;overflow-x:auto;scrollbar-width:none}
+  nav.tabs::-webkit-scrollbar{display:none}
+}
+/* ---- v3: list + detail. Slim two-line rows on the left; everything about the selected job on the right
+   (a full-screen sheet on phones). One avatar menu replaces the profile picker, Profile, gear and Update buttons. */
+.wrap{max-width:1360px}
+header.top{align-items:center}
+.brandline{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.fresh{color:var(--muted);font-size:12.5px}
+.avatarBtn{display:inline-flex;align-items:center;gap:8px;height:var(--h);border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 12px 0 4px;font-weight:600;cursor:pointer;color:var(--ink)}
+.avatarBtn .av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:13px}
+.menuWrap{position:relative}
+.iconBtn{position:relative;width:var(--h);height:var(--h);display:inline-grid;place-items:center;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--ink);cursor:pointer;padding:0}
+.iconBtn:hover{background:var(--bg)}
+.iconBtn[aria-expanded="true"],.iconBtn[aria-current="page"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+a.iconBtn{text-decoration:none}
+.iconBtn:disabled{opacity:.55;cursor:default}
+.iconBtn svg{width:18px;height:18px}
+.iconBtn.busy svg{animation:nlspin 1.4s linear infinite}
+@media (prefers-reduced-motion:reduce){.iconBtn.busy svg{animation:none}}
+.rrbadge{position:absolute;top:-4px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--surface);font-size:10.5px;font-weight:700;display:grid;place-items:center}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (max-width:640px){.tools .menuWrap{margin-left:auto}}
+.amenu{position:absolute;right:0;top:calc(var(--h) + 6px);width:270px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;z-index:40}
+.amenu .who{padding:8px 10px;color:var(--muted);font-size:12px}
+.amenu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;border:0;background:none;padding:9px 10px;border-radius:8px;text-align:left;cursor:pointer;color:var(--ink);font-size:14px;height:auto;font-weight:500}
+.amenu button:hover{background:var(--bg)}
+.amenu button[aria-current="true"]{font-weight:700}
+.amenu button[aria-current="true"]::after{content:"✓";color:var(--accent)}
+.amenu .sep{height:1px;background:var(--line);margin:6px 0}
+.amenu small{color:var(--muted);font-weight:400}
+nav.tabs a .n{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:4px;font-weight:500}
+.quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.qc{height:30px;border:1px solid var(--line);background:var(--surface);border-radius:15px;padding:0 12px;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.qc[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.split{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:16px;align-items:start}
+.listcol{min-width:0}
+ol.rows{gap:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.jrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;position:relative}
+.jrow:last-child{border-bottom:0}
+.jrow:hover{background:var(--bg)}
+.jrow[aria-selected="true"]{background:var(--accent-soft)}
+.jrow[aria-selected="true"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+.jrow.hidden-by-user{opacity:.5}
+.rtitle{font-weight:600;line-height:1.3;min-width:0}
+.rco{color:var(--muted);font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmeta{grid-column:1/-1;display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--muted);margin-top:3px}
+.rmeta .amt{font-family:var(--mono);color:var(--ink);font-size:12.5px}
+.rsc{grid-row:1/3;grid-column:2;display:flex;gap:4px}
+.rsc div{text-align:center;min-width:40px}
+.rsc b{display:block;font:500 17px/1.15 var(--mono)}
+.rsc b.m{color:var(--muted);font-size:15px}
+.rsc b.m.hi{color:var(--good)}
+.rsc small{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.vpill{font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:999px;white-space:nowrap;background:var(--bg);color:var(--muted)}
+.vpill.v-apply_now,.vpill.v-after_prep{background:var(--good-soft);color:var(--good)}
+.vpill.v-tailor{background:var(--accent-soft);color:var(--accent)}
+.vpill.v-stretch,.vpill.v-long_shot{background:var(--warn-soft);color:var(--warn)}
+.vpill.v-skip{background:var(--bad-soft);color:var(--bad)}
+.ndot{width:7px;height:7px;border-radius:50%;background:var(--new);display:inline-block;margin-right:6px;vertical-align:1px}
+.racts{position:absolute;right:10px;bottom:8px;display:none;gap:4px}
+.jrow:hover .racts{display:flex}
+.racts button{width:30px;height:26px;border:1px solid var(--line);background:var(--surface);border-radius:6px;cursor:pointer;color:var(--muted);font-size:13px;padding:0}
+.racts button[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
+.detail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:calc(100dvh - 24px);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;min-width:0}
+.dpane{padding:20px 22px 28px;display:flex;flex-direction:column;gap:18px}
+.dback{display:none;align-self:flex-start;border:0;background:none;color:var(--accent);font-weight:600;padding:0;cursor:pointer;font-size:15px}
+.dtitle{font-size:22px;font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
+.dco{display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--muted);font-size:13.5px;margin-top:6px;align-items:center}
+.dco .coname{color:var(--ink)}
+.dacts{display:flex;gap:8px;flex-wrap:wrap}
+.dacts .btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.dsec{border-top:1px solid var(--line);padding-top:14px}
+.dsec>h3{margin:0 0 10px;font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.dscores{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.dsc{display:flex;gap:12px;align-items:center}
+.ring{--p:0;width:54px;height:54px;border-radius:50%;flex:none;display:grid;place-items:center;background:conic-gradient(var(--accent) calc(var(--p)*1%),var(--bar) 0)}
+.ring b{width:42px;height:42px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font:500 16px var(--mono)}
+.dsc p{margin:0;font-size:12.5px;color:var(--muted)}
+.dsc strong{display:block;color:var(--ink);font-size:14px}
+.dread p{margin:0 0 10px;max-width:70ch}
+.dread .lab{display:block;font-weight:600;color:var(--ink);margin-bottom:1px}
+.dsec .pay{grid-row:auto;font-size:13px}
+.dsec details.copanel summary{display:none}
+.dsec details.copanel{background:none;border:0;padding:0}
+.dsec .snipp{white-space:pre-line;color:var(--muted);font-size:13.5px;max-width:75ch;margin:0}
+.dempty{padding:48px 24px;text-align:center;color:var(--muted)}
+.dempty b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
+.reqbox{display:flex;flex-direction:column;gap:8px}
+.reqbox .chip{white-space:normal}
+.chip.req-unmet{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.chip.req-flag{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.reqwhy{font-size:12.5px;color:var(--muted);max-width:75ch}
+.rmeta .rq{color:var(--warn);font-weight:600}
+.rmeta .old,.dco .old{color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:0 7px;font-size:11.5px}
+.tierdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:3px;vertical-align:1px;background:var(--muted)}
+.tierdot.t-haiku{background:transparent;border:1px solid var(--muted)}
+.tiertag{font-size:11.5px;color:var(--muted)}
+.ratefresh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.rmeta .rq.un{color:var(--bad)}
+.hlcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:10px}
+.hlcard{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--bg);min-width:0}
+.hlcard .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;justify-content:space-between;gap:6px}
+.hlcard .k em{font-style:normal;color:var(--accent);text-transform:none;letter-spacing:0;font-weight:600}
+.hlcard .v{margin-top:4px;font-size:13.5px}
+.hlcard .v div+div{margin-top:3px}
+.hlbanner{background:var(--accent-soft);color:var(--ink);border-radius:var(--r);padding:10px 12px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.hledit{display:flex;flex-direction:column;gap:8px}
+.hlrow{display:grid;grid-template-columns:130px minmax(0,1fr) minmax(0,1fr) auto;gap:6px;align-items:center}
+.hlrow.lic{grid-template-columns:minmax(0,1fr) 130px auto}
+.hledit input,.hledit select{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 8px;font:inherit;min-width:0}
+@media (max-width:640px){.hlrow,.hlrow.lic{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+details.howto{margin-top:16px;color:var(--muted);font-size:12.5px}
+details.howto summary{cursor:pointer;color:var(--accent);font-weight:600;width:max-content}
+details.howto .legend{margin-top:8px}
+@media (max-width:900px){
+  .split{grid-template-columns:minmax(0,1fr)}
+  .detail{position:fixed;inset:0;max-height:none;border:0;border-radius:0;z-index:30;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  .detail:not(.open){display:none}
+  .dback{display:inline-flex}
+  .racts{display:none!important}
+  .dscores{grid-template-columns:minmax(0,1fr)}
+  .fresh{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+"""
+
+# Header icon row (Home, Update, Re-rate, Settings, profile menu): shared by the board and settings_page.py.
+TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></a>
+    <button class="iconBtn" type="button" id="updateBtn" title="Update job listings now: checks every employer for new jobs (about 40 min)" aria-label="Update job listings now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span class="vh" id="updSmall">every employer, ~40 min</span></button>
+    <button class="iconBtn" type="button" id="rerateBtn" title="Re-rate with my latest info: Claude re-scores your best jobs, no new listings" aria-label="Re-rate with my latest info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="rrbadge" id="rrBadge" hidden></span><span class="vh" id="rrSmall">Claude only, no new listings</span></button>
+    <a class="iconBtn" id="prefsBtn" href="/settings" title="Settings: resume PDFs, review, Claude usage, display" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
+    <div class="menuWrap">
+      <button class="avatarBtn" id="avatarBtn" aria-haspopup="menu" aria-expanded="false"><span class="av" id="avInit">·</span><span id="avName">Profile</span></button>
+      <div class="amenu" id="amenu" role="menu" hidden>
+        <div id="amPeople"></div>
+        <div class="sep"></div>
+        <button role="menuitem" id="resumeBtn" aria-expanded="false">My profile<small>resume, pay, target</small></button>
+      </div>
+    </div>
+"""
+
+BODY = """<div class="wrap">
+<header class="top">
+  <div class="brandline">
+    <h1>Job Board</h1>
+    <span class="fresh" id="sub"></span><span class="fresh" id="nextRun"></span>
+  </div>
+  <div class="tools" id="tools" hidden>
+""" + TOOLS + """  </div>
+  <div id="stats" hidden></div>
+</header>
+<div class="banner" id="aiBanner" hidden></div>
+<div class="panel" id="progress" hidden>
+  <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span></div>
+  <div class="prog"><i id="progBar"></i></div>
+  <div class="loglines" id="progLog"></div>
+</div>
+<div class="panel" id="resumePanel" hidden>
+  <div class="row" style="justify-content:space-between"><strong class="ptitle">Profile</strong><button class="btn ghost sm" type="button" id="profileClose">Close</button></div>
+  <h2 class="sec">Resume</h2>
+  <div class="note" id="resumeState"></div>
+  <label class="drop" id="drop" for="resumeFile">Drop a resume here or click to choose a file<br><small>PDF, Word, RTF, text, or a photo of a printed resume</small></label>
+  <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.rtf,.odt,.txt,.md,.html,.png,.jpg,.jpeg,.heic,.webp" hidden>
+  <form class="row" id="gdocForm">
+    <input type="url" id="gdocUrl" placeholder="Or paste a Google Docs link (docs.google.com/document/d/…)" aria-label="Google Docs link">
+    <button class="btn" type="submit">Use Google Doc</button>
+  </form>
+  <small>A Google Doc link works if sharing is set to "Anyone with the link can view". Otherwise use File &gt; Download &gt; Microsoft Word in Google Docs and drop that file here.</small>
+  <div id="hlBox" hidden>
+    <h2 class="sec">What we pulled from your resume</h2>
+    <p class="help">Jobs that require a degree or license you don't have are hidden (you can still show them from Filters). Fix anything that's wrong here and the board re-checks itself.</p>
+    <div class="hlbanner" id="hlBanner" hidden><span>Please check these are right. They decide which jobs are hidden.</span><span class="row"><button class="btn sm" type="button" id="hlEditBtn2">Fix something</button><button class="btn primary sm" type="button" id="hlConfirm">Looks right</button></span></div>
+    <div class="hlcards" id="hlCards"></div>
+    <div class="row"><button class="btn sm" type="button" id="hlEditBtn">Edit</button><button class="btn ghost sm" type="button" id="hlRefresh">Re-read my resume</button><span class="note" id="hlMsg"></span></div>
+    <div class="hledit" id="hlEdit" hidden></div>
+  </div>
+  <details id="personSettings">
+    <summary>Search settings and target</summary>
+    <div class="psgrid">
+      <label>Name<input id="psName" type="text"></label>
+      <label>Salary floor ($ base)<input id="psFloor" type="number" step="5000" min="30000"></label>
+      <label>Current base ($, optional)<input id="psBase" type="number" step="5000"></label>
+      <label>Current package, one line (optional)<input id="psLabel" type="text" placeholder="e.g. $120k base, hybrid, 4 weeks PTO"></label>
+      <label>Home ZIP (or City, ST)<input id="psZip" type="text" placeholder="Blank = the DC-area list"></label>
+      <label>Search radius<select id="psRadius"><option value="10">10 miles</option><option value="25">25 miles</option><option value="35">35 miles</option><option value="50">50 miles</option><option value="75">75 miles</option></select></label>
+      <label class="chk"><input id="psRemote" type="checkbox"> Include remote jobs anywhere in the US</label>
+      <label>Your level<select id="psLevel"><option value="2">Mid-level</option><option value="3">Senior</option><option value="4">Lead / Manager</option><option value="5">Principal / Sr. Manager</option><option value="6">Director</option><option value="7">VP / Executive</option></select></label>
+      <label style="grid-column:1/-1">Goals for Claude to weigh (pay, commute, what to avoid)<textarea id="psGoals"></textarea></label>
+    </div>
+    <strong style="display:block;margin-top:6px">Target</strong>
+    <p class="help">What you're aiming for, in your own words. It gets its own tab where Claude rates each job as a step toward it. Leave it blank to skip, or tap "Not sure?" for suggestions.</p>
+    <div class="psgrid">
+      <label style="grid-column:1/-1">Target<textarea id="psTarget" placeholder="e.g. Highest-paying role I can land at an AI company, any function"></textarea></label>
+      <label>Companies<select id="psScope"><option value="all">All tracked companies</option><option value="ai">AI companies only</option></select></label>
+      <label style="grid-column:1/-1">What you'd do to get there (time, courses, certifications, projects)<textarea id="psPrep" placeholder="e.g. 5 hours a week for 3 months; one certification; no degree"></textarea></label>
+    </div>
+    <div class="note" id="psTargetState"></div>
+    <div class="row"><button class="btn" type="button" id="psSuggest">Not sure? Suggest targets</button></div>
+    <div id="psSuggestions" class="factlist"></div>
+    <div class="row"><button class="btn primary" type="button" id="psSave">Save settings</button><span class="note" id="psMsg"></span></div>
+    <div class="row rmrow"><button class="btn rmbtn" type="button" id="psRemove">Remove this profile</button><span class="note" id="psRemoveMsg"></span></div>
+  </details>
+  <div id="coBox" hidden>
+    <h2 class="sec">Companies</h2>
+    <p class="help">Which employers this profile's board watches. Changes apply at the next update.</p>
+    <div class="checks" id="coSets"></div>
+    <form class="row" id="coAddForm" style="margin-top:6px">
+      <input type="url" id="coUrl" placeholder="Paste a company's careers or job-list link" aria-label="Careers page link" style="flex:2 1 260px">
+      <input type="text" id="coName" placeholder="Name (optional)" aria-label="Company name" style="flex:1 1 140px;min-width:0;height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px">
+      <select id="coScope" aria-label="Who sees it"><option value="me">Just this profile</option><option value="all">Everyone</option></select>
+      <button class="btn" type="submit">Add company</button>
+    </form>
+    <div class="note" id="coMsg"></div>
+    <div class="factlist" id="coOwn"></div>
+  </div>
+  <div id="factsBox" hidden>
+    <div class="row" style="justify-content:space-between"><h2 class="sec">What you've told me <span class="note" id="factCount"></span></h2>
+      <button class="btn" type="button" id="generalQs">Answer general questions</button></div>
+    <p class="help">Skills and experience your resume leaves out. Scoring and tailoring use these exactly as you stated them; "No" answers are never claimed.</p>
+    <div class="factlist" id="factList"></div>
+  </div>
+
+</div>
+<dialog class="sheet" id="qSheet" aria-labelledby="qTitle">
+  <form method="dialog" id="qForm">
+    <div class="qhead"><strong id="qTitle">A few questions first</strong><button class="btn" value="cancel" type="submit" id="qClose">Close</button></div>
+    <div class="qbody">
+      <p class="help" id="qIntro" style="margin-top:10px">Your resume doesn't show these. Answer what's true and skip the rest. Answers are saved and reused for other jobs, and nothing is claimed more strongly than you put it.</p>
+      <div id="qList"></div>
+    </div>
+    <div class="qfoot" id="qFoot"><button class="btn primary" type="button" id="qGo">Save answers and tailor</button><button class="btn" type="button" id="qSkip">Skip, tailor now</button></div>
+  </form>
+</dialog>
+<div class="panel" id="reviewPanel" hidden>
+  <div class="row" style="justify-content:space-between"><strong>Review your profile</strong><span class="note" id="reviewSrc"></span></div>
+  <p class="help">Claude read your resume and drafted this. It decides which jobs you see and what tailoring is allowed. Fix anything that's wrong, then approve.</p>
+  <div class="facts" id="reviewFacts"></div>
+  <label class="f" for="rvSummary">Summary</label>
+  <textarea id="rvSummary"></textarea>
+  <label class="f" for="rvRoles">Roles to search for (one per line)</label>
+  <textarea id="rvRoles"></textarea>
+  <label class="f">Allowed reframings</label>
+  <p class="help">Honest ways to present your experience for other roles. Untick any you're not comfortable claiming.</p>
+  <div id="rvRefr"></div>
+  <label class="f" for="rvLimits">Never claim (one per line)</label>
+  <p class="help">Tailored resumes will never say these.</p>
+  <textarea id="rvLimits"></textarea>
+  <label class="f" for="rvNotes">True things your resume leaves out (optional)</label>
+  <p class="help">For example a certification in progress, a tool you use daily, or a project you led. Tailoring may use these.</p>
+  <textarea id="rvNotes" placeholder="e.g. PMP certification in progress; built weekly sales dashboards in Excel"></textarea>
+  <div class="row"><button class="btn primary" id="rvApprove" type="button">Approve and re-score jobs</button><button class="btn" id="rvDiscard" type="button">Discard draft</button></div>
+</div>
+<div class="panel" id="addPersonPanel" hidden>
+  <strong>Add a person</strong>
+  <p class="help">Each person gets their own resume, answers, saved jobs, tailored resumes and settings. Next comes a short setup: resume, where, pay, level and what you're aiming for.</p>
+  <form class="row" id="addPersonForm"><input type="text" id="newPersonName" placeholder="Name" aria-label="Name" autocomplete="off"><button class="btn primary" type="submit">Continue to setup</button><button class="btn" type="button" id="addPersonCancel">Cancel</button></form>
+  <div class="note" id="addPersonMsg"></div>
+</div>
+
+<nav class="tabs"><a href="#jobs" id="tab-jobs">Jobs</a><a href="#pivot" id="tab-pivot">Target</a><a href="#saved" id="tab-saved">Saved</a><a href="#applied" id="tab-applied">Applied</a><a href="#tailored" id="tab-tailored">Resumes</a><a href="#companies" id="tab-companies">Companies</a></nav>
+
+<section id="view-jobs">
+  <div class="filters">
+    <div class="frow">
+      <input type="search" id="q" enterkeyhint="search" placeholder="Describe a job, industry, company or role, then press Enter" aria-label="Describe what you're looking for">
+      <select id="sort" aria-label="Sort">
+        <option value="rel" id="sortRel" hidden>Best match to search</option><option value="score">Best bets (Appeal × Match)</option><option value="appeal">Highest Appeal</option><option value="odds">Highest Match</option><option value="odds_later" id="sortLater">Match as written</option><option value="pay">Highest pay</option><option value="gd">Best Glassdoor (review-weighted)</option><option value="new">Newest</option>
+      </select>
+      <button class="btn" type="button" id="filtersBtn" aria-expanded="false" aria-controls="fPanel">Filters<span class="badge" id="fCount" hidden></span></button>
+    </div>
+    <div class="nlbar" id="nlBar" role="status" aria-live="polite" hidden></div>
+    <div class="quick" id="quick"></div>
+    <div class="fpanel" id="fPanel" hidden>
+      <div class="fgrid">
+        <div class="field"><span class="flabel">Workplace</span>
+          <div class="seg" id="wp" role="group" aria-label="Workplace"><button data-v="all" aria-pressed="true">All</button><button data-v="remote" aria-pressed="false">Remote</button><button data-v="dmv" aria-pressed="false">DMV office</button></div></div>
+        <label class="field"><span class="flabel">Fit</span><select id="lbl"></select></label>
+        <label class="field"><span class="flabel">Seniority</span><select id="lvl">
+          <option value="near" selected>Near my level</option><option value="mine">My level</option>
+          <option value="above">Above my level</option><option value="below">Below my level</option><option value="all">Any level</option></select></label>
+        <label class="field"><span class="flabel">Clearance</span><select id="clr">
+          <option value="all">Any clearance</option><option value="none">No clearance mentioned</option>
+          <option value="nopoly">No TS/SCI + poly</option><option value="secret" selected>Secret or less</option></select></label>
+        <label class="field"><span class="flabel">Travel</span><select id="trv">
+          <option value="all">Any travel</option><option value="no25">Under 25%</option>
+          <option value="low">10% or less</option><option value="unmentioned">Not mentioned</option></select></label>
+        <label class="field"><span class="flabel">Company</span><select id="co"><option value="all">All companies</option></select></label>
+        <label class="field"><span class="flabel">Show</span><select id="st">
+          <option value="active">Not hidden</option><option value="saved">Saved</option><option value="applied">Applied</option><option value="hidden">Hidden</option><option value="all">Everything</option></select></label>
+        <div class="field"><span class="flabel">Only</span>
+          <div class="checks"><label class="chk"><input type="checkbox" id="paidonly"> Salary listed</label>
+          <label class="chk"><input type="checkbox" id="nowide"> No wide bands</label>
+          <label class="chk"><input type="checkbox" id="newonly"> New</label>
+          <label class="chk"><input type="checkbox" id="reqall"> Jobs I don't meet requirements for</label></div></div>
+      </div>
+      <div class="fgroup">Company</div>
+      <div class="fgrid">
+        <label class="field" id="cListField"><span class="flabel">List</span><select id="cList">
+          <option value="all">All my lists</option></select></label>
+        <label class="field"><span class="flabel">Type</span><select id="cType">
+          <option value="all">Any type</option><option value="public">Public</option><option value="private">Private</option>
+          <option value="lab">Frontier AI lab</option><option value="ai">AI company</option><option value="np">Nonprofit / gov-sponsored</option></select></label>
+        <label class="field"><span class="flabel">Size</span><select id="cSize">
+          <option value="all">Any size</option><option value="s">Under 200 people</option><option value="m">200 – 1,000</option>
+          <option value="l">1,000 – 10,000</option><option value="xl">10,000+</option><option value="nsxl">Under 10,000</option></select></label>
+        <label class="field"><span class="flabel">Value</span><select id="cVal">
+          <option value="all">Any value</option><option value="v1">Under $1B</option><option value="v10">$1B – $10B</option>
+          <option value="v100">$10B – $100B</option><option value="vbig">$100B+</option><option value="v10p">$10B+</option></select></label>
+        <label class="field"><span class="flabel">Age</span><select id="cAge">
+          <option value="all">Any age</option><option value="a5">Startup (under 5 yrs)</option><option value="a15">Growth (5 – 15 yrs)</option>
+          <option value="aold">Established (15+ yrs)</option><option value="a15m">Under 15 yrs</option></select></label>
+        <label class="field"><span class="flabel">Glassdoor</span><select id="cGd">
+          <option value="all">Any rating</option><option value="g40">4.0+</option><option value="g35">3.5+</option>
+          <option value="g35u">3.5+ or unrated</option><option value="g40r">4.0+ with 100+ reviews</option></select></label>
+        <label class="field"><span class="flabel">Layoffs</span><select id="cLay">
+          <option value="all">Any</option><option value="none">None reported (18 mo)</option><option value="noknown">Hide known layoffs</option></select></label>
+        <label class="field"><span class="flabel">Equity</span><select id="cEq">
+          <option value="all">Any equity</option><option value="liquid">Public stock (sellable RSUs)</option><option value="private">Private shares / options</option></select></label>
+      </div>
+      <div class="row"><button class="btn ghost sm" type="button" id="fReset">Reset to defaults</button><button class="btn sm" type="button" id="fDone">Done</button></div>
+    </div>
+    <div class="fchips" id="fChips"></div>
+  </div>
+  <div class="pvbar" id="pvPanel" hidden>
+    <span id="pvTitle" hidden></span>
+    <div class="pvcounts" id="pvCounts"></div>
+    <details class="pvgaps"><summary>What to work on</summary><p class="help" id="pvHelp"></p><div id="pvGaps"></div></details>
+  </div>
+  <div class="countrow"><div class="count" id="count"></div><button class="btn ghost sm" type="button" id="rateMore" hidden></button><span class="note" id="rateMsg"></span></div>
+  <div class="split">
+    <div class="listcol"><ol class="jobs rows" id="list" role="listbox" aria-label="Jobs"></ol>
+    <button class="more" id="more" hidden>Show 100 more</button></div>
+    <aside class="detail" id="detail" aria-label="Job details"></aside>
+  </div>
+  <details class="howto"><summary>How the scores work</summary>
+  <p class="legend" id="pvLegend" hidden>This tab shows jobs that fit your target, which you set under Resume, then Search settings. Claude rates each as a step toward it. "Now" is your shot today with an honest tailored resume. "After prep" assumes the preparation you described. Apply now = 65+ today; After prep = 65+ once prepared; Long shot = 40 to 64 even after prep. Pitch ideas only claim what's true today. Score = 50% odds (60% now, 40% after prep) + 30% pay + 20% quality of life.</p>
+  <p class="legend" id="legend2"><b>Overall</b> = how worth pursuing a job is: 50% match + 30% pay + 20% quality of life. <b>Match</b> = how well your resume, honestly tailored, meets the job's requirements (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability).</p>
+  <p class="legend" id="legend">Verdicts come from Claude comparing each job with your resume: Strong match (strong as written), Worth tailoring (strong after honest tailoring), Stretch, Not a fit. On the pay bar, the dark tick is your <span class="floorTxt"></span> floor, the grey tick is your current base, and the ring is the midpoint. Ranges whose top is 1.6× the bottom or more are flagged as wide bands. Save, Applied and Hide are kept per profile.</p>
+  </details>
+</section>
+
+<section id="view-tailored" hidden>
+  <div class="countrow"><div class="count" id="tlCount">Loading…</div></div>
+  <ol class="jobs" id="tlList"></ol>
+  <p class="legend">Every tailored resume you've made for this profile, newest first. Download PDF gives the finished resume; Review shows each bullet's source and the gaps Claude flagged.</p>
+</section>
+<section id="view-companies" hidden>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Company</th><th>Sector</th><th>Presence</th><th>Source</th><th>Postings</th><th>Matches</th><th>Status</th></tr></thead>
+    <tbody id="cos"></tbody>
+  </table></div>
+  <p class="legend">Postings = every job on the company's board. Matches = jobs left after the location (Reston or closer, or US remote), title, and <span class="floorTxt"></span> salary filters.</p>
+</section>
+</div>
+"""
+
+SCRIPT = r"""<script>
+(function(){
+const D = window.__DATA__, CUR = window.__CURRENT__;
+const $ = id => document.getElementById(id);
+const fmt = n => n == null ? "" : "$" + Math.round(n/1000) + "k";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const SERVED = location.protocol.startsWith("http");
+const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
+let status = {};
+try { status = JSON.parse(localStorage.getItem("dmvjobs.status") || "{}"); } catch(e) {}
+const saveStatus = (id) => {
+  try { localStorage.setItem("dmvjobs.status", JSON.stringify(status)); } catch(e) {}
+  if (SERVED && id) fetch("/api/marks", {method: "POST", headers: H, body: JSON.stringify({id, status: status[id] || ""})}).catch(() => {});
+};
+const LBL = {apply_now: "Strong match", tailor: "Worth tailoring", stretch: "Stretch", skip: "Not a fit"};
+const LBL_HELP = {apply_now: "Apply with your resume as it is.", tailor: "A good fit once your resume speaks to this role.", stretch: "Reachable, but there's a real gap.", skip: "Claude doesn't think this one is worth your time."};
+const TIER = {dmv_hq:"DMV HQ", dmv_office:"DMV office", remote_first:"Remote-first", remote_friendly:"Remote-friendly"};
+
+const jobs = D.jobs;
+const nNew = jobs.filter(j => j.new).length;
+const updatedAt = (() => { try { return new Date(D.generated).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"}); } catch(e) { return D.generated.replace("T", " "); } })();
+$("sub").textContent = "Updated " + updatedAt;
+document.querySelectorAll(".floorTxt").forEach(e => e.textContent = fmt(D.salary_floor));
+$("tab-pivot").textContent = D.target_name || "Target";
+if (!D.pivot_enabled) { $("tab-pivot").hidden = true; if (location.hash === "#pivot") location.hash = "#jobs"; }
+$("stats").innerHTML = [
+  [jobs.length, "matches"], [jobs.filter(j=>j.workplace==="remote").length, "remote"],
+  [jobs.filter(j=>j.salary_min!=null && j.salary_min>=D.salary_floor).length, "min ≥ " + fmt(D.salary_floor)],
+  [nNew, "new this run"], [D.companies.length, "companies"]
+].map(([n,l]) => `<div class="stat"><b>${n.toLocaleString()}</b><span>${l}</span></div>`).join("");
+
+const LISTS = D.lists || {options: [], by_company: {}};
+$("cList").insertAdjacentHTML("beforeend", LISTS.options.map(o => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join(""));
+$("cListField").hidden = LISTS.options.length < 2;
+const cos = [...new Set(jobs.map(j=>j.company))].sort();
+$("co").insertAdjacentHTML("beforeend", cos.map(c => `<option>${esc(c)}</option>`).join(""));
+
+let shown = 100, wp = "all", mode = "current", gapSel = "";
+let NL = null, NL_PREV_SORT = "score", nlSeq = 0;  // natural-language search result from /api/search
+const PVL = {apply_now: "Apply now", after_prep: "After prep", after_portfolio: "After prep", long_shot: "Long shot", skip: "Skip"};
+const pvLab = j => j.pv_label === "after_portfolio" ? "after_prep" : j.pv_label;
+const LBL_OPTS = {
+  current: [["all","Any fit"],["apply_now","Strong match"],["tailor","Worth tailoring"],["good","Strong + worth tailoring"],["stretch","Stretch"],["noskip","Hide not-a-fit"]],
+  pivot: [["noskip","Hide skips"],["all","Everything"],["apply_now","Apply now"],["good","Apply now + After prep"],["after_prep","After prep"],["long_shot","Long shots"],["labs","Frontier AI labs only"]],
+};
+function setLabelOptions(){ $("lbl").innerHTML = LBL_OPTS[mode].map(([v,l]) => `<option value="${v}">${l}</option>`).join(""); }
+const pvJobs = () => jobs.filter(j => (j.tracks || []).includes("ai"));
+function drawPivotPanel(){
+  const pj = pvJobs(), scored = pj.filter(j => j.pv_label);
+  const n = f => scored.filter(f).length;
+  $("pvTitle").textContent = D.target_name || "Target";
+  $("pvHelp").textContent = (D.target_summary ? D.target_summary + " " : "") + "Tap a number to filter.";
+  const counts = [["apply_now", n(j => pvLab(j)==="apply_now"), "Apply now", "a genuine shot today"],
+    ["after_prep", n(j => pvLab(j)==="after_prep"), "After prep", "once you've done the prep"],
+    ["long_shot", n(j => pvLab(j)==="long_shot"), "Long shots", "possible, but a reach"],
+    ["all", pj.length - scored.length, "Not yet rated", "use Get Claude's take"]];
+  $("pvCounts").innerHTML = counts.map(([v,c,l,sub]) => `<button type="button" data-lbl="${v}" title="${esc(sub)}" aria-pressed="${$("lbl").value === v}"><b>${c}</b> ${l}</button>`).join("");
+  const tally = {}, label = {};
+  scored.filter(j => ["apply_now","after_prep"].includes(pvLab(j))).forEach(j => (j.pv_gaps||[]).forEach(g => { const k = g.toLowerCase(); if (k.includes("ts/sci") || k.includes("scif")) return; tally[k] = (tally[k]||0) + 1; label[k] = label[k] || g; }));
+  const top = Object.entries(tally).sort((a,b) => b[1]-a[1]).slice(0, 10), mx = top.length ? top[0][1] : 1;
+  $("pvGaps").innerHTML = top.length ? top.map(([k,c]) => `<button type="button" class="gaprow" data-gap="${esc(k)}" aria-pressed="${gapSel===k}"><span>${esc(label[k])}</span><i style="width:${Math.max(4, c/mx*100)}%"></i><em>${c}</em></button>`).join("")
+    : `<div class="note">Appears once Claude has rated some jobs as Apply now or After prep.</div>`;
+}
+$("pvCounts").addEventListener("click", e => { const b = e.target.closest("button[data-lbl]"); if (!b) return; $("lbl").value = b.dataset.lbl; gapSel = ""; shown = 100; drawPivotPanel(); render(); });
+$("pvGaps").addEventListener("click", e => { const b = e.target.closest("button[data-gap]"); if (!b) return; gapSel = gapSel === b.dataset.gap ? "" : b.dataset.gap; if (gapSel) $("lbl").value = "noskip"; shown = 100; drawPivotPanel(); render(); });
+$("wp").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  wp = b.dataset.v; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x === b)); shown = 100; render();
+});
+["q","clr","co","st","sort","paidonly","newonly","reqall","lbl","trv","nowide","lvl","cList","cType","cSize","cVal","cAge","cGd","cLay","cEq"].forEach(id => $(id).addEventListener("input", () => { shown = 100; render(); }));
+$("more").addEventListener("click", () => { shown += 100; render(); });
+$("count").addEventListener("click", e => { if (e.target.id === "reqShow") { $("reqall").checked = true; shown = 100; render(); } });
+
+function payBar(j){
+  if (j.salary_max == null) return `<div class="pay"><span class="amt">Not listed</span><div>No salary range in posting</div></div>`;
+  const lo = 100000, hi = 400000, p = v => Math.max(0, Math.min(100, (v-lo)/(hi-lo)*100));
+  const mid = j.salary_mid ?? Math.round((j.salary_min + j.salary_max)/2);
+  const note = j.wide_band
+    ? `<div class="note">Wide band (top is ${(j.salary_max/j.salary_min).toFixed(1)}× bottom). Scored on midpoint ${fmt(mid)}.</div>`
+    : `<div>Midpoint ${fmt(mid)}${mid < D.salary_floor ? " · below your floor" : ""}</div>`;
+  return `<div class="pay"><span class="amt">${fmt(j.salary_min)} – ${fmt(j.salary_max)}</span>
+    <div class="bar${j.wide_band ? " wide" : ""}" title="Range ${fmt(j.salary_min)}–${fmt(j.salary_max)}, midpoint ${fmt(mid)}">
+      <i style="left:${p(j.salary_min)}%;width:${Math.max(1.5,p(j.salary_max)-p(j.salary_min))}%"></i>
+      ${CUR.base ? `<span class="mk cur" style="left:${p(CUR.base)}%" title="Your current base ${fmt(CUR.base)}"></span>` : ""}
+      <span class="mk" style="left:${p(D.salary_floor)}%" title="Your floor ${fmt(D.salary_floor)}"></span>
+      <span class="mid" style="left:${p(mid)}%" title="Midpoint ${fmt(mid)}"></span>
+    </div><div class="axis"><span>$100k</span><span>$250k</span><span>$400k</span></div>
+    ${note}</div>`;
+}
+
+const LVN = {2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"};
+function levelChip(j){
+  if (j.level == null) return "";
+  return `<span class="chip" title="${j.level_src === "years" ? "Level estimated from years of experience required" : "Level from job title"}">${LVN[j.level]}${j.level_src === "years" ? " (by years)" : ""}</span>`;
+}
+const TRV = {heavy: "Travel", moderate: "Travel", light: "Travel", some: "Travel required (amount not stated)", none: "No travel"};
+function travelChip(j){
+  if (!j.travel) return "";
+  const label = j.travel_pct ? `Travel up to ${j.travel_pct}%` : TRV[j.travel];
+  return `<span class="chip trv-${j.travel}" title="${esc(j.travel_text || "")}">${label}</span>`;
+}
+
+// ---- preferences (from the server; defaults until loaded)
+let PREFS = {"display.level": "near", "display.clearance": "secret", "display.sort": "score", "display.theme": "system", "tailor.questions": "always"};
+let RESTORED = false;  // true when filters came back from a page refresh, so defaults don't override them
+function applyTheme(){
+  const t = PREFS["display.theme"];
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem("jb.theme", t); } catch(e) {}
+}
+try { const t = localStorage.getItem("jb.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch(e) {}
+function applyDisplayDefaults(){
+  applyTheme();
+  if (!RESTORED) {
+    $("lvl").value = PREFS["display.level"]; $("clr").value = PREFS["display.clearance"]; $("sort").value = PREFS["display.sort"];
+    if (!location.hash && PREFS["display.start_tab"] && PREFS["display.start_tab"] !== "jobs") { location.hash = "#" + PREFS["display.start_tab"]; return; }
+  }
+  render();
+}
+
+// ---- tailored resumes (per profile): registry for cards + the Tailored tab
+let TAILORED = {}, TLIST = [];
+function loadTailored(){
+  if (!SERVED) return Promise.resolve();
+  return fetch("/api/tailored").then(r => r.json()).then(d => {
+    TLIST = d.items || []; TAILORED = Object.fromEntries(TLIST.map(x => [x.job.id, x.slug]));
+    $("tab-tailored").innerHTML = `Resumes${TLIST.length ? `<span class="n">${TLIST.length}</span>` : ""}`;
+  }).catch(() => {});
+}
+function reviewBadge(r){
+  if (!r || !r.status) return "";
+  if (r.status === "needs_answers") return `<span class="gd lo">Astra ${r.final ?? "?"} · ${r.pending} question${r.pending === 1 ? "" : "s"} waiting</span>`;
+  if (r.status === "error") return `<span class="gd lo">Astra review failed</span>`;
+  if (r.status === "running") return `<span class="gd">Astra review in progress…</span>`;
+  if (r.status === "interrupted") return `<span class="gd lo">Astra review interrupted at ${r.final ?? "?"}</span>`;
+  const pass = r.status === "passed";
+  return `<span class="gd ${pass ? "hi" : "lo"}">Astra ${r.final} · ${pass ? "passed" : `below ${r.threshold}`} · ${r.rounds} round${r.rounds === 1 ? "" : "s"}</span>`;
+}
+function drawTailored(){
+  const byId = Object.fromEntries(jobs.map(j => [j.id, j]));
+  $("tlCount").textContent = !SERVED ? "Open the board from the server to see tailored resumes." : TLIST.length ? `${TLIST.length} tailored resume${TLIST.length > 1 ? "s" : ""}` : "No tailored resumes yet. Tap Tailor my resume on any job.";
+  $("tlList").innerHTML = TLIST.map(x => {
+    const j = byId[x.job.id], when = x.created ? new Date(x.created).toLocaleDateString([], {month: "short", day: "numeric", year: "numeric"}) : "";
+    const m = j ? (j.ai_fit ?? j.pv_now) : null;
+    return `<li class="job tlcard">
+      <div class="scores">${j ? `<div class="score" title="Overall">${j.score}<small>OVERALL</small></div>` : ""}${m != null ? `<div class="score match ${m >= 70 ? "hi" : m >= 45 ? "mid" : "lo"}">${m}<small>MATCH</small></div>` : ""}</div>
+      <div style="min-width:0">
+        <a class="title" href="${esc(x.job.url || "#")}" target="_blank" rel="noopener">${esc(x.job.title || "")}</a>
+        <div class="meta"><span class="coname">${esc(x.job.company || "")}</span><span>Tailored ${esc(when)}</span><span>${j ? "Still open" : "No longer on your board"}</span>${x.gaps ? `<span>${x.gaps} gaps flagged</span>` : ""}${reviewBadge(x.review)}</div>
+        ${x.headline ? `<div class="tl2">${esc(x.headline)}</div>` : ""}
+        <div class="acts">${x.review && x.review.status === "interrupted" ? `<button class="pri" data-resume="${esc(x.job.id)}" data-slug="${x.slug}">Resume review</button>` : ""}${x.review && x.review.status === "needs_answers" ? `<button class="pri" data-astra="${esc(x.job.id)}" data-slug="${x.slug}">Answer Astra's questions</button>` : ""}<a class="pri" href="/tailored/${x.slug}.pdf">Download PDF</a><a href="/tailored/${x.slug}" target="_blank" rel="noopener">Review</a><a href="/tailored/${x.slug}.docx">Word</a>${x.job.url ? `<a href="${esc(x.job.url)}" target="_blank" rel="noopener">Posting</a>` : ""}<button class="danger" data-del="${x.slug}">Remove</button></div>
+      </div></li>`;
+  }).join("");
+}
+
+// ---- company info: researched facts (dated, sourced) + live hiring stats from this board
+const CI = D.company_info || {};
+const big = v => v == null ? "" : v >= 1e12 ? "$" + (v/1e12).toFixed(v >= 1e13 ? 0 : 1) + "T" : v >= 1e9 ? "$" + (v/1e9).toFixed(v >= 1e11 ? 0 : 1).replace(/\.0$/, "") + "B" : v >= 1e6 ? "$" + Math.round(v/1e6) + "M" : "$" + v;
+const mon = s => { if (!s) return ""; const [y, m] = s.split("-"); return new Date(+y, (+m || 1) - 1, 1).toLocaleString([], {month: "short", year: "numeric"}); };
+const OWN = {public: "Public", private: "Private", subsidiary: "Part of", nonprofit: "Nonprofit", "government-sponsored": "Gov-sponsored", cooperative: "Credit union / co-op"};
+// Review-weighted rating for sorting: pulls small samples toward a typical 3.7 (as if 50 average reviews were added).
+function gdWeighted(c){
+  if (c.gd_rating == null) return 0;
+  const n = c.gd_reviews ?? 100;
+  return (c.gd_rating * n + 3.7 * 50) / (n + 50);
+}
+function gdChip(c){
+  if (c.gd_rating == null) return "";
+  const r = c.gd_rating, few = c.gd_reviews != null && c.gd_reviews < 100;
+  const cls = few ? "" : r >= 4 ? "hi" : r >= 3.5 ? "" : "lo";
+  return `<span class="gd ${cls}" title="Glassdoor rating${c.gd_reviews ? `, ${c.gd_reviews.toLocaleString()} reviews` : ""}${c.gd_as_of ? `, as of ${mon(c.gd_as_of)}` : ""}${few ? " (few reviews, read with care)" : ""}">★ ${r.toFixed(1)}${few ? "*" : ""}</span>`;
+}
+function coLine(j){
+  const c = CI[j.company]; if (!c) return `<span>${esc(j.sector || "")}</span>`;
+  const parts = [];
+  if (c.ownership === "subsidiary" && c.parent) parts.push(`Part of ${esc(c.parent)}`);
+  else if (c.ownership) parts.push(esc(OWN[c.ownership] || c.ownership) + (c.ownership === "private" && c.stage && c.stage.length <= 14 ? ` · ${esc(c.stage)}` : ""));
+  if (c.value_usd) parts.push(`${big(c.value_usd)} ${c.value_kind === "market cap" ? "mkt cap" : "valuation"}`);
+  if (c.employees) parts.push(`~${c.employees >= 10000 ? Math.round(c.employees/1000) + "k" : c.employees.toLocaleString()} people`);
+  return parts.map(p => `<span>${p}</span>`).join("") + gdChip(c);
+}
+function coPanel(j){
+  const c = CI[j.company] || {};
+  const src = (u, t) => u ? ` <a href="${esc(u)}" target="_blank" rel="noopener">${t || "source"}</a>` : ` <span class="asof">(unverified)</span>`;
+  const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
+  const glass = "https://www.glassdoor.com/Search/results.htm?keyword=" + encodeURIComponent(j.company.replace(/\s*\(.*\)|\s*\/.*$/g, ""));
+  const facts = [
+    row("Ownership", c.ownership ? esc(c.ownership === "subsidiary" && c.parent ? "Subsidiary of " + c.parent : (OWN[c.ownership] || c.ownership)) + (c.ticker ? ` (${esc(c.ticker)})` : "") + (c.stage ? ` · ${esc(c.stage)}` : "") : ""),
+    row(c.value_kind === "market cap" ? "Market cap" : "Valuation", c.value_usd ? `${big(c.value_usd)}${c.value_as_of ? ` <span class="asof">as of ${mon(c.value_as_of)}</span>` : ""}${src(c.value_source)}` : ""),
+    row("Raised", c.total_raised_usd ? big(c.total_raised_usd) : ""),
+    row("Employees", c.employees ? `~${c.employees.toLocaleString()}${c.employees_as_of ? ` <span class="asof">as of ${mon(c.employees_as_of)}</span>` : ""}${src(c.employees_source)}` : ""),
+    row("Founded", c.founded ? `${c.founded} <span class="asof">(${new Date().getFullYear() - c.founded} yrs)</span>` : ""),
+    row("HQ", c.hq ? esc(c.hq) + (c.dmv_presence ? ` · ${esc(c.dmv_presence)}` : "") : ""),
+    row("Equity", c.equity ? esc(c.equity) : ""),
+    row("Tender offers", c.tender_offers ? esc(c.tender_offers) : ""),
+    row("Layoffs (18 mo)", c.layoffs ? esc(c.layoffs) + (c.layoffs === "none reported" && !c.layoffs_source ? "" : src(c.layoffs_source)) : ""),
+    row("Glassdoor", c.gd_rating != null ? `★ ${c.gd_rating.toFixed(1)}${c.gd_reviews ? ` · ${c.gd_reviews.toLocaleString()} reviews` : ""}${c.gd_recommend_pct != null ? ` · ${c.gd_recommend_pct}% would recommend` : ""}${c.gd_as_of ? ` <span class="asof">as of ${mon(c.gd_as_of)}</span>` : ""}${src(c.gd_source)}${c.gd_reviews != null && c.gd_reviews < 100 ? ` <span class="asof">(few reviews)</span>` : ""}${c.gd_note ? ` <span class="asof">${esc(c.gd_note)}</span>` : ""}` : ""),
+    row("Hiring for you", `${c.open || 0} open on your board${c.new_week && c.new_week < c.open ? `, ${c.new_week} new this week` : ""}${c.median_mid ? ` · typical midpoint ${fmt(c.median_mid)}` : ""}`),
+  ].join("");
+  return `<details class="copanel" open><summary>About ${esc(j.company)}</summary>
+    ${c.blurb ? `<p>${esc(c.blurb)}</p>` : ""}<dl>${facts}</dl>
+    <div class="colinks">${c.levels_url ? `<a href="${esc(c.levels_url)}" target="_blank" rel="noopener">Pay on Levels.fyi</a>` : ""}<a href="${glass}" target="_blank" rel="noopener">Reviews on Glassdoor</a></div>
+    ${c.ownership ? "" : `<p class="asof">Company facts not researched yet.</p>`}</details>`;
+}
+
+const ago = d => { if (!d) return ""; const t = Date.parse(d); if (!t) return ""; const n = Math.round((Date.now() - t) / 864e5); return n <= 0 ? "today" : n === 1 ? "yesterday" : n < 7 ? n + "d ago" : n < 45 ? Math.round(n / 7) + "w ago" : Math.round(n / 30) + "mo ago"; };
+const whereTxt = j => j.workplace === "remote" ? "Remote" : ((j.dmv_locations.length ? j.dmv_locations : j.locations)[0] || "").replace(/,?\s*(United States( of America)?|USA)$/i, "").slice(0, 40) + (j.workplace === "hybrid" ? " · Hybrid" : "");
+const payTxt = j => j.salary_min == null ? "Pay not listed" : (j.salary_max && j.salary_max !== j.salary_min ? `${fmt(j.salary_min)}–${fmt(j.salary_max)}` : fmt(j.salary_min));
+const TIERN = {haiku: "Quick rating (Haiku)", sonnet: "Sonnet rating", opus: "Careful rating (Opus)"};
+const tierName = j => j.ai_tier ? TIERN[j.ai_tier] + (j.ai_at ? " · " + j.ai_at : "") + (j.ai_stale ? " · made with older info" : "") : "Not rated yet";
+const verdict = j => mode === "pivot" ? (j.pv_label ? [pvLab(j), PVL[j.pv_label]] : null) : (j.ai_label ? [j.ai_label, LBL[j.ai_label]] : null);
+let SEL = null, OPENED = false;
+function card(j){
+  const s = status[j.id] || "", pvm = mode === "pivot";
+  const sc = pvm ? (j.pv_score ?? j.score) : j.score, m = pvm ? j.pv_now : j.ai_fit, v = verdict(j);
+  return `<li class="jrow ${s==="hidden"?"hidden-by-user":""}" role="option" tabindex="0" data-id="${esc(j.id)}" aria-selected="${SEL === j.id}">
+    <div class="rtitle">${j.new ? '<span class="ndot" title="New this week"></span>' : ""}${esc(j.title)}</div>
+    <div class="rsc"><div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}" title="${pvm ? "" : tierName(j)}">${m ?? "–"}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
+    <div class="rco">${esc(j.company)} · ${esc(whereTxt(j))}</div>
+    <div class="rmeta">${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : `<span class="vpill">Not rated yet</span>`}<span class="amt">${payTxt(j)}</span>${j.posted ? `<span>${ago(j.posted)}</span>` : ""}${(pvm ? j.pv_stale : j.ai_stale) ? '<span class="old" title="Rated before your latest info">Older info</span>' : ""}${j.req_status === "unmet" ? '<span class="rq un">Requirement not met</span>' : j.req_status === "flag" ? '<span class="rq">Check requirements</span>' : ""}${TAILORED[j.id] ? "<span>Resume ready</span>" : ""}${s === "applied" ? "<span>Applied</span>" : s === "saved" ? "<span>★ Saved</span>" : ""}</div>
+    <div class="racts"><button type="button" data-k="saved" aria-pressed="${s==="saved"}" title="Save" aria-label="Save">★</button><button type="button" data-k="hidden" aria-pressed="${s==="hidden"}" title="Not for me" aria-label="Hide">✕</button></div>
+  </li>`;
+}
+function detail(j){
+  if (!j) return `<div class="dempty"><b>Pick a job</b>Select a job to see why it fits, what's missing, and what to do next.</div>`;
+  const s = status[j.id] || "", pvm = mode === "pivot";
+  const sc = pvm ? (j.pv_score ?? j.score) : j.score, m = pvm ? j.pv_now : j.ai_fit, v = verdict(j);
+  const asis = pvm ? j.pv_later : j.ai_asis;
+  const read = pvm
+    ? (j.pv_reason ? `<p><span class="lab">${v ? v[1] : ""}${j.pv_now != null ? ` · now ${j.pv_now}, after prep ${j.pv_later}` : ""}</span>${esc(j.pv_reason)}</p>` : "") + (j.pv_angle ? `<p><span class="lab">How to pitch yourself</span>${esc(j.pv_angle)}</p>` : "") + ((j.pv_gaps || []).length ? `<div class="chips">${j.pv_gaps.map(g => `<span class="chip gap">${esc(g)}</span>`).join("")}</div>` : "")
+    : (j.ai_reason ? `<p><span class="lab">${v ? v[1] : ""}</span>${esc(LBL_HELP[j.ai_label] || "")}</p><p><span class="lab">Why it fits, and the gap${j.ai_level && j.ai_level !== "match" ? (j.ai_level === "stretch" ? " · a step above you" : " · below your level") : ""}</span>${esc(j.ai_reason)}</p>` : "") + (j.ai_tailor ? `<p><span class="lab">How to pitch yourself</span>${esc(j.ai_tailor)}</p>` : "");
+  const unrated = pvm ? j.pv_label == null : j.ai_fit == null;
+  const wpChip = j.workplace ? `<span class="chip ${j.workplace}">${j.workplace === "onsite" ? "On-site" : j.workplace[0].toUpperCase()+j.workplace.slice(1)}</span>` : `<span class="chip">Workplace not stated</span>`;
+  const locs = (j.dmv_locations.length ? j.dmv_locations : j.locations).slice(0,4).map(l => `<span class="chip">${esc(l)}</span>`).join("");
+  const clr = j.clearance ? `<span class="chip ${j.clearance.includes("poly")?"poly":""}">${esc(j.clearance)}</span>` : "";
+  const tl = TAILORED[j.id];
+  const tailorBtns = !SERVED ? "" : tl ? `<a class="btn primary" href="/tailored/${tl}.pdf">Download resume PDF</a><a class="btn" href="/tailored/${tl}" target="_blank" rel="noopener">Review resume</a><button class="btn" type="button" data-tailor="1" data-again="1">Re-tailor</button>`
+    : `<button class="btn primary" type="button" data-tailor="1">Tailor my resume</button>`;
+  return `<div class="dpane" data-id="${esc(j.id)}">
+    <button class="dback" type="button" id="dBack">‹ All jobs</button>
+    <div><h2 class="dtitle">${esc(j.title)}</h2>
+      <div class="dco"><span class="coname">${esc(j.company)}</span><span>${esc(whereTxt(j))}</span>${j.posted ? `<span>Posted ${ago(j.posted)}</span>` : ""}${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : ""}${j.new ? '<span class="chip new">New</span>' : ""}</div></div>
+    <div class="dacts acts">${tailorBtns}
+      <button class="btn" type="button" data-k="saved" aria-pressed="${s==="saved"}">${s==="saved" ? "★ Saved" : "☆ Save"}</button>
+      <button class="btn" type="button" data-k="applied" aria-pressed="${s==="applied"}">${s==="applied" ? "✓ Applied" : "Mark applied"}</button>
+      <a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener">View posting ↗</a>
+      <button class="btn ghost" type="button" data-k="hidden" aria-pressed="${s==="hidden"}">${s==="hidden" ? "Unhide" : "Not for me"}</button></div>
+    <section class="dsec"><h3>How you stack up</h3><div class="dscores">
+      ${pvm ? `<div class="dsc"><div class="ring" style="--p:${sc}"><b>${sc}</b></div><p><strong>Overall</strong>Odds, pay and quality of life combined.</p></div>`
+        : `<div class="dsc"><div class="ring" style="--p:${j.appeal ?? 0}"><b>${j.appeal ?? "–"}</b></div><p><strong>Appeal</strong>How well this job gives you what you want.${j.appeal_parts ? `<br>Pay ${j.appeal_parts.pay} · Place ${j.appeal_parts.place} · Level ${j.appeal_parts.level} · Company ${j.appeal_parts.company} · Travel ${j.appeal_parts.burden}` : ""}</p></div>`}
+      <div class="dsc"><div class="ring" style="--p:${m ?? 0}"><b>${m ?? "–"}</b></div><p><strong>Match</strong>${m == null ? "Not rated yet." : pvm ? `Your shot today with an honest tailored resume (after prep: ${j.pv_later}).` : `How well your resume matches what they want${asis != null && asis !== m ? ` (${asis} as written today)` : ""}.<br><span class="tiertag t-${j.ai_tier}">${esc(tierName(j))}</span>`}</p></div>
+    </div></section>
+    <section class="dsec dread"><h3>Claude's read</h3>${!unrated && (pvm ? j.pv_stale : j.ai_stale) && SERVED ? `<div class="ratefresh"><span class="old">Rated before your latest info</span><button class="btn sm" type="button" data-rate="1">Re-rate this job</button></div>` : ""}${unrated ? `<p>Claude hasn't read this one yet.</p>${SERVED && D.profile ? `<button class="btn" type="button" data-rate="1">Get Claude's take (about 30 seconds)</button>` : ""}` : read}</section>
+    ${reqSection(j)}
+    <section class="dsec"><h3>Pay</h3>${payBar(j)}</section>
+    <section class="dsec"><h3>Details</h3><div class="chips">${levelChip(j)}${wpChip}${locs}${clr}${j.scif ? `<span class="chip onsite">SCIF</span>` : ""}${travelChip(j)}</div></section>
+    <section class="dsec"><h3>About ${esc(j.company)}</h3>${coPanel(j)}</section>
+    <section class="dsec"><h3>From the posting</h3><p class="snipp" id="dDesc">${esc(j.snippet || "")}${j.snippet ? "…" : ""}</p>${SERVED ? `<button class="btn ghost sm" type="button" id="dFull" style="margin-top:6px">Show the full posting</button>` : ""}</section>
+  </div>`;
+}
+function reqSection(j){
+  const st = j.req_status, chips = j.req_chips || [], soft = j.req_soft || [];
+  if (!st || (st === "ok" && !soft.length)) return "";
+  const head = st === "unmet" ? "You may not meet a hard requirement" : st === "flag" ? "Check these requirements" : "Nice to have";
+  return `<section class="dsec reqbox"><h3>Requirements</h3><div><b>${head}</b></div>
+    <div class="chips">${chips.map(c => `<span class="chip req-${st}">${esc(c)}</span>`).join("")}${soft.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>
+    ${(j.req_reasons || []).length ? `<div class="reqwhy">${(j.req_reasons || []).map(esc).join("<br>")}</div>` : ""}
+    ${st !== "ok" ? `<div class="reqwhy">Wrong? Fix your degrees or licenses under My profile and the board re-checks.</div>` : ""}</section>`;
+}
+function drawDetail(){
+  const j = jobs.find(x => x.id === SEL);
+  $("detail").innerHTML = detail(j);
+  $("detail").classList.toggle("open", OPENED && !!j);
+  $("detail").scrollTop = 0;
+}
+function select(id, open){
+  SEL = id; OPENED = !!open;
+  document.querySelectorAll(".jrow").forEach(r => r.setAttribute("aria-selected", r.dataset.id === id));
+  drawDetail();
+  if (OPENED && window.matchMedia("(max-width:900px)").matches) {
+    document.body.style.overflow = "hidden";
+    if (!(history.state && history.state.sheet)) history.pushState({sheet: 1}, "");  // phone back gesture closes the sheet
+  }
+}
+function closeDetail(fromPop){
+  const wasOpen = OPENED && $("detail").classList.contains("open");
+  OPENED = false; $("detail").classList.remove("open"); document.body.style.overflow = "";
+  if (wasOpen && !fromPop && history.state && history.state.sheet) history.back();
+}
+window.addEventListener("popstate", () => { if ($("detail").classList.contains("open")) closeDetail(true); });
+function act(e){
+  const host = e.target.closest("[data-id]"); if (!host) return false;
+  const id = host.dataset.id;
+  const rb = e.target.closest("button[data-rate]");
+  if (rb) { rateJobs([id], rb); return true; }
+  const tb = e.target.closest("button[data-tailor]");
+  if (tb) { tailorJob(id, tb); return true; }
+  const b = e.target.closest("button[data-k]"); if (!b) return false;
+  const k = b.dataset.k;
+  status[id] = status[id] === k ? "" : k; if (!status[id]) delete status[id];
+  saveStatus(id); render(); return true;
+}
+$("detail").addEventListener("click", e => {
+  if (e.target.closest("#dBack")) { closeDetail(); return; }
+  const full = e.target.closest("#dFull");
+  if (full) {
+    full.disabled = true; full.textContent = "Loading…";
+    fetch("/api/desc?id=" + encodeURIComponent(SEL)).then(r => r.json()).then(d => { $("dDesc").textContent = d.desc || "The full posting isn't saved; use View posting."; full.remove(); })
+      .catch(() => { full.textContent = "Couldn't load it"; });
+    return;
+  }
+  act(e);
+});
+$("list").addEventListener("click", e => {
+  if (e.target.closest(".racts")) { act(e); return; }
+  const r = e.target.closest(".jrow"); if (r) select(r.dataset.id, true);
+});
+$("list").addEventListener("keydown", e => { const r = e.target.closest(".jrow"); if (r && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); select(r.dataset.id, true); } });
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, select, textarea") || $("qSheet").open) return;
+  if (e.key === "Escape") { closeDetail(); $("amenu").hidden = true; return; }
+  if (!["ArrowDown","ArrowUp","j","k"].includes(e.key) || !$("view-companies").hidden || !$("view-tailored").hidden) return;
+  const ids = window.__shownIds || []; if (!ids.length) return;
+  e.preventDefault();
+  let i = ids.indexOf(SEL); i = (e.key === "ArrowDown" || e.key === "j") ? Math.min(ids.length - 1, i + 1) : Math.max(0, i - 1);
+  select(ids[i], OPENED);
+  const el = document.querySelector(`.jrow[data-id="${CSS.escape(ids[i])}"]`); if (el) el.scrollIntoView({block: "nearest"});
+});
+function render(){
+  const q = $("q").value.trim().toLowerCase(), clr = $("clr").value, co = $("co").value, st = $("st").value;
+  window.__reqHidden = 0;
+  let r = jobs.filter(j => {
+    if (wp === "remote" && j.workplace !== "remote") return false;
+    if (wp === "dmv" && !j.dmv_locations.length) return false;
+    if (co !== "all" && j.company !== co) return false;
+    const lb = $("lbl").value;
+    if (mode === "pivot") {
+      if (!(j.tracks || []).includes("ai")) return false;
+      if (lb === "noskip" && j.pv_label === "skip") return false;
+      if (["apply_now","after_prep","long_shot"].includes(lb) && pvLab(j) !== lb) return false;
+      if (lb === "good" && !["apply_now","after_prep"].includes(pvLab(j))) return false;
+      if (lb === "labs" && j.ai_track !== "lab") return false;
+      if (gapSel && !(j.pv_gaps || []).some(g => g.toLowerCase() === gapSel)) return false;
+    } else {
+      if (lb === "good" && !["apply_now","tailor"].includes(j.ai_label)) return false;
+      if (lb === "noskip" && j.ai_label === "skip") return false;
+      if (["apply_now","tailor","stretch"].includes(lb) && j.ai_label !== lb) return false;
+    }
+    if ($("paidonly").checked && j.salary_max == null) return false;
+    if ($("nowide").checked && j.wide_band) return false;
+    const lv = $("lvl").value, L = j.level, SB = (D.seniority && D.seniority.band) || [3,5], MY = (D.seniority && D.seniority.mine) || 4;
+    if (lv === "near" && L != null && (L < SB[0] || L > SB[1])) return false;
+    if (lv === "mine" && L !== MY) return false;
+    if (lv === "above" && !(L > MY)) return false;
+    if (lv === "below" && !(L != null && L < MY)) return false;
+    const tv = $("trv").value;
+    if (tv === "no25" && j.travel === "heavy") return false;
+    if (tv === "low" && !["", "none", "light"].includes(j.travel || "")) return false;
+    if (tv === "unmentioned" && j.travel) return false;
+    if (!companyOk(j)) return false;
+    if ($("newonly").checked && !j.new) return false;
+    if (j.req_status === "unmet" && !$("reqall").checked) { window.__reqHidden++; return false; }
+    if (clr === "none" && j.clearance) return false;
+    if (clr === "nopoly" && j.clearance === "TS/SCI + poly") return false;
+    if (clr === "secret" && ["TS/SCI + poly","TS/SCI","Top Secret"].includes(j.clearance)) return false;
+    const s = status[j.id] || "";
+    if (PIN) { if (s !== PIN) return false; }
+    else if (st === "active" && s === "hidden") return false;
+    else if (["saved","applied","hidden"].includes(st) && s !== st) return false;
+    if (nlOn()) { if (!NL.rank.has(j.id)) return false; }
+    else if (q && !(j.title+" "+j.company+" "+j.locations.join(" ")+" "+j.sector).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const key = $("sort").value;
+  const by = {rel: j => -((nlOn() ? NL.rank.get(j.id) || 0 : 0) * 1e3 + (mode === "pivot" ? (j.pv_score ?? 0) : j.score)),
+    score: j => -(mode === "pivot" ? (j.pv_score ?? 0) : j.score), appeal: j => -((j.appeal ?? 0) * 1e3 + (j.ai_fit ?? 0)),
+    gd: j => -(gdWeighted(CI[j.company] || {}) * 1e6 + (j.salary_mid || 0) / 1e3), pay: j => -(j.salary_mid ?? 0), odds: j => -(((mode === "pivot" ? j.pv_now : j.ai_fit) ?? -1) * 1e6 + ((mode === "pivot" ? j.pv_later : j.ai_asis) ?? 0) * 1e3 + (j.salary_mid || 0) / 1e3),
+    odds_later: j => -(((mode === "pivot" ? j.pv_later : j.ai_asis) ?? -1) * 1e6 + ((mode === "pivot" ? j.pv_now : j.ai_fit) ?? 0) * 1e3 + (j.salary_mid || 0) / 1e3), new: j => -(Date.parse(j.first_seen + "T00:00") || 0) - (Date.parse(j.posted) || 0)/1e6};
+  r.sort((a,b) => by[key](a) - by[key](b));
+  const base = mode === "pivot" ? pvJobs().length : jobs.length;
+  $("count").innerHTML = `${r.length.toLocaleString()} of ${base.toLocaleString()} jobs` + (r.length > shown ? ` · showing ${shown}` : "") +
+    (D.ratings && (D.ratings.stale + D.ratings.unrated) ? ` · <span title="Rated with older info or not rated yet. Use Re-rate with my latest info in the menu.">${D.ratings.stale + D.ratings.unrated} of your top ${D.ratings.top} need a fresh rating</span>` : "") +
+    (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "");
+  drawChips();
+  const unrated = r.filter(j => mode === "pivot" ? j.pv_label == null : j.ai_fit == null);
+  window.__unrated = unrated.slice(0, 45).map(j => j.id);
+  $("rateMore").hidden = !SERVED || !D.profile || !unrated.length;
+  $("rateMore").textContent = `Get Claude's take on the next ${Math.min(45, unrated.length)} unrated here`;
+  const page = r.slice(0, shown);
+  window.__shownIds = page.map(j => j.id);
+  if (!page.some(j => j.id === SEL)) { SEL = !window.matchMedia("(max-width:900px)").matches && page[0] ? page[0].id : null; if (!SEL) OPENED = false; }
+  $("list").innerHTML = page.length ? page.map(card).join("") : `<li class="dempty"><b>${PIN === "saved" ? "Nothing saved yet" : PIN === "applied" ? "No applications yet" : "No jobs match"}</b>${PIN === "saved" ? "Tap Save on any job to keep it here." : PIN === "applied" ? "Mark a job as applied and it moves here, so you can keep track." : (!nlOn() && SERVED && q.split(/\s+/).length > 1 ? "Press Enter to have Claude search for that description." : "Try removing a filter.")}</li>`;
+  $("more").hidden = r.length <= shown;
+  drawDetail(); drawQuick(); drawTabCounts(); nlDraw(r.length);
+}
+// ---- natural-language search: Enter sends the description to Claude, which picks role / topic / company terms
+function nlOn(){ return !!NL && $("q").value.trim() === NL.q; }
+function nlSet(d){
+  NL = {q: d.q, crit: d.criteria, ids: d.ids, raw: d, rank: new Map(d.ids.map((id, i) => [id, d.scores[i]]))};
+  if ($("sort").value !== "rel") NL_PREV_SORT = $("sort").value;
+  $("sortRel").hidden = false; $("sort").value = "rel";
+}
+function nlClear(){
+  NL = null; $("sortRel").hidden = true;
+  if ($("sort").value === "rel") $("sort").value = NL_PREV_SORT || "score";
+  $("nlBar").hidden = true; $("nlBar").className = "nlbar";
+}
+function nlDraw(total){
+  if (!nlOn()) return;
+  const c = NL.crit, n = NL.ids.length, hid = n - total;
+  const parts = [...c.role_terms.slice(0, 4), ...c.companies.slice(0, 4), ...c.sectors.slice(0, 3), ...c.topic_terms.slice(0, 5)];
+  if (c.workplace === "remote") parts.push("remote"); if (c.workplace === "dmv") parts.push("DMV office");
+  if (c.min_salary) parts.push("$" + Math.round(c.min_salary / 1000) + "k+");
+  $("nlBar").className = "nlbar"; $("nlBar").hidden = false;
+  $("nlBar").innerHTML = `<span>Claude searched for <b>${esc(c.summary)}</b>: ${n.toLocaleString()} match${n === 1 ? "" : "es"}${hid > 0 ? `, ${hid.toLocaleString()} hidden by your filters` : ""}.</span>` +
+    (hid > 0 ? `<button type="button" class="linkbtn" data-nl="all">Show all matches</button>` : "") +
+    `<button type="button" class="linkbtn" data-nl="clear">Clear search</button>` +
+    (parts.length ? `<span class="nlterms">Matching on: ${esc(parts.join(", "))}</span>` : "");
+}
+function runNL(){
+  const q = $("q").value.trim();
+  if (!q || !SERVED || nlOn()) return;
+  const seq = ++nlSeq;
+  $("nlBar").className = "nlbar"; $("nlBar").hidden = false;
+  $("nlBar").innerHTML = `<span class="spin" aria-hidden="true"></span><span>Claude is reading “${esc(q)}”…</span>`;
+  fetch("/api/search", {method: "POST", headers: H, body: JSON.stringify({q})})
+    .then(r => r.json().then(d => ({ok: r.ok, d})))
+    .then(({ok, d}) => {
+      if (seq !== nlSeq || $("q").value.trim() !== q) return;
+      if (!ok) { if (d.signin || /signed out/i.test(d.error || "")) { $("nlBar").className = "nlbar err"; signInOffer($("nlBar"), "Claude Code is signed out, so searches can't be read yet. Showing plain keyword matches for now."); return; } throw new Error(d.error || "Search failed."); }
+      nlSet(d); shown = 100; render();
+    })
+    .catch(e => {
+      if (seq !== nlSeq) return;
+      $("nlBar").className = "nlbar err";
+      $("nlBar").innerHTML = `<span>${esc(e.message || "Search failed.")} Showing plain keyword matches for now.</span>`;
+    });
+}
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); runNL(); } });
+$("q").addEventListener("input", () => {
+  if (NL && $("q").value.trim() !== NL.q) { nlClear(); render(); }
+  if (!NL) { nlSeq++; $("nlBar").hidden = true; }
+});
+$("nlBar").addEventListener("click", e => {
+  const b = e.target.closest("button[data-nl]"); if (!b) return;
+  if (b.dataset.nl === "clear") { $("q").value = ""; nlClear(); }
+  else {
+    ["lvl", "clr", "trv", "co", "lbl"].forEach(id => $(id).value = "all");
+    ["paidonly", "nowide", "newonly"].forEach(id => $(id).checked = false); $("reqall").checked = true;
+    CF_IDS.forEach(id => $(id).value = "all"); gapSel = "";
+    wp = "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === "all"));
+  }
+  shown = 100; render();
+});
+if (!SERVED) $("q").placeholder = "Search title, company, location…";
+else if (window.matchMedia("(max-width:640px)").matches) $("q").placeholder = "Describe the job you want…";
+
+// ---- Claude sign-in from the board: the server starts "claude auth login", we show its link, the person
+// signs in on whatever device they're using and pastes back the code the sign-in page shows.
+function signInOffer(el, lead){
+  el.hidden = false;
+  el.innerHTML = `<span>${esc(lead)}</span> <button class="btn sm primary" type="button" data-cl="start">Sign in to Claude</button>`;
+}
+const clPost = body => fetch("/api/claude/login", {method: "POST", headers: H, body: JSON.stringify(body)}).then(r => r.json().then(d => ({ok: r.ok, d})));
+document.addEventListener("click", e => {
+  const b = e.target.closest("button[data-cl]"); if (!b) return;
+  const box = b.closest(".banner, .nlbar"), act = b.dataset.cl, msg = t => { const m = box.querySelector(".clmsg"); if (m) m.textContent = t; };
+  if (act === "start") {
+    b.disabled = true; b.textContent = "Starting…";
+    clPost({action: "start"}).then(({ok, d}) => {
+      if (!ok) throw new Error(d.error || "Couldn't start sign-in.");
+      box.innerHTML = `<b>Sign in to Claude</b><ol class="clsteps">
+        <li><a class="btn sm primary" href="${esc(d.url)}" target="_blank" rel="noopener">Open the Claude sign-in page</a> and sign in with your Claude account.</li>
+        <li>Copy the code the page shows, paste it here, and finish.<div class="clrow"><input type="text" class="clcode" placeholder="Paste the code" aria-label="Sign-in code" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn sm primary" type="button" data-cl="code">Finish sign-in</button><button class="btn sm" type="button" data-cl="cancel">Cancel</button></div></li>
+      </ol><span class="clmsg" role="status"></span>`;
+    }).catch(err => { b.disabled = false; b.textContent = "Sign in to Claude"; box.insertAdjacentHTML("beforeend", `<span class="clmsg">${esc(err.message)}</span>`); });
+  }
+  if (act === "code") {
+    const code = box.querySelector(".clcode").value.trim();
+    if (!code) { msg("Paste the code from the sign-in page first."); return; }
+    b.disabled = true; b.textContent = "Checking…"; msg("");
+    clPost({action: "code", code}).then(({ok, d}) => {
+      if (!ok) throw Object.assign(new Error(d.error || "Sign-in didn't go through."), {expired: !!d.expired});
+      const inSearch = box.id === "nlBar";
+      box.className = box.className.replace(" err", "");
+      box.innerHTML = `<span class="clok">Signed in to Claude.</span> <span>${inSearch ? "Running your search now." : "Ratings pick up again with the next update, or use Update now in the profile menu."}</span>`;
+      if (inSearch) { nlSeq++; runNL(); }
+      else document.querySelectorAll(".nlbar.err").forEach(x => x.hidden = true);
+    }).catch(err => {
+      b.disabled = false; msg(err.message);
+      if (err.expired) { b.dataset.cl = "start"; b.textContent = "Start over"; box.querySelector(".clcode").value = ""; }  // the CLI ended; a new link is needed
+      else b.textContent = "Finish sign-in";
+    });
+  }
+  if (act === "cancel") { clPost({action: "cancel"}); box.hidden = true; }
+});
+if (SERVED) clPost({action: "status"}).then(({d}) => {
+  if (d.installed && !d.logged_in && $("aiBanner").hidden) signInOffer($("aiBanner"), "Claude Code is signed out on the computer running the board, so ratings, tailoring and search are paused.");
+  if (d.logged_in && (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out")) $("aiBanner").textContent = "Claude Code is signed in. Ratings pick up again with the next update, or use Update now in the profile menu.";
+}).catch(() => {});
+const QUICK = [["good", "Strong & worth tailoring"], ["remote", "Remote"], ["nonprofit", "Nonprofit"], ["paid", "Pay listed"], ["new", "New"]];
+function quickOn(k){
+  if (k === "good") return $("lbl").value === "good";
+  if (k === "remote") return wp === "remote";
+  if (k === "nonprofit") return $("cList").value === "nonprofit";
+  if (k === "paid") return $("paidonly").checked;
+  if (k === "new") return $("newonly").checked;
+}
+function drawQuick(){
+  const hasNP = LISTS.options.some(o => o.id === "nonprofit");
+  $("quick").innerHTML = QUICK.filter(([k]) => (k !== "nonprofit" || hasNP) && (k !== "good" || mode !== "pivot")).map(([k, l]) => `<button type="button" class="qc" data-qk="${k}" aria-pressed="${!!quickOn(k)}">${l}</button>`).join("");
+}
+$("quick").addEventListener("click", e => {
+  const b = e.target.closest("button[data-qk]"); if (!b) return;
+  const k = b.dataset.qk, on = !quickOn(k);
+  if (k === "good") $("lbl").value = on ? "good" : "all";
+  if (k === "remote") { wp = on ? "remote" : "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === wp)); }
+  if (k === "nonprofit") $("cList").value = on ? "nonprofit" : "all";
+  if (k === "paid") $("paidonly").checked = on;
+  if (k === "new") $("newonly").checked = on;
+  shown = 100; render();
+});
+function drawTabCounts(){
+  const n = k => Object.values(status).filter(v => v === k).length;
+  $("tab-saved").innerHTML = `Saved<span class="n">${n("saved")}</span>`;
+  $("tab-applied").innerHTML = `Applied<span class="n">${n("applied")}</span>`;
+}
+
+$("cos").innerHTML = D.companies.slice().sort((a,b)=>b.matched-a.matched || a.company.localeCompare(b.company)).map(c => `<tr>
+  <td>${esc(c.company)}</td><td>${esc(c.sector)}</td><td>${TIER[c.tier]||esc(c.tier)}</td><td>${esc(c.ats)}</td>
+  <td class="n">${c.raw_jobs.toLocaleString()}</td><td class="n">${c.matched}</td>
+  <td class="${c.status==="ok"?"":"err"}">${c.status==="ok"?"OK":esc(c.status)}</td></tr>`).join("");
+
+let PIN = "";
+function route(){
+  const v = {"#companies": "companies", "#pivot": "pivot", "#tailored": "tailored", "#saved": "saved", "#applied": "applied"}[location.hash] || "jobs";
+  PIN = v === "saved" || v === "applied" ? v : "";
+  closeDetail(true);
+  $("view-jobs").hidden = v === "companies" || v === "tailored"; $("view-companies").hidden = v !== "companies"; $("view-tailored").hidden = v !== "tailored";
+  ["jobs","pivot","saved","applied","tailored","companies"].forEach(t => $("tab-" + t).setAttribute("aria-current", v===t ? "page" : "false"));
+  if (v === "tailored") drawTailored();
+  const m = v === "pivot" ? "pivot" : "current";
+  if (m !== mode || !$("lbl").options.length) { mode = m; gapSel = ""; setLabelOptions(); shown = 100; }
+  $("pvPanel").hidden = mode !== "pivot";
+  $("sortLater").textContent = mode === "pivot" ? "Best match after prep" : "Best match as written";
+  $("legend").hidden = mode === "pivot"; $("pvLegend").hidden = mode !== "pivot";
+  $("legend2").innerHTML = mode === "pivot"
+    ? "<b>Overall</b> = how worth pursuing a job is: 50% odds (60% today, 40% after prep) + 30% pay + 20% quality of life. <b>Match</b> = your shot today with an honest tailored resume (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability). Hover it for the after-prep number."
+    : "<b>Appeal</b> = how well a job gives you what you want, worked out from the posting and company facts: 40% pay against your floor, 20% workplace and distance, 15% level, 15% company (Glassdoor, layoffs), 10% travel and clearance burden. <b>Match</b> = how well your resume, honestly tailored, meets what they ask for (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability). Every job gets a quick Haiku rating, the best ~15% a Sonnet rating, and your top 300 a careful Opus rating; a hollow dot means quick, a filled dot Sonnet, no dot Opus. <b>Best bets</b> (the default order) ranks jobs high on both.";
+  if (mode === "pivot") drawPivotPanel();
+  render();
+}
+// ---- company filters (researched facts; unknown values are excluded once a filter is set, except "or unrated")
+const CF_IDS = ["cList", "cType", "cSize", "cVal", "cAge", "cGd", "cLay", "cEq"];
+const CF_LABEL = {cList: "", cType: "", cSize: "Size: ", cVal: "Value: ", cAge: "", cGd: "Glassdoor ", cLay: "Layoffs: ", cEq: ""};
+function companyOk(j){
+  const c = CI[j.company] || {}, v = id => $(id).value;
+  const li = v("cList");
+  if (li !== "all" && !((LISTS.by_company || {})[j.company] || []).includes(li)) return false;
+  const t = v("cType");
+  if (t === "public" && c.ownership !== "public") return false;
+  if (t === "private" && c.ownership !== "private") return false;
+  if (t === "lab" && j.ai_track !== "lab") return false;
+  if (t === "ai" && !j.ai_track) return false;
+  if (t === "np" && !["nonprofit", "government-sponsored", "cooperative"].includes(c.ownership)) return false;
+  const e = c.employees, sz = v("cSize");
+  if (sz !== "all") {
+    if (e == null) return false;
+    if (sz === "s" && !(e < 200)) return false;
+    if (sz === "m" && !(e >= 200 && e < 1000)) return false;
+    if (sz === "l" && !(e >= 1000 && e < 10000)) return false;
+    if (sz === "xl" && !(e >= 10000)) return false;
+    if (sz === "nsxl" && !(e < 10000)) return false;
+  }
+  const val = c.value_usd, vv = v("cVal");
+  if (vv !== "all") {
+    if (val == null) return false;
+    if (vv === "v1" && !(val < 1e9)) return false;
+    if (vv === "v10" && !(val >= 1e9 && val < 1e10)) return false;
+    if (vv === "v100" && !(val >= 1e10 && val < 1e11)) return false;
+    if (vv === "vbig" && !(val >= 1e11)) return false;
+    if (vv === "v10p" && !(val >= 1e10)) return false;
+  }
+  const age = c.founded ? new Date().getFullYear() - c.founded : null, a = v("cAge");
+  if (a !== "all") {
+    if (age == null) return false;
+    if (a === "a5" && !(age < 5)) return false;
+    if (a === "a15" && !(age >= 5 && age < 15)) return false;
+    if (a === "aold" && !(age >= 15)) return false;
+    if (a === "a15m" && !(age < 15)) return false;
+  }
+  const g = c.gd_rating, gv = v("cGd");
+  if (gv === "g40" && !(g >= 4)) return false;
+  if (gv === "g35" && !(g >= 3.5)) return false;
+  if (gv === "g35u" && g != null && g < 3.5) return false;
+  if (gv === "g40r" && !(g >= 4 && (c.gd_reviews || 0) >= 100)) return false;
+  const lay = (c.layoffs || "").toLowerCase(), none = /^(none|no )/.test(lay), l = v("cLay");
+  if (l === "none" && !none) return false;
+  if (l === "noknown" && lay && !none) return false;
+  const eq = v("cEq"), liquid = c.ownership === "public" || /\(public\)/i.test(c.equity || "");
+  if (eq === "liquid" && !liquid) return false;
+  if (eq === "private" && (liquid || c.ownership !== "private")) return false;
+  return true;
+}
+
+// ---- filters panel and active-filter chips
+const FDEF = () => ({clr: PREFS["display.clearance"] || "secret", lvl: PREFS["display.level"] || "near", st: "active", trv: "all", co: "all", lbl: mode === "pivot" ? "noskip" : "all"});
+const optText = id => { const o = $(id).selectedOptions[0]; return o ? o.textContent : ""; };
+function activeFilters(){
+  const out = [];
+  if (wp !== "all") out.push(["wp", wp === "remote" ? "Remote" : "DMV office"]);
+  for (const id of ["lbl", "lvl", "clr", "trv", "co"]) if ($(id).value !== "all") out.push([id, optText(id)]);
+  for (const id of CF_IDS) if ($(id).value !== "all") out.push([id, CF_LABEL[id] + optText(id)]);
+  if ($("st").value !== "active") out.push(["st", "Show: " + optText("st")]);
+  for (const [id, t] of [["paidonly", "Salary listed"], ["nowide", "No wide bands"], ["newonly", "New"], ["reqall", "Including requirements I don't meet"]]) if ($(id).checked) out.push([id, t]);
+  if (gapSel) out.push(["gap", "Gap: " + gapSel]);
+  return out;
+}
+function drawChips(){
+  const a = activeFilters();
+  $("fChips").innerHTML = a.map(([id, t]) => `<button type="button" class="fchip" data-f="${id}" aria-label="Remove filter ${esc(t)}">${esc(t)}<span aria-hidden="true">×</span></button>`).join("");
+  $("fCount").hidden = !a.length; $("fCount").textContent = a.length;
+}
+$("fChips").addEventListener("click", e => {
+  const b = e.target.closest("button[data-f]"); if (!b) return;
+  const id = b.dataset.f;
+  if (id === "wp") { wp = "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === "all")); }
+  else if (id === "gap") { gapSel = ""; if (mode === "pivot") drawPivotPanel(); }
+  else if ($(id).type === "checkbox") $(id).checked = false;
+  else $(id).value = id === "st" ? "active" : "all";
+  shown = 100; render();
+});
+$("filtersBtn").addEventListener("click", () => { const open = $("fPanel").hidden; $("fPanel").hidden = !open; $("filtersBtn").setAttribute("aria-expanded", open); });
+$("fDone").addEventListener("click", () => { $("fPanel").hidden = true; $("filtersBtn").setAttribute("aria-expanded", "false"); });
+$("fReset").addEventListener("click", () => {
+  const d = FDEF(); Object.entries(d).forEach(([k, v]) => $(k).value = v);
+  ["paidonly", "nowide", "newonly", "reqall"].forEach(id => $(id).checked = false);
+  CF_IDS.forEach(id => $(id).value = "all");
+  wp = "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === "all")); gapSel = "";
+  shown = 100; if (mode === "pivot") drawPivotPanel(); render();
+});
+
+const FILTER_IDS = ["q","clr","co","st","sort","paidonly","newonly","reqall","trv","nowide","lvl","cList","cType","cSize","cVal","cAge","cGd","cLay","cEq"];
+function saveFilters(){
+  try { sessionStorage.setItem("jb.filters", JSON.stringify({f: Object.fromEntries(FILTER_IDS.map(id => [id, $(id).type === "checkbox" ? $(id).checked : $(id).value])), lbl: $("lbl").value, wp, y: scrollY, nl: nlOn() ? NL.raw : null})); } catch(e) {}
+}
+setLabelOptions();
+window.addEventListener("hashchange", route); route();
+// Home: back to the Jobs tab with the detail sheet and side panels closed, keeping search and filters.
+$("homeBtn").addEventListener("click", e => {
+  e.preventDefault();
+  $("resumePanel").hidden = true; $("resumeBtn").setAttribute("aria-expanded", "false"); $("addPersonPanel").hidden = true;
+  const onJobs = !location.hash || location.hash === "#jobs";
+  if (history.state && history.state.sheet) history.replaceState(null, "", onJobs ? location.pathname + location.hash : "#jobs");  // drop the phone sheet's history entry
+  else if (!onJobs) history.pushState(null, "", "#jobs");
+  route(); scrollTo(0, 0);
+});
+try {
+  const sv = JSON.parse(sessionStorage.getItem("jb.filters") || "null");
+  if (sv) {
+    sessionStorage.removeItem("jb.filters"); RESTORED = true;
+    FILTER_IDS.forEach(id => { if (id in sv.f) { if ($(id).type === "checkbox") $(id).checked = sv.f[id]; else $(id).value = sv.f[id]; } });
+    if (sv.nl && $("q").value.trim() === sv.nl.q) nlSet(sv.nl);
+    if (!(NL ? ["rel"] : []).concat(["score","appeal","odds","odds_later","pay","gd","new"]).includes($("sort").value)) $("sort").value = "score";
+    $("lbl").value = sv.lbl; wp = sv.wp || "all"; [...$("wp").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === wp));
+    render(); setTimeout(() => scrollTo(0, sv.y || 0), 60);
+  }
+} catch(e) {}
+if (!jobs.length && !D.profile) { $("aiBanner").hidden = false; $("aiBanner").textContent = "New profile: open My profile in the menu at the top right to upload a resume. Once it's approved, an update fills this board (about 15 minutes)."; }
+
+if (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out") { $("aiBanner").hidden = false; if (SERVED) signInOffer($("aiBanner"), "Claude fit scoring is paused because Claude Code is signed out."); else $("aiBanner").textContent = "Claude fit scoring is paused because Claude Code is signed out. Open the board from the server to sign in."; }
+else if (D.ai_status === "no_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude fit scoring is off. Add an Anthropic API key in Settings, then use Update now in the profile menu."; }
+else if (D.ai_status === "bad_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "The saved Anthropic API key was rejected. Replace it in Settings, then use Update now in the profile menu."; }
+
+if (SERVED) {
+  $("tools").hidden = false;
+  loadTailored().then(() => { render(); if (location.hash === "#tailored") drawTailored(); });
+  fetch("/api/marks").then(r => r.json()).then(m => { status = Object.assign({}, status, m); render(); }).catch(() => {});
+  // Settings live on their own page (/settings, settings_page.py); the gear in TOOLS is a plain link.
+  $("profileClose").addEventListener("click", () => { $("resumePanel").hidden = true; $("resumeBtn").setAttribute("aria-expanded", "false"); });
+
+  // ---- resume upload + profile review
+  const lines = a => (a || []).join("\n");
+  const unlines = s => s.split("\n").map(x => x.trim()).filter(Boolean);
+  let draft = null, ingestWas = false;
+  function loadProfile(){
+    return fetch("/api/profile").then(r => r.json()).then(p => {
+      const a = p.active, ing = p.ingest || {};
+      $("resumeState").textContent = ing.running ? "Reading your resume… this takes about a minute."
+        : ing.error ? "Couldn't use that resume: " + ing.error
+        : a ? `Active: ${a._source_file || "resume"} (approved ${String(a._approved||"").replace("T"," ")}). Upload a new one to replace it.`
+        : "No resume uploaded yet. Jobs are scored against the profile set up earlier.";
+      $("drop").hidden = !!ing.running; $("gdocForm").hidden = !!ing.running;
+      if (ing.running) { ingestWas = true; $("resumePanel").hidden = false; setTimeout(loadProfile, 3000); }
+      draft = p.draft;
+      if (draft) showReview(draft); else $("reviewPanel").hidden = true;
+      if (ingestWas && !ing.running && draft) { ingestWas = false; $("resumePanel").hidden = true; $("reviewPanel").scrollIntoView({behavior: "smooth"}); }
+    });
+  }
+  function showReview(d){
+    $("reviewPanel").hidden = false;
+    $("reviewSrc").textContent = d._source_file || "";
+    const f = [d.name, (d.years_experience ? d.years_experience + " yrs" : ""), (d.clearances||[]).join(", "), (d.education||[]).join("; ")].filter(Boolean).join(" · ");
+    $("reviewFacts").textContent = f + (d.experience && d.experience.length ? " · Roles: " + d.experience.map(e => `${e.title} at ${e.employer}`).join("; ") : "");
+    $("rvSummary").value = d.summary || "";
+    $("rvRoles").value = lines(d.target_roles);
+    $("rvLimits").value = lines(d.hard_limits);
+    $("rvNotes").value = d.notes || "";
+    $("rvRefr").innerHTML = (d.reframings || []).map((r, i) => `<label class="refr"><input type="checkbox" data-i="${i}" checked>
+      <span><b>${esc(r.angle)}</b><br><span class="ev">Opens: ${esc(r.target_titles.join(", "))}<br>Based on: ${esc(r.evidence.join(" / "))}</span></span></label>`).join("");
+  }
+  $("resumeBtn").addEventListener("click", () => {
+    const open = $("resumePanel").hidden; $("resumePanel").hidden = !open; $("resumeBtn").setAttribute("aria-expanded", open); if (open) { loadProfile(); loadFacts(); loadCompanies(); loadHL(); scrollTo(0, 0); }
+  });
+  function sendResume(body){
+    $("resumeState").textContent = "Uploading…";
+    fetch("/api/resume", {method: "POST", headers: H, body: JSON.stringify(body)}).then(r => r.json().then(j => ({ok: r.ok, j})))
+      .then(({ok, j}) => { if (!ok) $("resumeState").textContent = j.error || "Upload failed."; else { ingestWas = true; setTimeout(loadProfile, 800); } });
+  }
+  function readFile(file){
+    if (!file) return;
+    if (file.size > 15 * 1024 * 1024) { $("resumeState").textContent = "That file is over 15 MB."; return; }
+    const fr = new FileReader();
+    fr.onload = () => sendResume({filename: file.name, data_b64: String(fr.result).split(",")[1] || ""});
+    fr.readAsDataURL(file);
+  }
+  $("resumeFile").addEventListener("change", e => readFile(e.target.files[0]));
+  ["dragenter","dragover"].forEach(ev => $("drop").addEventListener(ev, e => { e.preventDefault(); $("drop").classList.add("over"); }));
+  ["dragleave","drop"].forEach(ev => $("drop").addEventListener(ev, e => { e.preventDefault(); $("drop").classList.remove("over"); }));
+  $("drop").addEventListener("drop", e => readFile(e.dataTransfer.files[0]));
+  $("gdocForm").addEventListener("submit", e => { e.preventDefault(); const u = $("gdocUrl").value.trim(); if (u) sendResume({gdoc_url: u}); });
+  $("rvApprove").addEventListener("click", () => {
+    const keep = [...$("rvRefr").querySelectorAll("input[type=checkbox]")].filter(c => c.checked).map(c => draft.reframings[+c.dataset.i]);
+    const edits = {summary: $("rvSummary").value.trim(), target_roles: unlines($("rvRoles").value),
+                   hard_limits: unlines($("rvLimits").value), notes: $("rvNotes").value.trim(), reframings: keep};
+    $("rvApprove").disabled = true;
+    fetch("/api/profile/approve", {method: "POST", headers: H, body: JSON.stringify({edits, rescore: true})})
+      .then(r => r.json()).then(() => { $("reviewPanel").hidden = true; wasRunning = true; poll(); })
+      .finally(() => { $("rvApprove").disabled = false; });
+  });
+  $("rvDiscard").addEventListener("click", () => fetch("/api/profile/discard", {method: "POST", headers: H, body: "{}"}).then(loadProfile));
+  loadProfile();
+
+  // ---- tailoring
+  // ---- on-demand Claude ratings
+  function rateJobs(ids, btn){
+    if (!ids.length) return;
+    btn.disabled = true;
+    btn.textContent = ids.length > 1 ? `Claude is rating ${ids.length} jobs… (about ${Math.max(1, Math.round(ids.length / 15))} min)` : "Claude is reading it… (about 30 seconds)";
+    fetch("/api/rate", {method: "POST", headers: H, body: JSON.stringify({ids, mode})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+      if (!ok) { btn.disabled = false; btn.textContent = d.error || "Couldn't start"; return; }
+      const check = () => fetch("/api/rate").then(r => r.json()).then(s => {
+        if (s.running) return setTimeout(check, 3000);
+        if (s.error) { btn.disabled = false; btn.textContent = "Failed: " + s.error; return; }
+        saveFilters(); location.reload();
+      });
+      check();
+    });
+  }
+  $("rateMore").addEventListener("click", () => rateJobs(window.__unrated || [], $("rateMore")));
+
+  // ---- profiles
+  let curPerson = D.person ? D.person.id : "";
+  fetch("/api/people").then(r => r.json()).then(d => {
+    curPerson = d.current;
+    PREFS = d.prefs || PREFS; applyDisplayDefaults();
+    const s = d.settings, me = d.people.find(p => p.id === d.current) || {};
+    $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
+    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button>`;
+    document.querySelector(".ptitle").textContent = "Profile · " + (me.name || "");
+    $("psRemove").parentElement.hidden = d.people.length < 2;  // the last profile can't be removed
+    $("psName").value = me.name || ""; $("psFloor").value = s.salary_floor || ""; $("psBase").value = s.current_base || "";
+    $("psZip").value = s.home_zip || ""; $("psRadius").value = String([10,25,35,50,75].includes(+s.radius_miles) ? s.radius_miles : 35); $("psRemote").checked = s.remote_us !== false;
+    $("psLabel").value = s.current_label || ""; $("psLevel").value = String(s.seniority_mine || 4); $("psGoals").value = s.goals || "";
+    $("psTarget").value = s.target_text || ""; $("psScope").value = s.target_scope || "all"; $("psPrep").value = s.prep_text || "";
+    showTargetState(s, d.target_job);
+  }).catch(() => {});
+  $("avatarBtn").addEventListener("click", e => { e.stopPropagation(); const h = $("amenu").hidden; $("amenu").hidden = !h; $("avatarBtn").setAttribute("aria-expanded", h); });
+  document.addEventListener("click", e => { if (!e.target.closest(".menuWrap")) { $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false"); } });
+  $("amenu").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    $("amenu").hidden = true;
+    const v = b.dataset.person; if (!v) return;
+    if (v === "__add") { $("addPersonPanel").hidden = false; $("newPersonName").focus(); scrollTo(0, 0); return; }
+    if (v === curPerson) return;
+    fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => { location.hash = ""; location.reload(); });
+  });
+  $("addPersonCancel").addEventListener("click", () => { $("addPersonPanel").hidden = true; });
+  // ---- remove a profile: first click arms, second click (within 6 s) removes. The folder is kept in data\people_removed.
+  let rmTimer = null;
+  $("psRemove").addEventListener("click", () => {
+    const b = $("psRemove"), who = $("psName").value || "this profile";
+    if (b.dataset.armed !== "1") {
+      b.dataset.armed = "1"; b.textContent = `Click again to remove ${who}`;
+      $("psRemoveMsg").textContent = "Their resume, saved jobs, tailored resumes and settings leave the board.";
+      clearTimeout(rmTimer);
+      rmTimer = setTimeout(() => { b.dataset.armed = ""; b.textContent = "Remove this profile"; $("psRemoveMsg").textContent = ""; }, 6000);
+      return;
+    }
+    clearTimeout(rmTimer); b.disabled = true; b.textContent = "Removing…";
+    fetch("/api/people/remove", {method: "POST", headers: H, body: JSON.stringify({id: curPerson})})
+      .then(r => r.json().then(d => ({ok: r.ok, d})))
+      .then(({ok, d}) => {
+        if (!ok) throw new Error(d.error || "Couldn't remove it.");
+        location.hash = ""; location.reload();
+      })
+      .catch(e => { b.disabled = false; b.dataset.armed = ""; b.textContent = "Remove this profile"; $("psRemoveMsg").textContent = e.message; });
+  });
+  $("addPersonForm").addEventListener("submit", e => {
+    e.preventDefault();
+    fetch("/api/people/add", {method: "POST", headers: H, body: JSON.stringify({name: $("newPersonName").value})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+      if (!ok) { $("addPersonMsg").textContent = d.error || "Couldn't create it."; return; }
+      location.href = "/setup";
+    });
+  });
+  try { if (sessionStorage.getItem("jb.openResume")) { sessionStorage.removeItem("jb.openResume"); setTimeout(() => $("resumeBtn").click(), 0); } } catch(e) {}
+  $("psSave").addEventListener("click", () => {
+    const settings = {salary_floor: $("psFloor").value, current_base: $("psBase").value, current_label: $("psLabel").value,
+                      seniority_mine: $("psLevel").value, goals: $("psGoals").value,
+                      home_zip: $("psZip").value, radius_miles: $("psRadius").value, remote_us: $("psRemote").checked,
+                      target_text: $("psTarget").value, target_scope: $("psScope").value, prep_text: $("psPrep").value};
+    fetch("/api/person/settings", {method: "POST", headers: H, body: JSON.stringify({name: $("psName").value, settings})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+      $("psMsg").textContent = ok ? "Saved. Use Update now in your profile menu to apply (about 30 minutes)." : (d.error || "Couldn't save.");
+      if (ok && d.interpreting) pollTarget();
+    });
+  });
+  function showTargetState(s, tj){
+    if (tj && tj.running) { $("psTargetState").textContent = "Claude is working out which jobs fit this target…"; return; }
+    if (tj && tj.error) { $("psTargetState").textContent = "Couldn't interpret the target: " + tj.error; return; }
+    $("psTargetState").textContent = s.target_text ? (s.target_summary ? `Tab "${s.target_name || "Target"}": ${s.target_summary}` + (s.target_any_title ? " (any job title)" : ` (titles like: ${(s.target_keywords || []).slice(0, 8).join(", ")}…)`) : "") : "No target set.";
+  }
+  function pollTarget(){
+    fetch("/api/people").then(r => r.json()).then(d => { showTargetState(d.settings, d.target_job); if (d.target_job && d.target_job.running) setTimeout(pollTarget, 3000); });
+  }
+  $("psSuggest").addEventListener("click", () => {
+    $("psSuggest").disabled = true; $("psSuggestions").innerHTML = `<div class="note">Claude is reading your resume and the job market… (about a minute)</div>`;
+    const poll = () => fetch("/api/target/suggest").then(r => r.json()).then(s => {
+      if (s.running) return setTimeout(poll, 3000);
+      $("psSuggest").disabled = false;
+      if (s.error) { $("psSuggestions").innerHTML = `<div class="note">${esc(s.error)}</div>`; return; }
+      window.__sugg = s.options || [];
+      $("psSuggestions").innerHTML = window.__sugg.map((o, i) => `<div class="fact"><div><b>${esc(o.name)}</b> · ${esc(o.pay)} · odds now: ${esc(o.odds_now)}<div>${esc(o.why)}</div><div class="fl">Prep: ${esc(o.prep)}</div></div><button type="button" data-use="${i}">Use this</button></div>`).join("");
+    });
+    fetch("/api/target/suggest", {method: "POST", headers: H, body: "{}"}).then(poll);
+  });
+  $("psSuggestions").addEventListener("click", e => {
+    const b = e.target.closest("button[data-use]"); if (!b) return;
+    const o = window.__sugg[+b.dataset.use];
+    $("psTarget").value = o.target_text; $("psScope").value = o.scope; if (o.prep && o.prep.toLowerCase() !== "none" && !$("psPrep").value) $("psPrep").value = o.prep;
+    $("psMsg").textContent = "Filled in. Tap Save settings to use it.";
+  });
+
+  // ---- questions before tailoring, and the answer bank
+  const slugify = id => id.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+  const LV = {yes: "Yes", some: "Some", no: "No"};
+  let facts = [], hasProfile = !!D.profile;
+  fetch("/api/profile").then(r => r.json()).then(p => { hasProfile = !!p.active; }).catch(() => {});
+  const loadFacts = () => fetch("/api/facts").then(r => r.json()).then(d => { facts = d.facts || []; drawFacts(); return facts; });
+  function drawFacts(){
+    $("factsBox").hidden = !hasProfile;
+    $("factCount").textContent = facts.length ? `(${facts.length})` : "";
+    $("factList").innerHTML = facts.length ? facts.slice().reverse().map(f => `<div class="fact"><div><b>${esc(f.requirement)}</b> · ${LV[f.level] || ""}${f.answer ? ": " + esc(f.answer) : ""}
+      ${f.polished ? `<div class="pol" data-pid="${esc(f.id)}">Resume wording: <span>${esc(f.polished)}</span> <button type="button" class="linkbtn" data-edit="${esc(f.id)}">Edit</button></div>` : ""}
+      <div class="fl">${esc(f.context || "")} · ${esc(f.date || "")}</div></div><button type="button" data-del="${esc(f.id)}">Remove</button></div>`).join("")
+      : `<div class="note">Nothing yet. Tap "Tailor my resume" on a job, or answer general questions.</div>`;
+  }
+  // ---- companies: lists this profile watches + adding a company by link
+  function loadCompanies(){
+    return fetch("/api/companies/mine").then(r => r.json()).then(d => {
+      $("coBox").hidden = false;
+      $("coSets").innerHTML = d.sets.map(x => `<label class="chk"><input type="checkbox" data-set="${esc(x.id)}" ${d.watching.includes(x.id) ? "checked" : ""}> ${esc(x.label)} <span class="note">(${x.count})</span></label>`).join("");
+      $("coOwn").innerHTML = d.own.length ? d.own.map(c => `<div class="fact"><div><b>${esc(c.name)}</b><div class="fl">${esc(c.ats)}${c.everyone ? " · everyone" : " · this profile"}</div></div></div>`).join("") : "";
+    });
+  }
+  // ---- resume highlights (degrees, licenses...) that drive the requirement check
+  let HL = null, hlEditing = false;
+  const LVL = {associate: "Associate's", bachelor: "Bachelor's", master: "Master's", doctorate: "PhD", jd: "JD", md: "MD"};
+  function loadHL(){
+    return fetch("/api/highlights").then(r => r.json()).then(d => { HL = d; drawHL(); if (d.rescoring) setTimeout(loadHL, 5000); }).catch(() => {});
+  }
+  function drawHL(){
+    if (!HL) return;
+    const h = HL.highlights; $("hlBox").hidden = false;
+    if (!h) { $("hlCards").innerHTML = `<div class="note">Nothing pulled yet. Tap "Re-read my resume".</div>`; $("hlBanner").hidden = true; return; }
+    const ed = new Set(HL.edited_fields || []), mark = k => ed.has(k) ? "<em>edited</em>" : "";
+    const card = (k, title, body) => `<div class="hlcard"><div class="k">${title}${mark(k)}</div><div class="v">${body}</div></div>`;
+    const m = h.management || {}, c = h.clearance || {};
+    $("hlCards").innerHTML = [
+      card("degrees", "Education", (h.degrees || []).length ? h.degrees.map(d => `<div><b>${esc(LVL[d.level] || d.level)}</b>${d.field ? " in " + esc(d.field) : ""}${d.school ? `<br><span class="note">${esc(d.school)}${d.year ? " · " + d.year : ""}${d.completed === false ? " · in progress" : ""}</span>` : ""}</div>`).join("") : "No degree listed"),
+      card("licenses", "Licenses & certifications", (h.licenses || []).length ? h.licenses.map(l => `<div>${esc(l.name)}${l.kind === "license" ? " <span class='note'>(license)</span>" : ""}</div>`).join("") : "None listed"),
+      card("years_experience", "Experience", h.years_experience != null ? `${h.years_experience} years` : "Not stated"),
+      card("management", "People you manage", m.manages_people ? (m.direct_reports != null ? `${m.direct_reports} direct report${m.direct_reports === 1 ? "" : "s"}` : "Yes") + (m.note ? `<br><span class="note">${esc(m.note)}</span>` : "") : "None"),
+      card("clearance", "Clearance", c.level ? esc(c.level.replace(/_/g, " ").toUpperCase()) + (c.active === false ? " (inactive)" : "") : "None"),
+      card("languages", "Languages", (h.languages || []).map(x => esc(x.language) + (x.level ? ` <span class="note">(${esc(x.level)})</span>` : "")).join(", ") || "Not listed"),
+    ].join("");
+    $("hlBanner").hidden = !!HL.confirmed;
+    $("hlMsg").textContent = HL.rescoring ? "Re-checking jobs against these… (about a minute; reload after)" : HL.confirmed ? "Confirmed " + String(HL.confirmed).replace("T", " ") : "";
+  }
+  function drawHLEdit(){
+    const h = (HL && HL.highlights) || {}, o = (HL && HL.options) || {};
+    const lvOpts = v => (o.levels || []).map(x => `<option value="${x.id}"${x.id === v ? " selected" : ""}>${esc(x.label)}</option>`).join("");
+    const degRow = d => `<div class="hlrow" data-deg><select aria-label="Degree">${lvOpts(d.level || "bachelor")}</select><input aria-label="Field" placeholder="Field, e.g. Economics" value="${esc(d.field || "")}"><input aria-label="School" placeholder="School" value="${esc(d.school || "")}"><button type="button" class="btn sm" data-rm>Remove</button></div>`;
+    const licRow = l => `<div class="hlrow lic" data-lic><input aria-label="Name" placeholder="e.g. PMP, CPA, RN" value="${esc(l.name || "")}"><select aria-label="Kind"><option value="cert"${l.kind !== "license" ? " selected" : ""}>Certification</option><option value="license"${l.kind === "license" ? " selected" : ""}>License</option></select><button type="button" class="btn sm" data-rm>Remove</button></div>`;
+    const m = h.management || {};
+    $("hlEdit").innerHTML = `<label class="f">Degrees</label><div id="hlDegs">${(h.degrees || []).map(degRow).join("")}</div><button type="button" class="btn ghost sm" id="hlAddDeg" style="align-self:flex-start">+ Add a degree</button>
+      <label class="f">Licenses and certifications</label><div id="hlLics">${(h.licenses || []).map(licRow).join("")}</div><button type="button" class="btn ghost sm" id="hlAddLic" style="align-self:flex-start">+ Add one</button>
+      <div class="psgrid"><label>Years of experience<input id="hlYears" type="number" min="0" max="60" value="${h.years_experience ?? ""}"></label>
+      <label>Direct reports right now<input id="hlReports" type="number" min="0" max="10000" value="${m.direct_reports ?? ""}"></label></div>
+      <div class="row"><button type="button" class="btn primary" id="hlSave">Save and re-check jobs</button><button type="button" class="btn" id="hlCancel">Cancel</button></div>`;
+    window.__degRow = degRow; window.__licRow = licRow;
+  }
+  function openHLEdit(){ hlEditing = true; drawHLEdit(); $("hlEdit").hidden = false; $("hlEdit").scrollIntoView({block: "nearest"}); }
+  $("hlEditBtn").addEventListener("click", openHLEdit); $("hlEditBtn2").addEventListener("click", openHLEdit);
+  $("hlEdit").addEventListener("click", e => {
+    if (e.target.closest("[data-rm]")) { e.target.closest(".hlrow").remove(); return; }
+    if (e.target.id === "hlAddDeg") { $("hlDegs").insertAdjacentHTML("beforeend", window.__degRow({})); return; }
+    if (e.target.id === "hlAddLic") { $("hlLics").insertAdjacentHTML("beforeend", window.__licRow({})); return; }
+    if (e.target.id === "hlCancel") { $("hlEdit").hidden = true; return; }
+    if (e.target.id === "hlSave") {
+      const degrees = [...$("hlDegs").querySelectorAll("[data-deg]")].map(r => { const [lv, f, sc] = r.querySelectorAll("select,input"); return {level: lv.value, field: f.value.trim(), school: sc.value.trim(), completed: true}; }).filter(d => d.level);
+      const licenses = [...$("hlLics").querySelectorAll("[data-lic]")].map(r => { const [n, k] = r.querySelectorAll("input,select"); return {name: n.value.trim(), kind: k.value, active: true}; }).filter(l => l.name);
+      const h = HL.highlights || {}, m = Object.assign({}, h.management || {});
+      const rep = $("hlReports").value; m.direct_reports = rep === "" ? null : +rep; m.manages_people = (m.direct_reports || 0) > 0;
+      const edits = {degrees, licenses, management: m};
+      if ($("hlYears").value !== "") edits.years_experience = +$("hlYears").value;
+      e.target.disabled = true;
+      fetch("/api/highlights", {method: "POST", headers: H, body: JSON.stringify({edits})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+        e.target.disabled = false;
+        if (!ok) { $("hlMsg").textContent = d.error || "Couldn't save."; return; }
+        HL = d; $("hlEdit").hidden = true; drawHL(); setTimeout(loadHL, 5000);
+      });
+    }
+  });
+  $("hlConfirm").addEventListener("click", () => fetch("/api/highlights", {method: "POST", headers: H, body: JSON.stringify({confirm: true})}).then(r => r.json()).then(d => { HL = d; drawHL(); }));
+  $("hlRefresh").addEventListener("click", () => { $("hlMsg").textContent = "Claude is re-reading your resume… (about a minute)"; fetch("/api/highlights/refresh", {method: "POST", headers: H, body: "{}"}).then(() => setTimeout(loadHL, 45000)); });
+  $("coSets").addEventListener("change", () => {
+    const sets = [...$("coSets").querySelectorAll("input:checked")].map(i => i.dataset.set);
+    fetch("/api/person/settings", {method: "POST", headers: H, body: JSON.stringify({settings: {company_sets: sets.length ? sets : ["tech"]}})})
+      .then(() => { $("coMsg").textContent = "Saved. Use Update now in your profile menu to refresh the board with these lists."; });
+  });
+  $("coAddForm").addEventListener("submit", e => {
+    e.preventDefault();
+    $("coMsg").textContent = "Checking that link…";
+    fetch("/api/companies/add", {method: "POST", headers: H, body: JSON.stringify({url: $("coUrl").value, name: $("coName").value, scope: $("coScope").value})})
+      .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+        if (!ok) { $("coMsg").textContent = d.error || "Couldn't add it."; return; }
+        $("coMsg").textContent = `${d.existing ? "Already tracked; now on your list" : "Added"}: ${d.name} (${d.open_jobs} open jobs on its board). ` + (d.fetching ? "Fetching its jobs now; they'll appear when the update bar finishes." : "An update is running; its jobs arrive with the next update.");
+        $("coUrl").value = ""; $("coName").value = ""; loadCompanies(); if (d.fetching) setTimeout(poll, 1500);
+      });
+  });
+
+  $("factList").addEventListener("click", e => {
+    const ed = e.target.closest("button[data-edit]");
+    if (ed) {
+      const box = ed.closest(".pol"), cur = box.querySelector("span").textContent;
+      box.innerHTML = `<textarea style="width:100%;min-height:3.5em">${esc(cur)}</textarea><button type="button" class="linkbtn" data-save="${esc(ed.dataset.edit)}">Save</button>`;
+      return;
+    }
+    const sv = e.target.closest("button[data-save]");
+    if (sv) {
+      const text = sv.closest(".pol").querySelector("textarea").value;
+      fetch("/api/facts/polish", {method: "POST", headers: H, body: JSON.stringify({id: sv.dataset.save, polished: text})}).then(r => r.json()).then(d => { facts = d.facts; drawFacts(); });
+      return;
+    }
+    const b = e.target.closest("button[data-del]"); if (!b) return;
+    fetch("/api/facts/delete", {method: "POST", headers: H, body: JSON.stringify({id: b.dataset.del})}).then(r => r.json()).then(d => { facts = d.facts; drawFacts(); });
+  });
+
+  let qCtx = null;  // {id, btn, context, questions}
+  function qWait(msg){ $("qList").innerHTML = `<div class="qwait">${esc(msg)}</div>`; $("qGo").disabled = true; }
+  function drawQuestions(qs){
+    const prev = Object.fromEntries(facts.map(f => [f.requirement.toLowerCase(), f]));
+    $("qList").innerHTML = qs.map((q, i) => { const p = q.fact_id ? null : prev[q.requirement.toLowerCase()];
+      return `<div class="q" data-i="${i}" data-level="${p ? p.level : ""}">
+        <div class="qreq">${esc(q.requirement)}${q.fact_id ? " · follow-up" : ""}</div>${q.earlier ? `<div class="qwhy">You said before: ${esc(q.earlier)}</div>` : ""}<div class="qtext">${esc(q.question)}</div><div class="qwhy">${esc(q.why || "")}</div>
+        <div class="ans" role="group" aria-label="Answer">${Object.entries(LV).map(([k, v]) => `<button type="button" data-lv="${k}" aria-pressed="${p && p.level === k}">${v}</button>`).join("")}</div>
+        <textarea aria-label="Details" placeholder="${esc(q.hint)}">${p ? esc(p.answer) : ""}</textarea></div>`; }).join("");
+    $("qGo").disabled = false;
+  }
+  $("qList").addEventListener("click", e => {
+    const b = e.target.closest(".ans button"); if (!b) return;
+    const q = b.closest(".q"), on = b.getAttribute("aria-pressed") !== "true";
+    q.querySelectorAll(".ans button").forEach(x => x.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", on); q.dataset.level = on ? b.dataset.lv : "";
+  });
+  function collectAnswers(){
+    return [...$("qList").querySelectorAll(".q")].map(el => { const q = qCtx.questions[+el.dataset.i];
+      return {requirement: q.requirement, question: q.question, fact_id: q.fact_id || "", level: el.dataset.level || (el.querySelector("textarea").value.trim() ? "yes" : ""), answer: el.querySelector("textarea").value.trim()}; })
+      .filter(a => a.level || a.answer);
+  }
+  function fetchQuestions(id){
+    const key = id ? slugify(id) : "general";
+    const poll = () => fetch("/api/questions/" + key).then(r => r.json()).then(s => s.running ? new Promise(r => setTimeout(r, 2500)).then(poll) : s);
+    return fetch("/api/questions/" + key).then(r => r.json()).then(s => {
+      if (!s.missing && !s.running && !s.error) return s;
+      if (s.running) return poll();
+      return fetch("/api/questions", {method: "POST", headers: H, body: JSON.stringify(id ? {id} : {})}).then(poll);
+    });
+  }
+  function openQuestions(id, btn){
+    const general = !id;
+    qCtx = {id, btn, questions: [], context: ""};
+    $("qTitle").textContent = general ? "Questions about your experience" : "A few questions first";
+    $("qGo").textContent = general ? "Save answers" : "Save answers and tailor";
+    $("qSkip").hidden = general; $("qSkip").textContent = "Skip, tailor now";
+    qWait(general ? "Claude is working out what your target roles usually ask for that your resume doesn't show… (about a minute)"
+                  : "Claude is comparing the posting with your resume… (about 30 seconds)");
+    if (!$("qSheet").open) $("qSheet").showModal();
+    Promise.all([loadFacts(), fetchQuestions(id)]).then(([, s]) => {
+      if (qCtx.id !== id || !$("qSheet").open) return;
+      if (s.error) { qWait("Couldn't get questions: " + s.error); $("qGo").disabled = general; if (!general) $("qGo").textContent = "Tailor anyway"; qCtx.questions = []; return; }
+      qCtx.questions = s.questions || []; qCtx.context = s.context || "";
+      if (!qCtx.questions.length) {
+        if (general) { qWait("Nothing important seems to be missing for your target roles."); return; }
+        $("qSheet").close(); startTailor(id, btn, false); return;
+      }
+      drawQuestions(qCtx.questions);
+    }).catch(() => qWait("Lost contact with the job board. Check the connection and try again."));
+  }
+  $("qGo").addEventListener("click", () => {
+    if (qCtx.astra) { continueTailor(collectAnswers()); return; }
+    const {id, btn, context} = qCtx, answers = collectAnswers();
+    $("qGo").disabled = true;
+    const save = answers.length ? fetch("/api/answers", {method: "POST", headers: H, body: JSON.stringify({answers, context})}).then(r => r.json()) : Promise.resolve({added: 0});
+    save.then(d => {
+      if (d.facts) { facts = d.facts; drawFacts(); }
+      $("qSheet").close();
+      if (id) startTailor(id, btn, (d.added || 0) > 0);
+    });
+  });
+  $("qSkip").addEventListener("click", () => { if (qCtx.astra) { continueTailor([]); return; } $("qSheet").close(); startTailor(qCtx.id, qCtx.btn, false); });
+  $("generalQs").addEventListener("click", () => openQuestions(null, null));
+
+  function tailorJob(id, btn){
+    if (btn.dataset.slug) { window.open("/tailored/" + btn.dataset.slug, "_blank"); return; }
+    if (!hasProfile) {
+      btn.textContent = "Approve your profile first (top of page)";
+      const rp = $("reviewPanel"); if (rp && !rp.hidden) rp.scrollIntoView({behavior: "smooth"});
+      return;
+    }
+    const q = PREFS["tailor.questions"], j = jobs.find(x => x.id === id) || {}, m = mode === "pivot" ? j.pv_now : j.ai_fit;
+    if (q === "never" || (q === "gaps" && m != null && m >= 70)) { startTailor(id, btn, false); return; }
+    openQuestions(id, btn);
+  }
+  const STEP = s => s.step === "pdf" ? "Building PDF…" : s.step === "tailor" ? "Tailoring… (about a minute)"
+    : s.step === "grade" ? `Astra is grading (round ${s.round || 1})…` : s.step === "rework" ? `Claude is reworking${s.round ? ` (after round ${s.round})` : ""}…` : null;
+  function pollTailor(id, slug, btn){
+    const check = () => fetch("/api/tailor/" + slug).then(r => r.json()).then(s => {
+      if (s.running) { btn.textContent = STEP(s) || btn.textContent; return setTimeout(check, 3000); }
+      btn.disabled = false;
+      if (s.error) { btn.textContent = "Tailoring failed"; btn.title = s.error; return; }
+      if (s.review_status === "needs_answers" && (s.pending || []).length) { openAstraQuestions(id, slug, btn, s); return; }
+      loadTailored().then(() => { render(); if (location.hash === "#tailored") drawTailored(); });
+    });
+    check();
+  }
+  function startTailor(id, btn, rescore){
+    btn.disabled = true; btn.textContent = rescore ? "Re-scoring with your answers…" : "Tailoring… (about a minute)";
+    fetch("/api/tailor", {method: "POST", headers: H, body: JSON.stringify({id, rescore})}).then(r => r.json()).then(({slug}) => pollTailor(id, slug, btn));
+  }
+  // Astra asked for facts the resume lacks: ask the candidate, then rework
+  function openAstraQuestions(id, slug, btn, s){
+    qCtx = {id, btn, slug, astra: true, context: "Astra review", questions: s.pending};
+    $("qTitle").textContent = `Astra scored this ${s.score}/100 (target ${s.threshold}). A few questions`;
+    $("qGo").textContent = "Save answers and rework"; $("qSkip").hidden = false; $("qSkip").textContent = "Skip, rework without them";
+    loadFacts().then(() => { drawQuestions(s.pending); if (!$("qSheet").open) $("qSheet").showModal(); });
+  }
+  $("tlList").addEventListener("click", e => {
+    const del = e.target.closest("button[data-del]");
+    if (del) {
+      if (del.dataset.armed !== "1") {  // two taps: the first arms the button for a few seconds
+        del.dataset.armed = "1"; del.textContent = "Tap again to remove";
+        setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "Remove"; } }, 4000);
+        return;
+      }
+      del.disabled = true; del.textContent = "Removing…";
+      fetch("/api/tailored/delete", {method: "POST", headers: H, body: JSON.stringify({slug: del.dataset.del})})
+        .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+          if (!ok) { del.disabled = false; del.textContent = d.error || "Couldn't remove"; return; }
+          loadTailored().then(() => { drawTailored(); render(); });
+        });
+      return;
+    }
+    const rs = e.target.closest("button[data-resume]");
+    if (rs) {
+      rs.disabled = true; rs.textContent = "Astra is grading…";
+      fetch("/api/tailor/resume", {method: "POST", headers: H, body: JSON.stringify({id: rs.dataset.resume})}).then(() => pollTailor(rs.dataset.resume, rs.dataset.slug, rs));
+      return;
+    }
+    const b = e.target.closest("button[data-astra]"); if (!b) return;
+    fetch("/api/tailor/" + b.dataset.slug).then(r => r.json()).then(st => openAstraQuestions(b.dataset.astra, b.dataset.slug, b, st));
+  });
+  function continueTailor(answers){
+    const {id, btn, slug} = qCtx;
+    $("qSheet").close(); btn.disabled = true; btn.textContent = "Claude is reworking…";
+    fetch("/api/tailor/continue", {method: "POST", headers: H, body: JSON.stringify({id, answers})}).then(() => pollTailor(id, slug, btn));
+  }
+
+  let wasRunning = false;
+  const PH = {fetch: "Checking company job boards", ai: "Claude is scoring new jobs", pivot: "Claude is rating AI-pivot jobs"};
+  function poll(){
+    fetch("/api/status").then(r => r.json()).then(s => {
+      $("updateBtn").disabled = s.running; $("updateBtn").classList.toggle("busy", !!s.running);
+      $("updSmall").textContent = s.running ? "running now…" : "every employer, ~40 min";
+      $("updateBtn").title = s.running ? "Updating job listings now…" : "Update job listings now: checks every employer for new jobs (about 40 min)";
+      if (s.next_run) { const n = new Date(s.next_run); $("nextRun").textContent = "· next update " + (n.toDateString() === new Date().toDateString() ? "today " : "tomorrow ") + n.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); }
+      else $("nextRun").textContent = "· automatic updates off";
+      if (s.running) {
+        wasRunning = true; $("progress").hidden = false; scrollTo(0, 0);
+        $("progTitle").textContent = (PH[s.phase] || "Working") + "…";
+        $("progNote").textContent = s.total ? `${s.done} of ${s.total}` : "";
+        $("progBar").style.width = s.total ? (100 * s.done / s.total) + "%" : "4%";
+        $("progLog").textContent = s.lines.slice(-6).join("\n");
+        setTimeout(poll, 2000);
+      } else if (wasRunning) {
+        if (s.exit === 0) location.reload();
+        else { $("progTitle").textContent = "Update failed"; $("progNote").textContent = "Last output:"; $("progLog").textContent = s.lines.join("\n"); }
+      }
+    }).catch(() => setTimeout(poll, 5000));
+  }
+  const RR = D.ratings || {};
+  const need = (RR.stale || 0) + (RR.unrated || 0);
+  $("rrSmall").textContent = need ? `${need} of your top ${RR.top} need a fresh rating` : "all top jobs current";
+  $("rerateBtn").title = "Re-rate with my latest info: Claude re-scores your best jobs, no new listings" + (need ? ` (${need} of your top ${RR.top} need a fresh rating)` : " (all top jobs current)");
+  if (need) { $("rrBadge").hidden = false; $("rrBadge").textContent = need > 99 ? "99+" : need; }
+  function pollRerate(){
+    fetch("/api/rerate").then(r => r.json()).then(s => {
+      $("rerateBtn").disabled = !!s.running; $("rerateBtn").classList.toggle("busy", !!s.running);
+      if (s.running) {
+        $("progress").hidden = false; $("progTitle").textContent = "Claude is re-rating your best jobs with your latest info…";
+        $("progNote").textContent = s.total ? `batch ${s.done} of ${s.total}` : "starting";
+        $("progBar").style.width = s.total ? (100 * s.done / s.total) + "%" : "4%";
+        $("progLog").textContent = (s.lines || []).slice(-4).join("\n");
+        pollRerate.was = true; setTimeout(pollRerate, 3000);
+      } else if (pollRerate.was) {
+        if (!s.error) { saveFilters(); location.reload(); }
+        else { $("progTitle").textContent = "Re-rating stopped"; $("progNote").textContent = s.error; }
+      }
+    }).catch(() => setTimeout(pollRerate, 5000));
+  }
+  $("rerateBtn").addEventListener("click", () => {
+    if (!confirm("Re-rate with your latest info?\n\nClaude re-scores your best jobs using your current resume, answers and settings. No new listings are fetched. It uses your Claude plan and takes a few minutes.")) return;
+    fetch("/api/rerate", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+      if (!ok) { $("progress").hidden = false; $("progTitle").textContent = d.error || "Couldn't start"; $("progNote").textContent = ""; return; }
+      pollRerate.was = true; scrollTo(0, 0); pollRerate();
+    });
+  });
+  pollRerate();
+  $("updateBtn").addEventListener("click", () => {
+    if (!confirm("Update job listings now?\n\nChecks every employer's job board for new and removed jobs, then Claude rates the new ones for each profile. Takes about 40 minutes.")) return;
+    fetch("/api/update", {method: "POST", headers: H, body: "{}"}).then(() => { wasRunning = true; poll(); });
+  });
+  poll();
+  // The settings page hands its Update / Re-rate / Add a person clicks to the board (sessionStorage "jb.run").
+  try {
+    const r = sessionStorage.getItem("jb.run"); sessionStorage.removeItem("jb.run");
+    if (r === "update" || r === "rerate") setTimeout(() => $(r + "Btn").click(), 300);
+    else if (r === "addPerson") { $("addPersonPanel").hidden = false; $("newPersonName").focus(); }
+  } catch(e) {}
+}
+})();
+</script>
+"""
+
+def build(payload, path, fragment=False):
+    payload.setdefault("pivot_enabled", True)
+    cur = payload.get("current") or CURRENT
+    data = "<script>window.__DATA__=" + json.dumps(payload, separators=(",", ":")).replace("</", "<\\/") + \
+           ";window.__CURRENT__=" + json.dumps(cur) + ";</script>\n"
+    body = HEAD + BODY + data + SCRIPT
+    if not fragment:
+        body = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
+                HEAD + "</head><body>" + BODY + data + SCRIPT + "</body></html>")
+    open(path, "w").write(body)

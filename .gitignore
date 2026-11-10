@@ -1,0 +1,27 @@
+# User data lives outside the app folder (see paths.py); never commit it.
+data/
+data.migrated-*/
+/config.json
+/companies.json
+profile.txt
+secrets*.json
+access_key
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Logs and backups
+*.log
+*.bak
+*.bak*
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
