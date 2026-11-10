@@ -96,13 +96,19 @@ def detect(url):
         found = _match(page)
         if not found:
             try:
+                import ats_more   # (Radancy / Eightfold / Avature: checked by their own page markers)
+                found = ats_more.detect(url, page)
+            except Exception:
+                found = None
+        if not found:
+            try:
                 import jsonld_fetcher
                 found = jsonld_fetcher.detect_config(url, page)
             except Exception:
                 found = None
     if not found:
         raise ValueError("Couldn't find a supported job board on that page, and the site doesn't publish standard job data Siftwell can read. Supported: Greenhouse, Lever, Ashby, Workday, "
-                         "SmartRecruiters, iCIMS, UKG, Oracle, Paylocity, ADP, Workable, BambooHR, JazzHR, Breezy, Recruitee, Paycom, Dayforce, Rippling, and custom careers sites that publish standard job data. Tip: open the company's job list and paste the link from the address bar.")
+                         "SmartRecruiters, iCIMS, UKG, Oracle, Paylocity, ADP, Workable, BambooHR, JazzHR, Breezy, Recruitee, Paycom, Dayforce, Rippling, Radancy, Eightfold, Avature, and custom careers sites that publish standard job data. Tip: open the company's job list and paste the link from the address bar.")
     cfg, why = netsafe.clean_config(found)
     if cfg is None:
         raise ValueError(f"Found a job board on that page, but its settings look wrong ({why}).")
@@ -145,6 +151,11 @@ def verify(c):
                 if n >= 400:
                     break
             return n, None
+        if a in ("radancy", "eightfold", "avature"):
+            import sys
+            sys.path.insert(0, HERE)
+            import ats_more
+            return ats_more.verify(c)
         if a == "jsonld":
             import sys
             sys.path.insert(0, HERE)

@@ -239,7 +239,7 @@ const errText = err => err instanceof TypeError ? "Couldn't reach Siftwell. Chec
 const ATS = {greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", workday: "Workday", smartrecruiters: "SmartRecruiters", icims: "iCIMS",
   ukg: "UKG", oracle: "Oracle", paylocity: "Paylocity", adp: "ADP", rippling: "Rippling", workable: "Workable", bamboohr: "BambooHR",
   jazzhr: "JazzHR", breezy: "Breezy", recruitee: "Recruitee", paycom: "Paycom", saashr: "SaaSHR", dayforce: "Dayforce", jsonld: "Standard job data",
-  amazon: "Amazon", jibe: "Jibe", phenom: "Phenom", clearcompany: "ClearCompany"};
+  radancy: "Radancy", eightfold: "Eightfold", avature: "Avature", amazon: "Amazon", jibe: "Jibe", phenom: "Phenom", clearcompany: "ClearCompany"};
 const atsName = a => ATS[a] || a || "";
 const STATUS = {ok: "OK", suspect: "Suspect", capped: "Capped", error: "Error", paused: "Paused", new: "Not fetched yet"};
 function when(iso){
