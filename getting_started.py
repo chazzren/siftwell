@@ -12,15 +12,18 @@ import os
 import sys
 
 if __name__ == "__main__" and "--serve" in sys.argv:
-    # Login launcher: `pythonw -X utf8 getting_started.py --serve` reads <app>/.siftwell/port (default 8766) at run
-    # time and runs server.py on it, so the start-at-sign-in entry never holds a stale port.
+    # Login launcher: `pythonw -X utf8 getting_started.py --serve` reads DATA/port (default 8766; an older launcher's
+    # <app>/.siftwell/port is copied over once) at run time and runs server.py on it, so the start-at-sign-in entry
+    # never holds a stale port.
     _app = os.path.dirname(os.path.abspath(__file__))
-    try:
-        _port = int(open(os.path.join(_app, ".siftwell", "port")).read().strip())
-    except (OSError, ValueError):
-        _port = 8766
-    if not 1024 <= _port <= 65535:
-        _port = 8766
+    sys.path.insert(0, _app)
+    sys.dont_write_bytecode = True
+    import paths as _paths
+    sys.dont_write_bytecode = False
+    if not os.environ.get("PYTHONPYCACHEPREFIX"):  # keep compiled .pyc files out of the app folder (as the launchers do)
+        os.environ["PYTHONPYCACHEPREFIX"] = os.path.join(_paths.RUNTIME, "pycache")
+        sys.pycache_prefix = os.environ["PYTHONPYCACHEPREFIX"]
+    _port = _paths.read_port()
     os.chdir(_app)
     sys.argv = [os.path.join(_app, "server.py"), str(_port)]
     import runpy
@@ -43,7 +46,6 @@ import report
 VERSION = "1"
 NETWORK = os.path.join(paths.DATA, "network.json")
 APP = paths.APP
-RUN_DIR = os.path.join(APP, ".siftwell")           # launcher runtime folder (port, server.pid)
 TASK_NAME = "Job Board server"                       # scheduled task made by the older setup_windows.ps1
 MAC_LABEL = "com.siftwell.server"
 CTX = {"port": 8766, "token": "", "busy": lambda: False, "bound_lan": False}
@@ -73,8 +75,8 @@ def _pid_alive(pid):
 
 
 def note_started():
-    """Call after the port is bound: record our pid in .siftwell/server.pid unless that file names another live process."""
-    pf = os.path.join(RUN_DIR, "server.pid")
+    """Call after the port is bound: record our pid in DATA/server.pid unless that file names another live process."""
+    pf = paths.PID_FILE
     try:
         old = int(open(pf).read().strip())
     except (OSError, ValueError):
@@ -82,7 +84,7 @@ def note_started():
     if old and old != os.getpid() and _pid_alive(old):
         return
     try:
-        os.makedirs(RUN_DIR, exist_ok=True)
+        os.makedirs(os.path.dirname(pf), exist_ok=True)
         with open(pf, "w") as f:
             f.write(str(os.getpid()))
     except OSError:
@@ -163,15 +165,15 @@ def lan_ip():
 
 # ---------------------------------------------------------------- start at login
 def _app_python():
-    """The app's own interpreter without a console window."""
+    """The interpreter a start-at-sign-in entry should use, without a console window: the launcher's runtime venv
+    (paths.RUNTIME, outside the app folder), else an older install's <app>/.venv, else whatever runs us now."""
+    for p in (paths.runtime_python(windowed=True), paths.legacy_python(windowed=True)):
+        if p:
+            return p
     if osdeps.WINDOWS:
-        for p in (os.path.join(APP, ".venv", "Scripts", "pythonw.exe"),
-                  os.path.join(os.path.dirname(sys.executable), "pythonw.exe")):
-            if os.path.exists(p):
-                return p
-        return sys.executable
-    p = os.path.join(APP, ".venv", "bin", "python")
-    return p if os.path.exists(p) else sys.executable
+        p = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+        return p if os.path.exists(p) else sys.executable
+    return sys.executable
 
 
 def _win_lnk():
@@ -230,9 +232,45 @@ def startup_state():
     return {"on": own, "via": "autostart" if own else None, "task": False, "own": own}
 
 
+def _launcher():
+    return os.path.join(APP, "getting_started.py")
+
+
+def _win_args():
+    return f'-X utf8 "{_launcher()}" --serve'
+
+
+def _mac_args(py):
+    return [py, "-X", "utf8", _launcher(), "--serve"]
+
+
+def _linux_entry(py):
+    def q(s):
+        for ch in ("\\", '"', "`", "$"):
+            s = s.replace(ch, "\\" + ch)
+        return '"' + s.replace("%", "%%") + '"'
+    return ("[Desktop Entry]\nType=Application\nName=Siftwell\nComment=Start the Siftwell job board\n"
+            f"Exec={q(py)} -X utf8 {q(_launcher())} --serve\nPath={APP}\nTerminal=false\n"
+            "X-GNOME-Autostart-enabled=true\n")
+
+
+def _write_mac_plist(py, reload=True):
+    import plistlib
+    pl = _mac_plist()
+    os.makedirs(os.path.dirname(pl), exist_ok=True)
+    with open(pl, "wb") as f:
+        plistlib.dump({"Label": MAC_LABEL, "ProgramArguments": _mac_args(py),
+                       "WorkingDirectory": APP, "RunAtLoad": True, "KeepAlive": False,
+                       "StandardOutPath": os.path.join(paths.data(), "server.log"),
+                       "StandardErrorPath": os.path.join(paths.data(), "server.log")}, f)
+    if reload:
+        subprocess.run(["launchctl", "unload", pl], capture_output=True, timeout=30)
+        # loading starts a second copy now; it exits at once because the port is taken, and it runs at the next sign-in
+        subprocess.run(["launchctl", "load", "-w", pl], capture_output=True, timeout=30)
+
+
 def set_startup(on):
     py = _app_python()
-    launcher = os.path.join(APP, "getting_started.py")
     if osdeps.WINDOWS:
         lnk = _win_lnk()
         if not on:
@@ -243,14 +281,12 @@ def set_startup(on):
         script = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:SW_LNK);"
                   "$s.TargetPath=$env:SW_EXE;$s.Arguments=$env:SW_ARGS;$s.WorkingDirectory=$env:SW_DIR;"
                   "$s.Description='Siftwell';$s.Save()")
-        env = dict(os.environ, SW_LNK=lnk, SW_EXE=py, SW_DIR=APP,
-                   SW_ARGS=f'-X utf8 "{launcher}" --serve')
+        env = dict(os.environ, SW_LNK=lnk, SW_EXE=py, SW_DIR=APP, SW_ARGS=_win_args())
         r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], env=env,
                            capture_output=True, text=True, timeout=60, creationflags=NOWIN)
         if r.returncode != 0 or not os.path.exists(lnk):
             raise RuntimeError("Couldn't create the startup shortcut. " + (r.stderr or "").strip()[:200])
     elif osdeps.MAC:
-        import plistlib
         pl = _mac_plist()
         if not on:
             if os.path.exists(pl):
@@ -259,15 +295,7 @@ def set_startup(on):
                     subprocess.run(["launchctl", "unload", pl], capture_output=True, timeout=30)
                 os.remove(pl)
             return
-        os.makedirs(os.path.dirname(pl), exist_ok=True)
-        with open(pl, "wb") as f:
-            plistlib.dump({"Label": MAC_LABEL, "ProgramArguments": [py, "-X", "utf8", launcher, "--serve"],
-                           "WorkingDirectory": APP, "RunAtLoad": True, "KeepAlive": False,
-                           "StandardOutPath": os.path.join(paths.data(), "server.log"),
-                           "StandardErrorPath": os.path.join(paths.data(), "server.log")}, f)
-        subprocess.run(["launchctl", "unload", pl], capture_output=True, timeout=30)
-        # loading starts a second copy now; it exits at once because the port is taken, and it runs at the next sign-in
-        subprocess.run(["launchctl", "load", "-w", pl], capture_output=True, timeout=30)
+        _write_mac_plist(py)
     else:
         df = _linux_desktop()
         if not on:
@@ -275,14 +303,87 @@ def set_startup(on):
                 os.remove(df)
             return
         os.makedirs(os.path.dirname(df), exist_ok=True)
-        def q(s):
-            for ch in ("\\", '"', "`", "$"):
-                s = s.replace(ch, "\\" + ch)
-            return '"' + s.replace("%", "%%") + '"'
         with open(df, "w", encoding="utf-8") as f:
-            f.write("[Desktop Entry]\nType=Application\nName=Siftwell\nComment=Start the Siftwell job board\n"
-                    f"Exec={q(py)} -X utf8 {q(launcher)} --serve\nPath={APP}\nTerminal=false\n"
-                    "X-GNOME-Autostart-enabled=true\n")
+            f.write(_linux_entry(py))
+
+
+def _same_path(a, b):
+    return os.path.normcase(os.path.normpath(a or ".")) == os.path.normcase(os.path.normpath(b or "."))
+
+
+def _under(path, folder):
+    try:
+        a, b = os.path.normcase(os.path.abspath(path)), os.path.normcase(os.path.abspath(folder))
+        return os.path.commonpath([a, b]) == b
+    except ValueError:
+        return False
+
+
+def heal_startup(log=print):
+    """Called on every server start. If start-at-sign-in is on (our own Startup shortcut / LaunchAgent / autostart
+    entry, never the older "Job Board server" scheduled task), make sure it points at THIS app folder and the current
+    runtime; rewrite it when it doesn't (for example after the app folder was deleted and a new release downloaded
+    somewhere else). Returns "ok", "fixed", "off", "skipped" or "failed: ...".
+
+    Skipped when JOBBOARD_DATA is set: a start-at-sign-in entry always runs with the default data folder, so a test
+    or portable server using other data must not take it over. Also skipped when SIFTWELL_RUNTIME is set (a dev or test
+    copy), when SIFTWELL_NO_SELFHEAL=1, and unless this server runs on the launcher's runtime Python or the legacy
+    <app>/.venv (a stray interpreter must never become the sign-in shortcut)."""
+    if os.environ.get("JOBBOARD_DATA") or os.environ.get("SIFTWELL_NO_SELFHEAL") or os.environ.get("SIFTWELL_RUNTIME"):
+        return "skipped"
+    if not (_under(sys.executable, paths.RUNTIME) or _under(sys.executable, os.path.join(APP, ".venv"))):
+        return "skipped"
+    py = _app_python()
+    try:
+        if osdeps.WINDOWS:
+            lnk = _win_lnk()
+            if not os.path.exists(lnk):
+                return "off"
+            ps = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:SW_LNK);"
+                  "@{t=[string]$s.TargetPath;a=[string]$s.Arguments;w=[string]$s.WorkingDirectory}|ConvertTo-Json -Compress")
+            r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                               env=dict(os.environ, SW_LNK=lnk), capture_output=True, text=True, timeout=60, creationflags=NOWIN)
+            cur = json.loads(r.stdout) if r.stdout.strip() else {}
+            ok = (_same_path(cur.get("t"), py) and _same_path(cur.get("w"), APP)
+                  and os.path.normcase(" ".join((cur.get("a") or "").split())) == os.path.normcase(" ".join(_win_args().split())))
+        elif osdeps.MAC:
+            import plistlib
+            pl = _mac_plist()
+            if not os.path.exists(pl):
+                return "off"
+            with open(pl, "rb") as f:
+                cur = plistlib.load(f)
+            ok = cur.get("ProgramArguments") == _mac_args(py) and _same_path(cur.get("WorkingDirectory"), APP)
+        else:
+            df = _linux_desktop()
+            if not os.path.exists(df):
+                return "off"
+            with open(df, encoding="utf-8") as f:
+                ok = f.read() == _linux_entry(py)
+        if ok:
+            return "ok"
+        if osdeps.MAC:
+            _write_mac_plist(py, reload=False)  # launchd reads it at the next sign-in; reloading now would start a 2nd copy
+        else:
+            set_startup(True)
+        log(f"Start at sign-in pointed at an old location; updated it to {APP}")
+        return "fixed"
+    except Exception as e:  # never stop the server over this
+        log(f"Couldn't check the start-at-sign-in entry: {type(e).__name__}: {str(e)[:150]}")
+        return f"failed: {type(e).__name__}"
+
+
+def heal_overnight_job(log=print):
+    """Hook for an OS-level overnight job (Windows scheduled task / launchd / cron) created by this app. None exists
+    yet: the nightly update runs inside the server (server.scheduler). If one is added, check here on every start
+    that it points at APP and the current runtime, the same way heal_startup() does. Never touch the older
+    "Job Board server" / "Job Board wake for nightly update" scheduled tasks made by setup_windows.ps1."""
+    return "none"
+
+
+def heal_entries(log=print):
+    """Both self-heal checks; server start runs this in a background thread."""
+    return {"startup": heal_startup(log), "overnight": heal_overnight_job(log)}
 
 
 # ---------------------------------------------------------------- install Claude Code (background)
@@ -403,7 +504,7 @@ def restart_now():
     if osdeps.WINDOWS:
         flags = NOWIN | subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
     subprocess.Popen([py, "-X", "utf8", "-c", _WAITER, str(CTX["port"]), os.path.join(paths.data(), "server.log"),
-                      os.path.join(RUN_DIR, "server.pid"), *cmd], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                      paths.PID_FILE, *cmd], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, creationflags=flags, start_new_session=not osdeps.WINDOWS, cwd=APP)
 
 

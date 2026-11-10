@@ -146,9 +146,28 @@ def build_profile(text):
     prof["notes"] = ""
     return prof
 
+PROFILE_HASH_KEYS = ("summary", "experience", "reframings", "hard_limits", "target_roles", "notes", "clearances",
+                     "certifications", "skills")
+
+def _norm_ws(v):
+    """Same content -> same value: collapse runs of whitespace and trim, recursively (key order is handled by sort_keys)."""
+    if isinstance(v, str):
+        return " ".join(v.split())
+    if isinstance(v, list):
+        return [_norm_ws(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _norm_ws(x) for k, x in v.items()}
+    return v
+
 def profile_hash(prof):
-    keep = {k: prof.get(k) for k in ("summary", "experience", "reframings", "hard_limits", "target_roles", "notes",
-                                     "clearances", "certifications", "skills")}
+    """Key of this person's cached Claude ratings (saved as _hash when the profile is approved). Only the person's own
+    profile data goes in, never code or prompt text, so an app update can't change it."""
+    keep = {k: _norm_ws(prof.get(k)) for k in PROFILE_HASH_KEYS}
+    return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:12]
+
+def profile_hash_legacy(prof):
+    """profile_hash before whitespace was normalized; ratings stored under it are adopted by ai_score/pivot. Frozen."""
+    keep = {k: prof.get(k) for k in PROFILE_HASH_KEYS}
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:12]
 
 def ingest(path):

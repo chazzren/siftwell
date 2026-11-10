@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Server for the DMV Job Board: serves the report, runs refreshes on demand, stores marks and settings.
 Listens on the home network; every request needs the access key (cookie set by visiting /?k=KEY once),
-except requests from this Mac itself.   Usage: .venv/bin/python server.py [port]"""
+except requests from this computer itself.   Usage: python server.py [port] (normally started by "Start Siftwell")"""
 import base64, datetime as dt, hmac, json, os, re, secrets, subprocess, sys, threading
 import osdeps
 from http.cookies import SimpleCookie
@@ -483,6 +483,26 @@ def write_private(path, obj):
     with os.fdopen(fd, "w") as f:
         json.dump(obj, f)
 
+# ---- "Keep my current ratings": ratings made by older versions are marked as current (no Claude calls)
+ACCEPT = {}   # pid -> {running, result, error}
+def run_accept(pid):
+    import ai_score, pivot
+    res, err = None, None
+    try:
+        with joblock.hold("accept-ratings", timeout=600), jobs_file_lock:
+            people.set_current(pid)
+            res = {"board": ai_score.accept_current(pid), "target": None}
+            try:
+                if people.target_on(people.settings_strict(missing_ok=True)):
+                    res["target"] = pivot.accept_current(pid)
+            except paths.CacheUnreadable as e:
+                err = f"Board ratings done; Target ratings skipped ({str(e)[:100]})"
+        request_recompute([pid])
+    except Exception as e:
+        res, err = None, f"{type(e).__name__}: {str(e)[:200]}"
+    with lock:
+        ACCEPT[pid] = {"running": False, "result": res, "error": err}
+
 # ---- re-rating with the latest info: its own action, separate from fetching job listings
 RERATE = {}   # pid -> {running, done, total, lines, error, finished}
 def run_rerate(pid, n):
@@ -707,6 +727,10 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/rerate":
             with lock:
                 r = dict(RERATE.get(pid) or {"running": False})
+            return self._send(200, r)
+        if path == "/api/ratings/accept":
+            with lock:
+                r = dict(ACCEPT.get(pid) or {"running": False, "result": None, "error": None})
             return self._send(200, r)
         if path == "/api/desc":
             from urllib.parse import parse_qs
@@ -963,6 +987,13 @@ class H(BaseHTTPRequestHandler):
             n = people.prefs(pid).get("claude.per_update") or 300
             threading.Thread(target=run_rerate, args=(pid, int(n)), daemon=True).start()
             return self._send(202, {"ok": True, "n": n})
+        if path == "/api/ratings/accept":
+            with lock:
+                if (ACCEPT.get(pid) or {}).get("running"):
+                    return self._send(409, {"error": "Already working on it."})
+                ACCEPT[pid] = {"running": True, "result": None, "error": None}
+            threading.Thread(target=run_accept, args=(pid,), daemon=True).start()
+            return self._send(202, {"ok": True})
         if path == "/api/schedule":
             s = schedule()
             if "enabled" in body: s["enabled"] = bool(body["enabled"])
@@ -1180,6 +1211,8 @@ if __name__ == "__main__":
     print(f"Job Board on http://127.0.0.1:{PORT}" + (f"  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)" if BIND == "0.0.0.0" else "  (this computer only)"), flush=True)
     threading.Thread(target=scheduler, daemon=True).start()
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
+    # start-at-sign-in entry still pointing at an old app folder or runtime? rewrite it (see getting_started.heal_startup)
+    threading.Thread(target=getting_started.heal_entries, kwargs={"log": lambda m: print(m, flush=True)}, daemon=True).start()
     if _CATALOG_MIGRATED:
         request_recompute()  # first start on the catalog: rebuild every board from it
     srv.serve_forever()

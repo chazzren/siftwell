@@ -105,7 +105,7 @@ def save_prefs(new, pid=None):
     merged = {**prefs(pid), **clean_prefs(new)}
     s = settings(pid)
     s["prefs"] = merged
-    json.dump(s, open(pdir("settings.json", pid=pid), "w"), indent=1)
+    _write_settings(s, pid)
     return merged
 
 def target_on(s):
@@ -156,12 +156,34 @@ def settings(pid=None):
         pass
     return s
 
+def read_saved_strict(pid=None):
+    """The person's saved settings.json exactly as stored (no defaults). A missing file -> None; one that can't be read
+    or parsed (a save in progress, a damaged file) -> retried briefly, then paths.CacheUnreadable. Use it wherever a
+    cache key or fingerprint is derived from settings: never derive one from a failed read."""
+    d = paths.load_json_cache(pdir("settings.json", pid=pid))
+    if d is not None and not isinstance(d, dict):
+        raise paths.CacheUnreadable("settings.json is not a settings object; left it untouched.")
+    return d
+
+def settings_strict(pid=None, missing_ok=False):
+    """settings(), but an unreadable file raises paths.CacheUnreadable instead of silently giving defaults. A missing
+    file raises too unless missing_ok (a profile that never saved anything simply has the defaults)."""
+    d = read_saved_strict(pid)
+    if d is None:
+        if not missing_ok:
+            raise paths.CacheUnreadable("settings.json is missing; left it alone.")
+        d = {}
+    return {**DEFAULT_SETTINGS, **d}
+
+def _write_settings(s, pid=None):
+    paths.dump_json_atomic(pdir("settings.json", pid=pid), s, indent=1)
+
 def save_settings(new, pid=None):
     s = settings(pid)
     for k in DEFAULT_SETTINGS:
         if k in new:
             s[k] = new[k]
-    json.dump(s, open(pdir("settings.json", pid=pid), "w"), indent=1)
+    _write_settings(s, pid)
     return s
 
 def add(name):

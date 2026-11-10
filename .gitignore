@@ -26,5 +26,5 @@ desktop.ini
 .vscode/
 .idea/
 
-# Siftwell launcher's private runtime (uv, Python, package cache, port/pid files)
+# Older launchers kept their runtime (uv, Python, cache, port/pid) here; current ones use paths.RUNTIME and DATA
 .siftwell/

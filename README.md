@@ -48,7 +48,7 @@ Avoid your Downloads folder and OneDrive or iCloud-synced folders.
 - **Windows:** open the Siftwell folder and double-click **Start Siftwell** (`Start Siftwell.cmd`).
 - **Mac:** open the Siftwell folder, **right-click** (or Control-click) **Start Siftwell** (`Start Siftwell.command`) and choose **Open**.
 
-The first time, a window says *"Setting up Siftwell. This happens once and takes a couple of minutes..."* while it downloads what it needs (Python and a few packages) into a hidden `.siftwell` folder inside the Siftwell folder. You need to be connected to the internet for this. When it's done, your browser opens Siftwell, and on Windows the window closes by itself (on a Mac you can close the Terminal window; Siftwell keeps running).
+The first time, a window says *"Setting up Siftwell. This happens once and takes a couple of minutes..."* while it downloads what it needs (Python and a few packages) into a folder of its own on your computer, not into the Siftwell folder (Windows: `%LOCALAPPDATA%\Siftwell\runtime`; Mac: `~/Library/Application Support/Siftwell/runtime`). Newer versions of Siftwell you download later reuse it, so they start right away. You need to be connected to the internet for this. When it's done, your browser opens Siftwell, and on Windows the window closes by itself (on a Mac you can close the Terminal window; Siftwell keeps running).
 
 **One-time security prompts.** Siftwell isn't from an app store, so the first time your computer may ask whether you trust it:
 - **Windows** "Windows protected your PC": click **More info**, then **Run anyway**. If you see "Open File – Security Warning" instead, click **Run**. A "Windows Security" firewall window may also ask about Python: click **Allow** if you want to open Siftwell from your phone, otherwise **Cancel** (Siftwell still works on this computer either way).
@@ -79,7 +79,7 @@ Then run `claude` once and sign in, or use the **Sign in to Claude** button in S
 
 If you'd rather set things up yourself, you need [uv](https://docs.astral.sh/uv/) (it installs Python for you).
 
-**Windows** (PowerShell, in the Siftwell folder). The setup script installs everything into `.venv`, makes Siftwell start when you sign in to Windows, schedules the nightly update, starts it, and prints your links. Running it as administrator also lets phones on your home network connect.
+**Windows** (PowerShell, in the Siftwell folder). The setup script installs everything into a `.venv` folder inside the Siftwell folder (unlike Start Siftwell, so keep that folder when you update), makes Siftwell start when you sign in to Windows, schedules the nightly update, starts it, and prints your links. Running it as administrator also lets phones on your home network connect.
 ```powershell
 cd "$HOME\Documents\Siftwell"
 powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1
@@ -109,6 +109,7 @@ Coming soon: **Find employers near me**, where Claude researches employers in yo
 - **Starting and stopping:** double-click **Start Siftwell** any time to open it (if it's already running, it just opens your browser). Siftwell keeps running in the background after the window closes, so the board and the nightly update keep working. To stop it, double-click **Stop Siftwell**. After restarting your computer, double-click **Start Siftwell** again, or turn on **Start Siftwell when I sign in** on the Get started page.
 - **The board** shows your matching jobs with **Appeal** and **Match** scores. Click a job for Claude's read on it, then **Save**, **Mark applied**, **Not for me**, or **Tailor my resume**.
 - **Header icons:** Home · Update job listings (checks every company, ~40 min) · Re-rate (Claude re-scores your best jobs after you change your resume or settings) · Settings · your profile menu.
+- **Getting a newer version:** download it the same way (step 1), unzip it, and double-click **Start Siftwell** in the new folder (stop the old one first with **Stop Siftwell**). You can delete the old Siftwell folder whenever you like. Everything carries over: profiles, ratings, your port and your phone link, with nothing re-rated and no new setup download unless the new version needs different packages. If you turned on **Start Siftwell when I sign in** on the Get started page, it switches to the new folder by itself the first time the new version starts. If you set it up earlier with `setup_windows.ps1`, that sign-in task still points at the old folder: open the Get started page in the new folder and turn on **Start Siftwell when I sign in** there instead.
 - **Nightly update:** every morning at 5:30 Siftwell checks for new and removed jobs and rates the new ones. You can change or turn this off.
 - **On your phone:** new installs only answer on this computer. To use your phone, turn on **Use Siftwell on my phone** on the Get started page (Siftwell restarts once), then scan the QR code or open the link it shows (it ends in `?k=…`). Keep that link private: anyone on your home network with it can open your board. On Windows, click **Allow access** on the firewall prompt the first time.
 
@@ -118,19 +119,22 @@ Everything Siftwell creates or learns is stored only on your computer, outside t
 - **Windows:** `%APPDATA%\JobBoard`
 - **Mac:** `~/Library/Application Support/JobBoard`
 
-That includes resumes, profiles, settings, saved and applied jobs, tailored resumes, the companies and job listings it has found, and Claude's ratings. Downloading a newer version of Siftwell (or deleting the app folder and downloading it again) doesn't touch it, so you pick up where you left off without paying for the same ratings twice. Job descriptions and your resume are sent to Claude (and to ChatGPT if you turn on Astra) to rate and tailor; nothing is sent anywhere else.
+That includes resumes, profiles, settings, saved and applied jobs, tailored resumes, the companies and job listings it has found, Claude's ratings, your phone access key, logs, and which port Siftwell uses. The Siftwell folder itself only holds the app; Siftwell never saves anything into it. Python and the packages Siftwell runs on sit in a separate folder (Windows: `%LOCALAPPDATA%\Siftwell\runtime`; Mac: `~/Library/Application Support/Siftwell/runtime`), which can be rebuilt from the internet any time and holds none of your data.
+
+So you can delete the Siftwell folder and download the latest version (or move it) and pick up exactly where you left off. Claude's ratings are tied to your own information (resume, answers, goals and target), not to the app version, so a new version doesn't re-rate anything or spend your Claude plan on ratings you already have. They're only redone when you change your own information. Job descriptions and your resume are sent to Claude (and to ChatGPT if you turn on Astra) to rate and tailor; nothing is sent anywhere else.
 
 ## Good to know
 
-- **Claude usage:** ratings run on your Claude plan. Settings → Claude usage controls how many jobs get rated and how carefully. Large first-time ratings can take a while and use a noticeable share of your plan's limits.
+- **Claude usage:** ratings run on your Claude plan. Settings → Claude usage controls how many jobs get rated and how carefully. Large first-time ratings can take a while and use a noticeable share of your plan's limits. If a new version shows many ratings as needing a fresh rating even though you haven't changed your resume or answers, press **Keep my current ratings** on that page (two taps) to mark them as up to date instead of re-rating them; it doesn't use Claude.
 - **Job sites:** Siftwell reads the public job listings employers publish on their career sites, at a polite pace, for your personal job search. Use it responsibly and respect each site's terms.
 - **Not affiliated** with Anthropic, OpenAI, or any job-board provider.
 
 ## Troubleshooting
 
-- **The page won't load:** double-click **Start Siftwell** again; it starts Siftwell if needed and opens the right address. If it still fails, double-click **Stop Siftwell**, then **Start Siftwell**. Logs are in your data folder (`server.log`; on a Mac also `.siftwell/launcher.log` in the Siftwell folder).
-- **First-time setup failed:** check your internet connection and double-click **Start Siftwell** again; it picks up where it left off. Details are in `.siftwell/setup.log` inside the Siftwell folder. Deleting the hidden `.siftwell` and `.venv` folders makes it set up from scratch (your data isn't touched).
-- **I moved the Siftwell folder:** that's fine; the next **Start Siftwell** repairs its setup. Stop Siftwell before moving it.
+- **The page won't load:** double-click **Start Siftwell** again; it starts Siftwell if needed and opens the right address. If it still fails, double-click **Stop Siftwell**, then **Start Siftwell**. Logs are in your data folder: `server.log`, plus `start-error.log` on Windows if Siftwell stopped right after starting, and `launcher.log` on a Mac.
+- **First-time setup failed:** check your internet connection and double-click **Start Siftwell** again; it picks up where it left off. Details are in `setup.log` in the runtime folder (Windows: `%LOCALAPPDATA%\Siftwell\runtime`; Mac: `~/Library/Application Support/Siftwell/runtime`). Deleting that runtime folder makes it set up from scratch (your data isn't touched).
+- **Hidden `.siftwell` or `.venv` folder inside the Siftwell folder:** older versions put the setup there. This version doesn't use them (an old `.venv` is only a fallback if the new setup can't finish) and remembers your port from `.siftwell` automatically. After Siftwell has started once with this version you can delete `.siftwell`, and `.venv` too unless you used the Windows setup script from **Advanced / manual install**, which still runs Siftwell from `.venv`.
+- **I moved the Siftwell folder:** that's fine; stop Siftwell first, then double-click **Start Siftwell** in the new place. If **Start Siftwell when I sign in** is on, Siftwell points it at the new place the next time it starts.
 - **"Claude Code is signed out":** click **Sign in to Claude** on the board, open the link, sign in, and paste the code back.
 - **Another program is using port 8766:** Start Siftwell picks the next free port (8767 to 8775) by itself and remembers it; the Get started page shows which port Siftwell is using. Phone links need that port too.
 - **My phone can't connect:** check **Use Siftwell on my phone** is on (Get started page), the phone is on the same Wi-Fi, and Windows Firewall allowed Siftwell (Start menu → "Allow an app through Windows Firewall").

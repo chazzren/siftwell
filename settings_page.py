@@ -132,6 +132,13 @@ def _render_parts():
         else:
             body = "".join(_group(t, f, [_row(f'<label for="{c_id}">{e(lbl)}</label>', hlp, ctl) for c_id, lbl, hlp, ctl in map(_control, rows)])
                            for t, f, rows in groups)
+            if cid == "claude":
+                body += _group("Ratings from older versions", "", [
+                    _row("<span>Keep my current ratings</span>",
+                         "Marks ratings made by older versions of Siftwell as up to date, so they aren't re-rated. "
+                         "Use this if you haven't changed your resume or answers since.",
+                         '<button class="btn sm" type="button" id="keepBtn">Keep my current ratings</button>'),
+                    '<div class="srow"><span class="note" id="keepMsg" role="status" aria-live="polite"></span></div>'])
             body += ('<div class="sreset"><button class="btn ghost sm" type="button" data-reset>Restore all defaults</button>'
                      '<span class="note" data-resetmsg></span></div>')
         panes.append(f'<section class="spane" data-cat="{cid}" aria-labelledby="h-{cid}" hidden>{_pane_head(cid, name)}{body}</section>')
@@ -302,6 +309,42 @@ document.querySelectorAll("[data-reset]").forEach(b => {
     post({reset: true}, b).then(() => { if (!b.closest(".spane").querySelector(".ssave.err")) saveState(b, "Defaults restored"); });
   });
 });
+
+// ---- Keep my current ratings: first tap arms, second tap (within 5 s) runs it; counts are shown afterwards
+(() => {
+  const b = $("keepBtn"), msg = $("keepMsg"); if (!b) return;
+  let t = null, busy = false;
+  const label = "Keep my current ratings";
+  const disarm = () => { b.dataset.armed = ""; b.textContent = label; };
+  const n = x => (x || 0).toLocaleString();
+  const show = s => {
+    if (s.error && !s.result) { msg.textContent = "Couldn't do that: " + s.error; return; }
+    const r = s.result || {}, bd = r.board || {};
+    const st = Object.values(bd).reduce((a, c) => a + (c.stamped || 0), 0);
+    const left = Object.values(bd).reduce((a, c) => a + (c.left_alone || 0) + (c.dirty || 0), 0);
+    let txt = `Marked ${n(st)} board rating${st === 1 ? "" : "s"} as up to date` + (left ? ` (${n(left)} left to re-rate because your info changed)` : "");
+    if (r.target) txt += `; Target tab: ${n(r.target.stamped)} marked` + (r.target.left_alone ? `, ${n(r.target.left_alone)} left` : "");
+    msg.textContent = txt + "." + (s.error ? " " + s.error + "." : "");
+  };
+  const poll = () => fetch("/api/ratings/accept").then(r => r.json()).then(s => {
+    if (s.running) { setTimeout(poll, 1500); return; }
+    busy = false; b.disabled = false; disarm(); if (s.result || s.error) show(s);
+  }).catch(() => { busy = false; b.disabled = false; msg.textContent = "Couldn't check. Check the connection."; });
+  b.addEventListener("click", () => {
+    if (busy) return;
+    if (b.dataset.armed !== "1") {
+      b.dataset.armed = "1"; b.textContent = "Tap again to confirm";
+      msg.textContent = "This changes nothing else and doesn't use Claude.";
+      clearTimeout(t); t = setTimeout(() => { disarm(); msg.textContent = ""; }, 5000); return;
+    }
+    clearTimeout(t); disarm(); busy = true; b.disabled = true; msg.textContent = "Working…";
+    fetch("/api/ratings/accept", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+      if (!ok) throw new Error(d.error || "Couldn't start.");
+      poll();
+    }).catch(err => { busy = false; b.disabled = false; msg.textContent = err instanceof TypeError ? "Couldn't do that. Check the connection." : err.message; });
+  });
+  fetch("/api/ratings/accept").then(r => r.json()).then(s => { if (s.running) { busy = true; b.disabled = true; msg.textContent = "Working…"; poll(); } }).catch(() => {});
+})();
 
 // ---- optional Anthropic API key
 const keyState = () => fetch("/api/settings").then(r => r.json()).then(s => {

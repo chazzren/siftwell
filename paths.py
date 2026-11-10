@@ -8,6 +8,13 @@ DATA    the person's own data, kept OUTSIDE the app folder so the app can be rep
           macOS    ~/Library/Application Support/JobBoard
           Linux    $XDG_DATA_HOME/jobboard (default ~/.local/share/jobboard)
         Set JOBBOARD_DATA to use another folder (tests, portable installs).
+        Also holds the launcher's state: DATA/port (chosen port) and DATA/server.pid.
+RUNTIME the launcher's Python runtime (uv, Python, packages, virtualenv), per machine and also outside the app folder:
+          Windows  %LOCALAPPDATA%\\Siftwell\\runtime
+          macOS    ~/Library/Application Support/Siftwell/runtime
+          Linux    $XDG_CACHE_HOME/siftwell/runtime (default ~/.cache/siftwell/runtime)
+        Set SIFTWELL_RUNTIME to use another folder (tests).
+Nothing at run time writes into APP, so the app folder can be deleted and replaced by a new download at any time.
 
 On first start after an upgrade, an old in-app data/ folder (plus the root companies.json and config.json) is copied
 into DATA and the old folder is renamed data.migrated-<date>. See migrate()."""
@@ -34,12 +41,69 @@ def _data_dir():
     return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "jobboard")
 
 
+def _runtime_dir():
+    """Per-machine folder for the launcher's Python runtime (uv, managed Python, package cache, virtualenv). It can be
+    rebuilt from the internet at any time, so it is not user data, but keeping it outside the app folder means a freshly
+    downloaded app folder starts at once. Must match tools/launcher.ps1 and Start Siftwell.command."""
+    env = os.environ.get("SIFTWELL_RUNTIME")
+    if env:
+        return os.path.abspath(os.path.expanduser(env))
+    if sys.platform == "win32":
+        return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser(r"~\AppData\Local"), "Siftwell", "runtime")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support/Siftwell/runtime")
+    return os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "siftwell", "runtime")
+
+
 DATA = _data_dir()
+RUNTIME = _runtime_dir()
 COMPANIES = os.path.join(DATA, "companies.json")   # this household's working company list (company_add.py writes it)
 CONFIG = os.path.join(DATA, "config.json")         # overrides merged over config.default.json
 SECRETS = os.path.join(DATA, "secrets.json")
 ACCESS_KEY = os.path.join(DATA, "access_key")
 MIGRATION_LOG = os.path.join(DATA, "migration.log")
+PORT_FILE = os.path.join(DATA, "port")             # the port the launcher picked (plain number); the launchers read it too
+PID_FILE = os.path.join(DATA, "server.pid")        # pid of the running server
+LEGACY_RUN_DIR = os.path.join(APP, ".siftwell")    # older launchers kept port/pid here; read once, never written
+
+
+def runtime_python(windowed=False):
+    """The launcher's virtualenv interpreter in RUNTIME, or None when it hasn't been set up on this machine."""
+    venv = os.path.join(RUNTIME, "venv")
+    if sys.platform == "win32":
+        p = os.path.join(venv, "Scripts", "pythonw.exe" if windowed else "python.exe")
+    else:
+        p = os.path.join(venv, "bin", "python")
+    return p if os.path.exists(p) else None
+
+
+def legacy_python(windowed=False):
+    """An older install's <app>/.venv interpreter (still used by the "Job Board server" scheduled task), or None."""
+    if sys.platform == "win32":
+        p = os.path.join(APP, ".venv", "Scripts", "pythonw.exe" if windowed else "python.exe")
+    else:
+        p = os.path.join(APP, ".venv", "bin", "python")
+    return p if os.path.exists(p) else None
+
+
+def read_port(default=8766):
+    """The remembered port: DATA/port, else an older launcher's <app>/.siftwell/port (copied into DATA once), else default."""
+    for f in (PORT_FILE, os.path.join(LEGACY_RUN_DIR, "port")):
+        try:
+            p = int(open(f).read().strip())
+        except (OSError, ValueError):
+            continue
+        if not 1024 <= p <= 65535:
+            continue
+        if f != PORT_FILE:
+            try:
+                os.makedirs(DATA, exist_ok=True)
+                with open(PORT_FILE, "w") as fh:
+                    fh.write(str(p))
+            except OSError:
+                pass
+        return p
+    return default
 
 
 def data(*parts):

@@ -2,14 +2,22 @@
 
 Two numbers per job: now_fit (a realistic shot today, with honest tailoring) and later_fit (after the
 3-4 month build plan). Gap tags come from a fixed list so the board can total them into a portfolio plan.
-Runs on the Claude subscription via the Claude Code CLI. Cache: data/pivot_scores.json keyed by profile."""
+Runs on the Claude subscription via the Claude Code CLI. Cache: DATA/pivot_scores.json keyed by profile and target:
+{"_rating_format": 1, "v2:<profile key>:<target key>": {job_id: rating}}. Each rating carries fp (fingerprint of the
+person's data) and fmt. Like ai_score, nothing code-side (prompt, model, schema) goes into keys or fingerprints."""
 import concurrent.futures as cf, json, os, re, threading, time
 
 import claude_cli
 
 import paths
 CACHE = paths.data("pivot_scores.json")
+# Key prefix of every stored Target rating. It is a frozen part of the cache key, not a version: never change it
+# (changing it would orphan every stored rating). To invalidate ratings on purpose, bump RATING_FORMAT instead.
 VERSION = "v2"
+# Bump (1 -> 2) ONLY to deliberately invalidate every stored Target rating. That makes every user re-rate, which costs
+# them Claude tokens and plan limits, so it must be a conscious decision and announced in the release notes.
+RATING_FORMAT = 1
+FORMAT_KEY = "_rating_format"
 _lock = threading.Lock()
 
 SCHEMA = {
@@ -45,10 +53,72 @@ def system_for(st):
                               floor=int(st.get("salary_floor") or 0), prep=st.get("prep_text") or "(not specified)")
 
 def target_key(st):
+    """Key of the person's target settings: their own words (whitespace-normalized), scope and pay floor. Pass the
+    person's saved settings file (not merged with code defaults), so a changed default can't re-key anything."""
     import hashlib
-    h = hashlib.sha256(json.dumps([st.get("target_text"), st.get("prep_text"), st.get("target_scope"),
-                                   st.get("salary_floor")]).encode()).hexdigest()[:10]
-    return h
+    def w(v):
+        return " ".join(v.split()) if isinstance(v, str) else v
+    return hashlib.sha256(json.dumps([w(st.get("target_text")), w(st.get("prep_text")), st.get("target_scope"),
+                                      st.get("salary_floor")]).encode()).hexdigest()[:10]
+
+def target_key_legacy(st):
+    """target_key as older versions computed it (raw text, settings merged with defaults). Frozen: only used to adopt
+    ratings stored under it."""
+    import hashlib
+    return hashlib.sha256(json.dumps([st.get("target_text"), st.get("prep_text"), st.get("target_scope"),
+                                      st.get("salary_floor")]).encode()).hexdigest()[:10]
+
+def cache_keys(f, st, saved=None):
+    """(key, older keys of the same person and target) for pivot_scores.json.
+    st: the person's settings merged with defaults, from a read that succeeded (people.settings_strict), never {}.
+    The key is target_key(st): for every settings file that holds the four target fields it equals the key stored
+    from the raw file. saved: that raw file (or None); if a field was missing from it, the key older versions stored
+    (computed from the raw file, so None for the missing field) is adopted, as are the all-None key (a failed read
+    once produced it) and the all-defaults key."""
+    import people
+    tk = target_key(st)
+    key = f"{VERSION}:{f['phash']}:{tk}"
+    tks = [target_key(saved or {}), target_key({}), target_key(people.DEFAULT_SETTINGS), target_key_legacy(st)]
+    old = []
+    for ph in [f["phash"], *f["phash_old"]]:
+        for t in tks:
+            k = f"{VERSION}:{ph}:{t}"
+            if k != key and k not in old:
+                old.append(k)
+    return key, old
+
+def accept_current(pid):
+    """"Keep my current ratings" for the Target tab: stamp this person's Target ratings that have no fingerprint
+    (made by older versions) with their current one so they aren't re-rated. Ratings with a fingerprint that differs
+    from today's were made from different data and are left alone. Nothing calls Claude.
+    Returns {"stamped": n, "already_current": n, "left_alone": n}."""
+    import ai_score, people
+    people.set_current(pid)
+    saved, st = people.read_saved_strict(), people.settings_strict()
+    f = ai_score.fingerprints()
+    key, old_keys = cache_keys(f, st, saved)
+    counts = {"stamped": 0, "already_current": 0, "left_alone": 0}
+    with _lock:
+        allc = load_cache()
+        allc.setdefault(FORMAT_KEY, 1)
+        ai_score.adopt(allc, key, old_keys)
+        for r in (allc.get(key) or {}).values():
+            if not isinstance(r, dict):
+                continue
+            if fresh(r, f):
+                counts["already_current"] += 1
+            elif "fp" not in r:
+                r["fp"], r["fmt"] = f["pfp"], RATING_FORMAT
+                counts["stamped"] += 1
+            else:
+                counts["left_alone"] += 1
+        if counts["stamped"]:
+            paths.dump_json_atomic(CACHE, allc)
+    return counts
+
+def fresh(r, f):
+    """Rating made from the same data under the current RATING_FORMAT (accepts the fingerprint older versions stored)."""
+    return bool(r) and r.get("fmt", 1) == RATING_FORMAT and r.get("fp") in (f["pfp"], f["pfp_old"])
 
 def _job_text(j):
     sal = f'${j["salary_min"]:,}-${j["salary_max"]:,}' if j.get("salary_max") else "not listed"
@@ -110,17 +180,27 @@ def score_jobs(jobs, cfg, log=print):
     """jobs: the AI-track jobs (with desc). Scores uncached ones, applies cache to all. Returns a status string."""
     import ai_score
     import people
-    profile, phash = ai_score.current_profile()
-    st = people.settings()
-    key = f"{VERSION}:{phash}:{target_key(st)}"
+    profile, _ = ai_score.current_profile()
+    try:
+        saved = people.read_saved_strict()
+        st = people.settings_strict()
+    except paths.CacheUnreadable as e:
+        # Never derive a cache key from a failed or partial read: that would file (or look up) ratings under a junk key
+        # and could re-rate hundreds of jobs. Nothing is rated, applied or written this time.
+        log(f"Target rating skipped: the profile's settings can't be read right now ({str(e)[:120]}).")
+        return "settings_unreadable"
+    f = ai_score.fingerprints()
+    key, old_keys = cache_keys(f, st, saved)
     system = system_for(st)
     allc = load_cache()
+    allc.setdefault(FORMAT_KEY, 1)  # caches written before the stamp existed were all format 1
+    ai_score.adopt(allc, key, old_keys)
     cache = allc.setdefault(key, {})
     for k in list(allc):
-        if not k.startswith(VERSION + ":"):
-            allc.pop(k)  # drop scores from older prompt versions; each person's profile+target keeps its own
-    fp = ai_score.info_fp(profile)
-    need = (lambda j: j["id"] not in cache or cache[j["id"]].get("fp") != fp) if cfg.get("refresh_stale") else (lambda j: j["id"] not in cache)
+        if re.match(r"v1:", k):
+            allc.pop(k)  # v1-era scores (an old prompt layout, long gone); v2 keys are never dropped by code
+    fp = f["pfp"]
+    need = (lambda j: not fresh(cache.get(j["id"]), f)) if cfg.get("refresh_stale") else (lambda j: j["id"] not in cache)
     todo = sorted((j for j in jobs if need(j)), key=lambda j: -priority(j, st))[: max(0, cfg.get("max_new_per_run", 300))]
     status = "ok"
     if todo and not claude_cli.logged_in():
@@ -137,7 +217,7 @@ def score_jobs(jobs, cfg, log=print):
                 try:
                     res = f.result()
                     for v in res.values():
-                        v["fp"] = fp
+                        v["fp"], v["fmt"] = fp, RATING_FORMAT
                     with _lock:
                         cache.update(res)
                 except claude_cli.CLIAuthError:
@@ -156,6 +236,6 @@ def score_jobs(jobs, cfg, log=print):
     for j in jobs:
         if j["id"] in cache:
             apply(j, cache[j["id"]])
-            j["pv_stale"] = cache[j["id"]].get("fp") != fp
+            j["pv_stale"] = not fresh(cache[j["id"]], f)
         combine(j)
     return status

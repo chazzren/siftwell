@@ -11,6 +11,23 @@ class CLIAuthError(Exception):
 class CLIError(Exception):
     pass
 
+class ClaudeForbidden(RuntimeError):
+    """Raised instead of calling Claude while SIFTWELL_FORBID_CLAUDE=1 (tests that must not spend the user's plan)."""
+
+FORBID_LOG = "forbidden_claude_calls.log"  # in DATA: one line per blocked call, so a test can count them
+
+def forbid_check(what):
+    """Call right before any request that spends Claude tokens (CLI `-p` or the API). With SIFTWELL_FORBID_CLAUDE=1 set,
+    records the attempt in DATA/forbidden_claude_calls.log and raises ClaudeForbidden instead."""
+    if os.environ.get("SIFTWELL_FORBID_CLAUDE") == "1":
+        import datetime
+        try:
+            with open(paths.data(FORBID_LOG), "a", encoding="utf-8") as f:
+                f.write(f"{datetime.datetime.now().isoformat(timespec='seconds')}  {what}\n")
+        except OSError:
+            pass
+        raise ClaudeForbidden(f"Claude call blocked by SIFTWELL_FORBID_CLAUDE: {what}")
+
 def path():
     return osdeps.find_exe("claude")
 
@@ -27,6 +44,7 @@ def logged_in():
 def run_json(system, prompt, schema, model="claude-opus-5-5", effort="low", read_dir=None, timeout=600):
     """Run one headless Claude turn that must return JSON matching `schema`.
     read_dir: if set, Claude may use the Read tool inside that directory (for PDFs / images)."""
+    forbid_check(f"claude_cli.run_json model={model}")
     p = path()
     if not p:
         raise CLIError("Claude Code is not installed")

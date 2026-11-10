@@ -62,7 +62,7 @@ def current_profile():
     except Exception:
         pass
     if prof:
-        return resume.profile_text(prof, goals), prof.get("_hash") or resume.profile_hash(prof)
+        return resume.profile_text(prof, goals), profile_keys(prof)[0]
     return "", "no_profile"  # callers check for a profile first
 
 _lock = threading.Lock()
@@ -90,6 +90,8 @@ def cli_logged_in(path):
         return False
 
 def _score_batch_cli(path, cfg, profile, batch):
+    import claude_cli as _cc
+    _cc.forbid_check(f"ai_score CLI {cfg['model']} x{len(batch)}")
     work = paths.data("claude_work")  # empty dir so no project files/CLAUDE.md are picked up
     os.makedirs(work, exist_ok=True)
     msg = "Score these postings. Return one result per job id.\n\n" + "\n\n".join(_job_text(j) for j in batch)
@@ -112,11 +114,13 @@ def _score_batch_cli(path, cfg, profile, batch):
     return {x["id"]: _parse(x) for x in data.get("results", [])}
 
 def load_all():
-    """Cache: {"v": 3, "by_profile": {phash: {job_id: {"haiku": r, "sonnet": r, "opus": r}}}}.
-    Each rating r carries fp (core info fingerprint), hl (highlights fingerprint) and facts (answer ids it knew)."""
+    """Cache: {"v": 3, "rating_format": 1, "by_profile": {phash: {job_id: {"haiku": r, "sonnet": r, "opus": r}}}}.
+    Each rating r carries fp (core info fingerprint), hl (highlights fingerprint), facts (answer ids it knew) and fmt
+    (RATING_FORMAT it was made under; missing = 1). "v" is the file layout, not a reason to re-rate."""
     d = paths.load_json_cache(CACHE)  # missing -> None; unreadable -> CacheUnreadable (never treated as empty)
     if not isinstance(d, dict) or "by_profile" not in d:
-        return {"v": 3, "by_profile": {}}
+        return {"v": 3, "rating_format": RATING_FORMAT, "by_profile": {}}
+    d.setdefault("rating_format", 1)  # caches written before the stamp existed were all format 1
     if d.get("v") != 3:  # older single-rating format: those ratings were all made by Opus
         for ph, jobs in d["by_profile"].items():
             for jid, r in list(jobs.items()):
@@ -133,6 +137,8 @@ def _job_text(j):
             f'Description:\n{(j.get("desc") or j.get("snippet") or "")[:3000]}\n</job>')
 
 def _score_batch(client, cfg, profile, batch):
+    import claude_cli as _cc
+    _cc.forbid_check(f"ai_score API {cfg['model']} x{len(batch)}")
     import anthropic
     msg = "Score these postings. Return one result per job id.\n\n" + "\n\n".join(_job_text(j) for j in batch)
     resp = client.messages.create(
@@ -150,11 +156,6 @@ def _score_batch(client, cfg, profile, batch):
         out[r["id"]] = _parse(r)
     return out
 
-def info_fp(profile_text):
-    """Fingerprint of a block of candidate info."""
-    import hashlib
-    return hashlib.sha1(profile_text.encode()).hexdigest()[:12]
-
 TIERS = ["haiku", "sonnet", "opus"]
 MODELS = {"haiku": "claude-haiku-5-5", "sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5"}
 TIER_RUN = {"haiku": {"batch_size": 25, "cli_concurrency": 6, "concurrency": 8},
@@ -163,26 +164,247 @@ TIER_RUN = {"haiku": {"batch_size": 25, "cli_concurrency": 6, "concurrency": 8},
 STOP = set("""a an and are as at be by for from has have in into is it of on or that the their this to was with will you your
 experience years year skills ability knowledge working work strong including able using use etc""".split())
 
-def info():
-    """What Claude is told about the candidate, split so small changes can be handled cheaply:
-    core (resume, reframings, goals) -> fp; confirmed highlights line -> hl; answers -> facts [(id, keywords)]."""
-    text, phash = current_profile()
-    facts, ft = [], ""
-    try:
-        import interview
-        ft = interview.facts_text() or ""
-        for f in interview.load_facts():
-            words = [w for w in __import__("re").findall(r"[a-z0-9+#./-]{3,}", (f.get("requirement") or "").lower()) if w not in STOP]
-            facts.append((f.get("id"), words))
-    except Exception:
-        pass
-    lines = text.split("\n")
-    hl_line = next((l for l in lines if l.startswith("Confirmed by the candidate:")), "")
-    core = "\n".join(l for l in lines if l != hl_line)
+# ---------------------------------------------------------------- rating fingerprints
+# A cached rating is shown as current when the fingerprints stored with it equal the ones computed now. They MUST only
+# depend on the person's own data (resume profile, notes, answers, highlights, goals, target settings), never on code:
+# no prompt or system text, model names, schemas, constants or wording of the text sent to Claude. That way installing
+# a new release never makes existing ratings missing or stale, so nobody pays for the same ratings twice.
+#
+# RATING_FORMAT is the ONLY code-side switch. Bump it (1 -> 2) solely to deliberately invalidate every stored rating,
+# e.g. when the scale itself changes meaning. Doing so makes every user re-rate their jobs, which costs them Claude
+# tokens and plan limits, so it must be a conscious decision and announced in the release notes.
+RATING_FORMAT = 1
+
+
+def info_fp(text):
+    """Fingerprint of a block of text (12 hex chars of SHA-1)."""
+    import hashlib
+    return hashlib.sha1(text.encode()).hexdigest()[:12]
+
+
+def _ws(s):
+    return " ".join(str(s or "").split())
+
+
+def user_goals():
+    """The person's own goals text: their profile's goals, else the household config's (DATA/config.json). Shipped
+    defaults (config.default.json) are code, so they're left out on purpose."""
+    cfg = paths.load_json_cache(paths.CONFIG)  # missing -> None; unreadable -> CacheUnreadable (after a short retry)
+    goals = (cfg.get("goals") if isinstance(cfg, dict) else None) or ""
+    import people
+    if people.current():
+        # missing file = no goals of their own; an unreadable one raises (never a silently different fingerprint)
+        goals = people.settings_strict(missing_ok=True).get("goals") or goals
+    return goals
+
+
+# The renderers below are a FROZEN hashing format, not a prompt. They reproduce, byte for byte, the candidate text the
+# app sent Claude when rating format 1 was introduced, so ratings stored before this change keep matching. Never edit
+# them to follow prompt changes (edit resume.profile_text / interview.facts_text instead, which are free to change).
+_LEVELS_V1 = {"yes": "Yes", "some": "Some / a little", "no": "No"}
+
+
+def _fp_core_lines(prof):
+    lines = [f"CANDIDATE PROFILE ({prof.get('location','')}, ~{prof.get('years_experience','?')} years experience)",
+             "", "Summary: " + prof.get("summary", ""), ""]
+    for label, key in (("Clearances", "clearances"), ("Education", "education"), ("Certifications", "certifications"),
+                       ("Skills", "skills"), ("Languages", "languages")):
+        if prof.get(key):
+            lines.append(f"{label}: " + "; ".join(prof[key]))
+    lines += ["", "Experience:"]
+    for e in prof.get("experience", []):
+        lines.append(f"- {e['title']}, {e['employer']} ({e['dates']})")
+        lines += [f"    * {h}" for h in e.get("highlights", [])]
+    lines += ["", "Honest reframings this candidate can use when tailoring:"]
+    for r in prof.get("reframings", []):
+        lines.append(f"- {r['angle']} (opens: {', '.join(r['target_titles'])}; evidence: {' / '.join(r['evidence'])})")
+    lines += ["", "Hard limits (must never be claimed): " + "; ".join(prof.get("hard_limits", []))]
+    if prof.get("notes"):
+        lines += ["", "Additional facts confirmed by the candidate (not on the resume): " + prof["notes"]]
+    return lines
+
+
+def _fp_facts_text(facts):
+    have = [f for f in facts if f.get("level") != "no"]
+    lack = [f for f in facts if f.get("level") == "no"]
+    lines = []
+    if have:
+        lines.append("Facts the candidate confirmed in Q&A (not on the resume). Each has a polished statement to work from and the "
+                     "candidate's raw note for nuance. Treat raw notes as facts, never as copy: write resume text in professional "
+                     "language. Use facts only as strongly as stated: 'Some / a little' means familiarity or limited use, never "
+                     "expertise; never add numbers, dates, tools or outcomes the answer doesn't contain.")
+        for f in have:
+            body = f.get("polished") or f.get("answer") or "(no details given)"
+            raw = f" (raw note: {f['answer']})" if f.get("polished") and f.get("answer") else ""
+            lines.append(f"- {f.get('requirement')} [{_LEVELS_V1.get(f.get('level'), '')}]: {body}{raw}")
+    if lack:
+        lines.append("The candidate confirmed they do NOT have (never claim): " + "; ".join(f.get("requirement") or "" for f in lack))
+    return "\n".join(lines)
+
+
+def _fp_hl_line(h):
+    if not h:
+        return ""
+    degs = "; ".join(f"{d.get('level','')} {('in ' + d['field']) if d.get('field') else ''}".strip() for d in h.get("degrees") or [])
+    lic = "; ".join(l.get("name", "") for l in h.get("licenses") or [])
+    m = h.get("management") or {}
+    return ("Confirmed by the candidate: degrees: " + (degs or "none") + "; licenses/certifications: " + (lic or "none")
+            + (f"; years of experience: {h['years_experience']}" if h.get("years_experience") is not None else "")
+            + (f"; currently manages {m['direct_reports']} direct report(s)" if m.get("direct_reports") is not None else ""))
+
+
+def _person_facts():
+    """The person's confirmed answers. No file -> []. A file that exists but can't be read -> retried briefly, then
+    paths.CacheUnreadable (a silently different fingerprint would re-rate everything)."""
+    import interview
+    d = paths.load_json_cache(interview.FACTS())
+    return d if isinstance(d, list) else []
+
+
+def _person_highlights():
+    import highlights, people
+    raw = paths.load_json_cache(highlights.path(people.current()))
+    if not isinstance(raw, dict) or (raw.get("extracted") is None and not raw.get("edits")):
+        return None
+    return highlights.merged(raw)
+
+
+def profile_keys(prof):
+    """(key, older keys) for the person's rating caches: the approved profile's stored _hash (or its data hash), plus
+    the pre-normalization hash so ratings stored under it are adopted rather than lost."""
+    import resume
+    key = prof.get("_hash") or resume.profile_hash(prof)
+    old = [] if prof.get("_hash") else [h for h in {resume.profile_hash_legacy(prof)} if h != key]
+    return key, old
+
+
+def adopt(by_key, key, old_keys):
+    """Move ratings stored under older keys of the same profile to its current key (never across people). Only when the
+    current key is missing or empty; every matching old key is merged in (the newest rating wins a conflict)."""
+    if by_key.get(key):
+        return False
+    moved = False
+    for k in old_keys:
+        if k == key or k not in by_key:
+            continue
+        old = by_key.pop(k)
+        cur = by_key.get(key)
+        if not cur:
+            by_key[key] = old
+        elif isinstance(cur, dict) and isinstance(old, dict):
+            for jid, r in old.items():
+                if jid not in cur:
+                    cur[jid] = r
+                elif isinstance(r, dict) and isinstance(cur[jid], dict):
+                    # same job rated under both: keep the newest rating (per tier for Match ratings)
+                    if "at" in r or "at" in cur[jid]:
+                        if str(r.get("at") or "") > str(cur[jid].get("at") or ""):
+                            cur[jid] = r
+                    else:
+                        for tier, rr in r.items():
+                            ct = cur[jid].get(tier)
+                            if not ct or (isinstance(rr, dict) and isinstance(ct, dict)
+                                          and str(rr.get("at") or "") > str(ct.get("at") or "")):
+                                cur[jid][tier] = rr
+        moved = True
+    return moved
+
+
+def accept_current(pid):
+    """"Keep my current ratings": mark this person's ratings made by older versions of the app (no fingerprint, or made
+    before highlights were fingerprinted, so no hl) as made from their current data, so they aren't re-rated. Ratings
+    that carry a current-scheme fingerprint (fp and hl) that differs from today's are left alone: they were made from
+    different data. Ratings marked dirty are left alone too. Only this person's cache entry is touched; nothing calls
+    Claude. Returns {tier: {"stamped": n, "already_current": n, "left_alone": n, "dirty": n}}."""
+    import people
+    people.set_current(pid)
+    inf = info()
+    counts = {t: {"stamped": 0, "already_current": 0, "left_alone": 0, "dirty": 0} for t in TIERS}
+    with _lock:
+        allc = load_all()
+        adopt(allc["by_profile"], inf["phash"], inf["phash_old"])
+        entry = allc["by_profile"].get(inf["phash"]) or {}
+        for e in entry.values():
+            for t, r in e.items():
+                c = counts.setdefault(t, {"stamped": 0, "already_current": 0, "left_alone": 0, "dirty": 0})
+                if not isinstance(r, dict):
+                    continue
+                if r.get("dirty"):
+                    c["dirty"] += 1
+                elif fp_ok(r, inf) and "hl" in r:
+                    c["already_current"] += 1
+                elif "fp" not in r or "hl" not in r:
+                    stamp(r, inf)
+                    c["stamped"] += 1
+                else:
+                    c["left_alone"] += 1
+        if any(c["stamped"] for c in counts.values()):
+            paths.dump_json_atomic(CACHE, allc)
+    return counts
+
+
+def fingerprints(prof=None):
+    """Everything that decides whether a stored rating is current. Data only (see the note above RATING_FORMAT).
+      phash / phash_old  cache key (+ older keys to adopt)
+      fp                 core info: resume profile, notes, goals (whitespace-normalized)
+      hl / hl_old        the confirmed-highlights line (normalized / as stored by older versions)
+      pfp / pfp_old      Target tab: core + answers + highlights + goals (normalized / as stored by older versions)
+      facts              [(answer id, its keywords)] for the cheap 'maybe' re-check"""
+    import re
+    if prof is None:
+        import resume
+        prof = resume.load_active()
+    if not prof:
+        e = info_fp("")
+        return {"phash": "no_profile", "phash_old": [], "fp": e, "hl": e, "hl_old": e, "pfp": e, "pfp_old": e, "facts": []}
+    goals = user_goals()
+    facts = _person_facts()
+    core = _fp_core_lines(prof)
+    hl_line = _fp_hl_line(_person_highlights())
+    full = list(core)
+    ft = _fp_facts_text(facts)
     if ft:
-        core = core.replace(ft, "")
-    core = " ".join(core.split())  # removing the answers block leaves blank lines behind; don't let that count
-    return {"text": text, "phash": phash, "fp": info_fp(core), "hl": info_fp(hl_line), "facts": facts}
+        full += ["", ft]
+    if hl_line:
+        full += ["", hl_line]
+    if goals:
+        core += ["", goals]
+        full += ["", goals]
+    full_text = "\n".join(full)
+    phash, old = profile_keys(prof)
+    kw = []
+    for f in facts:
+        words = [w for w in re.findall(r"[a-z0-9+#./-]{3,}", (f.get("requirement") or "").lower()) if w not in STOP]
+        kw.append((f.get("id"), words))
+    return {"phash": phash, "phash_old": old, "fp": info_fp(_ws("\n".join(core))),
+            "hl": info_fp(_ws(hl_line)), "hl_old": info_fp(hl_line),
+            "pfp": info_fp(_ws(full_text)), "pfp_old": info_fp(full_text), "facts": kw}
+
+
+def info():
+    """What Claude is told about the candidate (text: the prompt, free to change) plus the fingerprints of the
+    person's data, split so small changes can be handled cheaply: core (resume, reframings, goals) -> fp; confirmed
+    highlights line -> hl; answers -> facts [(id, keywords)]."""
+    text, _ = current_profile()
+    f = fingerprints()
+    return {"text": text, **f}
+
+
+def fmt_ok(r):
+    return (r or {}).get("fmt", 1) == RATING_FORMAT
+
+
+def fp_ok(r, inf):
+    """Rating made from the same core info, under the current RATING_FORMAT."""
+    return bool(r) and fmt_ok(r) and r.get("fp") == inf["fp"]
+
+
+def hl_ok(r, inf):
+    return r.get("hl") in (inf["hl"], inf.get("hl_old"))
+
+
+def stamp(r, inf):
+    r.update(fp=inf["fp"], hl=inf["hl"], facts=[fid for fid, _ in inf["facts"]], fmt=RATING_FORMAT)
 
 def _fact_hits(words, j):
     """words are the answer's distinctive words (already filtered to ones most postings don't use)."""
@@ -195,10 +417,10 @@ def freshness(r, j, inf):
     """'fresh', 'maybe' (a small change touches this job: re-check cheaply first) or 'stale' (core info changed)."""
     if not r:
         return "missing"
-    if r.get("fp") != inf["fp"]:
+    if not fp_ok(r, inf):
         return "stale"
     known = set(r.get("facts") or [])
-    if r.get("hl") != inf["hl"] and (j.get("req") or {}).get("degrees") or (r.get("hl") != inf["hl"] and (j.get("req") or {}).get("licenses")):
+    if not hl_ok(r, inf) and ((j.get("req") or {}).get("degrees") or (j.get("req") or {}).get("licenses")):
         return "maybe"
     if any(fid not in known and _fact_hits(words, j) for fid, words in inf["facts"]):
         return "maybe"
@@ -207,7 +429,7 @@ def freshness(r, j, inf):
     return "fresh"
 
 def _restamp(r, inf):
-    r["hl"] = inf["hl"]; r["facts"] = [fid for fid, _ in inf["facts"]]; r.pop("dirty", None)
+    stamp(r, inf); r.pop("dirty", None)
 
 def best(entry, j, inf):
     """The rating to show: the highest tier that's fresh, else the highest tier there is (marked stale)."""
@@ -264,7 +486,7 @@ def _rate(todo, tier, inf, log):
             except Exception as e:
                 log(f"{tier} batch failed: {type(e).__name__}: {str(e)[:150]}"); res = {}; failed += 1
             for v in res.values():
-                v.update(fp=inf["fp"], hl=inf["hl"], facts=[fid for fid, _ in inf["facts"]], at=now)
+                stamp(v, inf); v["at"] = now
             out.update(res)
             done += 1
             log(f"PROGRESS ai {done}/{len(batches)}")
@@ -289,6 +511,7 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print)
     with older info: 'maybe' ones get a cheap Haiku check first and only climb to Sonnet/Opus if the score moved."""
     inf = info()
     allc = load_all()
+    adopt(allc["by_profile"], inf["phash"], inf["phash_old"])
     cache = allc["by_profile"].setdefault(inf["phash"], {})
     pool = [j for j in jobs if (eligible(j) if eligible else True)]
     # an answer only concerns jobs that mention its distinctive words ("salesforce"), not common ones ("administration")
@@ -321,17 +544,17 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print)
             prev = old.get(jid) or {}
             e["haiku"] = r
             # a cheap check after a small change: if the score barely moved, the careful ratings above stay current
-            if prev and prev.get("fp") == inf["fp"]:
+            if prev and fp_ok(prev, inf):
                 moved = abs(r["fit"] - prev.get("fit", r["fit"])) >= 5 or r["label"] != prev.get("label")
                 for t in ("sonnet", "opus"):
-                    if e.get(t) and e[t].get("fp") == inf["fp"]:
+                    if e.get(t) and fp_ok(e[t], inf):
                         if moved: e[t]["dirty"] = True
                         else: _restamp(e[t], inf)
         if res: save()
         # tidy bookkeeping: ratings whose new answers don't concern them are still current
         for j in pool:
             for t, r in (cache.get(j["id"]) or {}).items():
-                if r.get("fp") == inf["fp"] and not r.get("dirty") and freshness(r, j, inf) == "fresh":
+                if fp_ok(r, inf) and not r.get("dirty") and freshness(r, j, inf) == "fresh":
                     _restamp(r, inf)
         def rank(tiers):
             # rank on the named tiers only, so a later, sharper rating doesn't reshuffle who gets picked
@@ -373,6 +596,7 @@ def score_jobs(jobs, cfg, log=print):
     (cfg['refresh_stale'] also redoes Opus ratings made with older info). Used by the per-job buttons."""
     inf = info()
     allc = load_all()
+    adopt(allc["by_profile"], inf["phash"], inf["phash_old"])
     cache = allc["by_profile"].setdefault(inf["phash"], {})
     status = "ok"
     n = cfg.get("max_new_per_run", 0)
@@ -402,6 +626,7 @@ def rescore_one(job, description, cfg):
         return None
     with _lock:
         allc = load_all()
+        adopt(allc["by_profile"], inf["phash"], inf["phash_old"])
         allc["by_profile"].setdefault(inf["phash"], {}).setdefault(job["id"], {})["opus"] = a
         paths.dump_json_atomic(CACHE, allc)
     job["ai_fit"], job["ai_asis"], job["ai_label"] = a["fit"], a["asis"], a["label"]
