@@ -172,10 +172,11 @@ STALE_DAYS = 14           # when a fetch can't be trusted to close, still close 
 def record_fetch(company, summary, listings, con):
     """Store one company's fetch. listings: parsed dicts (jobfinder.prepare_listing) or {"id":..., "_unchanged": True}
     for postings whose text didn't change. On a trustworthy success, open postings not returned this time are closed.
-    Not trustworthy (nothing closed, company marked last_status "suspect"): the fetch returned 0 while the company had
-    open listings, or under SUSPECT_RATIO of them (when it had >= SUSPECT_MIN_PREV). Truncated fetches
-    (summary["truncated"]: capped / stopped early) close nothing either (last_status "capped"). In both cases, if
-    the fetch returned something, listings not seen for STALE_DAYS are still closed.
+    Not trustworthy (company marked last_status "suspect", nothing closed): the fetch returned under SUSPECT_RATIO of
+    the open listings, or 0 of them, when there were >= SUSPECT_MIN_PREV open before (a smaller company dropping to 0
+    is a normal closure). If the fetch returned something, listings not seen for STALE_DAYS are still closed.
+    Truncated fetches (summary["truncated"]: Workday's 2000 / Amazon's 3000 cap, stopped early) close nothing at all
+    (last_status "capped"): postings past the cap are never returned but may be live.
     Returns counts {new, changed, reopened, closed, unchanged}."""
     t = today()
     counts = {"new": 0, "changed": 0, "reopened": 0, "closed": 0, "unchanged": 0}
@@ -206,18 +207,20 @@ def record_fetch(company, summary, listings, con):
     status, note = ("ok", None) if ok else ("error", summary.get("status"))
     if ok:
         n_prev, n_got = len(open_before), len(returned)
-        if n_prev and not n_got:
+        if summary.get("truncated"):
+            status, note = "capped", f"incomplete fetch ({summary['truncated']}); missing postings kept open"
+        elif n_prev >= SUSPECT_MIN_PREV and not n_got:
             status, note = "suspect", f"suspect: the fetch returned no postings but {n_prev} were open; kept them open"
         elif n_prev >= SUSPECT_MIN_PREV and n_got < SUSPECT_RATIO * n_prev:
             status, note = "suspect", f"suspect: the fetch returned {n_got} postings but {n_prev} were open; kept them open"
-        elif summary.get("truncated"):
-            status, note = "capped", f"incomplete fetch ({summary['truncated']}); missing postings kept open"
         gone = open_before - returned
-        if status != "ok" and n_got:
+        if status == "capped":
+            gone = set()  # never close on a capped fetch: what lies past the cap is never returned
+        elif status == "suspect" and n_got:
             cutoff = (dt.date.today() - dt.timedelta(days=STALE_DAYS)).isoformat()
             gone = {g for g in gone if (con.execute("SELECT last_seen FROM listings WHERE id=?", (g,)).fetchone()[0] or "") < cutoff}
         elif status != "ok":
-            gone = set()
+            gone = set()  # (suspect with nothing returned)
         gone = sorted(gone)
         for k in range(0, len(gone), 500):
             chunk = gone[k:k + 500]
