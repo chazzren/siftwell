@@ -6,6 +6,7 @@ import base64, datetime as dt, hmac, json, os, re, secrets, subprocess, sys, thr
 import osdeps
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import gzip
 
 import paths
 HERE, DATA = paths.APP, paths.DATA
@@ -597,6 +598,23 @@ def run_update(only=None):
         osdeps.keep_awake(False)
         flush_recompute()
 
+_GZ_TYPES = ("text/", "json", "javascript", "xml", "svg")
+_GZ_CACHE = {}  # key (path, mtime, size) -> gzipped bytes; only the big board pages use it
+_GZ_LOCK = threading.Lock()
+
+def gzip_cached(key, raw):
+    """gzip level 6, memoised by key (a new mtime/size replaces the old entry for that path, so memory stays bounded)."""
+    with _GZ_LOCK:
+        z = _GZ_CACHE.get(key)
+    if z is None:
+        z = gzip.compress(raw() if callable(raw) else raw, 6)
+        with _GZ_LOCK:
+            for k in [k for k in _GZ_CACHE if k[0] == key[0]]:
+                del _GZ_CACHE[k]
+            _GZ_CACHE[key] = z
+    return z
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -633,14 +651,29 @@ class H(BaseHTTPRequestHandler):
             return True
         return False
 
-    def _send(self, code, body, ctype="application/json"):
-        b = body if isinstance(body, bytes) else (json.dumps(body) if ctype == "application/json" else body).encode()
+    def _send(self, code, body, ctype="application/json", cache="no-store", gz_key=None):
+        """gz_key: (path, mtime, size) to memoise the gzipped body (for big files that rarely change)."""
+        compressible = any(t in ctype for t in _GZ_TYPES)
+        gz_ok = compressible and "gzip" in (self.headers.get("Accept-Encoding") or "").lower()
+        if callable(body):  # lazy body (big file): on a gzip cache hit it is never read from disk
+            compress = gz_ok and bool(gz_key)
+            b = gzip_cached(gz_key, body) if compress else body()
+        else:
+            b = body if isinstance(body, bytes) else (json.dumps(body) if ctype == "application/json" else body).encode()
+            compress = gz_ok and len(b) > 1024 and code not in (204, 304)
+            if compress:
+                b = gzip_cached(gz_key, b) if gz_key else gzip.compress(b, 6)
         self.send_response(code)
-        self.send_header("Content-Type", ctype + ("; charset=utf-8" if "text" in ctype or "json" in ctype else ""))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Type", ctype + ("; charset=utf-8" if "text" in ctype or "json" in ctype or "javascript" in ctype else ""))
+        self.send_header("Cache-Control", cache)
+        if compressible:
+            self.send_header("Vary", "Accept-Encoding")
+        if compress:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(b)))
         self.end_headers()
-        self.wfile.write(b)
+        if self.command != "HEAD" and code not in (204, 304):
+            self.wfile.write(b)
 
     def _send_cookie(self, obj, pid):
         b = json.dumps(obj).encode()
@@ -695,7 +728,8 @@ class H(BaseHTTPRequestHandler):
                 empty_board(pid)
             if not os.path.exists(rp):
                 return self._send(200, "<p>No data yet. Starting first refresh…</p><script>fetch('/api/update',{method:'POST',headers:{'X-Jobboard':'1'}}).then(()=>setTimeout(()=>location.reload(),5000))</script>", "text/html")
-            return self._send(200, open(rp, "rb").read(), "text/html")
+            st_ = os.stat(rp)
+            return self._send(200, lambda: open(rp, "rb").read(), "text/html", gz_key=(rp, st_.st_mtime_ns, st_.st_size))
         if path == "/api/status":
             with lock:
                 s = dict(state)
