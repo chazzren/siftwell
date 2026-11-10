@@ -83,8 +83,18 @@ log_tail() {
 # Body of a page on the local server ("" if nothing answers).
 fetch() { curl -fsSL --max-time 4 "http://127.0.0.1:$1$2" 2>/dev/null || true; }
 
+# Same as paths.data_id(): first 12 hex digits of SHA-256 of the absolute data folder path.
+data_id() { printf '%s' "$DATA" | { shasum -a 256 2>/dev/null || sha256sum; } | cut -c1-12; }
+
 is_siftwell() {
-    local body
+    # A Siftwell of THIS data folder only: one that uses another data folder (the main copy next to a test copy) is not
+    # ours, so its port counts as taken. An older build that reports no data id is treated as ours.
+    local body id
+    body="$(fetch "$1" /api/ping)"
+    case "$body" in *'"app": "siftwell"'*|*'"app":"siftwell"'*)
+        id="$(printf '%s' "$body" | sed -n 's/.*"data": *"\([0-9a-f]*\)".*/\1/p')"
+        [ -z "$id" ] || [ "$id" = "$(data_id)" ]; return ;;
+    esac
     body="$(fetch "$1" /api/status)"
     case "$body" in *'"schedule"'*'"recomputing"'*|*'"recomputing"'*'"schedule"'*) return 0 ;; esac
     body="$(fetch "$1" /)"

@@ -386,7 +386,7 @@ def status():
     nr = next_time(c)
     out = dict(c, enabled=c["mode"] != "off", next_run=nr.isoformat(timespec="minutes") if nr else None,
                os="windows" if osdeps.WINDOWS else "mac" if osdeps.MAC else "linux",
-               closed_ok=closed_supported(), wake_ok=bool(osdeps.WINDOWS), legacy_wake=False, job=False, job_ok=False)
+               portable=paths.PORTABLE, closed_ok=closed_supported(), wake_ok=bool(osdeps.WINDOWS), legacy_wake=False, job=False, job_ok=False)
     try:
         if osdeps.WINDOWS:
             out["legacy_wake"] = bool(_gs()._wake_exists())
@@ -403,6 +403,8 @@ def heal(log=print):
     runtime (rewrite if not); any other mode: remove a leftover job (for example after restoring a backup made on
     another computer). Returns "off", "ok", "fixed", "skipped" or "failed: ...". Never raises."""
     try:
+        if paths.PORTABLE:
+            return "skipped"       # a portable copy never creates, repairs or removes anything outside its folder
         c = get()
         if not _os_live():
             return "skipped"
@@ -463,6 +465,7 @@ function show(s){
   let f = FOOT[s.mode];
   if (s.mode === "closed" && s.job === false) f += " The job isn't set up yet; saving again will try once more.";
   if (s.mode === "closed" && s.job && !s.job_ok) f += " The job exists but doesn't match these settings; Siftwell fixes it the next time it starts.";
+  if (s.portable) f += s.mode === "closed" ? " This adds something to this computer (outside the Siftwell folder)." : " Choosing \"Even when Siftwell is closed\" adds something to this computer (outside the Siftwell folder).";
   $("auFoot").textContent = f;
 }
 function load(){ return fetch("/api/schedule").then(r => r.json()).then(show).catch(() => { $("auNext").textContent = "Couldn't load. Check the connection."; }); }

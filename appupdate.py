@@ -15,6 +15,9 @@
     (/VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /RELAUNCH; /RELAUNCH makes the installer start Siftwell again when
     it is done) and exits so the installer can replace the files. If anything fails the error is shown and the current
     version keeps running.
+  * Portable copy (Siftwell-Portable-x.y.z.zip, paths.PORTABLE): never replaces itself; the banner says "Download the new
+    portable version" and links to the release's Siftwell-Portable-<version>.zip, with the steps (close Siftwell, unzip over
+    the old folder or copy your data folder into the new one).
   * ZIP / source copy: never replaces itself; the banner links to the release page ("Download the new version").
 
 Test hooks (never set by the app itself): SIFTWELL_UPDATE_API (API base URL), SIFTWELL_UPDATE_DELAY (seconds before the
@@ -40,6 +43,7 @@ REPO = "chazzren/siftwell"                      # GitHub owner/name; the one pla
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 API_BASE = "https://api.github.com"
 INSTALLER_NAME = "Siftwell-Setup-{version}.exe"
+PORTABLE_NAME = "Siftwell-Portable-{version}.zip"
 INSTALLER_FLAGS = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/CURRENTUSER", "/NORESTART", "/RELAUNCH"]
 CHECK_EVERY = 24 * 3600
 RETRY_OFFLINE = 3600                            # no internet: try again sooner than a day
@@ -64,7 +68,10 @@ def _testing():
 
 
 def installed_copy():
-    """True when Siftwell can replace itself: the installed program (or a test with SIFTWELL_UPDATE_RUNNER set)."""
+    """True when Siftwell can replace itself: the installed program (or a test with SIFTWELL_UPDATE_RUNNER set). A portable
+    copy never does (it is replaced by unzipping the new portable version)."""
+    if paths.PORTABLE:
+        return False
     return bool(frozen.FROZEN or os.environ.get("SIFTWELL_UPDATE_RUNNER"))
 
 
@@ -154,9 +161,12 @@ def _summary(rel):
     if not parse_version(version):
         return None
     out = {"version": version, "tag": tag[:60], "notes": str(rel.get("body") or "")[:20000],
-           "url": str(rel.get("html_url") or "")[:300], "prerelease": bool(rel.get("prerelease")), "installer": None}
+           "url": str(rel.get("html_url") or "")[:300], "prerelease": bool(rel.get("prerelease")), "installer": None,
+           "portable": None}
     want = INSTALLER_NAME.format(version=version)
     for a in rel.get("assets") or []:
+        if isinstance(a, dict) and a.get("name") == PORTABLE_NAME.format(version=version) and a.get("browser_download_url"):
+            out["portable"] = {"name": a["name"], "url": str(a["browser_download_url"])[:400], "size": int(a.get("size") or 0)}
         if isinstance(a, dict) and a.get("name") == want and a.get("browser_download_url"):
             dg = str(a.get("digest") or "").lower()
             out["installer"] = {"name": want, "url": str(a["browser_download_url"]), "size": int(a.get("size") or 0),
@@ -250,6 +260,14 @@ def configure(busy_reason=None, exit_fn=None):
         _hooks["exit"] = exit_fn
 
 
+def _port():
+    try:
+        import getting_started
+        return getting_started.CTX["port"]
+    except Exception:
+        return None
+
+
 def status():
     d = _load()
     cur = current_version()
@@ -261,9 +279,11 @@ def status():
         "current": cur, "auto": d.get("auto", True) is not False, "checked": d.get("checked"), "outcome": d.get("last_outcome"),
         "newer": newer, "dismissed": bool(newer and d.get("dismissed") == lat.get("version")),
         "latest": ({"version": lat["version"], "notes": lat.get("notes", ""), "url": lat.get("url") or RELEASES_PAGE,
-                    "size": (lat.get("installer") or {}).get("size", 0)} if newer else None),
+                    "size": (lat.get("installer") or {}).get("size", 0),
+                    "portable_url": (lat.get("portable") or {}).get("url", "")} if newer else None),
         "can_install": bool(newer and installed_copy() and lat.get("installer")),
-        "installed_copy": installed_copy(), "release_page": RELEASES_PAGE, "install": inst,
+        "installed_copy": installed_copy(), "portable": paths.PORTABLE, "release_page": RELEASES_PAGE, "install": inst,
+        "data_dir": paths.DATA, "port": _port(),
     }
 
 
@@ -420,7 +440,11 @@ function steps(s){
   const o = mk("div", "updsteps");
   o.append(mk("strong", null, "To update:"));
   const ol = mk("ol");
-  (s.installed_copy ? ["Click Update. Siftwell downloads the new installer, installs it and opens again."]
+  (s.portable ? ["Click \"Download the new portable version\" and save the ZIP.",
+       "Close Siftwell (close its window; if it keeps running for your phone, use Stop Siftwell from the tray icon).",
+       "Unzip the new ZIP over your old Siftwell folder and say yes to replace files. Or unzip it somewhere new and copy your old data folder into the new Siftwell folder.",
+       "Open Siftwell.exe again. Your profiles, ratings and settings are in the data folder, so they carry over."]
+    : s.installed_copy ? ["Click Update. Siftwell downloads the new installer, installs it and opens again."]
     : ["Click \"Download the new version\" and download the ZIP (or the Windows installer) from the page that opens.",
        "Unzip it, then double-click Start Siftwell in the new folder (use Stop Siftwell in the old one first).",
        "Everything carries over: your profiles, ratings and settings are kept outside the Siftwell folder."]).forEach(t => ol.append(mk("li", null, t)));
@@ -444,7 +468,8 @@ function render(box, s, st){
     b.addEventListener("click", () => { b.disabled = true; fetch("/api/app-update/install", {method: "POST", headers: H, body: "{}"}).then(r => r.json()).then(d => { if (!d.ok) { msg.textContent = d.message || "Couldn't start the update."; b.disabled = false; } else watch(box, st); }).catch(() => { msg.textContent = "Couldn't reach Siftwell."; b.disabled = false; }); });
     box.append(b);
   } else {
-    const a = mk("a", "btn sm primary", "Download the new version"); a.href = okUrl(s.latest.url) ? s.latest.url : s.release_page; a.target = "_blank"; a.rel = "noopener";
+    const a = mk("a", "btn sm primary", s.portable ? "Download the new portable version" : "Download the new version");
+    a.href = s.portable && okUrl(s.latest.portable_url) ? s.latest.portable_url : okUrl(s.latest.url) ? s.latest.url : s.release_page; a.target = "_blank"; a.rel = "noopener";
     box.append(a);
   }
   if (!st.keep) {
@@ -483,6 +508,7 @@ CSS = """<style>
 
 PANE_HTML = """<section class="sgsec"><h3 class="sgtitle">Siftwell</h3><div class="sgroup">
 <div class="srow"><div class="slab"><span>Version</span><small id="apVerNote"></small></div><div class="sctl"><span id="apVer" class="note"></span></div></div>
+<div class="srow"><div class="slab"><span>Data folder</span><small id="apDataNote"></small></div><div class="sctl"><span id="apData" class="note" style="word-break:break-all;text-align:right"></span></div></div>
 <div class="srow"><div class="slab"><label for="apCheck">Check for updates</label><small id="apCheckMsg" role="status" aria-live="polite"></small></div><div class="sctl"><button class="btn sm" type="button" id="apCheck">Check for updates</button></div></div>
 <div class="srow"><div class="slab"><label for="apAuto">Check for updates automatically</label><small>Once a day, Siftwell asks GitHub whether a newer version exists. Nothing is installed without your click.</small></div><div class="sctl"><input type="checkbox" role="switch" class="sw" id="apAuto"></div></div>
 </div></section>
@@ -495,7 +521,9 @@ const box = $("apBanner");
 function when(ts){ if (!ts) return "never"; const d = new Date(ts * 1000); return d.toLocaleDateString([], {month: "short", day: "numeric"}) + " " + d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); }
 function show(s){
   $("apVer").textContent = "Siftwell " + s.current;
-  $("apVerNote").textContent = s.installed_copy ? "Installed with the Windows installer." : "Running from a downloaded folder (ZIP).";
+  $("apVerNote").textContent = s.portable ? "Portable copy: your data is kept in the data folder next to Siftwell.exe." : s.installed_copy ? "Installed with the Windows installer." : "Running from a downloaded folder (ZIP).";
+  $("apData").textContent = s.data_dir || "";
+  $("apDataNote").textContent = "Where this copy keeps your profiles and settings." + (s.port && s.port !== 8766 ? " This copy runs on port " + s.port + " (test copy)." : "");
   $("apAuto").checked = !!s.auto;
   $("apCheckMsg").textContent = s.newer ? "Siftwell " + s.latest.version + " is available." : (s.checked ? "Last checked " + when(s.checked) + (s.outcome === "ok" || s.outcome === "none" ? ". You're up to date." : ".") : "Not checked yet.");
 }

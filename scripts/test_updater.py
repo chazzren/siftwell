@@ -40,6 +40,8 @@ def release(version, prerelease=False, installer=True, port=0):
         digest = "sha256:" + (STUB_SHA if SC["digest"] == "good" else "0" * 64)
         assets.append({"name": f"Siftwell-Setup-{version}.exe", "size": size, "digest": digest if SC["digest"] != "none" else None,
                        "browser_download_url": f"http://127.0.0.1:{port}/dl/Siftwell-Setup-{version}.exe"})
+        assets.append({"name": f"Siftwell-Portable-{version}.zip", "size": 10,
+                       "browser_download_url": f"http://127.0.0.1:{port}/dl/portable.zip"})
         assets.append({"name": f"Siftwell-{version}.zip", "size": 10, "browser_download_url": f"http://127.0.0.1:{port}/dl/zip"})
     return {"tag_name": "v" + version, "name": "Siftwell " + version, "body": NOTES, "draft": False, "prerelease": prerelease,
             "html_url": f"https://github.com/{REPO}/releases/tag/v{version}", "assets": assets}

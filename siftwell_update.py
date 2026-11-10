@@ -48,7 +48,7 @@ def server_port():
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/ping", timeout=4) as r:
             d = json.loads(r.read().decode("utf-8", "replace"))
-        return port if d.get("app") == "siftwell" else None
+        return port if d.get("app") == "siftwell" and d.get("data") in (None, paths.data_id()) else None
     except Exception:
         return None
 

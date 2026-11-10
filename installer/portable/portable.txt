@@ -1,0 +1,10 @@
+This file makes Siftwell run as a portable copy.
+
+Because this file is here, next to Siftwell.exe, Siftwell keeps all your data
+(profiles, resumes, ratings, settings) in the "data" folder next to it, and it
+does not install anything or change anything on this computer by itself.
+
+Don't delete or rename this file unless you want Siftwell to go back to using
+the normal place for its data (and then it will not find your portable data).
+
+Read README-portable.txt (in this folder) for how to run, update and move it.
