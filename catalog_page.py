@@ -85,8 +85,12 @@ __AUTOUPDATE__
   <div class="sgroup"><div class="srow stack"><div class="cats" id="fdCats"></div></div></div>
   <h3 class="sgtitle" style="margin-top:18px">Search size</h3>
   <div class="sgroup"><div class="srow stack">
-    <div class="seg" id="fdSize" role="group" aria-label="Search size"><button type="button" data-v="small" aria-pressed="false">Small · ~30</button><button type="button" data-v="medium" aria-pressed="true">Medium · ~80</button><button type="button" data-v="large" aria-pressed="false">Large · ~150</button></div>
+    <div class="seg" id="fdSize" role="group" aria-label="Search size"><button type="button" data-v="small" aria-pressed="false">Small<span class="segn"> · ~30</span></button><button type="button" data-v="medium" aria-pressed="true">Medium<span class="segn"> · ~80</span></button><button type="button" data-v="large" aria-pressed="false">Large<span class="segn"> · ~150</span></button><button type="button" data-v="exhaustive" aria-pressed="false">Exhaustive</button></div>
     <p class="note" id="fdEst"></p>
+    <div id="fdExh" hidden>
+      <div class="cline"><label for="fdBudget">Budget</label><input type="number" id="fdBudget" class="tin num" min="5" max="200" step="1"><span class="note">Claude passes at most (5 to 200)</span></div>
+      <p class="notice" id="fdExhEst" role="status" aria-live="polite"></p>
+    </div>
     <div class="sbtns"><button class="btn primary" type="submit" id="fdStart">Start search</button></div>
     <p class="note" id="fdMsg" role="status" aria-live="polite"></p>
   </div></div>
@@ -94,7 +98,8 @@ __AUTOUPDATE__
 <section class="sgsec" id="fdRun" hidden>
   <h3 class="sgtitle">Search</h3>
   <div class="sgroup"><div class="srow stack">
-    <div class="lbtop"><b id="fdTitle"></b><span class="sbtns"><button class="btn sm" type="button" id="fdStop" hidden>Stop</button><button class="btn sm primary" type="button" id="fdResume" hidden>Resume</button></span></div>
+    <div class="lbtop"><b id="fdTitle"></b><span class="sbtns"><span class="cline" id="fdBudgetRow" hidden><label for="fdBudget2" class="note">Budget</label><input type="number" id="fdBudget2" class="tin num" min="5" max="200" step="1"><span class="note">passes</span></span><button class="btn sm" type="button" id="fdStop" hidden>Stop</button><button class="btn sm primary" type="button" id="fdResume" hidden>Resume</button></span></div>
+    <div class="pbar" id="fdPassBar" hidden><i id="fdPassFill"></i></div>
     <div class="note" id="fdSub"></div>
     <div id="fdCatRows" class="fcats"></div>
     <div class="note mono" id="fdLines"></div>
@@ -108,7 +113,7 @@ __AUTOUPDATE__
       <p class="note" id="fdAddMsg" role="status" aria-live="polite"></p></div>
     <div id="fdOk"></div>
   </div>
-  <details class="fdet" id="fdBadWrap"><summary id="fdBadSum"></summary><div class="sgroup" id="fdBad"></div></details>
+  <details class="fdet" id="fdBadWrap"><summary id="fdBadSum"></summary><p class="note" id="fdSysNote"></p><div id="fdBad"></div></details>
   <details class="fdet" id="fdKnownWrap"><summary id="fdKnownSum"></summary><div class="sgroup" id="fdKnown"></div></details>
 </section>""",
     "share": """
@@ -190,7 +195,17 @@ CSS = """<style>
 .notice{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--warn-soft);color:var(--ink);border:1px solid var(--line)}
 .notice a{color:var(--accent);font-weight:600}
 .fcats{display:flex;flex-direction:column;gap:4px;margin-top:8px}
-.fcat{display:flex;justify-content:space-between;gap:10px;font-size:13px;flex-wrap:wrap}
+.fcat{display:flex;justify-content:space-between;gap:4px 10px;font-size:13px;flex-wrap:wrap;padding:4px 0}
+.fcat+.fcat{border-top:1px solid var(--line)}
+.fcat .fcl{display:flex;flex-direction:column;min-width:0;flex:1 1 220px}
+.fcat .fcl .note{overflow-wrap:anywhere}
+.fcn{display:flex;gap:4px 10px;flex-wrap:wrap;align-items:flex-start;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.fcn b{color:var(--ink);font-weight:600}
+.pill.budget{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.fsys{margin:0 0 8px}
+.fsys summary{cursor:pointer;padding:4px 0;font-size:13.5px}
+.fsys summary b{font-variant-numeric:tabular-nums}
+#fdExh .cline{margin-top:10px}
 .mono{font-family:var(--mono);font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:7.5em;overflow:hidden}
 .frow{grid-template-columns:auto minmax(0,2fr) minmax(0,1.2fr) auto}
 .frow input[type=checkbox]{width:18px;height:18px}
@@ -210,7 +225,8 @@ CSS = """<style>
   .cact{justify-content:flex-start}
   .ctools select{flex:1 1 140px}
   .sctl.cline{max-width:62%}
-  .seg{display:flex}.seg button{flex:1;padding:6px 4px;font-size:12.5px}
+  .seg{display:flex}.seg button{flex:1;padding:6px 4px;font-size:12.5px;white-space:nowrap}
+  #fdSize .segn{display:none}
 }
 </style>
 """
@@ -424,7 +440,7 @@ function runRow(r){
   let what = KIND[r.kind] || r.kind;
   if (r.kind === "fetch" && d.only) what = "Fetch: " + d.only;
   if (r.kind === "rerate" && d.person) what += " · " + d.person + (d.tiers ? " (" + d.tiers.join(", ") + ")" : "");
-  if (r.kind === "find") what += " · " + [d.label || d.location, d.size].filter(Boolean).join(", ");
+  if (r.kind === "find") what += " · " + [d.label || d.location, d.size === "exhaustive" ? `exhaustive (${n(d.passes)} of up to ${n(d.budget)} passes)` : d.size].filter(Boolean).join(", ");
   const c = [];
   if (r.kind === "find") { if (r.companies != null) c.push(`${pl(r.companies, "employer", "employers")} found`); if (r.fetched != null) c.push(`${n(r.fetched)} readable`); }
   else {
@@ -483,10 +499,31 @@ $("rateCards").addEventListener("click", ev => {
 // ---- Find employers near me
 let FD = null, fdTimer = null, fdSize = "medium";
 const CSTATE = {pending: "Waiting", researching: "Claude is researching…", checking: "Checking careers pages…", done: "Done", error: "Problem"};
+let fdEstTimer = null, fdEstSeq = 0;
 function fdEstimate(){
   if (!FD) return;
-  $("fdEst").textContent = `About ${FD.sizes[fdSize]} employers. This can take ${FD.estimate[fdSize]} and uses your Claude plan (Claude searches the web for each kind of employer). Siftwell then checks each careers page itself. You can leave this page; the search keeps going.`;
+  const exh = fdSize === "exhaustive";
+  $("fdExh").hidden = !exh;
+  $("fdStart").textContent = exh ? `Start exhaustive search (up to ${n(fdBudget())} passes)` : "Start search";
+  if (!exh) {
+    $("fdEst").textContent = `About ${FD.sizes[fdSize]} employers. This can take ${FD.estimate[fdSize]} and uses your Claude plan (Claude searches the web for each kind of employer). Siftwell then checks each careers page itself. You can leave this page; the search keeps going.`;
+    return;
+  }
+  $("fdEst").textContent = "As many employers as Claude can find in the area: it keeps searching, one kind of employer, sub-type and city at a time, telling Claude which employers it already knows and asking for more. Siftwell checks each careers page itself. You can leave this page; Stop and Resume pick up where it left off.";
+  clearTimeout(fdEstTimer);
+  fdEstTimer = setTimeout(() => {
+    const cats = [...$("fdCats").querySelectorAll("input:checked")].map(x => x.value), seq = ++fdEstSeq;
+    const qs = new URLSearchParams({location: $("fdLoc").value.trim(), radius: $("fdRad").value, cats: cats.join(","), budget: fdBudget()});
+    get("/api/catalog/find/estimate?" + qs).then(e => { if (seq === fdEstSeq) $("fdExhEst").textContent = e.text; })
+      .catch(err => { if (seq === fdEstSeq) $("fdExhEst").textContent = errText(err); });
+  }, 350);
 }
+function fdBudget(){
+  const x = FD ? FD.exhaustive : {budget: 40, min: 5, max: 200}, v = parseInt($("fdBudget").value, 10);
+  return isNaN(v) ? x.budget : Math.max(x.min, Math.min(x.max, v));
+}
+["fdLoc", "fdRad", "fdBudget"].forEach(id => $(id).addEventListener("input", () => { if (fdSize === "exhaustive") fdEstimate(); }));
+$("fdCats").addEventListener("change", () => { if (fdSize === "exhaustive") fdEstimate(); });
 $("fdSize").addEventListener("click", ev => {
   const b = ev.target.closest("button"); if (!b) return;
   fdSize = b.dataset.v; $("fdSize").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fdEstimate();
@@ -499,20 +536,27 @@ function fdClaudeNotice(c){
     " Find employers near me uses Claude Code (your Claude plan) to search the web. <a href=\"/settings#get-started\">Open Settings → Get started</a> to set it up, then come back.";
   return false;
 }
+let FDC = {key: "", list: []};   // the candidate list the page has (the server leaves it out of a poll when unchanged)
 function loadFind(){
   clearTimeout(fdTimer);
-  return get("/api/catalog/find").then(d => {
+  return get("/api/catalog/find" + (FDC.key ? "?have=" + encodeURIComponent(FDC.key) : "")).then(d => {
     const first = !FD; FD = d; LISTS = d.lists;
+    if (d.run) {
+      if (d.run.candidates) FDC = {key: d.run.id + ":" + d.run.sig, list: d.run.candidates};
+      else if (FDC.key.split(":")[0] === String(d.run.id)) d.run.candidates = FDC.list;
+      else d.run.candidates = [];
+    }
     if (first) {
       $("fdCats").innerHTML = d.categories.map(c => `<label><input type="checkbox" value="${esc(c.id)}" checked> ${esc(c.label)}</label>`).join("");
       $("fdLoc").value = d.defaults.location; $("fdRad").value = d.defaults.radius;
+      $("fdBudget").value = d.exhaustive.budget; $("fdBudget").min = $("fdBudget2").min = d.exhaustive.min; $("fdBudget").max = $("fdBudget2").max = d.exhaustive.max;
       fillListSelect($("fdList"), "near-" + ME.id);
       fdEstimate();
     }
     fdClaudeNotice(d.claude);
     renderFind();
-    if (d.live) fdTimer = setTimeout(loadFind, 3000);
-  }).catch(err => { $("fdMsg").textContent = errText(err); });
+    if (d.live) fdTimer = setTimeout(loadFind, d.run && d.run.details && d.run.details.size === "exhaustive" ? 4000 : 3000);
+  }).catch(err => { $("fdMsg").textContent = errText(err); if (FD && FD.live) fdTimer = setTimeout(loadFind, 6000); });
 }
 function renderFind(){
   const d = FD, run = d.run;
@@ -521,20 +565,31 @@ function renderFind(){
   if (!run) { $("fdReview").hidden = true; return; }
   const dt = run.details || {}, counts = run.counts || {};
   const tot = s => Object.values(counts).reduce((a, c) => a + (c[s] || 0), 0);
-  const label = d.live ? (d.waiting ? `Waiting for the running ${d.waiting} to finish…` : "Searching…") :
-    {ok: "Search finished", partial: "Search finished (some kinds had a problem)", stopped: "Search stopped", error: "Search stopped by a problem", running: "Searching…"}[run.status] || run.status;
-  $("fdTitle").textContent = label;
-  $("fdSub").textContent = `${dt.label || dt.location}, ${dt.radius} mi · ${dt.size} search${dt.focus ? " · focus: " + dt.focus : ""} · started ${when(run.started)}` +
-    (dt.error === "signin" ? " · Claude Code is signed out: sign in on Settings → Get started, then Resume." : dt.error ? " · " + dt.error : "");
+  const exh = dt.size === "exhaustive", passes = `pass ${n(dt.passes)} of up to ${n(dt.budget)}`;
+  const label = d.live ? (d.waiting ? `Waiting for the running ${d.waiting} to finish…` : exh ? `Searching… ${passes}` : "Searching…") :
+    {ok: "Search finished", partial: "Search finished (some kinds had a problem)", stopped: "Search stopped", error: "Search stopped by a problem", running: "Searching…",
+     budget: `Stopped at the budget: ${n(dt.passes)} of ${n(dt.budget)} passes used`}[run.status] || run.status;
+  $("fdTitle").textContent = label + (exh && !d.live && run.status !== "budget" ? ` (${n(dt.passes)} of up to ${n(dt.budget)} passes used)` : "");
+  $("fdSub").textContent = `${dt.label || dt.location}, ${dt.radius} mi · ${exh ? `exhaustive search, budget ${n(dt.budget)} passes` : dt.size + " search"}${dt.focus ? " · focus: " + dt.focus : ""} · started ${when(run.started)}` +
+    (dt.error === "signin" ? " · Claude Code is signed out: sign in on Settings → Get started, then Resume." : dt.error ? " · " + dt.error : "") +
+    (run.status === "budget" && !d.live ? " · Raise the budget and Resume to keep going." : "");
   $("fdStop").hidden = !d.live; $("fdResume").hidden = d.live || run.status === "ok";
+  const canBudget = exh && !d.live && run.status !== "ok";
+  if (canBudget && $("fdBudgetRow").hidden) $("fdBudget2").value = run.status === "budget" ? Math.min(FD.exhaustive.max, (dt.passes || 0) + 20) : dt.budget;
+  $("fdBudgetRow").hidden = !canBudget;
+  $("fdPassBar").hidden = !exh; if (exh) $("fdPassFill").style.width = Math.min(100, 100 * (dt.passes || 0) / (dt.budget || 1)) + "%";
   $("fdCatRows").innerHTML = (dt.categories || []).map(cid => {
     const st = (dt.cats || {})[cid] || {}, c = counts[cid] || {}, lab = (d.categories.find(x => x.id === cid) || {}).label || cid;
     const checked = (c.readable || 0) + (c.unreadable || 0) + (c.known || 0) + (c.duplicate || 0) + (c.added || 0), all = checked + (c.pending || 0);
     let s = CSTATE[st.state] || st.state;
+    if (exh && st.state === "researching") s = d.live ? `Claude is researching (its pass ${n(st.passes)}): ${st.doing || ""}` : `Stopped in the middle of its pass ${n(st.passes)} (${st.doing || ""}); Resume does that pass again`;
+    else if (!d.live && (st.state === "researching" || st.state === "checking")) s = "Stopped part way; Resume picks up here";
+    if (exh && st.state === "pending" && st.passes) s = `${n(st.passes)} pass${st.passes === 1 ? "" : "es"} so far · waiting for its next pass` + (st.error ? ` (last pass had a problem: ${st.error})` : "");
     if (st.state === "checking" && all) s = `Checking careers pages: ${checked} of ${all}`;
-    if (st.state === "done") s = `${n((c.readable || 0) + (c.added || 0))} readable of ${n(all)} found`;
+    if (st.state === "done") s = exh ? `Done after ${n(st.passes)} pass${st.passes === 1 ? "" : "es"}: ${st.stop || ""}` : `${n((c.readable || 0) + (c.added || 0))} readable of ${n(all)} found`;
     if (st.state === "error") s = "Problem: " + (st.error || "") + " (Resume tries again)";
-    return `<div class="fcat"><span>${esc(lab)}</span><span class="note">${esc(s)}</span></div>`;
+    const cnt = all ? `<div class="fcn"><span><b>${n(all)}</b> found</span><span><b>${n((c.readable || 0) + (c.added || 0))}</b> readable</span><span><b>${n(c.unreadable)}</b> can't read</span><span><b>${n((c.known || 0) + (c.duplicate || 0))}</b> already in catalog</span>${c.pending ? `<span><b>${n(c.pending)}</b> to check</span>` : ""}</div>` : "";
+    return `<div class="fcat"><div class="fcl"><span>${esc(lab)}</span><span class="note">${esc(s)}</span></div>${cnt}</div>`;
   }).join("");
   $("fdLines").textContent = d.live ? (d.lines || []).join("\n") : "";
   const cands = run.candidates || [];
@@ -549,7 +604,16 @@ function renderFind(){
     : `<div class="srow"><span class="note">${d.live ? "Readable employers show up here as they're checked." : !bad.length && known.length ? "Every employer found is already in your catalog." : "None of the new employers found could be read by Siftwell."}</span></div>`;
   $("fdAdd").disabled = $("fdAddAll").disabled = !ok.some(c => c.status === "readable");
   $("fdBadWrap").hidden = !bad.length; $("fdBadSum").textContent = `${n(bad.length)} employer${bad.length === 1 ? "" : "s"} Siftwell can't read`;
-  $("fdBad").innerHTML = bad.map(c => `<div class="crow"><div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}${c.location_note ? " · " + esc(c.location_note) : ""}</small></div><div><small>${esc(c.reason || "")}</small>${safeUrl(c.url) ? `<a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener" class="sm">${esc(c.url)}</a>` : `<span class="sm">${esc(c.url)}</span>`}</div></div>`).join("");
+  const groups = {}; bad.forEach(c => (groups[c.system || "Not identified"] = groups[c.system || "Not identified"] || []).push(c));
+  const order = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length || a.localeCompare(b));
+  const openSys = new Set([...document.querySelectorAll("#fdBad details[open]")].map(x => x.dataset.sys));
+  const SYSW = {"Custom careers site": "use their own custom careers site", "Page couldn't be opened": "couldn't be opened",
+    "A job board, not the employer's own page": "were job-board pages, not the employer's own", "Not identified": "use a job system Siftwell didn't recognise"};
+  const sysWords = k => SYSW[k] || "use " + k;
+  $("fdSysNote").textContent = order.length ? "Grouped by the job system each careers page uses, biggest group first: " + order.slice(0, 4).map(k => `${n(groups[k].length)} ${sysWords(k)}`).join(", ") +
+    (order.length > 4 ? `, and ${n(order.length - 4)} more group${order.length - 4 === 1 ? "" : "s"}` : "") + ". Support for the biggest job system would unlock the most employers." : "";
+  $("fdBad").innerHTML = order.map(k => `<details class="fsys" data-sys="${esc(k)}"${openSys.has(k) ? " open" : ""}><summary><b>${n(groups[k].length)}</b> · ${esc(k)}</summary><div class="sgroup">` +
+    groups[k].map(c => `<div class="crow"><div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}${c.location_note ? " · " + esc(c.location_note) : ""}</small></div><div><small>${esc(c.reason || "")}</small>${safeUrl(c.url) ? `<a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener" class="sm">${esc(c.url)}</a>` : `<span class="sm">${esc(c.url)}</span>`}</div></div>`).join("") + `</div></details>`).join("");
   $("fdKnownWrap").hidden = !known.length; $("fdKnownSum").textContent = `${n(known.length)} already in your catalog`;
   $("fdKnown").innerHTML = known.map(c => `<div class="crow"><div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}</small></div><div><small>${esc(c.reason || "")}</small></div></div>`).join("");
 }
@@ -558,14 +622,14 @@ $("fdForm").addEventListener("submit", ev => {
   if (!FD || !fdClaudeNotice(FD.claude)) return;
   const cats = [...$("fdCats").querySelectorAll("input:checked")].map(x => x.value);
   const m = $("fdMsg"); m.style.color = ""; m.textContent = "Starting…"; $("fdStart").disabled = true;
-  post("/api/catalog/find/start", {location: $("fdLoc").value.trim(), radius: +$("fdRad").value, focus: $("fdFocus").value.trim(), categories: cats, size: fdSize})
+  post("/api/catalog/find/start", {location: $("fdLoc").value.trim(), radius: +$("fdRad").value, focus: $("fdFocus").value.trim(), categories: cats, size: fdSize, budget: fdBudget()})
     .then(() => { m.textContent = ""; loadFind(); })
     .catch(err => { $("fdStart").disabled = false; m.style.color = "var(--bad)"; m.textContent = errText(err); if (err.data && err.data.claude) fdClaudeNotice(err.data.claude); });
 });
 $("fdStop").addEventListener("click", () => { $("fdStop").disabled = true; post("/api/catalog/find/stop").catch(() => {}).then(() => { $("fdStop").disabled = false; $("fdTitle").textContent = "Stopping (finishing the pages being checked)…"; }); });
 $("fdResume").addEventListener("click", () => {
   $("fdResume").disabled = true;
-  post("/api/catalog/find/resume").then(() => { $("fdResume").disabled = false; loadFind(); })
+  post("/api/catalog/find/resume", $("fdBudgetRow").hidden ? {} : {budget: +$("fdBudget2").value}).then(() => { $("fdResume").disabled = false; loadFind(); })
     .catch(err => { $("fdResume").disabled = false; $("fdSub").textContent = errText(err); if (err.data && err.data.claude) fdClaudeNotice(err.data.claude); });
 });
 function fdAdd(body){

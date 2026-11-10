@@ -46,9 +46,14 @@ CREATE TABLE IF NOT EXISTS runs(
 CREATE TABLE IF NOT EXISTS candidates(
   id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER NOT NULL, name TEXT NOT NULL, url TEXT, category TEXT,
   location_note TEXT, why TEXT, status TEXT NOT NULL DEFAULT 'pending', reason TEXT, ats TEXT, cfg TEXT,
-  open_jobs INTEGER, suggested TEXT, added_as TEXT, created TEXT, checked TEXT);
+  open_jobs INTEGER, suggested TEXT, added_as TEXT, created TEXT, checked TEXT, system TEXT, pass INTEGER);
 CREATE INDEX IF NOT EXISTS candidates_run ON candidates(run_id);
 """
+# Columns added after the first release: (table, column, type). db() adds any that an older catalog.db lacks.
+# candidates.system: for an employer Siftwell can't read, the job system its careers page seems to use ("Taleo",
+# "Custom careers site", ...), so Find employers can group them; candidates.pass: the Exhaustive-search pass that found it.
+ADDED_COLUMNS = (("candidates", "system", "TEXT"), ("candidates", "pass", "INTEGER"))
+_columns_ok = set()
 
 # Board fields that depend on the person looking (never stored on a listing).
 PERSON_KEYS = {"score", "appeal", "appeal_parts", "fit_score", "comp_score", "qol_score", "req_status", "req_chips",
@@ -73,6 +78,11 @@ def db():
         con.execute("PRAGMA journal_mode=WAL")
         con.execute("PRAGMA synchronous=NORMAL")
         con.executescript(SCHEMA)
+        if DB not in _columns_ok:
+            for table, col, typ in ADDED_COLUMNS:
+                if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
+                    con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+            _columns_ok.add(DB)
         yield con
         con.commit()
     finally:

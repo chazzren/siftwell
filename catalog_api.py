@@ -132,7 +132,7 @@ def handle_get(h, path, pid):
             if r["status"] == "running" and not (job and job["alive"]) and not (r["kind"] == "find" and find_live()):
                 r["status"] = "interrupted"  # its process is gone (e.g. Siftwell was closed mid-run)
             if r["kind"] == "find":
-                r["details"] = {k: d.get(k) for k in ("location", "label", "radius", "size", "categories", "person", "error")}
+                r["details"] = {k: d.get(k) for k in ("location", "label", "radius", "size", "categories", "person", "error", "passes", "budget")}
         with S.lock:
             st = dict(S.state)
         nr = S.next_run()
@@ -153,13 +153,25 @@ def handle_get(h, path, pid):
             catalog.update_run(run["id"], status="stopped", finished=True)  # the server restarted mid-search: resumable
             run["status"] = "stopped"
         out = {"categories": [{"id": c[0], "label": c[1]} for c in ef.CATEGORIES], "sizes": ef.SIZES, "estimate": ef.ESTIMATE,
+               "exhaustive": {"budget": ef.BUDGET_DEFAULT, "min": ef.BUDGET_MIN, "max": ef.BUDGET_MAX, "min_new": ef.MIN_NEW},
                "defaults": ef.defaults(pid), "claude": ef.claude_status(), "live": live, "lines": FIND["lines"][-6:],
                "waiting": FIND["waiting"] if live else None, "lists": lists(), "current": pid, "run": None}
         if run:
-            d = run.get("details") or {}
+            d = dict(run.get("details") or {})
+            d.pop("pid", None)
+            sig = ef.signature(run["id"])
             out["run"] = {"id": run["id"], "status": run["status"], "started": run["started"], "finished": run["finished"],
-                          "details": d, "counts": ef.counts(run["id"]), "candidates": ef.candidates(run["id"])}
+                          "details": d, "counts": ef.counts(run["id"]), "systems": ef.systems(run["id"]), "sig": sig}
+            if q.get("have") != f"{run['id']}:{sig}":  # (the page already has this list: skip it)
+                out["run"]["candidates"] = ef.candidates(run["id"])
         return h._send(200, out)
+    if path == "/api/catalog/find/estimate":
+        import employer_finder as ef
+        try:
+            est = ef.estimate(q.get("location", ""), q.get("radius", ""), q.get("cats", "").split(","), q.get("budget"))
+        except ValueError as e:
+            return h._send(400, {"error": str(e)})
+        return h._send(200, est)
     return h._send(404, {"error": "not found"})
 
 
@@ -323,10 +335,11 @@ def handle_post(h, path, body, pid):
         if not cs["installed"] or not cs["signed_in"]:
             return h._send(409, {"error": "Claude Code isn't installed." if not cs["installed"] else "Claude Code is signed out.", "claude": cs})
         try:
-            rid = ef.start(pid, body.get("location"), body.get("radius"), body.get("focus"), body.get("categories") or [], body.get("size"))
+            rid = ef.start(pid, body.get("location"), body.get("radius"), body.get("focus"), body.get("categories") or [], body.get("size"),
+                           budget=body.get("budget"))
         except ValueError as e:
             return h._send(400, {"error": str(e)})
-        h._act("find employers started", pid, f"{body.get('size')} search")
+        h._act("find employers started", pid, f"{body.get('size')} search" + (f", budget {body.get('budget')} passes" if body.get("size") == ef.EXHAUSTIVE else ""))
         _start_find_thread(rid)
         return h._send(202, {"ok": True, "run_id": rid})
     if path == "/api/catalog/find/stop":
@@ -344,6 +357,13 @@ def handle_post(h, path, body, pid):
         cs = ef.claude_status()
         if not cs["installed"] or not cs["signed_in"]:
             return h._send(409, {"error": "Claude Code isn't installed." if not cs["installed"] else "Claude Code is signed out.", "claude": cs})
+        if body.get("budget") is not None:
+            try:
+                ef.set_budget(run["id"], body.get("budget"))
+            except ValueError as e:
+                return h._send(400, {"error": str(e)})
+        elif run["status"] == "budget":
+            return h._send(400, {"error": "This search used its whole budget. Raise the budget to keep going."})
         catalog.update_run(run["id"], status="running")
         h._act("find employers resumed", pid)
         _start_find_thread(run["id"])
