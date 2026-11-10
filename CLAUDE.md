@@ -27,6 +27,8 @@ Siftwell is a self-hosted household job board: it fetches listings from employer
 
 ## Testing
 - Run a test server on its own port with its own data: `JOBBOARD_DATA=<scratch dir> python -X utf8 server.py <port>`. Never point tests at a real user's data folder.
+- **No Claude needed to use Siftwell.** `claude_cli.claude_ready()` (installed + signed in, cached 30 s; `claude_cli.state()` says "ready" / "signed_out" / "not_installed") gates every Claude feature. When it is false: the board shows one banner and a "—" Match, sort defaults to Appeal, Tailor / Re-rate / Target suggestions explain instead of failing (`NEEDS_CLAUDE` routes in `server.py` answer 409 `needs_claude`), `/api/search` falls back to `nlsearch.keyword_search`, the funnel and Target ratings skip quietly (status `no_claude`), and `/profile` + `/setup` offer "Fill in my profile myself" (`manual_profile.py`, `resume.save_manual`, `/api/profile/manual`, `/api/resume/prefill`). New Claude-dependent features must check `claude_ready()` and show the same prompt (`Connect Claude to get ... → Settings → Get started`).
+- **Test the no-Claude experience** with env `SIFTWELL_PRETEND_NO_CLAUDE=1` (makes `claude_cli.path()` None, so `claude_ready()` is False everywhere, including child processes). Unset it to get the normal behaviour back.
 - **Don't spend the user's Claude plan in tests**: use tiny runs (a handful of jobs) or stub `claude_cli` responses; ask before anything larger.
 - Verify UI in a browser at desktop width and 375px, and check the console for errors.
 - Stop only processes you started. Restore any setting you change while testing.

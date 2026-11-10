@@ -77,7 +77,8 @@ def api_key():
 
 def claude_cli():
     """Path to the Claude Code CLI (signed in with the user's Claude subscription), or None."""
-    return osdeps.find_exe("claude")
+    import claude_cli as _cc
+    return _cc.path()
 
 class CLIAuthError(Exception):
     pass
@@ -464,7 +465,7 @@ def _rate(todo, tier, inf, log, on_batch=None):
     if not inf["text"].strip():
         raise ValueError("Upload and approve a resume first.")
     key, cli = api_key(), claude_cli()
-    if not key and not (cli and cli_logged_in(cli)):
+    if not key and not _cc.claude_ready():
         raise CLIAuthError("Claude Code is not signed in.")
     cfg = {"model": MODELS[tier], "effort": "low", **TIER_RUN[tier]}
     bs = cfg["batch_size"]
@@ -577,6 +578,13 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
     inf, allc, cache, pool = _prepare(jobs, eligible)
     status = "ok"
     saved = set(saved)
+    if not api_key() and not _cc.claude_ready():
+        # Siftwell works without Claude: skip quietly (one line, only when a rating run was really asked for)
+        if any(budgets.get(k) for k in ("haiku", "sonnet_pct", "opus_top")):
+            log("Claude isn't connected, so Match ratings are skipped (Appeal, filters and search still work).")
+        apply(jobs, cache, inf)
+        mark_state(jobs, pool, cache, inf)
+        return "no_claude"
     def save():
         os.makedirs(os.path.dirname(CACHE), exist_ok=True)
         with _lock:

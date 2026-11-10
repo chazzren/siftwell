@@ -49,7 +49,7 @@ def add_answers(answers, context):
                           "level": level or "yes", "answer": text})
             added += 1
         _save(facts)
-    if added:
+    if added and claude_cli.claude_ready():
         try:
             polish_all()  # one quick Claude call; tailoring then works from professional wording
         except Exception as e:

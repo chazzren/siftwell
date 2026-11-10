@@ -203,9 +203,9 @@ def score_jobs(jobs, cfg, log=print):
     need = (lambda j: not fresh(cache.get(j["id"]), f)) if cfg.get("refresh_stale") else (lambda j: j["id"] not in cache)
     todo = sorted((j for j in jobs if need(j)), key=lambda j: -priority(j, st))[: max(0, cfg.get("max_new_per_run", 300))]
     status = "ok"
-    if todo and not claude_cli.logged_in():
-        status, todo = "cli_logged_out", []
-        log("Pivot scoring skipped: Claude Code is not signed in.")
+    if todo and not claude_cli.claude_ready():
+        status, todo = "no_claude", []
+        log("Target rating skipped: Claude isn't connected.")
     if todo:
         bs = cfg.get("batch_size", 12)
         batches = [todo[i:i + bs] for i in range(0, len(todo), bs)]

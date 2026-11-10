@@ -12,6 +12,8 @@ profile through POST /api/profile/edit. A freshly read resume is a draft: it is 
 import html
 import json
 
+import claude_cli
+import manual_profile
 import people
 import report
 import settings_page
@@ -64,7 +66,13 @@ def _pane_resume():
         '<form class="srow stack" id="gdocForm"><input type="url" id="gdocUrl" placeholder="Or paste a Google Docs link (docs.google.com/document/d/…)" '
         'aria-label="Google Docs link"><div class="sbtns"><button class="btn" type="submit">Use Google Doc</button></div></form>',
     ]) + '<p class="sfoot">A Google Doc link works if sharing is set to "Anyone with the link can view". Otherwise use File &gt; Download &gt; '
-         'Microsoft Word in Google Docs and drop that file here. A new resume becomes a draft you check under About you before it replaces the current profile.</p>')
+         'Microsoft Word in Google Docs and drop that file here. A new resume becomes a draft you check under About you before it replaces the current profile.</p>' +
+            '<div class="hlbanner" id="resNoClaude" style="margin-top:18px" hidden><span><b>Claude isn\'t connected</b>, so Siftwell can\'t read a resume by itself. '
+            'Fill in your profile below (a Word or text resume can fill the form in for you), or connect Claude to have it read PDFs, photos and Google Docs.</span>'
+            '<span class="row"><a class="btn sm" href="/settings#get-started">Connect Claude</a></span></div>' +
+            '<p class="sfoot" id="manualLink" hidden><button type="button" class="linkbtn" id="manualOpen">Fill in my profile myself instead</button></p>'
+            '<div id="manualWrap" hidden style="margin-top:14px">' + _group("Fill in my profile myself", "Siftwell uses this to choose which jobs to show. You can change any of it later under About you.",
+                                                                          ['<div class="spad"><div id="manualRoot"></div></div>']) + '</div>')
 
 
 def _pane_about():
@@ -181,9 +189,10 @@ def render_profile_html(pid=None) -> str:
             # Apply the saved theme before first paint so the page doesn't flash the wrong colours.
             "<script>(function(){var t=" + json.dumps(p.get("display.theme")) +
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
-            head + settings_page.CSS + CSS + "</head><body>" + body +
+            head + settings_page.CSS + CSS + "<style>" + manual_profile.CSS + "</style></head><body>" + body +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") + ";window.__PS__=" + json.dumps(data).replace("</", "<\\/") +
-            ";</script>\n" + settings_page.fill_script(SCRIPT) + "</body></html>")
+            ";window.__CLAUDE__=" + json.dumps({"ready": claude_cli.claude_ready()}) +
+            ";</script>\n" + settings_page.fill_script(SCRIPT).replace("/*__MANUAL__*/", manual_profile.JS) + "</body></html>")
 
 
 CSS = """<style>
@@ -257,6 +266,9 @@ const netErr = err => err instanceof TypeError ? "Couldn't save. Check the conne
 const saved = (el, p) => p.then(({ok, d}) => { if (!ok) throw new Error(d.error || "Couldn't save."); return d; });
 /*__THEME__*/
 /*__HEADER__*/
+/*__MANUAL__*/
+const CL = window.__CLAUDE__ || {ready: true};  // false: Claude isn't connected; every Claude control explains instead of failing
+const NEED_CL = `Needs Claude. Connect it under Settings, then Get started.`;
 
 // ---- the name (page title, header, profile menu)
 function showName(n){
@@ -277,7 +289,7 @@ function drawStrip(){
   const chips = [], miss = [], a = PROF, d = DRAFT;
   if (ING.running) chips.push(["warn", "Resume", "being read…"]);
   else if (a || d) chips.push(["ok", "Resume", "read " + when((a && (a._created || a._approved)) || (d && d._created))]);
-  else { chips.push(["warn", "Resume", "not uploaded"]); miss.push({go: "resume", text: "Upload your resume"}); }
+  else { chips.push(["warn", "Resume", CL.ready ? "not uploaded" : "no profile yet"]); miss.push({go: "resume", text: CL.ready ? "Upload your resume" : "Fill in your profile"}); }
   if (d && !ING.running) { chips.push(["warn", "Profile", "new draft to approve"]); miss.push({go: "about", text: "Approve your new profile"}); }
   else if (a) chips.push(["ok", "Profile", "approved"]);
   else chips.push(["warn", "Profile", "not approved"]);
@@ -307,17 +319,20 @@ function drawResume(){
   $("resumeState").textContent = ING.running ? `${st[0]} This takes about a minute${since > 5 ? ` (${since}s so far)` : ""}.`
     : ING.error ? "Couldn't use that resume: " + ING.error
     : d ? `New resume read: ${d._source_file || "resume"}, ${when(d._created)}. Check it under About you and approve it to use it.`
+    : a && a._manual ? `Active: filled in by hand, ${when(a._approved)}.` + (CL.ready ? " Claude is connected now: upload your resume above and Claude will read it to improve this profile." : "")
     : a ? `Active: ${a._source_file || "resume"}, read ${when(a._created || a._approved)}, approved ${when(a._approved)}. Upload a new one to replace it.`
-    : "No resume uploaded yet. Jobs are scored against the profile set up earlier.";
+    : CL.ready ? "No resume uploaded yet. Jobs are scored against the profile set up earlier." : "No profile yet. Fill in the form below to tell Siftwell what to look for.";
   $("resProg").hidden = !ING.running; $("resBar").style.width = st[1] + "%";
-  $("resPick").hidden = $("gdocForm").hidden = !!ING.running;
+  $("resPick").hidden = $("gdocForm").hidden = !!ING.running || !CL.ready;
+  $("resNoClaude").hidden = CL.ready;
+  drawManual();
 }
 function loadProfile(){
   return fetch("/api/profile").then(r => r.json()).then(p => {
     PROF = p.active; DRAFT = p.draft; ING = p.ingest || {};
     drawResume(); drawTitles(); drawStrip();
     if (!$("abBody").contains(document.activeElement)) drawAbout();
-    drawFacts(); $("generalQs").disabled = !PROF;
+    drawFacts(); $("generalQs").disabled = !PROF || !CL.ready;
     clearTimeout(loadProfile.t);
     if (ING.running) { ingestSeen = true; loadProfile.t = setTimeout(loadProfile, 2500); }
     else if (ingestSeen) { ingestSeen = false; if (DRAFT) go("about"); }
@@ -341,6 +356,26 @@ $("resumeFile").addEventListener("change", e => readFile(e.target.files[0]));
 $("drop").addEventListener("drop", e => readFile(e.dataTransfer.files[0]));
 $("gdocForm").addEventListener("submit", e => { e.preventDefault(); const u = $("gdocUrl").value.trim(); if (u) sendResume({gdoc_url: u}); });
 
+// ---- Resume without Claude: the "Fill in my profile myself" form (manual_profile.py). Shown straight away when there is no
+// profile yet and Claude isn't connected; otherwise behind a link, since saving it replaces the current profile.
+let manualOpen = false, manualMounted = false;
+function drawManual(){
+  const has = !!(PROF || DRAFT), busy = !!ING.running;
+  const show = !busy && (manualOpen || (!CL.ready && !has));
+  $("manualWrap").hidden = !show;
+  $("manualLink").hidden = show || busy;
+  $("manualOpen").textContent = !has ? "Fill in my profile myself instead" : PROF && PROF._manual ? "Edit my hand-filled profile" : "Replace my profile by filling it in myself";
+  if (show && !manualMounted) {
+    manualMounted = true;
+    if (PROF && PROF._manual) ManualProfile.load(PROF);
+    ManualProfile.mount($("manualRoot"), {button: true, name: PS0.name, onSaved: () => { manualOpen = false; loadProfile().then(() => { soonBoard(); go("about"); }); }});
+  }
+}
+$("manualOpen").addEventListener("click", () => {
+  if ((PROF || DRAFT) && !(PROF && PROF._manual) && !confirm("Saving the form replaces your current profile (the one Claude read). Continue?")) return;
+  manualOpen = true; drawManual();
+});
+
 // ---- About you: the structured profile. An approved profile saves as you edit; a new draft waits for Approve.
 const LISTS = [["clearances", "Clearances", "One per line, e.g. Secret (active)"], ["education", "Education", "One per line"],
                ["certifications", "Certifications and licenses", "One per line"], ["skills", "Skills", "One per line"], ["languages", "Languages", "One per line"]];
@@ -351,7 +386,7 @@ const refRow = (r, i) => `<div class="fact"><div><b>${esc(r.angle)}</b><div clas
 function drawAbout(){
   const p = DRAFT || PROF, box = $("abBody");
   $("abDraft").hidden = !DRAFT || !!ING.running;
-  if (!p) { box.innerHTML = `<p class="note pnote">No profile yet. <a href="#resume" data-go="resume">Upload your resume</a> and Claude drafts one here for you to check.</p>`; return; }
+  if (!p) { box.innerHTML = CL.ready ? `<p class="note pnote">No profile yet. <a href="#resume" data-go="resume">Upload your resume</a> and Claude drafts one here for you to check.</p>` : `<p class="note pnote">No profile yet. <a href="#resume" data-go="resume">Fill in your profile</a> and it shows up here to fine-tune.</p>`; return; }
   AB = {reframings: (p.reframings || []).slice()};
   const ta = (k, label, rows, v) => `<textarea data-ab="${k}" rows="${rows}" aria-label="${label}">${esc(v)}</textarea>`;
   box.innerHTML =
@@ -435,6 +470,7 @@ $("ps-titles").addEventListener("change", e => {
 });
 function drawTarget(){
   $("tgState").textContent = TJ.running ? "Claude is working out which jobs fit this target…"
+    : (TJ.needs_claude || (!CL.ready && SET.target_text && !SET.target_summary)) ? "Your target is saved. It starts working once Claude is connected (Settings, then Get started)."
     : TJ.error ? "Couldn't interpret the target: " + TJ.error
     : SET.target_text ? (SET.target_summary ? `Tab "${SET.target_name || "Target"}": ${SET.target_summary}` + (SET.target_any_title ? " (any job title)" : ` (titles like: ${(SET.target_keywords || []).slice(0, 8).join(", ")}…)`) : "")
     : "No target set.";
@@ -445,6 +481,7 @@ function pollTarget(){
     if (TJ.running) setTimeout(pollTarget, 3000);
   }).catch(() => {});
 }
+if (!CL.ready) { $("tgSuggest").disabled = true; $("tgSuggest").title = NEED_CL; $("tgSuggest").insertAdjacentHTML("afterend", ` <span class="note">${NEED_CL}</span>`); }
 $("tgSuggest").addEventListener("click", () => {
   $("tgSuggest").disabled = true; $("tgSugg").innerHTML = `<div class="note">Claude is reading your resume and the job market… (about a minute)</div>`;
   const poll = () => fetch("/api/target/suggest").then(r => r.json()).then(s => {
@@ -524,7 +561,8 @@ $("hlEdit").addEventListener("click", e => {
   }
 });
 $("hlConfirm").addEventListener("click", () => jpost("/api/highlights", {confirm: true}).then(({d}) => { HL = d; drawHL(); drawStrip(); }));
-$("hlRefresh").addEventListener("click", () => { $("hlMsg").textContent = "Claude is re-reading your resume… (about a minute)"; jpost("/api/highlights/refresh", {}).then(() => setTimeout(loadHL, 45000)); });
+if (!CL.ready) { $("hlRefresh").textContent = "Re-check from my profile"; $("generalQs").title = NEED_CL; $("generalQs").insertAdjacentHTML("afterend", `<span class="note">${NEED_CL}</span>`); }
+$("hlRefresh").addEventListener("click", () => { $("hlMsg").textContent = CL.ready ? "Claude is re-reading your resume… (about a minute)" : "Re-checking your profile…"; jpost("/api/highlights/refresh", {}).then(() => setTimeout(loadHL, 45000)); });
 
 // answers you've given (also asked for when you tailor a resume)
 const LV = {yes: "Yes", some: "Some", no: "No"};

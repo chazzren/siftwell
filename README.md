@@ -9,7 +9,7 @@
 
 **Your own job search assistant that runs on your computer.**
 
-Siftwell checks the career pages of the companies you care about every night, filters the openings down to your location, pay and level, has Claude rate how well each one fits your resume, and tailors your resume for the jobs worth applying to. Several people in one household can each have their own profile.
+Siftwell checks the career pages of the companies you care about every night, filters the openings down to your location, pay and level, can have Claude rate how well each one fits your resume, and tailors your resume for the jobs worth applying to. Claude is optional: Siftwell works without it (see **Using Siftwell without Claude**). Several people in one household can each have their own profile.
 
 > **Status: early preview.** Siftwell works day to day: it starts with a double-click, and a **Get started** checklist inside the app installs Claude Code and signs you in. Coming next: a Catalog page for managing companies, with **Find employers near me** (Claude researches employers in your area for you), and a proper desktop app window.
 
@@ -35,7 +35,7 @@ Siftwell checks the career pages of the companies you care about every night, fi
 | | Needed? | Notes |
 |---|---|---|
 | A Windows 11 or Mac computer | Yes | It needs to be on (asleep is fine) for the nightly update. |
-| A **Claude** subscription (Pro or Max) | Yes | Siftwell uses **Claude Code**, signed in with your Claude account, for ratings, resume reading and tailoring. An Anthropic API key works instead. |
+| A **Claude** subscription (Pro or Max) | Optional | Siftwell works without it (see **Using Siftwell without Claude** below). With **Claude Code**, signed in with your Claude account, it also gives Match ratings, reads your resume and tailors it. |
 | Google Chrome or Microsoft Edge | Yes | Used to make resume PDFs. Edge is already on Windows. |
 | A **ChatGPT** account + Codex | Optional | Only for the Astra resume reviewer. |
 
@@ -67,9 +67,11 @@ The Siftwell window shows Siftwell, which runs on your computer at **http://127.
 
 ### 4. Finish setup with the "Get started" checklist
 Open **Get started** (linked from the welcome page; once you have a profile it is the first item in **Settings**, the gear icon at the top, and the gear shows a small number while required steps are missing). It checks your computer and fixes things with buttons:
+- **Browser for resume PDFs:** found automatically (Edge is already on Windows).
+
+**Claude (optional).** Connect Claude to unlock Match ratings, resume reading and tailoring; Siftwell works without it. These two buttons never count as missing steps:
 - **Claude Code installed:** click **Install Claude Code** and Siftwell runs the official installer for you.
 - **Signed in to Claude:** click **Sign in to Claude**, open the link, sign in with your Claude account, and paste the code it shows back into Siftwell.
-- **Browser for resume PDFs:** found automatically (Edge is already on Windows).
 
 Optional switches on the same page: **Start Siftwell when I sign in to my computer** (on Windows it also offers **Switch to the new startup** if an older setup is still starting Siftwell), **Use Siftwell on my phone** (shows a link and a QR code to scan), **Keep Siftwell available to my phone when the window is closed** (see below), and how to set up **Astra** resume reviews.
 
@@ -144,6 +146,21 @@ Coming soon: **Find employers near me**, where Claude researches employers in yo
 - **Nightly update:** every morning at 5:30 Siftwell checks for new and removed jobs and rates the new ones. You can change or turn this off.
 - **On your phone:** new installs only answer on this computer. To use your phone, turn on **Use Siftwell on my phone** in **Settings → Get started** (Siftwell restarts once), then scan the QR code or open the link it shows (it ends in `?k=…`). Keep that link private: anyone on your home network with it can open your board. On Windows, click **Allow access** on the firewall prompt the first time. Your phone can only reach Siftwell while it is running: that means while its window is open, or after closing the window if **Keep Siftwell available to my phone when the window is closed** is on.
 
+## Using Siftwell without Claude
+
+Claude is an optional upgrade. Without it Siftwell still fetches listings, filters them to your location, pay and level, and ranks them by **Appeal**.
+
+**What works without Claude**
+- The nightly update, the board, **Appeal** ranking (the board sorts by Appeal until there are Match ratings), every filter, Save / Applied / Not for me, the Companies tab and the company lists.
+- **Search** the board by typing words and pressing Enter: it matches every word against the title, company, place and posting text, with a one-line note that this is a plain keyword search.
+- **Fill in my profile myself:** on **My profile → Resume** (and in the first-time setup) a short form takes your name, location, current title, summary, roles, skills, education, certifications and clearance and makes your profile. A Word (`.docx`) or text (`.txt`) resume can pre-fill the form (it is read on your computer, no AI); you check everything before saving. Scanned PDFs, photos and Google Doc links need Claude.
+
+**What needs Claude**
+- **Match** ratings, the verdicts and **Claude's read** on each job, the **Re-rate** panel and the nightly rating (these quietly skip).
+- **Tailor my resume**, the Astra review, tailoring questions, **Target** suggestions and ratings, reading a resume with Claude, and plain-English search that understands what you mean.
+
+Where something needs Claude, Siftwell shows one note ("Connect Claude to get Match ratings and tailoring → Settings → Get started") and a dash where the Match number would be, instead of an error. Once you connect Claude, upload your resume and Claude reads it to improve the profile you filled in.
+
 ## Your data stays on your computer
 
 Your information stays on this computer. Siftwell keeps your resume, profiles, saved jobs and ratings in a folder on your PC (not in the cloud). If you connect Claude, job descriptions and your resume are sent to Claude only to rate jobs and tailor resumes. Everything Siftwell creates or learns is stored only on your computer, outside the app folder:
@@ -169,6 +186,7 @@ So you can delete the Siftwell folder and download the latest version (or move i
 - **First-time setup failed:** check your internet connection and double-click **Start Siftwell** again; it picks up where it left off. Details are in `setup.log` in the runtime folder (Windows: `%LOCALAPPDATA%\Siftwell\runtime`; Mac: `~/Library/Application Support/Siftwell/runtime`). Deleting that runtime folder makes it set up from scratch (your data isn't touched).
 - **Hidden `.siftwell` or `.venv` folder inside the Siftwell folder:** older versions put the setup there. This version doesn't use them (an old `.venv` is only a fallback if the new setup can't finish) and remembers your port from `.siftwell` automatically. After Siftwell has started once with this version you can delete `.siftwell`, and `.venv` too unless you started Siftwell by hand from it (**Advanced / manual install**).
 - **I moved the Siftwell folder:** that's fine; stop Siftwell first, then double-click **Start Siftwell** in the new place. If **Start Siftwell when I sign in** is on, Siftwell points it at the new place the next time it starts.
+- **"Connect Claude to get Match ratings and tailoring":** Claude isn't installed or signed in on the computer running Siftwell. Everything else still works; to unlock Match ratings, open **Settings → Get started** and use **Install Claude Code** and **Sign in to Claude**.
 - **"Claude Code is signed out":** click **Sign in to Claude** on the board, open the link, sign in, and paste the code back.
 - **Another program is using port 8766:** Start Siftwell picks the next free port (8767 to 8775) by itself and remembers it; **Settings → Get started** shows which port Siftwell is using. Phone links need that port too.
 - **My phone can't connect:** check **Use Siftwell on my phone** is on (**Settings → Get started**), Siftwell is running (its window is open, or **Keep Siftwell available to my phone when the window is closed** is on), the phone is on the same Wi-Fi, and Windows Firewall allowed Siftwell (Start menu → "Allow an app through Windows Firewall").
