@@ -23,6 +23,10 @@ PAGE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Set up your board</title>
+<link rel="icon" type="image/svg+xml" href="/assets/brand/siftwell-mark.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/brand/favicon-16.png">
+<link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -287,7 +291,7 @@ h1.q.qtext{font-size:clamp(20px,4.6vw,24px);font-weight:600;line-height:1.3;lett
 <div class="shell">
   <div>
     <div class="top">
-      <div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)"/><path d="M7 9h10M7 12.5h6M7 16h8" stroke="var(--surface)" stroke-width="2" stroke-linecap="round"/></svg><span>Siftwell setup</span></div>
+      <div class="brand"><svg width="24" height="24" viewBox="16 12 80 92" aria-hidden="true" style="color:var(--ink)"><g fill="currentColor"><circle cx="38" cy="20" r="4"/><circle cx="56" cy="20" r="4"/><circle cx="74" cy="20" r="4"/></g><polygon points="22,32 90,32 64,62 64,78 48,78 48,62" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><circle cx="56" cy="94" r="6" fill="#FAC775"/></svg><span>Siftwell setup</span></div>
       <a class="later" id="later" href="/">Finish later</a>
     </div>
     <ol class="dots" id="dots" aria-label="Setup progress"></ol>
@@ -540,6 +544,7 @@ SCREENS.resume = {
           <span class="ico">${I.up}</span>
           <b>Drop your resume here</b>
           <small>PDF, Word (.docx) or text, up to 15 MB</small>
+          <small>Your resume is saved only on this computer.</small>
           <label class="btn primary" style="margin-top:4px" for="file" id="pick" tabindex="0" role="button">Choose a file</label>
           <input type="file" id="file" class="sr" accept=".pdf,.doc,.docx,.rtf,.odt,.txt,.md,.png,.jpg,.jpeg,.heic" tabindex="-1">
         </div>

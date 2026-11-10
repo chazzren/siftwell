@@ -236,7 +236,7 @@ CSS = """<style>
 BODY = """<div class="wrap">
 <header class="top">
   <div class="brandline">
-    <h1>Settings · __NAME__</h1>
+    """ + report.MARK + """<h1>Settings · __NAME__</h1>
   </div>
   <div class="tools" id="tools">
 __TOOLS__  </div>

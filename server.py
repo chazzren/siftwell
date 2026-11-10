@@ -1283,6 +1283,11 @@ if __name__ == "__main__":
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
     # start-at-sign-in entry still pointing at an old app folder or runtime? rewrite it (see getting_started.heal_startup)
     threading.Thread(target=getting_started.heal_entries, kwargs={"log": lambda m: print(m, flush=True)}, daemon=True).start()
+    try:   # tray icon while Siftwell runs without its window (helper process; see tray.py)
+        import tray
+        tray.start_helper(PORT)
+    except Exception as e:
+        print(f"tray helper not started: {e}", flush=True)
     if _CATALOG_MIGRATED:
         request_recompute()  # first start on the catalog: rebuild every board from it
     srv.serve_forever()
