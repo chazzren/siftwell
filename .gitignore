@@ -25,3 +25,6 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Siftwell launcher's private runtime (uv, Python, package cache, port/pid files)
+.siftwell/

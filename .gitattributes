@@ -1,0 +1,7 @@
+# Line endings: Windows scripts keep CRLF, Mac/Unix scripts keep LF, everything else is normalized.
+* text=auto
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.command text eol=lf
+*.sh text eol=lf
