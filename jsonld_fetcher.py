@@ -8,7 +8,7 @@ import concurrent.futures as cf
 from html.parser import HTMLParser
 from urllib import robotparser
 
-UA = "Mozilla/5.0 (dmv-jobfinder personal job search)"
+UA = "Mozilla/5.0 (Siftwell personal job search)"
 MAX_PAGES = 300        # job pages fetched per company per run
 WORKERS = 4
 DELAY = 0.25           # seconds each worker waits after a request

@@ -547,7 +547,7 @@ BODY = """<div class="wrap">
       <label>Salary floor ($ base)<input id="psFloor" type="number" step="5000" min="30000"></label>
       <label>Current base ($, optional)<input id="psBase" type="number" step="5000"></label>
       <label>Current package, one line (optional)<input id="psLabel" type="text" placeholder="e.g. $120k base, hybrid, 4 weeks PTO"></label>
-      <label>Home ZIP (or City, ST)<input id="psZip" type="text" placeholder="Blank = the DC-area list"></label>
+      <label>Home ZIP (or City, ST)<input id="psZip" type="text" placeholder="Blank = no home area"></label>
       <label>Search radius<select id="psRadius"><option value="10">10 miles</option><option value="25">25 miles</option><option value="35">35 miles</option><option value="50">50 miles</option><option value="75">75 miles</option></select></label>
       <label class="chk"><input id="psRemote" type="checkbox"> Include remote jobs anywhere in the US</label>
       <label>Your level<select id="psLevel"><option value="2">Mid-level</option><option value="3">Senior</option><option value="4">Lead / Manager</option><option value="5">Principal / Sr. Manager</option><option value="6">Director</option><option value="7">VP / Executive</option></select></label>
@@ -639,7 +639,7 @@ BODY = """<div class="wrap">
     <div class="fpanel" id="fPanel" hidden>
       <div class="fgrid">
         <div class="field"><span class="flabel">Workplace</span>
-          <div class="seg" id="wp" role="group" aria-label="Workplace"><button data-v="all" aria-pressed="true">All</button><button data-v="remote" aria-pressed="false">Remote</button><button data-v="dmv" aria-pressed="false">DMV office</button></div></div>
+          <div class="seg" id="wp" role="group" aria-label="Workplace"><button data-v="all" aria-pressed="true">All</button><button data-v="remote" aria-pressed="false">Remote</button><button data-v="dmv" aria-pressed="false">Near me</button></div></div>
         <label class="field"><span class="flabel">Fit</span><select id="lbl"></select></label>
         <label class="field"><span class="flabel">Seniority</span><select id="lvl">
           <option value="near" selected>Near my level</option><option value="mine">My level</option>
@@ -715,7 +715,7 @@ BODY = """<div class="wrap">
     <thead><tr><th>Company</th><th>Sector</th><th>Presence</th><th>Source</th><th>Postings</th><th>Matches</th><th>Status</th></tr></thead>
     <tbody id="cos"></tbody>
   </table></div>
-  <p class="legend">Postings = every job on the company's board. Matches = jobs left after the location (Reston or closer, or US remote), title, and <span class="floorTxt"></span> salary filters.</p>
+  <p class="legend">Postings = every job on the company's board. Matches = jobs left after the location (near you, or US remote), title, and <span class="floorTxt"></span> salary filters.</p>
 </section>
 </div>
 """
@@ -736,7 +736,7 @@ const saveStatus = (id) => {
 };
 const LBL = {apply_now: "Strong match", tailor: "Worth tailoring", stretch: "Stretch", skip: "Not a fit"};
 const LBL_HELP = {apply_now: "Apply with your resume as it is.", tailor: "A good fit once your resume speaks to this role.", stretch: "Reachable, but there's a real gap.", skip: "Claude doesn't think this one is worth your time."};
-const TIER = {dmv_hq:"DMV HQ", dmv_office:"DMV office", remote_first:"Remote-first", remote_friendly:"Remote-friendly"};
+const TIER = {dmv_hq:"HQ near you", dmv_office:"Office near you", remote_first:"Remote-first", remote_friendly:"Remote-friendly"};
 
 const jobs = D.jobs;
 const nNew = jobs.filter(j => j.new).length;
@@ -1132,7 +1132,7 @@ function nlDraw(total){
   if (!nlOn()) return;
   const c = NL.crit, n = NL.ids.length, hid = n - total;
   const parts = [...c.role_terms.slice(0, 4), ...c.companies.slice(0, 4), ...c.sectors.slice(0, 3), ...c.topic_terms.slice(0, 5)];
-  if (c.workplace === "remote") parts.push("remote"); if (c.workplace === "dmv") parts.push("DMV office");
+  if (c.workplace === "remote") parts.push("remote"); if (c.workplace === "dmv") parts.push("Near me");
   if (c.min_salary) parts.push("$" + Math.round(c.min_salary / 1000) + "k+");
   $("nlBar").className = "nlbar"; $("nlBar").hidden = false;
   $("nlBar").innerHTML = `<span>Claude searched for <b>${esc(c.summary)}</b>: ${n.toLocaleString()} match${n === 1 ? "" : "es"}${hid > 0 ? `, ${hid.toLocaleString()} hidden by your filters` : ""}.</span>` +
@@ -1352,7 +1352,7 @@ const FDEF = () => ({clr: PREFS["display.clearance"] || "secret", lvl: PREFS["di
 const optText = id => { const o = $(id).selectedOptions[0]; return o ? o.textContent : ""; };
 function activeFilters(){
   const out = [];
-  if (wp !== "all") out.push(["wp", wp === "remote" ? "Remote" : "DMV office"]);
+  if (wp !== "all") out.push(["wp", wp === "remote" ? "Remote" : "Near me"]);
   for (const id of ["lbl", "lvl", "clr", "trv", "co"]) if ($(id).value !== "all") out.push([id, optText(id)]);
   for (const id of CF_IDS) if ($(id).value !== "all") out.push([id, CF_LABEL[id] + optText(id)]);
   if ($("st").value !== "active") out.push(["st", "Show: " + optText("st")]);

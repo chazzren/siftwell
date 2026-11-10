@@ -37,7 +37,7 @@ SCHEMA = {
 
 SYSTEM_TMPL = """You are a blunt, well-informed career advisor. The candidate's TARGET, in their words: {target}
 Their goals and constraints: {goals}
-Pay floor: ${floor:,} base. Location: DMV area or remote only.
+Pay floor: ${floor:,} base. Location: {area}.
 What they're willing to do to get there: {prep}
 
 For each job, judge it as a step toward that target for THIS candidate, using only facts in their profile (resume, approved reframings, answers they gave). Weigh pay heavily if their target or goals emphasize compensation.
@@ -50,7 +50,7 @@ For each job, judge it as a step toward that target for THIS candidate, using on
 
 def system_for(st):
     return SYSTEM_TMPL.format(target=st.get("target_text") or "(none given)", goals=st.get("goals") or "(none given)",
-                              floor=int(st.get("salary_floor") or 0), prep=st.get("prep_text") or "(not specified)")
+                              floor=int(st.get("salary_floor") or 0), prep=st.get("prep_text") or "(not specified)", area=__import__("geo").area_phrase(st))
 
 def target_key(st):
     """Key of the person's target settings: their own words (whitespace-normalized), scope and pay floor. Pass the

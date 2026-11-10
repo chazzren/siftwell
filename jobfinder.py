@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DMV job finder: pull jobs from company ATS feeds, keep DMV (Reston or closer) + US-remote roles,
+"""Siftwell job finder: pull jobs from company ATS feeds, keep roles near the person (home radius) + US-remote roles,
 filter by title/salary, score against resume profile, and write data/jobs.json, jobs.csv, report.html.
 
 Usage:  python3 jobfinder.py            # full refresh
@@ -11,7 +11,7 @@ import urllib.request, urllib.error
 
 import paths
 HERE, DATA = paths.APP, paths.DATA
-UA = "Mozilla/5.0 (dmv-jobfinder personal job search)"
+UA = "Mozilla/5.0 (Siftwell personal job search)"
 CFG = paths.load_config()
 
 import copy
@@ -533,7 +533,7 @@ def f_smartrecruiters(c):
             break
 
 def _wd_location_facets(facets):
-    """Walk Workday facet tree; return {facetParameter: [ids]} for DMV/remote location values."""
+    """Walk Workday facet tree; return {facetParameter: [ids]} for local/remote location values."""
     out = {}
     def walk(fs):
         for f in fs or []:
