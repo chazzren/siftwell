@@ -144,8 +144,43 @@ def check_js():
     print(f"[js] {checked} page script(s) checked with node --check")
 
 
+def _repo_slug():
+    """This repository's own "owner/name" (public by definition: it's the repo's address)."""
+    slug = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    if not slug:
+        try:
+            url = subprocess.run(["git", "-C", ROOT, "remote", "get-url", "origin"], capture_output=True,
+                                 text=True, timeout=10).stdout.strip()
+            m = re.search(r"github\.com[:/]+([^/]+/[^/.]+)", url)
+            slug = m.group(1) if m else ""
+        except Exception:
+            slug = ""
+    return slug
+
+
+def _allowed_spans(line, phrases):
+    """Character ranges of allow-listed public phrases in a line (case-insensitive)."""
+    spans, low = [], line.lower()
+    for p in phrases:
+        start = 0
+        while p and (i := low.find(p, start)) >= 0:
+            spans.append((i, i + len(p)))
+            start = i + 1
+    return spans
+
+
 def check_leaks(files):
     rules = list(LEAK_RULES)
+    # Public phrases a private pattern may legitimately match: the repo's own owner/name (its address) and the
+    # company names in scripts/leak_allow.txt (e.g. an employer that shares a first name with someone).
+    phrases = []
+    slug = _repo_slug()
+    if slug:
+        phrases.append(slug.lower())
+    allow_file = os.path.join(ROOT, "scripts", "leak_allow.txt")
+    if os.path.isfile(allow_file):
+        with open(allow_file, encoding="utf-8") as fh:
+            phrases += [l.strip().lower() for l in fh if l.strip() and not l.lstrip().startswith("#")]
     for i, line in enumerate((os.environ.get("LEAK_PATTERNS") or "").splitlines()):
         line = line.strip()
         if not line:
@@ -168,11 +203,14 @@ def check_leaks(files):
         scanned += 1
         with open(full, encoding="utf-8", errors="replace") as fh:
             for n, line in enumerate(fh, 1):
+                spans = _allowed_spans(line, phrases) if phrases else []
                 for label, rx in rules:
                     for m in rx.finditer(line):
                         text = m.group(0)
                         if label == "email address" and any(a in text.lower() for a in EMAIL_ALLOW):
                             continue
+                        if label.startswith("private pattern") and any(a <= m.start() and m.end() <= b for a, b in spans):
+                            continue  # inside the repo's own address or an allow-listed public company name
                         hits += 1
                         errors.append(f"leak: {f}:{n}: {label}: {mask(text)}")
     print(f"[leaks] {scanned} text files scanned with {len(rules)} rules "

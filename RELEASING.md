@@ -54,3 +54,5 @@ python scripts/release_check.py --local
 ## Executable bit for macOS
 
 `Start Siftwell.command` must be executable inside the ZIP. Set it once in git: `git update-index --chmod=+x "Start Siftwell.command"`, then commit. The workflow fails if it is missing.
+
+**False alarms from your private names list:** the leak check ignores matches inside this repository's own address (owner/name) and inside public phrases listed in `scripts/leak_allow.txt` (one per line, e.g. a company like "Charles Schwab"). Only add public company or place names there, never people.

@@ -1,0 +1,3 @@
+# Public phrases the private-name leak check (LEAK_PATTERNS) may match without failing a release.
+# One per line, case-insensitive, exact substring. Only add public names (companies, places), never people.
+Charles Schwab
