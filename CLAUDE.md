@@ -20,6 +20,9 @@ Siftwell is a self-hosted household job board: it fetches listings from employer
 - No new dependencies without asking. Python 3.12, stdlib first.
 - Never commit, push, or change git config unless the project manager asks. Don't commit user data (it lives outside the repo anyway).
 
+## README must always match the app
+`README.md` is the user-facing manual for people who barely know GitHub. **Any change that alters what users see or do (install steps, pages, buttons, settings, defaults, requirements, where data lives) must update README.md in the same change**, in plain language. Don't describe features that aren't built yet except in the clearly marked "coming next" status line. Reviewers check this too.
+
 ## Testing
 - Run a test server on its own port with its own data: `JOBBOARD_DATA=<scratch dir> python -X utf8 server.py <port>`. Never point tests at a real user's data folder.
 - **Don't spend the user's Claude plan in tests**: use tiny runs (a handful of jobs) or stub `claude_cli` responses; ask before anything larger.
