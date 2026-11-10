@@ -19,11 +19,8 @@ if __name__ == "__main__" and "--serve" in sys.argv:
         _port = int(open(os.path.join(_app, ".siftwell", "port")).read().strip())
     except (OSError, ValueError):
         _port = 8766
-    try:
-        os.makedirs(os.path.join(_app, ".siftwell"), exist_ok=True)
-        open(os.path.join(_app, ".siftwell", "server.pid"), "w").write(str(os.getpid()))
-    except OSError:
-        pass
+    if not 1024 <= _port <= 65535:
+        _port = 8766
     os.chdir(_app)
     sys.argv = [os.path.join(_app, "server.py"), str(_port)]
     import runpy
@@ -54,7 +51,55 @@ NOWIN = getattr(subprocess, "CREATE_NO_WINDOW", 0) if osdeps.WINDOWS else 0
 
 
 def configure(port, token, busy):
+    """busy() returns a short reason string while work a restart would kill is running, else ''."""
     CTX.update(port=port, token=token, busy=busy)
+
+
+def _pid_alive(pid):
+    try:
+        if osdeps.WINDOWS:
+            import ctypes
+            h = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+            if not h:
+                return False
+            code = ctypes.c_ulong()
+            ok = ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(code))
+            ctypes.windll.kernel32.CloseHandle(h)
+            return bool(ok) and code.value == 259
+        os.kill(pid, 0)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def note_started():
+    """Call after the port is bound: record our pid in .siftwell/server.pid unless that file names another live process."""
+    pf = os.path.join(RUN_DIR, "server.pid")
+    try:
+        old = int(open(pf).read().strip())
+    except (OSError, ValueError):
+        old = 0
+    if old and old != os.getpid() and _pid_alive(old):
+        return
+    try:
+        os.makedirs(RUN_DIR, exist_ok=True)
+        with open(pf, "w") as f:
+            f.write(str(os.getpid()))
+    except OSError:
+        pass
+
+
+_slow = {}
+
+
+def _cached(key, fn, ttl=30):
+    """Slow checks (subprocesses, network lookups) are reused for ttl seconds; status(fresh=True) clears them."""
+    hit = _slow.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    v = fn()
+    _slow[key] = (time.time(), v)
+    return v
 
 
 # ---------------------------------------------------------------- phone access (network.json)
@@ -79,7 +124,10 @@ def bind_host():
 
 def save_network(on):
     os.makedirs(paths.DATA, exist_ok=True)
-    json.dump({"lan": bool(on)}, open(NETWORK, "w", encoding="utf-8"))
+    tmp = NETWORK + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"lan": bool(on)}, f)
+    os.replace(tmp, NETWORK)
 
 
 def _private(ip):
@@ -139,14 +187,35 @@ def _linux_desktop():
     return os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "autostart", "siftwell.desktop")
 
 
-def _task_exists():
+def _task_info():
+    """The older setup's scheduled task: {} when absent, else {state, wd, args}. Read-only; cached."""
     if not osdeps.WINDOWS:
+        return {}
+    def q():
+        try:
+            ps = (f"$t=Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue; "
+                  "if($t){@{state=[string]$t.State;wd=[string]$t.Actions[0].WorkingDirectory;args=[string]$t.Actions[0].Arguments}|ConvertTo-Json -Compress}")
+            r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                               capture_output=True, text=True, timeout=30, creationflags=NOWIN)
+            return json.loads(r.stdout) if r.stdout.strip() else {}
+        except Exception:
+            return {}
+    return _cached("task", q)
+
+
+def _task_exists():
+    return bool(_task_info())
+
+
+def task_managed():
+    """True when this server is (very likely) the one the scheduled task runs: the task is Running, its working
+    folder is this app, and it uses our port (it passes none, so 8766). Restarting from inside it is unreliable."""
+    t = _task_info()
+    if not t or t.get("state") != "Running":
         return False
-    try:
-        return subprocess.run(["schtasks", "/Query", "/TN", TASK_NAME], capture_output=True, timeout=15,
-                              creationflags=NOWIN).returncode == 0
-    except Exception:
-        return False
+    same = os.path.normcase(os.path.abspath(t.get("wd") or "")) == os.path.normcase(os.path.abspath(APP))
+    port = CTX["port"]
+    return same and (port == 8766 or str(port) in (t.get("args") or ""))
 
 
 def startup_state():
@@ -206,7 +275,10 @@ def set_startup(on):
                 os.remove(df)
             return
         os.makedirs(os.path.dirname(df), exist_ok=True)
-        q = lambda s: '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`") + '"'
+        def q(s):
+            for ch in ("\\", '"', "`", "$"):
+                s = s.replace(ch, "\\" + ch)
+            return '"' + s.replace("%", "%%") + '"'
         with open(df, "w", encoding="utf-8") as f:
             f.write("[Desktop Entry]\nType=Application\nName=Siftwell\nComment=Start the Siftwell job board\n"
                     f"Exec={q(py)} -X utf8 {q(launcher)} --serve\nPath={APP}\nTerminal=false\n"
@@ -225,27 +297,55 @@ def install_command():
         return test, True
     if osdeps.WINDOWS:
         return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "irm https://claude.ai/install.ps1 | iex"], False
-    return ["bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash"], False
+    return ["bash", "-c", "curl -fsSL --max-time 540 https://claude.ai/install.sh | bash"], False
+
+
+def _kill_tree(p):
+    try:
+        if osdeps.WINDOWS:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True, timeout=15, creationflags=NOWIN)
+        else:
+            import signal
+            os.killpg(p.pid, signal.SIGKILL)
+    except Exception:
+        try:
+            p.kill()
+        except Exception:
+            pass
 
 
 def _run_install():
     import claude_cli
     cmd, shell = install_command()
+    limit = float(os.environ.get("SIFTWELL_TEST_INSTALL_TIMEOUT") or 600)
+    timed_out = []
     try:
         p = subprocess.Popen(cmd, shell=shell, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             creationflags=NOWIN)
+                             creationflags=NOWIN, start_new_session=not osdeps.WINDOWS)
+        def stop():
+            timed_out.append(1)
+            _kill_tree(p)
+        dog = threading.Timer(limit, stop)
+        dog.daemon = True
+        dog.start()
         for raw in iter(p.stdout.readline, b""):
             line = _ANSI.sub("", raw.decode("utf-8", "replace")).replace("\r", "").strip()
             if line:
                 with _ilock:
                     INSTALL["lines"] = (INSTALL["lines"] + [line])[-60:]
         p.wait()
+        dog.cancel()
         code = p.returncode
+        if timed_out:
+            code = -1
+            with _ilock:
+                INSTALL["lines"] = (INSTALL["lines"] + ["Stopped: the installer was taking too long. Check your internet connection and try again."])[-60:]
     except Exception as e:
         code = -1
         with _ilock:
             INSTALL["lines"] = (INSTALL["lines"] + ["Couldn't run the installer: " + str(e)[:200]])[-60:]
     _status_cache.clear()
+    _slow.clear()
     with _ilock:
         INSTALL.update(running=False, exit=code, finished=time.time(), found=bool(claude_cli.path()))
 
@@ -291,7 +391,11 @@ except OSError:
 
 
 def restart_now():
-    """Start a replacement server that waits for this one's port to free, then exit this process."""
+    """Start a replacement server that waits for this one's port to free. Raises if it can't be started; the caller
+    answers the browser and then calls exit_soon()."""
+    if task_managed():
+        raise RuntimeError("Siftwell is run by the Windows scheduled task \"Job Board server\", which can't be restarted from "
+                           "here. Sign out of Windows and back in (or restart the computer) to apply this change.")
     py = sys.executable
     server = os.path.join(APP, "server.py")
     cmd = [py, "-X", "utf8", server, str(CTX["port"])]
@@ -301,6 +405,9 @@ def restart_now():
     subprocess.Popen([py, "-X", "utf8", "-c", _WAITER, str(CTX["port"]), os.path.join(paths.data(), "server.log"),
                       os.path.join(RUN_DIR, "server.pid"), *cmd], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, creationflags=flags, start_new_session=not osdeps.WINDOWS, cwd=APP)
+
+
+def exit_soon():
     threading.Timer(0.8, lambda: os._exit(0)).start()
 
 
@@ -322,15 +429,17 @@ def _signed_in(installed, fresh):
 
 def status(fresh=False):
     import claude_cli
+    if fresh:
+        _slow.clear()
     port = CTX["port"]
     cpath = claude_cli.path()
     signed = _signed_in(bool(cpath), fresh)
-    chrome = osdeps.chrome_path()
+    chrome = _cached("chrome", osdeps.chrome_path)
     st = startup_state()
     lan = lan_enabled()
-    ip = lan_ip() if lan else None
+    ip = _cached("ip", lan_ip) if lan else None
     url = f"http://{ip}:{port}/?k={CTX['token']}" if lan and ip else None
-    codex = osdeps.find_exe("codex")
+    codex = _cached("codex", lambda: osdeps.find_exe("codex"))
     items = [
         {"id": "claude", "title": "Claude Code installed", "done": bool(cpath), "optional": False},
         {"id": "signin", "title": "Signed in to Claude", "done": bool(signed), "optional": False},
@@ -343,11 +452,12 @@ def status(fresh=False):
     done = sum(1 for i in req if i["done"])
     return {
         "items": items, "done": done, "total": len(req), "complete": done == len(req),
+        "missing": [i["id"] for i in req if not i["done"]],
         "port": port, "windows": osdeps.WINDOWS, "mac": osdeps.MAC,
         "claude": {"installed": bool(cpath), "signed_in": bool(signed)},
         "browser": {"found": bool(chrome), "name": "Edge" if chrome and "edge" in chrome.lower() else "Chrome" if chrome else ""},
         "startup": st,
-        "phone": {"on": lan, "bound": CTX["bound_lan"], "restart_needed": lan != CTX["bound_lan"], "ip": ip, "url": url, "port": port},
+        "phone": {"on": lan, "bound": CTX["bound_lan"], "restart_needed": lan != CTX["bound_lan"], "restart_manual": lan != CTX["bound_lan"] and task_managed(), "ip": ip, "url": url, "port": port},
         "astra": {"found": bool(codex)},
         "install": install_state(),
     }
@@ -404,11 +514,17 @@ def handle_post(h, path, body):
             save_network(bool(body.get("on")))
             h._send(200, status())
         elif act == "restart":
-            if CTX["busy"]():
-                return h._send(409, {"error": "An update is running. Restarting now would stop it. Try again when it finishes."}) or True
+            why = CTX["busy"]() or (install_state()["running"] and "Claude Code is installing")
+            if why:
+                return h._send(409, {"error": f"{why}. Restarting now would stop it. Try again when it finishes."}) or True
+            try:
+                restart_now()
+            except Exception as e:
+                print("restart failed:", e, flush=True)
+                return h._send(500, {"error": str(e)[:300] or "Couldn't restart Siftwell."}) or True
             h._send(200, {"ok": True})
             h.wfile.flush()
-            restart_now()
+            exit_soon()
         else:
             return False
     except Exception as e:
@@ -559,7 +675,8 @@ function rowPhone(){
   const p = S.phone;
   let desc = p.on ? "Phones and tablets on your home Wi-Fi can open Siftwell." : "Right now only this computer can open Siftwell. Turn this on to use it from phones on your home Wi-Fi.";
   let body = `<label class="gsw"><input type="checkbox" class="sw" role="switch" id="swPhone" ${p.on ? "checked" : ""} ${ui.busy.phone || ui.restarting ? "disabled" : ""}><span>${p.on ? "On" : "Off"}</span></label>`;
-  if (p.restart_needed) body += `<div class="gswarn">Restart Siftwell to apply this change. <button class="btn sm primary" type="button" data-act="restart" ${ui.restarting ? "disabled" : ""}>${ui.restarting ? "Restarting…" : "Restart now"}</button></div>`;
+  if (p.restart_needed && p.restart_manual) body += `<div class="gswarn">This change takes effect after you sign out of Windows and back in (or restart the computer). Siftwell is started by a Windows scheduled task here, so it can't restart itself.</div>`;
+  else if (p.restart_needed) body += `<div class="gswarn">Restart Siftwell to apply this change. <button class="btn sm primary" type="button" data-act="restart" ${ui.restarting ? "disabled" : ""}>${ui.restarting ? "Restarting…" : "Restart now"}</button></div>`;
   if (p.on) {
     if (p.url) body += `<div class="gsmsg">On your phone, open this link (anyone with it can use Siftwell on your network, so keep it private):</div><div class="gslink" id="phoneLink">${esc(p.url)}</div><div class="gsqr" id="qr" aria-label="QR code for the phone link" role="img"></div>`
       + `<span class="gsmsg">${S.windows ? "The first time, Windows asks whether to allow Siftwell on your network. Choose Allow access on private networks. " : ""}Your phone must be on the same Wi-Fi as this computer.</span>`;

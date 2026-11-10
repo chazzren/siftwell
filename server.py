@@ -730,6 +730,8 @@ class H(BaseHTTPRequestHandler):
         import getting_started
         if getting_started.handle_post(self, path, body):
             return
+        if path == "/api/claude/login":  # before the no-profile check: sign-in is part of first-time setup
+            return self._send(*claude_login(str(body.get("action") or ""), str(body.get("code") or "")))
         if pid is None and path != "/api/people/add":
             return self._send(409, {"error": "Add a person first."})
         if path == "/api/person":
@@ -879,8 +881,6 @@ class H(BaseHTTPRequestHandler):
                 state["running"] = True
             threading.Thread(target=run_update, args=(body.get("only"),), daemon=True).start()
             return self._send(202, {"ok": True})
-        if path == "/api/claude/login":
-            return self._send(*claude_login(str(body.get("action") or ""), str(body.get("code") or "")))
         if path == "/api/search":
             import claude_cli, nlsearch
             q = str(body.get("q") or "").strip()[:300]
@@ -1030,6 +1030,20 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"has_key": bool(sec.get("anthropic_api_key"))})
         self._send(404, {"error": "not found"})
 
+def busy_reason():
+    """What a restart would kill right now ('' when idle); used by the Get started page's Restart button."""
+    with lock:
+        if state["running"]:
+            return "An update is running"
+        if any(r.get("running") for r in RERATE.values()):
+            return "A re-rate is running"
+    if _RESCORE["running"]:
+        return "Ratings are being recomputed"
+    for p in list(_pstate.values()):
+        if any(t.get("running") for t in list(p["tailor"].values())) or p["resume"].get("running") or any(q.get("running") for q in list(p["questions"].values())):
+            return "A resume is being tailored or read"
+    return ""
+
 if __name__ == "__main__":
     osdeps.ensure_utf8()
 
@@ -1046,8 +1060,9 @@ if __name__ == "__main__":
     try:
         import getting_started
         BIND = getting_started.bind_host()  # 127.0.0.1 unless phone access is on (DATA/network.json)
-        getting_started.configure(PORT, TOKEN, lambda: state["running"])
         srv = Server((BIND, PORT), H)
+        getting_started.configure(PORT, TOKEN, busy_reason)
+        getting_started.note_started()
     except OSError:
         print(f"Port {PORT} is already in use by another program. Stop it, or run on another port: "
               f"python server.py <port>", flush=True)

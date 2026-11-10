@@ -1149,13 +1149,15 @@ if (SERVED) clPost({action: "status"}).then(({d}) => {
 }).catch(() => {});
 // ---- "Finish setting up" banner: links to /getting-started while required checklist items are missing; Dismiss is remembered in this browser
 if (SERVED) {
-  let gsOff = false; try { gsOff = localStorage.getItem("jb.gsOff") === "1"; } catch(e) {}
-  if (!gsOff) fetch("/api/setup-status").then(r => r.json()).then(s => {
+  let gsOff = ""; try { gsOff = localStorage.getItem("jb.gsOff") || ""; } catch(e) {}
+  fetch("/api/setup-status").then(r => r.json()).then(s => {
     if (!s || s.complete || !s.total) return;
+    const miss = (s.missing || []).slice().sort().join(","), seen = gsOff.split(",");
+    if (gsOff && (s.missing || []).every(m => seen.includes(m))) return;  // dismissed; shows again if something new is missing
     const b = $("gsBanner");
     b.innerHTML = `<span>Finish setting up Siftwell (${s.done} of ${s.total} done)</span><a class="btn sm primary" href="/getting-started">Open the checklist</a><button class="btn sm ghost" type="button" id="gsOff">Dismiss</button>`;
     b.hidden = false;
-    $("gsOff").addEventListener("click", () => { b.hidden = true; try { localStorage.setItem("jb.gsOff", "1"); } catch(e) {} });
+    $("gsOff").addEventListener("click", () => { b.hidden = true; try { localStorage.setItem("jb.gsOff", miss); } catch(e) {} });
   }).catch(() => {});
 }
 const QUICK = [["good", "Strong & worth tailoring"], ["remote", "Remote"], ["nonprofit", "Nonprofit"], ["paid", "Pay listed"], ["new", "New"]];
