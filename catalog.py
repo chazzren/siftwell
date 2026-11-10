@@ -5,7 +5,8 @@ DATA/catalog.db (SQLite, WAL so the server can read while an update writes):
   listings   one row per posting ever seen: parsed fields (JSON in `data`), full text in `desc`,
              first_seen / last_seen / closed_at. Closed listings stay so a reappearing posting keeps its history.
   seen       first-seen date for every posting id (also for ones that were never stored)
-  runs       history of fetches, recomputes and re-rates (counts, errors, per-tier timing)
+  runs       history of fetches, recomputes, re-rates and employer searches (counts, errors, per-tier timing)
+  candidates employers found by "Find employers near me" (employer_finder.py), with whether Siftwell can read them
   meta       key/value bookkeeping (migration, date of the last full fetch)
 
 Boards are not stored here: jobfinder.recompute() runs each person's filters over the open listings and writes
@@ -41,6 +42,11 @@ CREATE TABLE IF NOT EXISTS runs(
   id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, started TEXT NOT NULL, finished TEXT, status TEXT,
   companies INTEGER, fetched INTEGER, new INTEGER, closed INTEGER, changed INTEGER, reopened INTEGER,
   errors TEXT, details TEXT);
+CREATE TABLE IF NOT EXISTS candidates(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER NOT NULL, name TEXT NOT NULL, url TEXT, category TEXT,
+  location_note TEXT, why TEXT, status TEXT NOT NULL DEFAULT 'pending', reason TEXT, ats TEXT, cfg TEXT,
+  open_jobs INTEGER, suggested TEXT, added_as TEXT, created TEXT, checked TEXT);
+CREATE INDEX IF NOT EXISTS candidates_run ON candidates(run_id);
 """
 
 # Board fields that depend on the person looking (never stored on a listing).
@@ -311,10 +317,89 @@ def finish_run(run_id, status="ok", **fields):
                     (now(), status, *cols.values(), run_id))
 
 
-def runs(limit=50):
+def runs(limit=50, kind=None):
     with db() as con:
-        rows = con.execute("SELECT * FROM runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        if kind:
+            rows = con.execute("SELECT * FROM runs WHERE kind=? ORDER BY id DESC LIMIT ?", (kind, limit)).fetchall()
+        else:
+            rows = con.execute("SELECT * FROM runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     return [dict(r, errors=json.loads(r["errors"] or "null"), details=json.loads(r["details"] or "null")) for r in rows]
+
+
+def get_run(run_id):
+    with db() as con:
+        r = con.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+    return dict(r, errors=json.loads(r["errors"] or "null"), details=json.loads(r["details"] or "null")) if r else None
+
+
+def update_run(run_id, details=None, status=None, finished=False):
+    """Save a running job's progress (details replaces the stored JSON); status/finished as given."""
+    sets, vals = [], []
+    if details is not None:
+        sets.append("details=?"); vals.append(json.dumps(details))
+    if status is not None:
+        sets.append("status=?"); vals.append(status)
+    if finished:
+        sets.append("finished=?"); vals.append(now())
+    elif status == "running":
+        sets.append("finished=NULL")
+    if sets:
+        with db() as con:
+            con.execute(f"UPDATE runs SET {', '.join(sets)} WHERE id=?", (*vals, run_id))
+
+
+# ---------------------------------------------------------------- browsing (the Catalog page)
+COMPANY_META = ("name", "tier", "sector", "sets", "size", "ai_track", "added_by")  # everything else in cfg is the job-board config
+
+
+def ats_key(c):
+    """Identity of a company's job board: its system plus the board config (token, tenant/site, ...), not its name."""
+    return c.get("ats", "") + "|" + json.dumps({k: v for k, v in c.items() if k not in COMPANY_META and k != "ats"
+                                                 and not k.startswith("_")}, sort_keys=True)
+
+
+def board_config(c):
+    """The job-board part of a company entry (ats + its config keys)."""
+    return {k: v for k, v in c.items() if k not in COMPANY_META and not k.startswith("_")}
+
+
+def find_listings(q="", state="open", company="", page=1, per=50, sort="last_seen", only=None):
+    """One page of catalog listings for the Catalog page: (rows, total). q matches title, company or location.
+    only: a set of listing ids to keep (e.g. one person's board)."""
+    where, args = [], []
+    if state == "open":
+        where.append("closed_at IS NULL AND partial=0")
+    elif state == "closed":
+        where.append("closed_at IS NOT NULL")
+    if company:
+        where.append("company=?"); args.append(company)
+    for w in (q or "").split()[:6]:
+        where.append("(title LIKE ? OR company LIKE ? OR locations LIKE ?)"); args += [f"%{w}%"] * 3
+    sql = " WHERE " + " AND ".join(where) if where else ""
+    order = {"first_seen": "first_seen DESC, id", "title": "title COLLATE NOCASE, id", "company": "company COLLATE NOCASE, title COLLATE NOCASE"}.get(sort, "last_seen DESC, first_seen DESC, id")
+    per = max(10, min(200, int(per)))
+    page = max(1, int(page))
+    cols = "id, company, title, url, locations, workplace, salary_min, salary_max, first_seen, last_seen, closed_at, partial"
+    with db() as con:
+        if only is not None:
+            ids = [r[0] for r in con.execute(f"SELECT id FROM listings{sql} ORDER BY {order}", args) if r[0] in only]
+            total, ids = len(ids), ids[(page - 1) * per:page * per]
+            pos = {i: n for n, i in enumerate(ids)}
+            rows = sorted(con.execute(f"SELECT {cols} FROM listings WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall(),
+                          key=lambda r: pos[r["id"]]) if ids else []
+        else:
+            total = con.execute("SELECT COUNT(*) FROM listings" + sql, args).fetchone()[0]
+            rows = con.execute(f"SELECT {cols} FROM listings{sql} ORDER BY {order} LIMIT ? OFFSET ?", (*args, per, (page - 1) * per)).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["locations"] = json.loads(d["locations"] or "[]")
+        except ValueError:
+            d["locations"] = []
+        d["partial"] = bool(d["partial"])
+        out.append(d)
+    return out, total
 
 
 # ---------------------------------------------------------------- one-time migration from the file-based layout

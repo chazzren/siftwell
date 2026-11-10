@@ -142,33 +142,44 @@ def verify(c):
         raise ValueError(f"Found a {a} board, but its job feed didn't respond ({type(e).__name__}).")
     raise ValueError("Unsupported job board.")
 
-def add(url, name="", scope="me"):
-    c = detect(url)
-    total, suggested = verify(c)
-    if not total:
-        raise ValueError("That job board is reachable but has no open jobs right now.")
-    pid = people.current()
+def default_name(c, suggested=None, name=""):
+    """The name a new company gets: the one typed, else the board's own name, else one made from its config."""
     if c["ats"] == "jsonld" and not suggested:
         import urllib.parse
         h = urllib.parse.urlsplit(c.get("list_url") or c.get("sitemap") or "").netloc.lower().removeprefix("www.").split(":")[0]
         suggested = h.rsplit(".", 1)[0].split(".")[-1] if "." in h else h
     ident = c.get("token") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key") or c.get("id") or re.sub(r"^https://|\..*$", "", c.get("base", "")).replace("careers-", "")
-    nm = (name or suggested or ident.replace("-", " ").replace("_", " ").title()).strip()[:60]
+    # (no commas: an update for named companies takes a comma-separated list)
+    return (name or suggested or str(ident).replace("-", " ").replace("_", " ").title()).replace(",", "").strip()[:60]
+
+def save_found(c, nm, set_id, pid, sector="Added by you"):
+    """Save a detected board as a company in list set_id, or add that list to the company already using this board.
+    Returns (entry, existing)."""
     with _lock:
         cos = catalog.companies()
         same = next((x for x in cos if x["ats"] == c["ats"] and all(x.get(k) == v for k, v in c.items())), None)
         if same:
             sets = set(same.get("sets") or ["tech"])
-            sets.add("all" if scope == "all" else f"own-{pid}")
+            sets.add(set_id)
             same["sets"] = sorted(sets)
             entry = same
         else:
             if any(x["name"].lower() == nm.lower() for x in cos):
                 nm = f"{nm} ({c['ats']})"
-            entry = {"name": nm, "tier": "dmv_office", "sector": "Added by you", **c,
-                     "sets": ["all" if scope == "all" else f"own-{pid}"], "added_by": pid}
+            entry = {"name": nm, "tier": "dmv_office", "sector": sector, **c, "sets": [set_id], "added_by": pid}
         catalog.save_company(entry)
-    return {"name": entry["name"], "ats": c["ats"], "open_jobs": total, "existing": bool(same)}
+    return entry, bool(same)
+
+def add(url, name="", scope="me", target_set=None):
+    """target_set: the company list to put it in (default: "all" for scope "all", else the person's own additions)."""
+    c = detect(url)
+    total, suggested = verify(c)
+    if not total:
+        raise ValueError("That job board is reachable but has no open jobs right now.")
+    pid = people.current()
+    nm = default_name(c, suggested, name)
+    entry, same = save_found(c, nm, target_set or ("all" if scope == "all" else f"own-{pid}"), pid)
+    return {"name": entry["name"], "ats": c["ats"], "open_jobs": total, "existing": same}
 
 def own(pid=None):
     pid = pid or people.current()

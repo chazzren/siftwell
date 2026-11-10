@@ -796,9 +796,9 @@ def company_lists_payload(pid, jobs, sets, watch):
     by_co = {}
     for n in names:
         s = sets.get(n, {"tech"}) & watch
-        by_co[n] = sorted("own" if x in (own, "all") else x for x in s)
+        by_co[n] = sorted({"own" if x in (own, "all") else "near" if x == f"near-{pid}" else x for x in s})
     used = sorted({x for v in by_co.values() for x in v}, key=lambda x: list(LIST_SHORT).index(x) if x in LIST_SHORT else 99)
-    return {"options": [{"id": x, "label": LIST_SHORT.get(x, "Added by you")} for x in used], "by_company": by_co}
+    return {"options": [{"id": x, "label": LIST_SHORT.get(x, "Near me" if x == "near" else "Added by you")} for x in used], "by_company": by_co}
 
 def company_sets_map():
     import catalog
