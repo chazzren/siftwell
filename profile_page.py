@@ -1,6 +1,6 @@
 """The My profile page (GET /profile): everything about the person, in the same two-pane layout as Settings.
 
-Left: a section list (Resume, About you, Highlights & answers, Job search (which includes the Target), Companies). Right: the selected
+Left: a section list (Resume, About you, Highlights & answers, Job search, Target, Companies). Right: the selected
 section. The selection lives in the URL hash (/profile#search); at phone width it is a drill-down with a "‹ My profile"
 back control. A status strip on top shows what is read, approved and rated, and what is missing, with links.
 
@@ -27,6 +27,7 @@ CATEGORIES = [
     ("about", "About you", '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
     ("highlights", "Highlights & answers", '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 17.8 5.8 21.1 7 14.2 2 9.3l6.9-1z"/>'),
     ("search", "Job search", '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/>'),
+    ("target", "Target", '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
     ("companies", "Companies", '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>'),
 ]
 
@@ -129,20 +130,18 @@ def _pane_search():
                                                           '<textarea id="ps-titles" rows="6" aria-label="Job titles to search for, one per line"></textarea>')]) +
             _group("Goals for Claude to weigh", "Pay, commute, what to avoid. Claude reads this when it rates a job.",
                    [_textarea("ps-goals", "goals", "Goals for Claude to weigh", 4)]) +
-            _pane_target() +
             '<p class="sfoot">Each change re-checks your board right away (no new listings). Jobs that newly appear get a quick Claude check automatically.</p>')
 
 
 def _pane_target():
-    """The Target groups, shown at the end of Job search (they used to be a section of their own)."""
-    return (_group("Target: what you're aiming for", "Optional. In your own words. It gets its own tab where Claude rates each job as a step toward it. "
+    return (_group("What you're aiming for", "In your own words. It gets its own tab where Claude rates each job as a step toward it. "
                    "Leave it blank to skip, or tap Not sure? for suggestions.",
                    [_textarea("ps-target_text", "target_text", "Target", 4, "e.g. Highest-paying role I can land at an AI company, any function")]) +
-            _group("Target: which companies", "", [_row_ps("Companies", "", "ps-target_scope",
+            _group("Which companies", "", [_row_ps("Companies", "", "ps-target_scope",
                                                    _select("ps-target_scope", "target_scope", [("all", "All tracked companies"), ("ai", "AI companies only")]))]) +
-            _group("Target: what you'd do to get there", "Time, courses, certifications, projects.",
+            _group("What you'd do to get there", "Time, courses, certifications, projects.",
                    [_textarea("ps-prep_text", "prep_text", "What you'd do to get there", 3, "e.g. 5 hours a week for 3 months; one certification; no degree")]) +
-            _group("Target: Claude's reading", "", [_pad('<div class="note" id="tgState" role="status" aria-live="polite"></div>'
+            _group("Claude's reading", "", [_pad('<div class="note" id="tgState" role="status" aria-live="polite"></div>'
                                                  '<div class="row"><button class="btn" type="button" id="tgSuggest">Not sure? Suggest targets</button></div>'
                                                  '<div class="factlist" id="tgSugg"></div>')]))
 
@@ -164,7 +163,7 @@ def _pane_companies():
 
 
 PANES = {"resume": _pane_resume, "about": _pane_about, "highlights": _pane_highlights, "search": _pane_search,
-         "companies": _pane_companies}
+         "target": _pane_target, "companies": _pane_companies}
 
 
 def _render_parts():
@@ -251,7 +250,6 @@ __TOOLS__  </div>
 """
 
 SCRIPT = r"""<script>
-if (location.hash === "#target") history.replaceState(null, "", "#search");  // Target now lives in Job search
 (function(){
 /*__PRELUDE__*/
 /*__ROUTER__*/
