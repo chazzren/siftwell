@@ -232,14 +232,16 @@ def _task_query(name):
                 "wd": x.get("wd") or "", "exe": x.get("exe") or "", "args": x.get("args") or ""}
     try:
         ps = (f"$t=Get-ScheduledTask -TaskName '{name}' -ErrorAction SilentlyContinue; "
-              "if($t){@{state=[string]$t.State;wd=[string]$t.Actions[0].WorkingDirectory;exe=[string]$t.Actions[0].Execute;"
-              "args=[string]$t.Actions[0].Arguments}|ConvertTo-Json -Compress}")
+              "if($t){@{state=[string]$t.State;enabled=[bool]$t.Settings.Enabled;wd=[string]$t.Actions[0].WorkingDirectory;"
+              "exe=[string]$t.Actions[0].Execute;args=[string]$t.Actions[0].Arguments}|ConvertTo-Json -Compress}")
         _rc, out = _ps(ps)
         d = json.loads(out) if out else {}
     except Exception:
         return {}
     if d:
-        d["enabled"] = d.get("state") != "Disabled"
+        # A disabled task that is still running (e.g. the one running this server) reports State "Running",
+        # so use the real Enabled flag; fall back to the state only if it's missing.
+        d["enabled"] = bool(d["enabled"]) if "enabled" in d else d.get("state") != "Disabled"
     return d
 
 
