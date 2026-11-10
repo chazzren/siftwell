@@ -454,8 +454,11 @@ def apply(jobs, cache, inf):
             for k in ("ai_fit", "ai_asis", "ai_label", "ai_level", "ai_reason", "ai_tailor", "ai_tier", "ai_stale", "ai_at"):
                 j.pop(k, None)
 
-def _rate(todo, tier, inf, log):
-    """Send jobs to one model; returns {id: rating} (stamped). Raises CLIAuthError on sign-in problems."""
+def _rate(todo, tier, inf, log, on_batch=None):
+    """Send jobs to one model; returns {id: rating} (stamped). Raises CLIAuthError on sign-in problems.
+    on_batch(res) runs (in this thread) after each finished batch, so callers can save as they go. Once the person
+    presses Stop (claude_cli.stop_requested), batches not yet sent are skipped; ones already sent finish."""
+    import claude_cli as _cc
     if not todo:
         return {}
     if not inf["text"].strip():
@@ -474,8 +477,13 @@ def _rate(todo, tier, inf, log):
     if key:
         import anthropic
         client = anthropic.Anthropic(api_key=key, max_retries=4)
+    def one(b):
+        if _cc.stop_requested():
+            return None
+        return _score_batch(client, cfg, inf["text"], b) if key else _score_batch_cli(cli, cfg, inf["text"], b)
+    skipped = 0
     with cf.ThreadPoolExecutor(cfg["concurrency"] if key else cfg["cli_concurrency"]) as ex:
-        futs = [ex.submit(_score_batch, client, cfg, inf["text"], b) if key else ex.submit(_score_batch_cli, cli, cfg, inf["text"], b) for b in batches]
+        futs = [ex.submit(one, b) for b in batches]
         for f in cf.as_completed(futs):
             try:
                 res = f.result()
@@ -485,12 +493,18 @@ def _rate(todo, tier, inf, log):
                 raise
             except Exception as e:
                 log(f"{tier} batch failed: {type(e).__name__}: {str(e)[:150]}"); res = {}; failed += 1
+            if res is None:
+                skipped += 1; res = {}
+                if skipped == 1:
+                    log(f"Stopping: {tier.capitalize()} batches already sent will finish and be kept.")
             for v in res.values():
                 stamp(v, inf); v["at"] = now
             out.update(res)
+            if res and on_batch:
+                on_batch(res)
             done += 1
-            log(f"PROGRESS ai {done}/{len(batches)}")
-    _timing(tier, len(todo), len(batches), failed, t0, log, rated=len(out))
+            log(f"PROGRESS ai {done}/{len(batches)} {tier}")
+    _timing(tier, len(todo), len(batches), failed, t0, log, rated=len(out), **({"stopped": "stopped by you"} if skipped else {}))
     return out
 
 TIMINGS = []  # per-tier timing of the current run, collected by jobfinder into the run history
@@ -505,10 +519,9 @@ def bestbets(appeal, match):
     import math
     return round(math.sqrt(max(0, appeal) * max(0, match if match is not None else 50)))
 
-def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print):
-    """Haiku on every eligible job, Sonnet on the best ~15%, Opus on the top ~300 (+ saved jobs).
-    Normal runs (refresh=False) only fill missing ratings; the re-rate step (refresh=True) also redoes ratings made
-    with older info: 'maybe' ones get a cheap Haiku check first and only climb to Sonnet/Opus if the score moved."""
+def _prepare(jobs, eligible):
+    """Shared set-up for a rating run: info + fingerprints, this profile's cache, the eligible pool, and answers
+    narrowed to their distinctive words."""
     inf = info()
     allc = load_all()
     adopt(allc["by_profile"], inf["phash"], inf["phash_old"])
@@ -524,6 +537,44 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print)
                 out.append(w)
         return out
     inf["facts"] = [(fid, rare(words)) for fid, words in inf["facts"]]
+    return inf, allc, cache, pool
+
+def rank_match(entry, tiers):
+    """Match used for ranking: the first of `tiers` this job has a rating from (None if none)."""
+    entry = entry or {}
+    for t in tiers:
+        if entry.get(t):
+            return entry[t]["fit"]
+    return None
+
+BEST_AVAILABLE = ["opus", "sonnet", "haiku"]
+
+def mark_state(jobs, pool, cache, inf):
+    """For the Re-rate panel's counts: on each job Claude would rate, ai_rs = one letter per tier (haiku, sonnet,
+    opus): "-" no rating, "s" needs a fresh one (older info), "f" current; ai_bb = its Best bets score with the best
+    available Match (Opus, else Sonnet, else Haiku). Jobs outside the pool get neither."""
+    ids = {j["id"] for j in pool}
+    code = {"missing": "-", "fresh": "f"}
+    for j in jobs:
+        if j["id"] not in ids:
+            j.pop("ai_rs", None); j.pop("ai_bb", None)
+            continue
+        e = cache.get(j["id"]) or {}
+        j["ai_rs"] = "".join(code.get(freshness(e.get(t), j, inf), "s") for t in TIERS)
+        j["ai_bb"] = bestbets(j.get("appeal", 0), rank_match(e, BEST_AVAILABLE))
+
+def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print, tiers=None, force=False, pick="funnel",
+               only_ids=None):
+    """Haiku on every eligible job, Sonnet on the best ~15%, Opus on the top ~300 (+ saved jobs).
+    Normal runs (refresh=False) only fill missing ratings; the re-rate step (refresh=True) also redoes ratings made
+    with older info: 'maybe' ones get a cheap Haiku check first and only climb to Sonnet/Opus if the score moved.
+    Re-rate panel options: tiers (which models run), force (rate the picked jobs again even if current; only when the
+    person asks), pick="best" (rank by Best bets with the best available Match instead of the funnel's per-step
+    ranking), only_ids (Haiku only looks at these jobs: the automatic check of new listings).
+    Every finished batch is saved right away, so a stopped run keeps what it got."""
+    import claude_cli as _cc
+    tiers = list(tiers or TIERS)
+    inf, allc, cache, pool = _prepare(jobs, eligible)
     status = "ok"
     saved = set(saved)
     def save():
@@ -531,64 +582,69 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print)
         with _lock:
             paths.dump_json_atomic(CACHE, allc)
     def need(j, tier):
+        if force:
+            return True
         r = (cache.get(j["id"]) or {}).get(tier)
         f = freshness(r, j, inf)
         return f == "missing" or (refresh and f != "fresh")
+    def keep(tier):
+        def put(res):
+            for jid, r in res.items():
+                cache.setdefault(jid, {})[tier] = r
+            save()
+        return put
+    def rank(tiers_):
+        # rank on the named tiers only, so a later, sharper rating doesn't reshuffle who gets picked
+        # (ties broken by job id, the same way the Re-rate panel counts them)
+        return sorted(pool, key=lambda j: (-bestbets(j.get("appeal", 0), rank_match(cache.get(j["id"]), tiers_)), j["id"]))
     try:
         # 1. Haiku: everyone, best Appeal first
-        todo = sorted((j for j in pool if need(j, "haiku")), key=lambda j: -j.get("appeal", 0))[: budgets.get("haiku", 0)]
-        old = {j["id"]: dict((cache.get(j["id"]) or {}).get("haiku") or {}) for j in todo}
-        res = _rate(todo, "haiku", inf, log)
-        for jid, r in res.items():
-            e = cache.setdefault(jid, {})
-            prev = old.get(jid) or {}
-            e["haiku"] = r
-            # a cheap check after a small change: if the score barely moved, the careful ratings above stay current
-            if prev and fp_ok(prev, inf):
-                moved = abs(r["fit"] - prev.get("fit", r["fit"])) >= 5 or r["label"] != prev.get("label")
-                for t in ("sonnet", "opus"):
-                    if e.get(t) and fp_ok(e[t], inf):
-                        if moved: e[t]["dirty"] = True
-                        else: _restamp(e[t], inf)
-        if res: save()
+        if "haiku" in tiers:
+            hpool = pool if only_ids is None else [j for j in pool if j["id"] in only_ids]
+            todo = sorted((j for j in hpool if need(j, "haiku")), key=lambda j: -j.get("appeal", 0))[: budgets.get("haiku", 0)]
+            old = {j["id"]: dict((cache.get(j["id"]) or {}).get("haiku") or {}) for j in todo}
+            was = {j["id"]: freshness((cache.get(j["id"]) or {}).get("haiku"), j, inf) for j in todo}
+            def put_haiku(res):
+                for jid, r in res.items():
+                    e = cache.setdefault(jid, {})
+                    prev = old.get(jid) or {}
+                    e["haiku"] = r
+                    # a cheap check after a small change: if the score barely moved, the careful ratings above stay
+                    # current. (A forced second look at a current rating changes nothing above it.)
+                    if prev and fp_ok(prev, inf) and was.get(jid) != "fresh":
+                        moved = abs(r["fit"] - prev.get("fit", r["fit"])) >= 5 or r["label"] != prev.get("label")
+                        for t in ("sonnet", "opus"):
+                            if e.get(t) and fp_ok(e[t], inf):
+                                if moved: e[t]["dirty"] = True
+                                else: _restamp(e[t], inf)
+                save()
+            _rate(todo, "haiku", inf, log, on_batch=put_haiku)
         # tidy bookkeeping: ratings whose new answers don't concern them are still current
         for j in pool:
             for t, r in (cache.get(j["id"]) or {}).items():
                 if fp_ok(r, inf) and not r.get("dirty") and freshness(r, j, inf) == "fresh":
                     _restamp(r, inf)
-        def rank(tiers):
-            # rank on the named tiers only, so a later, sharper rating doesn't reshuffle who gets picked
-            def m(j):
-                e = cache.get(j["id"]) or {}
-                for t in tiers:
-                    if e.get(t):
-                        return e[t]["fit"]
-                return None
-            return sorted(pool, key=lambda j: -bestbets(j.get("appeal", 0), m(j)))
         # 2. Sonnet: best ~15% by Appeal x Haiku's Match
-        ranked = rank(["haiku"])
-        top_s = ranked[: max(0, int(len(ranked) * budgets.get("sonnet_pct", 15) / 100))]
-        todo = [j for j in top_s if need(j, "sonnet")][: budgets.get("sonnet_max", 2000)]
-        res = _rate(todo, "sonnet", inf, log)
-        for jid, r in res.items():
-            cache.setdefault(jid, {})["sonnet"] = r
-        if res: save()
+        if "sonnet" in tiers and not _cc.stop_requested():
+            ranked = rank(["haiku"] if pick == "funnel" else BEST_AVAILABLE)
+            top_s = ranked[: max(0, int(len(ranked) * budgets.get("sonnet_pct", 15) / 100))]
+            todo = [j for j in top_s if need(j, "sonnet")][: budgets.get("sonnet_max", 2000)]
+            _rate(todo, "sonnet", inf, log, on_batch=keep("sonnet"))
         # 3. Opus: top N by Appeal x Sonnet's Match (Haiku's where Sonnet hasn't looked), plus anything saved
-        ranked = rank(["sonnet", "haiku"])
-        top_o = ranked[: budgets.get("opus_top", 300)] + [j for j in pool if j["id"] in saved]
-        seen, todo = set(), []
-        for j in top_o:
-            if j["id"] not in seen and need(j, "opus"):
-                seen.add(j["id"]); todo.append(j)
-        res = _rate(todo, "opus", inf, log)
-        for jid, r in res.items():
-            cache.setdefault(jid, {})["opus"] = r
-        if res: save()
+        if "opus" in tiers and not _cc.stop_requested():
+            ranked = rank(["sonnet", "haiku"] if pick == "funnel" else BEST_AVAILABLE)
+            top_o = ranked[: budgets.get("opus_top", 300)] + [j for j in pool if j["id"] in saved]
+            seen, todo = set(), []
+            for j in top_o:
+                if j["id"] not in seen and need(j, "opus"):
+                    seen.add(j["id"]); todo.append(j)
+            _rate(todo, "opus", inf, log, on_batch=keep("opus"))
     except CLIAuthError:
         status = "cli_logged_out"
         log("Claude rating paused: Claude Code is not signed in.")
     save()
     apply(jobs, cache, inf)
+    mark_state(jobs, pool, cache, inf)
     return status
 
 def score_jobs(jobs, cfg, log=print):

@@ -125,6 +125,11 @@ def _recompute_loop():
                 with joblock.hold("recompute") as token, jobs_file_lock:
                     r = subprocess.run([sys.executable, os.path.join(HERE, "jobfinder.py"), "--recompute", *pids], cwd=HERE,
                                        capture_output=True, text=True, timeout=900, env=joblock.child_env(token))
+                for m in re.finditer(r"^NEW_UNRATED (\{.*\})$", r.stdout or "", re.M):  # new listings Claude hasn't rated
+                    try:
+                        nu = json.loads(m.group(1)); note_new_unrated(nu["pid"], nu["ids"])
+                    except Exception as e:
+                        print("couldn't queue the quick check of new jobs:", e, flush=True)
                 if r.returncode:
                     m = re.search(r"^RECOMPUTE_FAILED (\S+)", r.stdout or "", re.M)
                     failed = m.group(1).split(",") if m else None
@@ -511,16 +516,50 @@ def run_accept(pid):
     with lock:
         ACCEPT[pid] = {"running": False, "result": res, "error": err}
 
-# ---- re-rating with the latest info: its own action, separate from fetching job listings
-RERATE = {}   # pid -> {running, done, total, lines, error, finished}
+# ---- re-rating with the latest info: its own action, separate from fetching job listings.
+# One rating job per person at a time; Runs pressed meanwhile wait in that person's queue. Options (opts) come from the
+# board's Re-rate panel: {tiers, only_needed, sonnet_pct, opus_top, target}, or {ids} for the automatic quick check of
+# new jobs; None is the classic re-rate (the nightly one). Stop: the server creates DATA/rerate-<pid>.stop, which the
+# rating subprocess checks before each batch (batches already sent finish and are saved).
+RERATE = {}   # pid -> {running, label, tier, done, total, queue: [opts], stopping, lines, error, finished, started}
+
+def _stop_file(pid):
+    return os.path.join(DATA, f"rerate-{pid}.stop")
+
+def rate_label(o):
+    if not o:
+        return "Full re-rate"
+    if o.get("ids") is not None:
+        return f"Quick check of {len(o['ids'])} new job{'s' if len(o['ids']) != 1 else ''}"
+    t = o.get("tiers") or []
+    if len(t) == 3:
+        return "Full re-rate"
+    name = {"haiku": "Quick check · Haiku", "sonnet": f"Careful look · Sonnet top {o.get('sonnet_pct')}%",
+            "opus": f"Best judgment · Opus top {o.get('opus_top')}"}[t[0]]
+    return name + ("" if o.get("only_needed", True) else " (fresh look at all)")
+
+def _rate_cmd(pid, n, o):
+    cmd = [sys.executable, os.path.join(HERE, "jobfinder.py"), "--rerate", pid, "--n", str(n)]
+    if o and o.get("ids") is not None:
+        f = os.path.join(DATA, f"rerate-{pid}-ids.json")
+        with open(f, "w") as fh:
+            json.dump(sorted(o["ids"]), fh)
+        cmd += ["--ids-file", f]
+    elif o:
+        cmd += ["--tiers", ",".join(o["tiers"]), "--sonnet-pct", str(o["sonnet_pct"]), "--opus-top", str(o["opus_top"])]
+        cmd += ([] if o.get("only_needed", True) else ["--force"]) + ([] if o.get("target", True) else ["--no-target"])
+    return cmd
+
+def _rate_state(o, queue=None):
+    return {"running": True, "label": rate_label(o), "auto": bool(o and o.get("ids") is not None), "tier": "", "done": 0, "total": 0, "queue": queue or [],
+            "stopping": False, "lines": [], "error": None, "finished": None, "started": dt.datetime.now().isoformat(timespec="seconds")}
+
 def _actlog(action, pid=None, detail=""):
     import actionlog
     actionlog.log(action, pid, None, detail)
 
-def run_rerate(pid, n):
-    with lock:
-        RERATE[pid] = {"running": True, "done": 0, "total": 0, "lines": [], "error": None, "finished": None,
-                       "started": dt.datetime.now().isoformat(timespec="seconds")}
+def _run_one(pid, n, o):
+    """One rating subprocess under the job lock; returns its exit code (None if it never ran)."""
     r = RERATE[pid]
     def waiting(kind):
         with lock:
@@ -528,16 +567,18 @@ def run_rerate(pid, n):
     rc = None
     try:
         with joblock.hold("rerate", on_wait=waiting) as token:
-            p = subprocess.Popen([sys.executable, os.path.join(HERE, "jobfinder.py"), "--rerate", pid, "--n", str(n)], cwd=HERE,
-                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=joblock.child_env(token))
+            if os.path.exists(_stop_file(pid)):
+                return None  # stopped while waiting for its turn
+            p = subprocess.Popen(_rate_cmd(pid, n, o), cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                 bufsize=1, env={**joblock.child_env(token), "SIFTWELL_STOP_FILE": _stop_file(pid)})
             with open(os.path.join(DATA, f"rerate-{pid}.log"), "w") as log:  # full output incl. per-tier TIMING lines
                 for line in p.stdout:
                     log.write(line); log.flush()
                     line = line.rstrip()
-                    m = re.match(r"PROGRESS ai (\d+)/(\d+)", line)  # the Target ratings run alongside; the bar follows the main funnel
+                    m = re.match(r"PROGRESS ai (\d+)/(\d+)(?: (\w+))?", line)  # the Target ratings run alongside; the bar follows the main funnel
                     with lock:
                         if m:
-                            r["done"], r["total"] = int(m.group(1)), int(m.group(2))
+                            r["done"], r["total"], r["tier"] = int(m.group(1)), int(m.group(2)), m.group(3) or r["tier"]
                         elif line and not line.startswith("PROGRESS"):
                             r["lines"] = (r["lines"] + [line])[-8:]
                 p.wait()
@@ -545,12 +586,106 @@ def run_rerate(pid, n):
     except Exception as e:
         with lock:
             r["lines"] = (r["lines"] + [f"Re-rating couldn't start: {type(e).__name__}: {e}"])[-8:]
-    finally:
+    return rc
+
+def _rating_worker(pid, n, o):
+    """Runs this person's rating jobs one after another until their queue is empty."""
+    try:
+        if os.path.exists(_stop_file(pid)):
+            os.remove(_stop_file(pid))
+        while True:
+            rc = _run_one(pid, n, o)
+            stopped = os.path.exists(_stop_file(pid))
+            if stopped:
+                os.remove(_stop_file(pid))
+            with lock:
+                r = RERATE[pid]
+                r["error"] = None if rc == 0 or stopped else (r["lines"][-1] if r["lines"] else "failed")
+                r["stopped"] = stopped
+                _actlog("re-rate stopped" if stopped else ("re-rate finished" if rc == 0 else "re-rate failed"), pid, r.get("label", ""))
+                if r["queue"]:  # Runs pressed after a Stop still run
+                    o = r["queue"].pop(0)
+                    RERATE[pid] = _rate_state(o, r["queue"])
+                    continue
+                r.update(running=False, stopping=False, finished=dt.datetime.now().isoformat(timespec="seconds"))
+                return
+    except Exception as e:
         with lock:
-            r.update(running=False, finished=dt.datetime.now().isoformat(timespec="seconds"),
-                     error=None if rc == 0 else (r["lines"][-1] if r["lines"] else "failed"))
-        _actlog("re-rate stopped" if rc != 0 else "re-rate finished", pid)
+            RERATE.setdefault(pid, {}).update(running=False, error=f"{type(e).__name__}: {e}"[:200],
+                                              finished=dt.datetime.now().isoformat(timespec="seconds"))
+    finally:
         flush_recompute()
+
+def start_rating(pid, o, n=None):
+    """Start a rating job for this person, or queue it behind the one running. Returns "started" or "queued"."""
+    n = n or int(people.prefs(pid).get("claude.per_update") or 300)
+    with lock:
+        r = RERATE.get(pid)
+        if r and r.get("running"):
+            q = r.setdefault("queue", [])
+            if o and o.get("ids") is not None:  # merge with a quick check of new jobs that hasn't started yet
+                for x in q:
+                    if x and x.get("ids") is not None:
+                        x["ids"] |= set(o["ids"]); return "queued"
+            q.append(o)
+            return "queued"
+        RERATE[pid] = _rate_state(o)
+    threading.Thread(target=_rating_worker, args=(pid, n, o), daemon=True).start()
+    return "started"
+
+def run_rerate(pid, n, opts=None):
+    """The classic re-rate (nightly): queued like any other run."""
+    start_rating(pid, opts, n)
+
+def stop_rating(pid):
+    with lock:
+        r = RERATE.get(pid)
+        if not (r and r.get("running")):
+            return False
+        r["queue"], r["stopping"] = [], True
+        r["lines"] = (r["lines"] + ["Stopping: batches already sent will finish and be kept..."])[-8:]
+    open(_stop_file(pid), "w").close()
+    return True
+
+def rating_status(pid):
+    with lock:
+        r = dict(RERATE.get(pid) or {"running": False})
+    r["queue"] = [rate_label(x) for x in r.get("queue") or []]
+    return r
+
+# Automatic quick check: when a board rebuild lets new listings onto someone's board that Claude hasn't rated, a Haiku
+# check of just those runs once the rebuilds have been quiet for AUTO_QUIET seconds (several saves in a row -> one run).
+_AUTO = {}   # pid -> {"ids": set, "due": time}
+AUTO_QUIET = 20
+
+def note_new_unrated(pid, ids):
+    import time
+    with lock:
+        a = _AUTO.setdefault(pid, {"ids": set(), "due": 0})
+        a["ids"].update(ids)
+        a["due"] = time.time() + AUTO_QUIET
+        if _AUTO.get("_loop"):
+            return
+        _AUTO["_loop"] = True
+    threading.Thread(target=_auto_loop, daemon=True).start()
+
+def _auto_loop():
+    import time
+    while True:
+        time.sleep(2)
+        with lock:
+            quiet = not (_RECOMPUTE["running"] or _RECOMPUTE["all"] or _RECOMPUTE["pending"])
+            ready = [p for p, a in _AUTO.items() if p != "_loop" and quiet and a["due"] <= time.time()]
+            todo = {p: _AUTO.pop(p)["ids"] for p in ready}
+            if not [p for p in _AUTO if p != "_loop"] and not todo:
+                _AUTO.pop("_loop", None)
+                return
+        for p, ids in todo.items():
+            try:
+                if people.exists(p) and people.prefs(p).get("claude.auto_rate", True):
+                    start_rating(p, {"ids": set(ids)})
+            except Exception as e:
+                print("automatic quick check failed for", p, e, flush=True)
 
 # ---- nightly job-listing update
 SCHEDULE_FILE = os.path.join(DATA, "schedule.json")
@@ -588,8 +723,6 @@ def scheduler():
                     for pid in people.ids():
                         try:
                             if people.prefs(pid).get("claude.auto_rerate", True):
-                                with lock:
-                                    RERATE[pid] = {"running": True, "done": 0, "total": 0, "lines": [], "error": None}
                                 run_rerate(pid, int(people.prefs(pid).get("claude.per_update") or 300))
                         except Exception as e:
                             print("nightly re-rate failed for", pid, e, flush=True)
@@ -778,9 +911,7 @@ class H(BaseHTTPRequestHandler):
             s["job"] = joblock.info()  # whoever holds the job lock, even a job this server didn't start
             return self._send(200, s)
         if path == "/api/rerate":
-            with lock:
-                r = dict(RERATE.get(pid) or {"running": False})
-            return self._send(200, r)
+            return self._send(200, rating_status(pid))
         if path == "/api/ratings/accept":
             with lock:
                 r = dict(ACCEPT.get(pid) or {"running": False, "result": None, "error": None})
@@ -1034,17 +1165,26 @@ class H(BaseHTTPRequestHandler):
                 ps()["suggest"] = {"running": True, "error": None}
                 spawn(bg_suggest)
             return self._send(202, {"ok": True})
-        if path == "/api/rerate":
+        if path == "/api/rerate":  # body {} = classic re-rate; Re-rate panel: {tiers, only_needed, sonnet_pct, opus_top, target}
+            o = None
+            if body.get("tiers"):
+                tiers = [t for t in ("haiku", "sonnet", "opus") if t in (body.get("tiers") or [])]
+                try:
+                    pct, top = int(body.get("sonnet_pct")), int(body.get("opus_top"))
+                except (TypeError, ValueError):
+                    return self._send(400, {"error": "Enter whole numbers for the Sonnet % and the Opus count."})
+                if not tiers or not 1 <= pct <= 100 or not 1 <= top <= 2000:
+                    return self._send(400, {"error": "Sonnet looks at 1 to 100% of your jobs; Opus at 1 to 2,000 jobs."})
+                o = {"tiers": tiers, "only_needed": body.get("only_needed", True) is not False, "sonnet_pct": pct,
+                     "opus_top": top, "target": body.get("target", True) is not False}
             with lock:
                 if state["running"]:
                     return self._send(409, {"error": "Job listings are updating right now. Re-rate when that finishes."})
-                if (RERATE.get(pid) or {}).get("running"):
-                    return self._send(409, {"error": "Already re-rating."})
-                RERATE[pid] = {"running": True, "done": 0, "total": 0, "lines": [], "error": None}
-            n = people.prefs(pid).get("claude.per_update") or 300
-            self._act("re-rate started", pid)
-            threading.Thread(target=run_rerate, args=(pid, int(n)), daemon=True).start()
-            return self._send(202, {"ok": True, "n": n})
+            how = start_rating(pid, o)
+            self._act("re-rate " + how, pid, rate_label(o))
+            return self._send(202, {"ok": True, how: True, "label": rate_label(o)})
+        if path == "/api/rerate/stop":
+            return self._send(200, {"ok": True}) if stop_rating(pid) else self._send(409, {"error": "Nothing is being rated."})
         if path == "/api/ratings/accept":
             with lock:
                 if (ACCEPT.get(pid) or {}).get("running"):
