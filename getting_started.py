@@ -577,12 +577,7 @@ def handle_get(h, path, pid, query=""):
     if path in ASSET_FILES:
         name, ctype = ASSET_FILES[path]
         data = open(os.path.join(paths.ASSETS, "vendor", name), "rb").read()
-        h.send_response(200)
-        h.send_header("Content-Type", ctype + "; charset=utf-8")
-        h.send_header("Cache-Control", "max-age=86400")
-        h.send_header("Content-Length", str(len(data)))
-        h.end_headers()
-        h.wfile.write(data)
+        h._send(200, data, ctype, cache="max-age=86400")
         return True
     if path == "/getting-started":
         h._send(200, render_html(pid), "text/html")
