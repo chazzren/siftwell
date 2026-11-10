@@ -6,6 +6,7 @@ import base64, datetime as dt, hmac, json, os, re, secrets, subprocess, sys, thr
 import osdeps
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs as _parse_qs
 import gzip
 
 import paths
@@ -39,6 +40,10 @@ def ps(pid=None):
     """Background-job state for one person (resume reading, tailoring, questions)."""
     pid = pid or people.current()
     return _pstate.setdefault(pid, {"resume": {"running": False, "error": None, "finished": None}, "tailor": {}, "questions": {}})
+
+def _qarg(path, name):
+    """One query-string value from a request path ("" when absent)."""
+    return (_parse_qs(path.partition("?")[2]).get(name) or [""])[0]
 
 def spawn(fn, *args):
     """Run fn in a background thread as the current person."""
@@ -531,10 +536,20 @@ def bg_resume_review(job_id):
     except Exception as e:
         ps()["tailor"][s] = {"running": False, "error": str(e)[:400], "slug": s}
 
+def job_card(job_id):
+    """Title, company and link for the Resumes tab while a resume is being tailored (before its file exists)."""
+    try:
+        job, _ = find_job(job_id)
+        return {k: job.get(k) for k in ("id", "title", "company", "url")}
+    except Exception:
+        return {"id": job_id, "title": "", "company": "", "url": ""}
+
 def bg_tailor(job_id, rescore=False):
     import tailor
     s = tailor.slug(job_id)
-    ps()["tailor"][s] = {"running": True, "error": None, "step": "rescore" if rescore else "tailor"}
+    prev = ps()["tailor"].get(s) or {}
+    meta = {"job": prev.get("job") or job_card(job_id), "started": prev.get("started") or dt.datetime.now().isoformat(timespec="seconds")}
+    ps()["tailor"][s] = {"running": True, "error": None, "step": "rescore" if rescore else "tailor", **meta}
     try:
         job, desc = find_job(job_id)
         if rescore:
@@ -552,9 +567,9 @@ def bg_tailor(job_id, rescore=False):
             print("pdf build failed:", e, flush=True)
         if people.prefs()["review.enabled"]:
             review_loop(s, job, desc)
-        ps()["tailor"][s] = {"running": False, "error": None, "slug": s}
+        ps()["tailor"][s] = {"running": False, "error": None, "slug": s, **meta}
     except Exception as e:
-        ps()["tailor"][s] = {"running": False, "error": str(e)[:400], "slug": s}
+        ps()["tailor"][s] = {"running": False, "error": str(e)[:400], "slug": s, **meta}
 
 state = {"running": False, "started": None, "finished": None, "exit": None, "phase": "", "done": 0, "total": 0, "lines": []}
 lock = threading.Lock()
@@ -902,6 +917,15 @@ class H(BaseHTTPRequestHandler):
         people.set_current(pid)
         return pid
 
+    def _page_person(self, given):
+        """The profile a board page belongs to (the page sends its own id), so a tab left open on one profile never
+        reads or writes another profile chosen later in a different tab. Falls back to the cookie's profile."""
+        given = str(given or "")
+        if given and people.exists(given):
+            people.set_current(given)
+            return given
+        return people.current()
+
     def _person_cookie(self, pid):
         return f"jb_person={pid}; Max-Age=31536000; Path=/; SameSite=Strict"
 
@@ -1030,6 +1054,7 @@ class H(BaseHTTPRequestHandler):
             jid = (parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "").get("id") or [""])[0]
             return self._send(200, {"desc": catalog.description(jid)})
         if path == "/api/marks":
+            self._page_person(_qarg(self.path, "person"))
             return self._send(200, read_json(people.pdir("marks.json"), {}))
         if path == "/api/profile":
             import resume
@@ -1039,6 +1064,7 @@ class H(BaseHTTPRequestHandler):
                                     "ingest": ps()["resume"]})
         m = re.fullmatch(r"/api/tailor/([a-z0-9-]+)", path)
         if m:
+            self._page_person(_qarg(self.path, "person"))
             s_ = m.group(1)
             st = ps()["tailor"].get(s_)
             tp = os.path.join(people.pdir("tailored"), s_ + ".json")
@@ -1051,20 +1077,33 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, st or {"running": False, "error": None, "missing": True})
         if path == "/api/tailored":
             import glob
-            out = []
+            self._page_person(_qarg(self.path, "person"))
+            out, have = [], set()
+            work = ps()["tailor"]
             for f in glob.glob(os.path.join(people.pdir("tailored"), "*.json")):
                 t = read_json(f, None)
                 if not t:
                     continue
                 rv = t.get("review") or {}
                 slug0 = os.path.basename(f)[:-5]
-                live = ps()["tailor"].get(slug0, {}).get("running")
+                have.add(slug0)
+                cur = work.get(slug0) or {}
+                live = cur.get("running")
                 status = "running" if live else ("interrupted" if rv.get("status") in ("reworking",) or (rv.get("rounds") and not rv.get("status")) else rv.get("status"))
                 rv = {**rv, "status": status}
                 out.append({"slug": os.path.basename(f)[:-5], "job": t.get("job") or {}, "created": t.get("created"),
-                            "headline": t.get("headline", ""), "gaps": len(t.get("gaps") or []),
+                            "headline": t.get("headline", ""), "gaps": len(t.get("gaps") or []), "state": "ready",
+                            # a Re-tailor running (or failed) on a resume that already exists
+                            "work": {"running": bool(live and cur.get("job")), "step": cur.get("step"), "error": cur.get("error") if cur.get("job") else None},
                             "review": {"status": rv.get("status"), "final": rv.get("final") or (rv.get("rounds") or [{}])[-1].get("score"),
                                        "rounds": len(rv.get("rounds") or []), "threshold": rv.get("threshold"), "pending": len(rv.get("pending") or [])}})
+            # Started with Tailor my resume but no file yet: still tailoring, or it failed (Try again / Remove on the card)
+            for slug0, cur in list(work.items()):
+                if slug0 in have or not cur.get("job") or not (cur.get("running") or cur.get("error")):
+                    continue
+                out.append({"slug": slug0, "job": cur["job"], "created": cur.get("started"), "headline": "", "gaps": 0,
+                            "state": "running" if cur.get("running") else "failed",
+                            "work": {"running": bool(cur.get("running")), "step": cur.get("step"), "error": cur.get("error")}, "review": {}})
             out.sort(key=lambda x: x.get("created") or "", reverse=True)
             return self._send(200, {"items": out})
         m = re.fullmatch(r"/tailored/([a-z0-9-]+)\.pdf", path)
@@ -1426,7 +1465,36 @@ class H(BaseHTTPRequestHandler):
             _pstate.pop(gone, None)
             nxt = pid if pid != gone else people.first()
             return self._send_cookie({"ok": True, "current": nxt}, nxt)
+        if path == "/api/marks/import":
+            # One-time hand-over of marks that boards up to v0.3.1 also kept in the browser under one key shared by every
+            # profile (so every profile showed them). A mark another profile already has on the server is theirs; any other
+            # is kept for this profile when the job is on its board, so nothing is lost. The page runs it once per profile.
+            pid = self._page_person(body.get("person"))
+            legacy = body.get("marks") if isinstance(body.get("marks"), dict) else {}
+            mine = read_json(people.pdir("marks.json"), {}) or {}
+            # marks another profile got from this same hand-over don't count as theirs: an unclaimed mark goes to every
+            # profile whose board has the job (we can't tell whose it was), rather than to whichever profile opened first
+            others = set()
+            for p2 in people.ids():
+                if p2 != pid:
+                    took = set(read_json(people.pdir("marks_from_browser.json", pid=p2), []) or [])
+                    others |= set(read_json(people.pdir("marks.json", pid=p2), {}) or {}) - took
+            on_board = {j.get("id") for j in (read_json(people.pdir("jobs.json"), {}) or {}).get("jobs", [])}
+            added, took_now = 0, []
+            for jid, st in list(legacy.items())[:5000]:
+                jid = str(jid)
+                if st in ("saved", "applied", "hidden") and jid not in mine and jid not in others and jid in on_board:
+                    mine[jid] = st
+                    took_now.append(jid)
+                    added += 1
+            if added:
+                json.dump(mine, open(people.pdir("marks.json"), "w"))
+                took = read_json(people.pdir("marks_from_browser.json"), []) or []
+                json.dump(sorted(set(took) | set(took_now)), open(people.pdir("marks_from_browser.json"), "w"))
+                self._act("marks kept from this browser", pid, f"{added} mark(s)")
+            return self._send(200, {"ok": True, "added": added, "marks": mine})
         if path == "/api/marks":
+            self._page_person(body.get("person"))
             marks = read_json(people.pdir("marks.json"), {})
             jid, st = str(body.get("id", "")), body.get("status", "")
             if not jid:
@@ -1483,14 +1551,28 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True})
         if path == "/api/tailor":
             import tailor
+            self._page_person(body.get("person"))
             jid = str(body.get("id", ""))
             s_ = tailor.slug(jid)
+            if not s_:
+                return self._send(400, {"error": "id required"})
             if ps()["tailor"].get(s_, {}).get("running"):
                 return self._send(202, {"slug": s_})
-            ps()["tailor"][s_] = {"running": True, "error": None}
+            # In the Resumes tab right away ("Tailoring…"), and still there after a reload: this state lives here, per profile
+            ps()["tailor"][s_] = {"running": True, "error": None, "step": "start", "job": job_card(jid),
+                                  "started": dt.datetime.now().isoformat(timespec="seconds")}
             spawn(bg_tailor, jid, bool(body.get("rescore")))
             return self._send(202, {"slug": s_})
+        if path == "/api/tailor/dismiss":
+            # forget a failed attempt (the card's Remove / Dismiss); a resume file that exists is left alone
+            self._page_person(body.get("person"))
+            slug_ = str(body.get("slug", ""))
+            st_ = ps()["tailor"].get(slug_)
+            if st_ and not st_.get("running"):
+                ps()["tailor"].pop(slug_, None)
+            return self._send(200, {"ok": True})
         if path == "/api/tailored/delete":
+            self._page_person(body.get("person"))
             slug_ = str(body.get("slug", ""))
             if not re.fullmatch(r"[a-z0-9-]{1,80}", slug_):
                 return self._send(400, {"error": "bad id"})

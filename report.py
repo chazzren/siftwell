@@ -273,6 +273,13 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
 .acts a.pri,.acts button.pri{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
 .tl2{font-size:12.5px;color:var(--muted);margin-top:4px;max-width:75ch}
 .job.tlcard{grid-template-columns:58px minmax(0,1fr)}
+.tlwork{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--accent)}
+.tlwork .spin{width:11px;height:11px;border:2px solid var(--accent);border-right-color:transparent;border-radius:50%;animation:nlspin .8s linear infinite}
+.tlfail{color:var(--bad);font-size:12.5px;margin-top:4px;max-width:75ch;overflow-wrap:anywhere}
+.tlcard.working .scores,.tlcard.failed .scores{display:grid;place-items:center}
+.tlcard .tlicon{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-weight:700}
+.tlcard.failed .tlicon{background:var(--bad-soft);color:var(--bad)}
+@media (prefers-reduced-motion:reduce){.tlwork .spin{animation:none}}
 .acts button{height:var(--h-sm);border-radius:6px;white-space:nowrap}
 @media (max-width:640px){
   .wrap{padding-block:12px 40px}
@@ -372,7 +379,7 @@ ol.rows{gap:0;background:var(--surface);border:1px solid var(--line);border-radi
 .jrow:hover .racts{display:flex}
 .racts button{width:30px;height:26px;border:1px solid var(--line);background:var(--surface);border-radius:6px;cursor:pointer;color:var(--muted);font-size:13px;padding:0}
 .racts button[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
-.detail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:calc(100dvh - 24px);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;min-width:0}
+.detail{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--fbar,0px) + 12px);max-height:calc(100dvh - env(safe-area-inset-top,0px) - var(--fbar,0px) - 24px);overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-radius:12px;min-width:0}
 .dpane{padding:20px 22px 28px;display:flex;flex-direction:column;gap:18px}
 .dback{display:none;align-self:flex-start;border:0;background:none;color:var(--accent);font-weight:600;padding:0;cursor:pointer;font-size:15px}
 .dtitle{font-size:22px;font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
@@ -425,7 +432,7 @@ details.howto summary{cursor:pointer;color:var(--accent);font-weight:600;width:m
 details.howto .legend{margin-top:8px}
 @media (max-width:900px){
   .split{grid-template-columns:minmax(0,1fr)}
-  .detail{position:fixed;inset:0;max-height:none;border:0;border-radius:0;z-index:30;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  .detail{position:fixed;inset:0;top:0;max-height:none;border:0;border-radius:0;z-index:30;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
   .detail:not(.open){display:none}
   .dback{display:inline-flex}
   .racts{display:none!important}
@@ -649,12 +656,19 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const safeUrl = u => { const s = String(u ?? "").trim(); return /^https?:\/\/[^\s\/?#]/i.test(s) && !/[\s\x00-\x1f]/.test(s) ? s : ""; };  // links from postings: http(s) only
 const SERVED = location.protocol.startsWith("http");
 const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
+// Save / Applied / Hide belong to one profile. The server keeps them (DATA/people/<id>/marks.json); the browser copy is
+// per profile too and only used when the board is opened as a file. Boards up to v0.3.1 kept one browser copy shared by
+// every profile ("dmvjobs.status"), which is why saves showed up in every profile; it is handed over once (importLegacyMarks).
+const PID = (D.person && D.person.id) || "";
+const MKEY = "jb.marks." + (PID || "local"), LEGACY_MKEY = "dmvjobs.status";
 let status = {};
-try { status = JSON.parse(localStorage.getItem("dmvjobs.status") || "{}"); } catch(e) {}
+try { status = JSON.parse(localStorage.getItem(MKEY) || (SERVED ? "{}" : localStorage.getItem(LEGACY_MKEY) || "{}")) || {}; } catch(e) {}
+const cacheMarks = () => { try { localStorage.setItem(MKEY, JSON.stringify(status)); } catch(e) {} };
 const saveStatus = (id) => {
-  try { localStorage.setItem("dmvjobs.status", JSON.stringify(status)); } catch(e) {}
-  if (SERVED && id) fetch("/api/marks", {method: "POST", headers: H, body: JSON.stringify({id, status: status[id] || ""})}).catch(() => {});
+  cacheMarks();
+  if (SERVED && id) fetch("/api/marks", {method: "POST", headers: H, body: JSON.stringify({person: PID, id, status: status[id] || ""})}).catch(() => {});
 };
+const pq = () => PID ? "?person=" + encodeURIComponent(PID) : "";
 const LBL = {apply_now: "Strong match", tailor: "Worth tailoring", stretch: "Stretch", skip: "Not a fit"};
 const LBL_HELP = {apply_now: "Apply with your resume as it is.", tailor: "A good fit once your resume speaks to this role.", stretch: "Reachable, but there's a real gap.", skip: "Claude doesn't think this one is worth your time."};
 const TIER = {dmv_hq:"HQ near you", dmv_office:"Office near you", remote_first:"Remote-first", remote_friendly:"Remote-friendly"};
@@ -773,14 +787,26 @@ function applyDisplayDefaults(){
 }
 
 // ---- tailored resumes (per profile): registry for cards + the Tailored tab
-let TAILORED = {}, TLIST = [];
+// TLIST items: state "ready" (a finished resume), "running" (Tailor my resume was pressed; still working) or "failed".
+// "work" says whether a Re-tailor is running or failed on a finished one. While anything runs, the list is re-read every
+// few seconds, so the cards and the Resumes tab follow along (also after a reload: the server keeps this per profile).
+let TAILORED = {}, TLIST = [], WORK = {}, tlTimer = null, tlRunning = "";
+const tlBusy = x => x.state === "running" || (x.work && x.work.running);
 function loadTailored(){
   if (!SERVED) return Promise.resolve();
-  return fetch("/api/tailored").then(r => r.json()).then(d => {
-    TLIST = d.items || []; TAILORED = Object.fromEntries(TLIST.map(x => [x.job.id, x.slug]));
+  return fetch("/api/tailored" + pq()).then(r => r.json()).then(d => {
+    TLIST = d.items || [];
+    TAILORED = Object.fromEntries(TLIST.filter(x => x.state !== "running" && x.state !== "failed").map(x => [x.job.id, x.slug]));
+    WORK = Object.fromEntries(TLIST.filter(x => tlBusy(x) || x.state === "failed" || (x.work && x.work.error)).map(x => [x.job.id, x]));
     $("tab-tailored").innerHTML = `Resumes${TLIST.length ? `<span class="n">${TLIST.length}</span>` : ""}`;
+    const running = TLIST.filter(tlBusy).map(x => x.slug).sort().join(" ");
+    const changed = running !== tlRunning; tlRunning = running;
+    clearTimeout(tlTimer);
+    if (running) tlTimer = setTimeout(() => loadTailored().then(c => { if (c) { render(); if (location.hash === "#tailored") drawTailored(); } else if (location.hash === "#tailored") drawTailored(); }), 4000);
+    return changed;
   }).catch(() => {});
 }
+const TL_STEP = {start: "Starting…", rescore: "Re-scoring with your answers…", tailor: "Tailoring… (about a minute)", pdf: "Building the PDF…", grade: "Astra is grading…", rework: "Claude is reworking…"};
 function reviewBadge(r){
   if (!r || !r.status) return "";
   if (r.status === "needs_answers") return `<span class="gd lo">Astra ${r.final ?? "?"} · ${r.pending} question${r.pending === 1 ? "" : "s"} waiting</span>`;
@@ -792,16 +818,30 @@ function reviewBadge(r){
 }
 function drawTailored(){
   const byId = Object.fromEntries(jobs.map(j => [j.id, j]));
-  $("tlCount").textContent = !SERVED ? "Open the board from the server to see tailored resumes." : TLIST.length ? `${TLIST.length} tailored resume${TLIST.length > 1 ? "s" : ""}` : "No tailored resumes yet. Tap Tailor my resume on any job.";
+  const nRun = TLIST.filter(x => x.state === "running").length, nReady = TLIST.filter(x => x.state !== "running" && x.state !== "failed").length;
+  $("tlCount").textContent = !SERVED ? "Open the board from the server to see tailored resumes." : TLIST.length ? `${nReady} tailored resume${nReady === 1 ? "" : "s"}${nRun ? ` · ${nRun} being tailored` : ""}` : "No tailored resumes yet. Tap Tailor my resume on any job.";
   $("tlList").innerHTML = TLIST.map(x => {
     const j = byId[x.job.id], when = x.created ? new Date(x.created).toLocaleDateString([], {month: "short", day: "numeric", year: "numeric"}) : "";
-    const m = j ? (j.ai_fit ?? j.pv_now) : null;
+    const m = j ? (j.ai_fit ?? j.pv_now) : null, w = x.work || {};
+    const title = safeUrl(x.job.url) ? `<a class="title" href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">${esc(x.job.title || "Job")}</a>` : `<span class="title">${esc(x.job.title || "Job")}</span>`;
+    const posting = safeUrl(x.job.url) ? `<a href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">Posting</a>` : "";
+    if (x.state === "running" || x.state === "failed") {  // not a finished resume yet
+      const run = x.state === "running";
+      return `<li class="job tlcard ${run ? "working" : "failed"}" data-slug="${esc(x.slug)}">
+      <div class="scores"><div class="tlicon" aria-hidden="true">${run ? "…" : "!"}</div></div>
+      <div style="min-width:0">${title}
+        <div class="meta"><span class="coname">${esc(x.job.company || "")}</span>${run ? `<span class="tlwork" role="status"><span class="spin"></span>${esc(TL_STEP[w.step] || "Tailoring…")}</span>` : `<span class="gd lo">Tailoring failed</span>`}</div>
+        ${run ? `<div class="tl2">Claude is writing this resume. It takes a minute or two; you can keep browsing, and it stays here if you reload.</div>` : `<div class="tlfail">${esc(w.error || "Something went wrong.")}</div>`}
+        <div class="acts">${run ? "" : `<button class="pri" data-retry="${esc(x.job.id)}"${NOAI ? ' disabled title="Needs Claude"' : ""}>Try again</button>`}${posting}${run ? "" : `<button class="danger" data-dismiss="${esc(x.slug)}">Remove</button>`}</div>
+      </div></li>`;
+    }
     return `<li class="job tlcard">
       <div class="scores">${j ? `<div class="score" title="Overall">${j.score}<small>OVERALL</small></div>` : ""}${m != null ? `<div class="score match ${m >= 70 ? "hi" : m >= 45 ? "mid" : "lo"}">${m}<small>MATCH</small></div>` : ""}</div>
       <div style="min-width:0">
         ${safeUrl(x.job.url) ? `<a class="title" href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">${esc(x.job.title || "")}</a>` : `<span class="title">${esc(x.job.title || "")}</span>`}
-        <div class="meta"><span class="coname">${esc(x.job.company || "")}</span><span>Tailored ${esc(when)}</span><span>${j ? "Still open" : "No longer on your board"}</span>${x.gaps ? `<span>${x.gaps} gaps flagged</span>` : ""}${reviewBadge(x.review)}</div>
+        <div class="meta"><span class="coname">${esc(x.job.company || "")}</span><span>Tailored ${esc(when)}</span><span>${j ? "Still open" : "No longer on your board"}</span>${x.gaps ? `<span>${x.gaps} gaps flagged</span>` : ""}${w.running ? `<span class="tlwork" role="status"><span class="spin"></span>Re-tailoring: ${esc(TL_STEP[w.step] || "working…")}</span>` : reviewBadge(x.review)}</div>
         ${x.headline ? `<div class="tl2">${esc(x.headline)}</div>` : ""}
+        ${w.error && !w.running ? `<div class="tlfail">Re-tailoring failed: ${esc(w.error)} <button class="btn ghost sm" type="button" data-dismiss="${esc(x.slug)}">Dismiss</button></div>` : ""}
         <div class="acts">${x.review && x.review.status === "interrupted" ? `<button class="pri" data-resume="${esc(x.job.id)}" data-slug="${x.slug}">Resume review</button>` : ""}${x.review && x.review.status === "needs_answers" ? `<button class="pri" data-astra="${esc(x.job.id)}" data-slug="${x.slug}">Answer Astra's questions</button>` : ""}<a class="pri" href="/tailored/${x.slug}.pdf">Download PDF</a><a href="/tailored/${x.slug}" target="_blank" rel="noopener">Review</a><a href="/tailored/${x.slug}.docx">Word</a>${safeUrl(x.job.url) ? `<a href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">Posting</a>` : ""}<button class="danger" data-del="${x.slug}">Remove</button></div>
       </div></li>`;
   }).join("");
@@ -871,7 +911,7 @@ function card(j){
     <div class="rtitle">${j.new ? '<span class="ndot" title="New this week"></span>' : ""}${esc(j.title)}</div>
     <div class="rsc"><div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}${m == null && NOAI ? " na" : ""}" title="${m == null && NOAI ? "Match ratings need Claude" : pvm ? "" : tierName(j)}">${m ?? (NOAI ? "—" : "–")}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
     <div class="rco">${esc(j.company)} · ${esc(whereTxt(j))}</div>
-    <div class="rmeta">${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : NOAI ? "" : `<span class="vpill">Not rated yet</span>`}<span class="amt">${payTxt(j)}</span>${j.posted ? `<span>${ago(j.posted)}</span>` : ""}${(pvm ? j.pv_stale : j.ai_stale) ? '<span class="old" title="Rated before your latest info">Older info</span>' : ""}${j.req_status === "unmet" ? '<span class="rq un">Requirement not met</span>' : j.req_status === "flag" ? '<span class="rq">Check requirements</span>' : ""}${TAILORED[j.id] ? "<span>Resume ready</span>" : ""}${s === "applied" ? "<span>Applied</span>" : s === "saved" ? "<span>★ Saved</span>" : ""}</div>
+    <div class="rmeta">${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : NOAI ? "" : `<span class="vpill">Not rated yet</span>`}<span class="amt">${payTxt(j)}</span>${j.posted ? `<span>${ago(j.posted)}</span>` : ""}${(pvm ? j.pv_stale : j.ai_stale) ? '<span class="old" title="Rated before your latest info">Older info</span>' : ""}${j.req_status === "unmet" ? '<span class="rq un">Requirement not met</span>' : j.req_status === "flag" ? '<span class="rq">Check requirements</span>' : ""}${TAILORED[j.id] ? "<span>Resume ready</span>" : WORK[j.id] && WORK[j.id].state === "running" ? "<span>Tailoring…</span>" : ""}${s === "applied" ? "<span>Applied</span>" : s === "saved" ? "<span>★ Saved</span>" : ""}</div>
     <div class="racts"><button type="button" data-k="saved" aria-pressed="${s==="saved"}" title="Save" aria-label="Save">★</button><button type="button" data-k="hidden" aria-pressed="${s==="hidden"}" title="Not for me" aria-label="Hide">✕</button></div>
   </li>`;
 }
@@ -887,8 +927,10 @@ function detail(j){
   const wpChip = j.workplace ? `<span class="chip ${j.workplace}">${j.workplace === "onsite" ? "On-site" : j.workplace[0].toUpperCase()+j.workplace.slice(1)}</span>` : `<span class="chip">Workplace not stated</span>`;
   const locs = (j.dmv_locations.length ? j.dmv_locations : j.locations).slice(0,4).map(l => `<span class="chip">${esc(l)}</span>`).join("");
   const clr = j.clearance ? `<span class="chip ${j.clearance.includes("poly")?"poly":""}">${esc(j.clearance)}</span>` : "";
-  const tl = TAILORED[j.id];
-  const tailorBtns = !SERVED ? "" : tl ? `<a class="btn primary" href="/tailored/${tl}.pdf">Download resume PDF</a><a class="btn" href="/tailored/${tl}" target="_blank" rel="noopener">Review resume</a><button class="btn" type="button" data-tailor="1" data-again="1"${NOAI ? ' disabled title="Needs Claude"' : ""}>Re-tailor</button>`
+  const tl = TAILORED[j.id], wk = WORK[j.id];
+  const tailorBtns = !SERVED ? "" : wk && tlBusy(wk) ? `<button class="btn primary" type="button" disabled>${esc(TL_STEP[(wk.work || {}).step] || "Tailoring…")}</button><a class="btn" href="#tailored">See it in Resumes</a>`
+    : wk && wk.state === "failed" ? `<button class="btn primary" type="button" data-tailor="1"${NOAI ? ' disabled title="Needs Claude"' : ""}>Tailoring failed · Try again</button>`
+    : tl ? `<a class="btn primary" href="/tailored/${tl}.pdf">Download resume PDF</a><a class="btn" href="/tailored/${tl}" target="_blank" rel="noopener">Review resume</a><button class="btn" type="button" data-tailor="1" data-again="1"${NOAI ? ' disabled title="Needs Claude"' : ""}>Re-tailor</button>`
     : NOAI ? `<button class="btn primary" type="button" disabled title="Needs Claude">Tailor my resume</button>${noClaude("Tailoring")}` : `<button class="btn primary" type="button" data-tailor="1">Tailor my resume</button>`;
   return `<div class="dpane" data-id="${esc(j.id)}">
     <button class="dback" type="button" id="dBack">‹ All jobs</button>
@@ -921,12 +963,21 @@ function reqSection(j){
     ${(j.req_reasons || []).length ? `<div class="reqwhy">${(j.req_reasons || []).map(esc).join("<br>")}</div>` : ""}
     ${st !== "ok" ? `<div class="reqwhy">Wrong? Fix your degrees or licenses under <a href="/profile#highlights">My profile</a> and the board re-checks.</div>` : ""}</section>`;
 }
+let DREAD = null;
 function drawDetail(){
-  const j = jobs.find(x => x.id === SEL);
-  $("detail").innerHTML = detail(j);
-  $("detail").classList.toggle("open", OPENED && !!j);
-  $("detail").scrollTop = 0;
+  const j = jobs.find(x => x.id === SEL), el = $("detail"), same = j && DREAD === j.id, top = el.scrollTop;
+  syncFbar();
+  el.innerHTML = detail(j);
+  el.classList.toggle("open", OPENED && !!j);
+  el.scrollTop = same ? top : 0;
+  DREAD = j ? j.id : null;
 }
+// The details panel sits below the sticky search/filter bar on wide screens: keep --fbar equal to the bar's height
+// (the bar grows with search notes, quick filters and filter chips, so it is measured again whenever it changes).
+function syncFbar(){ const b = document.querySelector("#view-jobs .filters"); if (b && b.offsetHeight) document.documentElement.style.setProperty("--fbar", b.offsetHeight + "px"); }
+if (window.ResizeObserver && document.querySelector("#view-jobs .filters")) new ResizeObserver(syncFbar).observe(document.querySelector("#view-jobs .filters"));
+window.addEventListener("resize", syncFbar);
+syncFbar();
 function select(id, open){
   SEL = id; OPENED = !!open;
   document.querySelectorAll(".jrow").forEach(r => r.setAttribute("aria-selected", r.dataset.id === id));
@@ -1378,7 +1429,19 @@ else if (D.ai_status === "bad_key") { $("aiBanner").hidden = false; $("aiBanner"
 if (SERVED) {
   $("tools").hidden = false;
   loadTailored().then(() => { render(); if (location.hash === "#tailored") drawTailored(); });
-  fetch("/api/marks").then(r => r.json()).then(m => { status = Object.assign({}, status, m); render(); }).catch(() => {});
+  // The server's marks for THIS profile replace whatever the browser had (never merged with another profile's).
+  fetch("/api/marks" + pq()).then(r => r.json()).then(m => { status = (m && typeof m === "object") ? m : {}; cacheMarks(); render(); importLegacyMarks(); }).catch(() => {});
+  function importLegacyMarks(){
+    let legacy = null, done = "jb.marksImported." + PID;
+    try { if (!PID || localStorage.getItem(done)) return; legacy = JSON.parse(localStorage.getItem(LEGACY_MKEY) || "null"); } catch(e) { return; }
+    const finish = () => { try { localStorage.setItem(done, "1"); } catch(e) {} };
+    if (!legacy || typeof legacy !== "object" || !Object.keys(legacy).length) { finish(); return; }
+    fetch("/api/marks/import", {method: "POST", headers: H, body: JSON.stringify({person: PID, marks: legacy})}).then(r => r.ok ? r.json() : null).then(d => {
+      if (!d) return;
+      finish();
+      if (d.added) { status = d.marks || status; cacheMarks(); render(); }
+    }).catch(() => {});
+  }
   // Settings (/settings, settings_page.py) and My profile (/profile, profile_page.py) are their own pages; their icons in TOOLS are plain links.
 
   // ---- tailoring
@@ -1513,19 +1576,26 @@ if (SERVED) {
   }
   const STEP = s => s.step === "pdf" ? "Building PDF…" : s.step === "tailor" ? "Tailoring… (about a minute)"
     : s.step === "grade" ? `Astra is grading (round ${s.round || 1})…` : s.step === "rework" ? `Claude is reworking${s.round ? ` (after round ${s.round})` : ""}…` : null;
+  const refreshTailored = () => loadTailored().then(() => { render(); if (location.hash === "#tailored") drawTailored(); });
   function pollTailor(id, slug, btn){
-    const check = () => fetch("/api/tailor/" + slug).then(r => r.json()).then(s => {
+    const check = () => fetch("/api/tailor/" + slug + pq()).then(r => r.json()).then(s => {
       if (s.running) { btn.textContent = STEP(s) || btn.textContent; return setTimeout(check, 3000); }
       btn.disabled = false;
-      if (s.error) { btn.textContent = "Tailoring failed"; btn.title = s.error; return; }
-      if (s.review_status === "needs_answers" && (s.pending || []).length) { openAstraQuestions(id, slug, btn, s); return; }
-      loadTailored().then(() => { render(); if (location.hash === "#tailored") drawTailored(); });
-    });
+      if (s.error) { btn.textContent = "Tailoring failed"; btn.title = s.error; refreshTailored(); return; }
+      if (s.review_status === "needs_answers" && (s.pending || []).length) { refreshTailored(); openAstraQuestions(id, slug, btn, s); return; }
+      refreshTailored();
+    }).catch(() => setTimeout(check, 5000));
     check();
   }
+  // The job goes into the Resumes tab as "Tailoring…" right away (the server keeps that state per profile, so a reload
+  // shows it too), then turns into the finished resume, or into "Tailoring failed" with Try again and Remove.
   function startTailor(id, btn, rescore){
     btn.disabled = true; btn.textContent = rescore ? "Re-scoring with your answers…" : "Tailoring… (about a minute)";
-    fetch("/api/tailor", {method: "POST", headers: H, body: JSON.stringify({id, rescore})}).then(r => r.json()).then(({slug}) => pollTailor(id, slug, btn));
+    fetch("/api/tailor", {method: "POST", headers: H, body: JSON.stringify({person: PID, id, rescore})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+      if (!ok || !d.slug) { btn.disabled = false; btn.textContent = d.error || "Couldn't start tailoring"; return; }
+      refreshTailored();
+      pollTailor(id, d.slug, btn);
+    }).catch(() => { btn.disabled = false; btn.textContent = "Lost contact with Siftwell. Try again."; });
   }
   // Astra asked for facts the resume lacks: ask the candidate, then rework
   function openAstraQuestions(id, slug, btn, s){
@@ -1535,6 +1605,14 @@ if (SERVED) {
     loadFacts().then(() => { drawQuestions(s.pending); if (!$("qSheet").open) $("qSheet").showModal(); });
   }
   $("tlList").addEventListener("click", e => {
+    const retry = e.target.closest("button[data-retry]");
+    if (retry) { tailorJob(retry.dataset.retry, retry); return; }
+    const dis = e.target.closest("button[data-dismiss]");
+    if (dis) {
+      dis.disabled = true;
+      fetch("/api/tailor/dismiss", {method: "POST", headers: H, body: JSON.stringify({person: PID, slug: dis.dataset.dismiss})}).then(refreshTailored);
+      return;
+    }
     const del = e.target.closest("button[data-del]");
     if (del) {
       if (del.dataset.armed !== "1") {  // two taps: the first arms the button for a few seconds
@@ -1543,7 +1621,7 @@ if (SERVED) {
         return;
       }
       del.disabled = true; del.textContent = "Removing…";
-      fetch("/api/tailored/delete", {method: "POST", headers: H, body: JSON.stringify({slug: del.dataset.del})})
+      fetch("/api/tailored/delete", {method: "POST", headers: H, body: JSON.stringify({person: PID, slug: del.dataset.del})})
         .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
           if (!ok) { del.disabled = false; del.textContent = d.error || "Couldn't remove"; return; }
           loadTailored().then(() => { drawTailored(); render(); });
