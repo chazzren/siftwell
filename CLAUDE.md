@@ -27,7 +27,7 @@ Siftwell is a self-hosted household job board: it fetches listings from employer
 
 ## Testing
 - Run a test server on its own port with its own data: `JOBBOARD_DATA=<scratch dir> python -X utf8 server.py <port>`. Never point tests at a real user's data folder.
-- **Don't spend the user's Claude plan in tests**: use tiny runs (a handful of jobs) or stub `claude_cli` responses; ask before anything larger.
+- **Don't spend the user's Claude plan in tests.** Always run test servers and scripts with `SIFTWELL_FORBID_CLAUDE=1` (it blocks every Claude call and logs attempts to `DATA/forbidden_claude_calls.log`), even when you don't expect Claude to be called: rebuilds, restores and settings saves can start the automatic quick check. Use `SIFTWELL_CLAUDE_STUB` or stubbed functions for Claude-dependent features. Only lift the block for a tiny run (≤5 jobs) when your brief explicitly allows it.
 - Verify UI in a browser at desktop width and 375px, and check the console for errors.
 - Stop only processes you started. Restore any setting you change while testing.
 
