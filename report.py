@@ -313,6 +313,11 @@ a.iconBtn{text-decoration:none}
 .amenu button[aria-current="true"]::after{content:"✓";color:var(--accent)}
 .amenu .sep{height:1px;background:var(--line);margin:6px 0}
 .amenu small{color:var(--muted);font-weight:400}
+.amenu a{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;color:var(--ink);font-size:14px;font-weight:500;text-decoration:none}
+.amenu a:hover{background:var(--bg)}
+.amenu a small{color:var(--muted);font-weight:400}
+.banner.gsbn{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);color:var(--ink)}
+.banner.gsbn span{flex:1 1 220px}
 nav.tabs a .n{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:4px;font-weight:500}
 .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .qc{height:30px;border:1px solid var(--line);background:var(--surface);border-radius:15px;padding:0 12px;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
@@ -421,6 +426,7 @@ TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-l
         <div id="amPeople"></div>
         <div class="sep"></div>
         <button role="menuitem" id="resumeBtn" aria-expanded="false">My profile<small>resume, pay, target</small></button>
+        <a role="menuitem" id="gsMenu" href="/getting-started">Get started checklist<small>set up this computer</small></a>
       </div>
     </div>
 """
@@ -436,6 +442,7 @@ BODY = """<div class="wrap">
   <div id="stats" hidden></div>
 </header>
 <div class="banner" id="aiBanner" hidden></div>
+<div class="banner gsbn" id="gsBanner" hidden></div>
 <div class="panel" id="progress" hidden>
   <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span></div>
   <div class="prog"><i id="progBar"></i></div>
@@ -1140,6 +1147,19 @@ if (SERVED) clPost({action: "status"}).then(({d}) => {
   if (d.installed && !d.logged_in && $("aiBanner").hidden) signInOffer($("aiBanner"), "Claude Code is signed out on the computer running the board, so ratings, tailoring and search are paused.");
   if (d.logged_in && (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out")) $("aiBanner").textContent = "Claude Code is signed in. Ratings pick up again with the next update, or use Update now in the profile menu.";
 }).catch(() => {});
+// ---- "Finish setting up" banner: links to /getting-started while required checklist items are missing; Dismiss is remembered in this browser
+if (SERVED) {
+  let gsOff = ""; try { gsOff = localStorage.getItem("jb.gsOff") || ""; } catch(e) {}
+  fetch("/api/setup-status").then(r => r.json()).then(s => {
+    if (!s || s.complete || !s.total) return;
+    const miss = (s.missing || []).slice().sort().join(","), seen = gsOff.split(",");
+    if (gsOff && (s.missing || []).every(m => seen.includes(m))) return;  // dismissed; shows again if something new is missing
+    const b = $("gsBanner");
+    b.innerHTML = `<span>Finish setting up Siftwell (${s.done} of ${s.total} done)</span><a class="btn sm primary" href="/getting-started">Open the checklist</a><button class="btn sm ghost" type="button" id="gsOff">Dismiss</button>`;
+    b.hidden = false;
+    $("gsOff").addEventListener("click", () => { b.hidden = true; try { localStorage.setItem("jb.gsOff", miss); } catch(e) {} });
+  }).catch(() => {});
+}
 const QUICK = [["good", "Strong & worth tailoring"], ["remote", "Remote"], ["nonprofit", "Nonprofit"], ["paid", "Pay listed"], ["new", "New"]];
 function quickOn(k){
   if (k === "good") return $("lbl").value === "good";

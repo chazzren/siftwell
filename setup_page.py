@@ -959,7 +959,8 @@ SCREENS.board = {
     <h1 class="q" tabindex="-1" id="bTitle">Setting up your board…</h1>
     <p class="lede" id="bLede">This takes about 15 minutes the first time. You can close this page; we’ll keep working and your board will be ready when you come back.</p>
     <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bBar"><i></i></div>
-    <ol class="checklist" id="bList" aria-live="polite"></ol>${errBox("_")}`,
+    <ol class="checklist" id="bList" aria-live="polite"></ol>${errBox("_")}
+    <p class="lede" style="margin-top:20px">While you wait: the <a href="/getting-started" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Get started checklist</a> checks Claude, PDFs, starting at login and phone access.</p>`,
   foot: () => ({back: false, skip: false, nextLabel: "Go to my board"}),
   next(){ location.href = "/"; },
   async mount(){

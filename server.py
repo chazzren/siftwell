@@ -652,12 +652,18 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
+        if self.path.split("?")[0] == "/api/ping":  # launchers use this to find a running Siftwell; no key, no side effects
+            import getting_started
+            return self._send(200, getting_started.ping())
         if self._login():
             return
         if not self._host_ok():
             return self._send(403, "<p style='font:16px system-ui;padding:24px'>Open the job board with your access link (it ends in ?k=…).</p>", "text/html")
         path = self.path.split("?")[0]
         pid = self._person()
+        import getting_started
+        if path in getting_started.GET_PATHS and getting_started.handle_get(self, path, pid, self.path.partition("?")[2]):
+            return
         if pid is None:  # fresh install: nothing exists until the first person is added
             if path in ("/", "/index.html", "/setup", "/settings"):
                 import welcome_page
@@ -820,6 +826,11 @@ class H(BaseHTTPRequestHandler):
             return self._send(400, {"error": "bad json"})
         path = self.path.split("?")[0]
         pid = self._person()
+        import getting_started
+        if getting_started.handle_post(self, path, body):
+            return
+        if path == "/api/claude/login":  # before the no-profile check: sign-in is part of first-time setup
+            return self._send(*claude_login(str(body.get("action") or ""), str(body.get("code") or "")))
         if pid is None and path != "/api/people/add":
             return self._send(409, {"error": "Add a person first."})
         if path == "/api/person":
@@ -971,8 +982,6 @@ class H(BaseHTTPRequestHandler):
                 state["running"] = True
             threading.Thread(target=run_update, args=(body.get("only"),), daemon=True).start()
             return self._send(202, {"ok": True})
-        if path == "/api/claude/login":
-            return self._send(*claude_login(str(body.get("action") or ""), str(body.get("code") or "")))
         if path == "/api/search":
             import claude_cli, nlsearch
             q = str(body.get("q") or "").strip()[:300]
@@ -1122,6 +1131,29 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"has_key": bool(sec.get("anthropic_api_key"))})
         self._send(404, {"error": "not found"})
 
+def busy_reason():
+    """What a restart would kill right now ('' when idle); used by the Get started page's Restart button."""
+    with lock:
+        if state["running"]:
+            return "An update is running"
+        if any(r.get("running") for r in RERATE.values()):
+            return "A re-rate is running"
+    if _RESCORE["running"]:
+        return "Ratings are being recomputed"
+    if _RECOMPUTE["running"]:
+        return "Boards are being rebuilt"
+    try:
+        import joblock
+        h = joblock.holder()
+        if h:
+            return f"A background job is running ({h.get('kind', 'job')})"
+    except Exception:
+        pass
+    for p in list(_pstate.values()):
+        if any(t.get("running") for t in list(p["tailor"].values())) or p["resume"].get("running") or any(q.get("running") for q in list(p["questions"].values())):
+            return "A resume is being tailored or read"
+    return ""
+
 if __name__ == "__main__":
     osdeps.ensure_utf8()
 
@@ -1136,12 +1168,16 @@ if __name__ == "__main__":
             super().server_bind()
 
     try:
-        srv = Server(("0.0.0.0", PORT), H)
+        import getting_started
+        BIND = getting_started.bind_host()  # 127.0.0.1 unless phone access is on (DATA/network.json)
+        srv = Server((BIND, PORT), H)
+        getting_started.configure(PORT, TOKEN, busy_reason)
+        getting_started.note_started()
     except OSError:
         print(f"Port {PORT} is already in use by another program. Stop it, or run on another port: "
               f"python server.py <port>", flush=True)
         sys.exit(1)
-    print(f"Job Board on http://127.0.0.1:{PORT}  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)", flush=True)
+    print(f"Job Board on http://127.0.0.1:{PORT}" + (f"  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)" if BIND == "0.0.0.0" else "  (this computer only)"), flush=True)
     threading.Thread(target=scheduler, daemon=True).start()
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
     if _CATALOG_MIGRATED:
