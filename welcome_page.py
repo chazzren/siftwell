@@ -16,6 +16,8 @@ CSS = """<style>
 .welcome p{color:var(--muted);margin:0 0 16px}
 .welcome form{display:flex;gap:8px;flex-wrap:wrap}
 .welcome input{flex:1 1 220px;min-width:0;height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 12px;font:inherit}
+.welcome .more{font-size:13.5px;margin-top:24px}
+.welcome .more a{color:var(--accent);font-weight:600}
 .welcome .msg{color:var(--bad);font-size:13px;margin-top:10px;min-height:1em}
 </style>
 """
@@ -28,6 +30,7 @@ BODY = """<div class="wrap"><main class="welcome">
     <button class="btn primary" type="submit">Add the first person</button>
   </form>
   <div class="msg" id="msg" role="status"></div>
+  <p class="more">New here? The <a href="/getting-started">Get started checklist</a> checks this computer and sets up Claude, PDFs and phone access with buttons.</p>
 </main></div>
 """
 

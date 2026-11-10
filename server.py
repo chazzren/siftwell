@@ -554,12 +554,18 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
+        if self.path.split("?")[0] == "/api/ping":  # launchers use this to find a running Siftwell; no key, no side effects
+            import getting_started
+            return self._send(200, getting_started.ping())
         if self._login():
             return
         if not self._host_ok():
             return self._send(403, "<p style='font:16px system-ui;padding:24px'>Open the job board with your access link (it ends in ?k=…).</p>", "text/html")
         path = self.path.split("?")[0]
         pid = self._person()
+        import getting_started
+        if path in getting_started.GET_PATHS and getting_started.handle_get(self, path, pid, self.path.partition("?")[2]):
+            return
         if pid is None:  # fresh install: nothing exists until the first person is added
             if path in ("/", "/index.html", "/setup", "/settings"):
                 import welcome_page
@@ -721,6 +727,9 @@ class H(BaseHTTPRequestHandler):
             return self._send(400, {"error": "bad json"})
         path = self.path.split("?")[0]
         pid = self._person()
+        import getting_started
+        if getting_started.handle_post(self, path, body):
+            return
         if pid is None and path != "/api/people/add":
             return self._send(409, {"error": "Add a person first."})
         if path == "/api/person":
@@ -1035,12 +1044,15 @@ if __name__ == "__main__":
             super().server_bind()
 
     try:
-        srv = Server(("0.0.0.0", PORT), H)
+        import getting_started
+        BIND = getting_started.bind_host()  # 127.0.0.1 unless phone access is on (DATA/network.json)
+        getting_started.configure(PORT, TOKEN, lambda: state["running"])
+        srv = Server((BIND, PORT), H)
     except OSError:
         print(f"Port {PORT} is already in use by another program. Stop it, or run on another port: "
               f"python server.py <port>", flush=True)
         sys.exit(1)
-    print(f"Job Board on http://127.0.0.1:{PORT}  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)", flush=True)
+    print(f"Job Board on http://127.0.0.1:{PORT}" + (f"  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)" if BIND == "0.0.0.0" else "  (this computer only)"), flush=True)
     threading.Thread(target=scheduler, daemon=True).start()
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
     srv.serve_forever()
