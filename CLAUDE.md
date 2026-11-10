@@ -9,6 +9,7 @@ Siftwell is a self-hosted household job board: it fetches listings from employer
 - `jobfinder.py`: fetching (ATS fetchers), per-person filtering (`select_for_person`), scoring, board build. `extra_fetchers.py`, `smb_fetchers.py`: more ATS fetchers. `company_add.py`: add a company from a careers link (detect + verify).
 - `ai_score.py`: Claude Match ratings (Haiku → Sonnet → Opus funnel). `pivot.py`: Target-tab ratings. `claude_cli.py`: wrapper around `claude -p`. `nlsearch.py`: natural-language search.
 - `report.py`: the board page. `HEAD`/`BODY`/`TOOLS` are plain strings; `SCRIPT` is a **raw** string holding all board JS. Output: `DATA/people/<id>/report.html`.
+- `backup.py`: Backup & move (Settings pane + welcome link): export/restore the whole DATA folder as a zip; routes under `/api/backup/` are wired in server.py via `backup.configure`.
 - Other pages: `settings_page.py` (/settings), `setup_page.py` + `setup_flow.py` (/setup), `welcome_page.py` (no profiles yet).
 - `resume.py`, `tailor.py`, `review.py` (Astra, via Codex CLI), `interview.py`, `highlights.py`, `requirements.py`, `target.py`, `geo.py` (offline geocoding from `assets/geo`).
 

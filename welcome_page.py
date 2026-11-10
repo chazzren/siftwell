@@ -2,6 +2,7 @@
 Uses the board's styles (report.HEAD) and POST /api/people/add, which creates the profile and sets the cookie."""
 import html
 
+import backup
 import paths
 import report
 
@@ -10,7 +11,7 @@ def render_welcome_html() -> str:
     head = report.HEAD.replace("<title>Siftwell</title>", "<title>Welcome to Siftwell</title>")
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
-            head + CSS + "</head><body>" + BODY + SCRIPT + "</body></html>")
+            head + CSS + backup.CSS + "</head><body>" + BODY + SCRIPT + backup.SCRIPT + "</body></html>")
 
 
 CSS = """<style>
@@ -38,6 +39,7 @@ BODY = """<div class="wrap"><main class="welcome">
   </form>
   <div class="msg" id="msg" role="status"></div>
   <div class="privacy"><b>Your information stays on this computer.</b> Siftwell keeps your resume, profiles, saved jobs and ratings in a folder on this PC (not in the cloud). If you connect Claude, job descriptions and your resume are sent to Claude only to rate jobs and tailor resumes.<small>Data folder: <code>""" + html.escape(paths.DATA) + """</code></small></div>
+  """ + backup.WELCOME_HTML + """
   <p class="more">New here? The <a href="/getting-started">Get started checklist</a> checks this computer and sets up Claude, PDFs and phone access with buttons.</p>
 </main></div>
 """
