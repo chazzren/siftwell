@@ -212,14 +212,20 @@ def score_jobs(jobs, cfg, log=print):
         log(f"Pivot scoring {len(todo)} AI-company jobs in {len(batches)} batches...")
         done, failed, t0 = 0, 0, time.time()
         with cf.ThreadPoolExecutor(cfg.get("cli_concurrency", 3)) as ex:
-            futs = [ex.submit(_batch, cfg, system, profile, b) for b in batches]
-            for f in cf.as_completed(futs):
+            def one(b):  # after Stop, batches not yet sent are skipped; ones already sent finish and are kept
+                return None if claude_cli.stop_requested() else _batch(cfg, system, profile, b)
+            futs = [ex.submit(one, b) for b in batches]
+            for fut in cf.as_completed(futs):  # (not "f": that is the fingerprints, used below)
                 try:
-                    res = f.result()
+                    res = fut.result()
+                    if res is None:
+                        status, res = "partial", {}
                     for v in res.values():
                         v["fp"], v["fmt"] = fp, RATING_FORMAT
-                    with _lock:
-                        cache.update(res)
+                    if res:
+                        with _lock:
+                            cache.update(res)
+                            paths.dump_json_atomic(CACHE, allc)  # save as we go, so a stopped run keeps what it got
                 except claude_cli.CLIAuthError:
                     status = "cli_logged_out"
                     for x in futs: x.cancel()

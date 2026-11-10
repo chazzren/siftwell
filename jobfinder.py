@@ -700,6 +700,13 @@ def main():
     ap.add_argument("--recompute", nargs="*", metavar="PID", help="rebuild these people's boards (everyone if none given) from the catalog; no fetching, no Claude")
     ap.add_argument("--rerate", metavar="PID", help="have Claude rate this person's unrated listings and redo ones rated with older info (no fetching)")
     ap.add_argument("--n", type=int, default=300, help="(kept for compatibility; budgets come from the person's settings)")
+    # Re-rate panel options (with --rerate). Without --tiers, --rerate does the classic run (settings' budgets).
+    ap.add_argument("--tiers", help="comma-separated: haiku,sonnet,opus (all three = the full re-rate)")
+    ap.add_argument("--force", action="store_true", help="rate the picked jobs again even if their ratings are current")
+    ap.add_argument("--sonnet-pct", type=int, help="Sonnet looks at the top X%% of board jobs (1-100)")
+    ap.add_argument("--opus-top", type=int, help="Opus looks at the top Y board jobs (1-2000), plus saved ones")
+    ap.add_argument("--no-target", action="store_true", help="don't rate for the Target tab alongside")
+    ap.add_argument("--ids-file", help="JSON list of job ids: Haiku only checks these (the automatic check of new jobs)")
     args = ap.parse_args()
     import catalog, joblock
     people.ensure_migrated(BASE_CFG)
@@ -712,7 +719,7 @@ def main():
         if args.recompute is not None:
             return run_recompute(args.recompute)
         if args.rerate:
-            return rerate(args.rerate, args.n)
+            return rerate(args.rerate, args.n, rate_opts(args.rerate, args))
         return fetch(args)
 
 def fetch(args):
@@ -871,18 +878,20 @@ def eligible_for_claude(j):
     L, band = j.get("level"), (CFG.get("seniority") or {}).get("band") or [3, 5]
     return L is None or band[0] - 1 <= L <= band[1] + 1
 
-def score_person(jobs, prof, new_claude=True, refresh=False):
+def score_person(jobs, prof, new_claude=True, refresh=False, opts=None):
     """Appeal for every job, then Match from Claude: the Haiku -> Sonnet -> Opus funnel (cache only if not new_claude).
     When rating, the Target (pivot) ratings run at the same time as the funnel, on copies; both caches are then
-    applied in the original order, so the result is the same as running them one after the other."""
+    applied in the original order, so the result is the same as running them one after the other.
+    opts: a Re-rate panel run (see rate_opts): which tiers, budgets, force, ranking, only these job ids, Target or not."""
     import ai_score, pivot, threading
+    opts = opts or {}
     for j in jobs:
         score(j)
     ok = [j for j in jobs if j.get("req_status") != "unmet"]
     unmet = [j for j in jobs if j.get("req_status") == "unmet"]
     pv_run, pv_thread = {"status": ""}, None
-    if CFG["pivot_enabled"] and prof and new_claude:
-        cfg_pv = {**CFG["pivot"], **({"refresh_stale": True} if refresh else {})}
+    if CFG["pivot_enabled"] and prof and new_claude and opts.get("target", True):
+        cfg_pv = {**CFG["pivot"], **({"refresh_stale": True} if refresh else {}), **opts.get("pivot", {})}
         copies = [dict(j) for j in ok if "ai" in j["tracks"]]
         pid = people.current()
         def run_pivot():
@@ -901,8 +910,11 @@ def score_person(jobs, prof, new_claude=True, refresh=False):
             budgets = CFG.get("funnel") or {}
             if not new_claude:
                 budgets = {"haiku": 0, "sonnet_pct": 0, "opus_top": 0}
+            extra = {k: opts[k] for k in ("tiers", "force", "pick", "only_ids") if k in opts} if new_claude else {}
+            if new_claude and "budgets" in opts:
+                budgets = opts["budgets"]
             ai_status = ai_score.run_funnel(jobs, budgets, refresh=refresh, saved=saved_ids(), eligible=eligible_for_claude,
-                                            log=lambda m: print(m, flush=True))
+                                            log=lambda m: print(m, flush=True), **extra)
         else:
             ai_status = "no_profile"
         for j in jobs:
@@ -970,7 +982,7 @@ def ratings_summary(jobs):
 BOARD_HIDDEN = ("desc", "base_wp", "remote_strict", "remote_bare", "local_unnamed", "last_seen")
 
 def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
-    import collections, report
+    import ai_score, collections, report
     for j in jobs:
         for k in BOARD_HIDDEN:  # catalog bookkeeping the page doesn't use
             j.pop(k, None)
@@ -987,7 +999,8 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
                "current": {"base": st.get("current_base"), "label": st.get("current_label") or ""},
                "profile": {"name": prof.get("name"), "file": prof.get("_source_file"), "approved": prof.get("_approved")} if prof else None,
                "companies": sorted(sums, key=lambda s: s["company"]), "company_info": company_info(jobs),
-               "lists": company_lists_payload(pid, jobs, sets, watch), "ratings": ratings_summary(jobs), "jobs": jobs}
+               "lists": company_lists_payload(pid, jobs, sets, watch), "ratings": ratings_summary(jobs),
+               "rate_batch": {t: v["batch_size"] for t, v in ai_score.TIER_RUN.items()}, "jobs": jobs}
     import io
     paths.dump_json_atomic(people.pdir("jobs.json", pid=pid), payload, indent=1)
     buf = io.StringIO(newline="")
@@ -1035,7 +1048,18 @@ def _kept_status(pid, prof=None):
             pass
     return st
 
-def recompute(pids=None, rate=False, refresh=False, pool=None):
+def new_unrated(pid, jobs):
+    """Jobs Claude would rate that just came onto this board (not on the board it replaces) and have no rating at
+    all: the automatic Haiku check rates these. Uses ai_rs/ai_fit set by score_person, so call after it."""
+    try:
+        prev = {j["id"] for j in json.load(open(people.pdir("jobs.json", pid=pid))).get("jobs", [])}
+    except FileNotFoundError:
+        prev = set()  # first board for this person (e.g. setup just finished)
+    except Exception:
+        return []  # can't tell what's new: don't guess
+    return [j["id"] for j in jobs if j["id"] not in prev and (j.get("ai_rs") or "f")[0] == "-" and j.get("ai_fit") is None]
+
+def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
     """Rebuild boards from the catalog: each person's filters over every open listing, requirements, Appeal and
     cached Claude ratings. rate=True also runs the Claude funnel over passing listings that are unrated
     (refresh=True: also ones rated with older info). Without rate it makes no network calls.
@@ -1065,11 +1089,14 @@ def recompute(pids=None, rate=False, refresh=False, pool=None):
             apply_requirements(pid, jobs)
             if rate:
                 print(f"--- {people.name(pid)}: {len(jobs)} listings pass their filters", flush=True)
-            ai_status, pv_status = score_person(jobs, prof, new_claude=rate, refresh=refresh)
+            ai_status, pv_status = score_person(jobs, prof, new_claude=rate, refresh=refresh, opts=opts)
             if rate:
                 catalog.set_meta(f"board_status:{pid}", [ai_status, pv_status])
             else:
                 ai_status, pv_status = _kept_status(pid, prof)
+                fresh_ids = new_unrated(pid, jobs) if prof else []
+                if fresh_ids:  # the server queues a quick Haiku check of just these (if the person allows it)
+                    print("NEW_UNRATED " + json.dumps({"pid": pid, "ids": fresh_ids}), flush=True)
             unrated = sum(1 for j in jobs if j.get("ai_fit") is None)
             write_person(pid, jobs, summaries, prof, st, ai_status, pv_status)
             out[pid] = {"jobs": len(jobs), "unrated": unrated, "secs": round(time.time() - t0, 1)}
@@ -1101,19 +1128,49 @@ def run_recompute(pids, kind="recompute"):
         return 3
     return 0
 
-def rerate(pid, n=None):
+TIER_NAMES = {"haiku": "Quick check (Haiku)", "sonnet": "Careful look (Sonnet)", "opus": "Best judgment (Opus)"}
+
+def rate_opts(pid, args):
+    """Re-rate panel options from the command line, or None for the classic re-rate. Budgets come from the run's own
+    values (X%, top Y) or the person's settings, whether or not automatic rating is on: the person asked for this run."""
+    if not args.tiers and not args.ids_file:
+        return None
+    pr = people.prefs(pid)
+    tiers = [t for t in ("haiku", "sonnet", "opus") if t in (args.tiers or "haiku").split(",")]
+    if not tiers:
+        raise SystemExit("--tiers needs haiku, sonnet and/or opus")
+    pct = max(1, min(100, args.sonnet_pct if args.sonnet_pct is not None else int(pr["claude.sonnet_pct"] or 15)))
+    top = max(1, min(2000, args.opus_top if args.opus_top is not None else int(pr["claude.opus_top"] or 300)))
+    full = len(tiers) == 3
+    o = {"tiers": tiers, "force": bool(args.force) and not full, "pick": "funnel" if full else "best",
+         "budgets": {"haiku": int(pr["claude.haiku_per_night"]) if full else 10 ** 9, "sonnet_pct": pct, "opus_top": top,
+                     "sonnet_max": 2000 if full else 10 ** 9},
+         "target": not args.no_target, "pivot": {"max_new_per_run": int(pr["claude.per_update"] or 300)}}
+    if args.ids_file:
+        # the automatic check of new jobs: Haiku only, only these jobs, only unrated ones, within the nightly budget
+        o.update(tiers=["haiku"], force=False, target=False, only_ids=set(json.load(open(args.ids_file))))
+        o["budgets"]["haiku"] = int(pr["claude.haiku_per_night"])
+    return o
+
+def rerate(pid, n=None, opts=None):
     """Separate from fetching: rebuild this person's board from the catalog, then have Claude rate passing listings
-    that are unrated or were rated with older info."""
+    that are unrated or were rated with older info. opts (rate_opts): a Re-rate panel run instead of the classic one."""
     import catalog
     if not people.exists(pid):
         print("No such profile.", flush=True); return 1
     if not person_cfg(pid)[1]:
         print("No approved resume profile yet.", flush=True); return 1
-    rid = catalog.start_run("rerate", details={"person": pid})
-    print(f"Re-rating {people.name(pid)}'s jobs with the latest info (Haiku check, then Sonnet and Opus for the best)", flush=True)
+    rid = catalog.start_run("rerate", details={"person": pid, **({"tiers": opts["tiers"], "force": opts["force"]} if opts else {})})
+    if opts is None or len(opts["tiers"]) == 3:
+        print(f"Re-rating {people.name(pid)}'s jobs with the latest info (Haiku check, then Sonnet and Opus for the best)", flush=True)
+    elif opts.get("only_ids") is not None:
+        print(f"Quick check of {len(opts['only_ids'])} new jobs on {people.name(pid)}'s board (Haiku)", flush=True)
+    else:
+        print(f"{' + '.join(TIER_NAMES[t] for t in opts['tiers'])} for {people.name(pid)}"
+              f"{' (fresh look at every pick)' if opts['force'] else ' (only ratings that need it)'}", flush=True)
     out, status = None, "error"
     try:
-        out = recompute([pid], rate=True, refresh=True)
+        out = recompute([pid], rate=True, refresh=True, opts=opts)
         status = "error" if _failed(out) else "ok"
     finally:
         catalog.finish_run(rid, status, errors=[{"person": p, "error": out[p]["error"]} for p in _failed(out)] or None,

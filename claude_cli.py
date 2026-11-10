@@ -28,6 +28,12 @@ def forbid_check(what):
             pass
         raise ClaudeForbidden(f"Claude call blocked by SIFTWELL_FORBID_CLAUDE: {what}")
 
+def stop_requested():
+    """True once the person pressed Stop on a rating run: the server creates the file named by SIFTWELL_STOP_FILE.
+    Rating loops check it before each batch; batches already sent finish and are kept."""
+    f = os.environ.get("SIFTWELL_STOP_FILE")
+    return bool(f) and os.path.exists(f)
+
 def path():
     return osdeps.find_exe("claude")
 

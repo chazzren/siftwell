@@ -380,7 +380,7 @@ const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); 
 $("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
 $("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
 $("updateBtn").title = "Update job listings now (opens the board): checks every employer for new jobs (about 40 min)";
-$("rerateBtn").title = "Re-rate with my latest info (opens the board): Claude re-scores your best jobs, no new listings";
+$("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Claude re-rates your jobs, no new listings";
 fetch("/api/status").then(r => r.json()).then(s => {
   if (!s.running) return;
   $("updateBtn").disabled = true; $("updateBtn").classList.add("busy"); $("updateBtn").title = "Updating job listings now…";

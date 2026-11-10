@@ -315,6 +315,22 @@ a.iconBtn{text-decoration:none}
 .amenu button[aria-current="true"]{font-weight:700}
 .amenu button[aria-current="true"]::after{content:"✓";color:var(--accent)}
 .amenu small{color:var(--muted);font-weight:400}
+/* Re-rate panel: a popover under the ✨ icon; a bottom sheet on phones */
+.rrpop{position:fixed;z-index:45;width:min(440px,calc(100vw - 16px));max-height:calc(100vh - 80px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.rrpop .rrhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.rrpop .rrhead strong{font-size:15px}
+.rrrow{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px}
+.rrrow.rec{border:1px solid var(--accent);background:var(--accent-soft);border-radius:var(--r);padding:10px}
+.rrtxt{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:13px}
+.rrtxt small,.rrfoot small{color:var(--muted);font-size:12.5px}
+.rrtag{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+.rrtxt input[type=number]{width:72px;height:var(--h-sm);border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:0 6px;font:inherit}
+.rrtxt input[type=number][aria-invalid="true"]{border-color:var(--bad)}
+.rrhint{color:var(--warn)!important}
+.rrfoot{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:10px}
+.rrmsg{color:var(--accent)!important;font-weight:600}
+.rrmsg.bad{color:var(--bad)!important}
+@media (max-width:640px){.rrpop{left:0!important;right:0!important;top:auto!important;bottom:0;width:auto;max-height:85vh;border-radius:16px 16px 0 0;padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}}
 .banner.gsbn{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);color:var(--ink)}
 .banner.gsbn span{flex:1 1 220px}
 nav.tabs a .n{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:4px;font-weight:500}
@@ -433,7 +449,7 @@ $("themeBtn").addEventListener("click", () => {
 # Header icon row (Home, Update, Re-rate, My profile, Theme, Settings, profile menu): shared by the board and settings_page.py.
 TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></a>
     <button class="iconBtn" type="button" id="updateBtn" title="Update job listings now: checks every employer for new jobs (about 40 min)" aria-label="Update job listings now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span class="vh" id="updSmall">every employer, ~40 min</span></button>
-    <button class="iconBtn" type="button" id="rerateBtn" title="Re-rate with my latest info: Claude re-scores your best jobs, no new listings" aria-label="Re-rate with my latest info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="rrbadge" id="rrBadge" hidden></span><span class="vh" id="rrSmall">Claude only, no new listings</span></button>
+    <button class="iconBtn" type="button" id="rerateBtn" title="Re-rate: choose how Claude re-rates your jobs, no new listings" aria-label="Re-rate jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="rrbadge" id="rrBadge" hidden></span><span class="vh" id="rrSmall">Claude only, no new listings</span></button>
     <button class="iconBtn" type="button" id="resumeBtn" aria-expanded="false" title="My profile: resume, search settings, target, companies" aria-label="My profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.5 17c.6-1.9 2-3 3.5-3s2.9 1.1 3.5 3"/><path d="M15 9.5h3.5M15 13h3.5"/></svg></button>
     <button class="iconBtn" type="button" id="themeBtn" title="Theme: Auto (follows your device). Click for Light" aria-label="Theme: Auto (follows your device). Click for Light"><svg class="ti ti-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg><svg class="ti ti-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="ti ti-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
     <a class="iconBtn" id="prefsBtn" href="/settings" title="Settings: setup checklist, resume PDFs, review, Claude usage, display" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="rrbadge" id="gsBadge" hidden></span></a>
@@ -458,9 +474,45 @@ BODY = """<div class="wrap">
 <div class="banner" id="aiBanner" hidden></div>
 <div class="banner gsbn" id="gsBanner" hidden></div>
 <div class="panel" id="progress" hidden>
-  <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span></div>
+  <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span><button class="btn sm" type="button" id="progStop" hidden title="Stop rating: batches already sent finish and their ratings are kept. Queued runs are cancelled.">Stop</button><button class="btn sm primary" type="button" id="progReload" hidden>Show new ratings</button></div>
   <div class="prog"><i id="progBar"></i></div>
+  <div class="note" id="progQueue" hidden></div>
   <div class="loglines" id="progLog"></div>
+</div>
+<div class="rrpop" id="rrPanel" role="dialog" aria-labelledby="rrTitle" hidden>
+  <div class="rrhead"><strong id="rrTitle">Re-rate jobs</strong><button class="btn ghost sm" type="button" id="rrClose">Close</button></div>
+  <div class="rrrow rec">
+    <div class="rrtxt"><span><b>Full re-rate</b><span class="rrtag">recommended</span></span>
+      <small>Quick check of jobs that need it, then Sonnet on your best <span class="rrPctTxt"></span>%, then Opus on your top <span class="rrTopTxt"></span>. Only ratings made with older info are redone.</small>
+      <small id="rrEstFull"></small></div>
+    <button class="btn primary sm" type="button" data-rr="full">Run</button>
+  </div>
+  <div class="rrrow">
+    <div class="rrtxt"><b>Quick check · Haiku</b>
+      <small id="rrHAll"></small>
+      <label class="chk"><input type="checkbox" id="rrHNeed" checked><span>Only jobs that need it (<span id="rrHN">0</span>)</span></label></div>
+    <button class="btn sm" type="button" data-rr="haiku">Run</button>
+  </div>
+  <div class="rrrow">
+    <div class="rrtxt"><b>Careful look · Sonnet</b>
+      <span>Top <input type="number" id="rrPct" min="1" max="100" step="1" aria-label="Percent of board jobs for Sonnet"> % of board jobs <span class="note" id="rrSN"></span></span>
+      <label class="chk"><input type="checkbox" id="rrSNeed" checked><span>Only ones that need it (<span id="rrSNn">0</span>)</span></label>
+      <small class="rrhint" hidden>Run the quick check first for better picks.</small></div>
+    <button class="btn sm" type="button" data-rr="sonnet">Run</button>
+  </div>
+  <div class="rrrow">
+    <div class="rrtxt"><b>Best judgment · Opus</b>
+      <span>Top <input type="number" id="rrTop" min="1" max="2000" step="1" aria-label="Number of top jobs for Opus"> jobs <span class="note" id="rrON"></span></span>
+      <label class="chk"><input type="checkbox" id="rrONeed" checked><span>Only ones that need it (<span id="rrONn">0</span>)</span></label>
+      <small class="rrhint" hidden>Run the quick check first for better picks.</small></div>
+    <button class="btn sm" type="button" data-rr="opus">Run</button>
+  </div>
+  <div class="rrfoot">
+    <label class="chk" id="rrTargetWrap" hidden><input type="checkbox" id="rrTarget" checked> Also rate for my Target tab</label>
+    <small id="rrEst"></small>
+    <small>"Top" follows your Best bets order. These numbers apply to this run only; your defaults stay in Settings.</small>
+    <small class="rrmsg" id="rrMsg" role="status"></small>
+  </div>
 </div>
 <div class="panel" id="resumePanel" hidden>
   <div class="row" style="justify-content:space-between"><strong class="ptitle">Profile</strong><button class="btn ghost sm" type="button" id="profileClose">Close</button></div>
@@ -1043,7 +1095,7 @@ function render(){
   r.sort((a,b) => by[key](a) - by[key](b));
   const base = mode === "pivot" ? pvJobs().length : jobs.length;
   $("count").innerHTML = `${r.length.toLocaleString()} of ${base.toLocaleString()} jobs` + (r.length > shown ? ` · showing ${shown}` : "") +
-    (D.ratings && (D.ratings.stale + D.ratings.unrated) ? ` · <span title="Rated with older info or not rated yet. Use Re-rate with my latest info in the menu.">${D.ratings.stale + D.ratings.unrated} of your top ${D.ratings.top} need a fresh rating</span>` : "") +
+    (D.ratings && (D.ratings.stale + D.ratings.unrated) ? ` · <span title="Rated with older info or not rated yet. Use the Re-rate (sparkle) icon at the top.">${D.ratings.stale + D.ratings.unrated} of your top ${D.ratings.top} need a fresh rating</span>` : "") +
     (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "");
   drawChips();
   const unrated = r.filter(j => mode === "pivot" ? j.pv_label == null : j.ai_fit == null);
@@ -1787,30 +1839,119 @@ if (SERVED) {
   const RR = D.ratings || {};
   const need = (RR.stale || 0) + (RR.unrated || 0);
   $("rrSmall").textContent = need ? `${need} of your top ${RR.top} need a fresh rating` : "all top jobs current";
-  $("rerateBtn").title = "Re-rate with my latest info: Claude re-scores your best jobs, no new listings" + (need ? ` (${need} of your top ${RR.top} need a fresh rating)` : " (all top jobs current)");
+  $("rerateBtn").title = "Re-rate: choose how Claude re-rates your jobs, no new listings" + (need ? ` (${need} of your top ${RR.top} need a fresh rating)` : " (all top jobs current)");
   if (need) { $("rrBadge").hidden = false; $("rrBadge").textContent = need > 99 ? "99+" : need; }
-  function pollRerate(){
-    fetch("/api/rerate").then(r => r.json()).then(s => {
-      $("rerateBtn").disabled = !!s.running; $("rerateBtn").classList.toggle("busy", !!s.running);
-      if (s.running) {
-        $("progress").hidden = false; $("progTitle").textContent = "Claude is re-rating your best jobs with your latest info…";
-        $("progNote").textContent = s.total ? `batch ${s.done} of ${s.total}` : "starting";
-        $("progBar").style.width = s.total ? (100 * s.done / s.total) + "%" : "4%";
-        $("progLog").textContent = (s.lines || []).slice(-4).join("\n");
-        pollRerate.was = true; setTimeout(pollRerate, 3000);
-      } else if (pollRerate.was) {
-        if (!s.error) { saveFilters(); location.reload(); }
-        else { $("progTitle").textContent = "Re-rating stopped"; $("progNote").textContent = s.error; }
-      }
-    }).catch(() => setTimeout(pollRerate, 5000));
+  // ---- Re-rate panel. Counts come from the board: ai_rs (per tier: "-" none, "s" older info, "f" current) and ai_bb
+  // (Best bets with the best available Match) on every job Claude would rate. The server picks again when it runs.
+  const RB = D.rate_batch || {haiku: 25, sonnet: 15, opus: 15};
+  const TNAME = {haiku: "Quick check (Haiku)", sonnet: "Careful look (Sonnet)", opus: "Best judgment (Opus)"};
+  const ratePool = jobs.filter(j => j.ai_rs);
+  const byBB = ratePool.slice().sort((a, b) => (b.ai_bb || 0) - (a.ai_bb || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));  // same order the server picks in
+  const nf = n => n.toLocaleString();
+  const reqs = (n, t) => Math.ceil(n / RB[t]);
+  const plural = (n, w) => `${nf(n)} ${w}${n === 1 ? "" : "s"}`;
+  const intIn = (id, lo, hi) => { const v = Number($(id).value); const ok = $(id).value.trim() !== "" && Number.isInteger(v) && v >= lo && v <= hi; $(id).setAttribute("aria-invalid", ok ? "false" : "true"); return ok ? v : null; };
+  function rrCalc(){
+    const pct = intIn("rrPct", 1, 100), top = intIn("rrTop", 1, 2000);
+    const stale = (j, i) => j.ai_rs[i] !== "f";
+    const hNeed = ratePool.filter(j => stale(j, 0)).length;
+    const sTop = pct ? byBB.slice(0, Math.floor(ratePool.length * pct / 100)) : [];
+    const saved = ratePool.filter(j => status[j.id] === "saved" || status[j.id] === "applied");
+    const oPick = top ? [...new Map(byBB.slice(0, top).concat(saved).map(j => [j.id, j])).values()] : [];
+    const sNeed = sTop.filter(j => stale(j, 1)).length, oNeed = oPick.filter(j => stale(j, 2)).length;
+    $("rrHAll").textContent = `All ${plural(ratePool.length, "job")} on your board that Claude would rate.`;
+    $("rrHN").textContent = nf(hNeed);
+    $("rrSN").textContent = pct ? `= ${plural(sTop.length, "job")}` : "(1 to 100)";
+    $("rrSNn").textContent = nf(sNeed);
+    const savedIn = oPick.length - Math.min(top || 0, byBB.length);
+    $("rrON").textContent = top ? `${savedIn > 0 ? `+ ${nf(savedIn)} saved ` : ""}= ${plural(oPick.length, "job")}` : "(1 to 2,000)";
+    $("rrONn").textContent = nf(oNeed);
+    document.querySelectorAll(".rrPctTxt").forEach(e => e.textContent = pct || "?");
+    document.querySelectorAll(".rrTopTxt").forEach(e => e.textContent = top ? nf(top) : "?");
+    document.querySelectorAll(".rrhint").forEach(e => e.hidden = !(hNeed >= Math.max(10, ratePool.length * 0.2)));
+    const h = $("rrHNeed").checked ? hNeed : ratePool.length, s = $("rrSNeed").checked ? sNeed : sTop.length, o = $("rrONeed").checked ? oNeed : oPick.length;
+    const hb = Math.min(hNeed, +(PREFS["claude.haiku_per_night"] ?? 4000));
+    const full = reqs(hb, "haiku") + reqs(sNeed, "sonnet") + reqs(oNeed, "opus");
+    $("rrEstFull").textContent = full ? `About ${plural(full, "Claude request")} (fewer if the quick check finds little has changed).` : "Everything is current: nothing to do.";
+    $("rrEst").textContent = `Claude requests: Quick check ${nf(reqs(h, "haiku"))} · Careful look ${pct ? nf(reqs(s, "sonnet")) : "?"} · Best judgment ${top ? nf(reqs(o, "opus")) : "?"} (${RB.haiku} Haiku or ${RB.sonnet} Sonnet/Opus jobs per request). Uses your Claude plan.`;
+    document.querySelectorAll("#rrPanel [data-rr]").forEach(b => b.disabled = (b.dataset.rr !== "haiku" && !(pct && top)));
+    return {pct, top, n: {haiku: h, sonnet: s, opus: o}, all: ratePool.length};
   }
-  $("rerateBtn").addEventListener("click", () => {
-    if (!confirm("Re-rate with your latest info?\n\nClaude re-scores your best jobs using your current resume, answers and settings. No new listings are fetched. It uses your Claude plan and takes a few minutes.")) return;
-    fetch("/api/rerate", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
-      if (!ok) { $("progress").hidden = false; $("progTitle").textContent = d.error || "Couldn't start"; $("progNote").textContent = ""; return; }
-      pollRerate.was = true; scrollTo(0, 0); pollRerate();
-    });
+  function rrPlace(){
+    const p = $("rrPanel"), r = $("rerateBtn").getBoundingClientRect();
+    p.style.top = Math.round(r.bottom + 8) + "px";
+    p.style.right = Math.max(8, Math.round(innerWidth - r.right - 8)) + "px"; p.style.left = "auto";
+  }
+  function rrOpen(){
+    if (!$("rrPanel").hidden) return rrClose();
+    $("rrTitle").textContent = `Re-rate ${D.person && D.person.name ? D.person.name + "'s" : "your"} jobs`;
+    if ($("rrPct").value === "") $("rrPct").value = PREFS["claude.sonnet_pct"] || 15;
+    if ($("rrTop").value === "") $("rrTop").value = PREFS["claude.opus_top"] || 300;
+    $("rrTargetWrap").hidden = !D.pivot_enabled;
+    $("rrMsg").textContent = ""; $("rrMsg").classList.remove("bad");
+    rrCalc(); rrPlace(); $("rrPanel").hidden = false; $("rerateBtn").setAttribute("aria-expanded", "true");
+    $("rrPanel").querySelector("[data-rr=full]").focus();
+  }
+  function rrClose(){ $("rrPanel").hidden = true; $("rerateBtn").setAttribute("aria-expanded", "false"); }
+  ["rrPct", "rrTop", "rrHNeed", "rrSNeed", "rrONeed"].forEach(id => $(id).addEventListener("input", rrCalc));
+  $("rrClose").addEventListener("click", rrClose);
+  addEventListener("resize", () => { if (!$("rrPanel").hidden) rrPlace(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("rrPanel").hidden) { rrClose(); $("rerateBtn").focus(); } });
+  document.addEventListener("click", e => { if (!$("rrPanel").hidden && !e.target.closest("#rrPanel,#rerateBtn")) rrClose(); });
+  $("rrPanel").addEventListener("click", e => {
+    const b = e.target.closest("button[data-rr]"); if (!b) return;
+    const kind = b.dataset.rr, c = rrCalc();
+    if (kind === "haiku") { c.pct = c.pct || +(PREFS["claude.sonnet_pct"] || 15); c.top = c.top || +(PREFS["claude.opus_top"] || 300); }  // not used by the quick check
+    if (!(c.pct && c.top)) { $("rrMsg").textContent = "Sonnet looks at 1 to 100% of your jobs; Opus at 1 to 2,000 jobs."; $("rrMsg").classList.add("bad"); return; }
+    const only = kind === "full" ? true : $({haiku: "rrHNeed", sonnet: "rrSNeed", opus: "rrONeed"}[kind]).checked;
+    if (kind === "haiku" && !only && !confirm(`Give all ${plural(c.all, "job")} a fresh quick check?\n\nThis also re-rates jobs whose ratings are current: about ${plural(reqs(c.all, "haiku"), "Claude request")} on your Claude plan.`)) return;
+    const body = {tiers: kind === "full" ? ["haiku", "sonnet", "opus"] : [kind], only_needed: only, sonnet_pct: c.pct, opus_top: c.top,
+                  target: !!D.pivot_enabled && $("rrTarget").checked};
+    b.disabled = true;
+    fetch("/api/rerate", {method: "POST", headers: H, body: JSON.stringify(body)}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+      b.disabled = false;
+      $("rrMsg").classList.toggle("bad", !ok);
+      if (!ok) { $("rrMsg").textContent = d.error || "Couldn't start"; return; }
+      if (d.queued) { $("rrMsg").textContent = "Queued: " + d.label; pollRerate(); return; }
+      rrClose(); pollRerate.mine = true; scrollTo(0, 0); pollRerate();
+    }).catch(() => { b.disabled = false; $("rrMsg").textContent = "Couldn't reach Siftwell."; $("rrMsg").classList.add("bad"); });
   });
+  function pollRerate(){
+    clearTimeout(pollRerate.t);
+    fetch("/api/rerate").then(r => r.json()).then(s => {
+      $("rerateBtn").classList.toggle("busy", !!s.running);
+      if (s.running) {
+        pollRerate.auto = !!s.auto && !(s.queue || []).length;  // the automatic quick check of new jobs
+        $("progress").hidden = false; $("progReload").hidden = true;
+        $("progTitle").textContent = (s.label || "Re-rating") + (s.stopping ? ": stopping…" : "…");
+        $("progNote").textContent = s.total ? `${TNAME[s.tier] || "Claude"} · batch ${s.done} of ${s.total}` : "starting";
+        $("progBar").style.width = s.total ? (100 * s.done / s.total) + "%" : "4%";
+        $("progStop").hidden = false; $("progStop").disabled = !!s.stopping;
+        $("progQueue").hidden = !(s.queue || []).length;
+        $("progQueue").textContent = (s.queue || []).map(q => "Queued: " + q).join(" · ");
+        $("progLog").textContent = (s.lines || []).slice(-4).join("\n");
+        pollRerate.was = true; pollRerate.t = setTimeout(pollRerate, 3000);
+      } else {
+        if (pollRerate.was) {
+          pollRerate.was = false; $("progStop").hidden = true; $("progQueue").hidden = true;
+          if (s.error) { $("progTitle").textContent = "Re-rating stopped"; $("progNote").textContent = s.error; }
+          else if (pollRerate.auto && !pollRerate.mine) {  // nobody pressed Run here: don't reload under their hands, offer it
+            $("progTitle").textContent = (s.label || "Re-rating") + (s.stopped ? " stopped" : " done"); $("progNote").textContent = "";
+            $("progBar").style.width = "100%"; $("progReload").hidden = false;
+          } else { saveFilters(); location.reload(); return; }
+          pollRerate.auto = pollRerate.mine = false;
+        }
+        pollRerate.t = setTimeout(pollRerate, 10000);  // a quick check of new jobs can start after a settings change
+      }
+    }).catch(() => { pollRerate.t = setTimeout(pollRerate, 5000); });
+  }
+  $("progStop").addEventListener("click", () => {
+    $("progStop").disabled = true;
+    fetch("/api/rerate/stop", {method: "POST", headers: H, body: "{}"}).then(() => pollRerate()).catch(() => { $("progStop").disabled = false; });
+  });
+  $("progReload").addEventListener("click", () => { saveFilters(); location.reload(); });
+  $("rerateBtn").setAttribute("aria-haspopup", "dialog"); $("rerateBtn").setAttribute("aria-expanded", "false");
+  $("rerateBtn").addEventListener("click", rrOpen);
   pollRerate();
   $("updateBtn").addEventListener("click", () => {
     if (!confirm("Update job listings now?\n\nChecks every employer's job board for new and removed jobs, then Claude rates the new ones for each profile. Takes about 40 minutes.")) return;
