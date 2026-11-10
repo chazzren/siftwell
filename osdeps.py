@@ -12,20 +12,54 @@ WINDOWS = os.name == "nt"
 MAC = sys.platform == "darwin"
 
 
+def _npmrc_prefix(home):
+    """The `prefix=` line of ~/.npmrc (where `npm install -g` puts commands), read from the file instead of running npm."""
+    try:
+        with open(os.path.join(home, ".npmrc"), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                k, _, v = line.partition("=")
+                if k.strip() == "prefix" and v.strip():
+                    return os.path.expanduser(os.path.expandvars(v.strip().strip('"')))
+    except OSError:
+        pass
+    return ""
+
+
+def _nvm_bins(home):
+    """~/.nvm/versions/node/*/bin, newest Node version first."""
+    import glob, re
+    def ver(d):
+        return tuple(int(x) for x in re.findall(r"\d+", os.path.basename(os.path.dirname(d)))[:3])
+    return sorted(glob.glob(os.path.join(home, ".nvm", "versions", "node", "*", "bin")), key=ver, reverse=True)
+
+
 def find_exe(name, extra=()):
-    """Full path to a command-line app, or None."""
+    """Full path to a command-line app, or None. Besides PATH, it looks in a fixed list of usual install folders,
+    because the desktop app (a Mac .app opened from Finder, Windows starting it at sign-in) gets a minimal PATH.
+    No shell profiles are read and no login shell is started."""
     cands = [shutil.which(name)]
+    home = os.path.expanduser("~")
+    prefix = _npmrc_prefix(home)
     if WINDOWS:
-        home, appdata, local = os.path.expanduser("~"), os.environ.get("APPDATA", ""), os.environ.get("LOCALAPPDATA", "")
+        appdata, local = os.environ.get("APPDATA", ""), os.environ.get("LOCALAPPDATA", "")
         cands += [shutil.which(name + ".exe"), shutil.which(name + ".cmd"),
                   os.path.join(home, ".local", "bin", name + ".exe"),
-                  os.path.join(appdata, "npm", name + ".cmd"),
-                  os.path.join(local, "Programs", name, name + ".exe")]
+                  os.path.join(home, ".claude", "local", name + ".exe"),
+                  os.path.join(home, ".claude", "local", name + ".cmd"),
+                  os.path.join(appdata, "npm", name + ".cmd") if appdata else "",
+                  os.path.join(local, "Programs", name, name + ".exe") if local else "",
+                  os.path.join(prefix, name + ".cmd") if prefix else ""]
     else:
-        cands += ["/opt/homebrew/bin/" + name, "/usr/local/bin/" + name, os.path.expanduser("~/.local/bin/" + name)]
+        cands += [os.path.join(home, ".local", "bin", name),
+                  os.path.join(home, ".claude", "local", name),
+                  "/opt/homebrew/bin/" + name, "/usr/local/bin/" + name,
+                  os.path.join(home, ".npm-global", "bin", name),
+                  os.path.join(prefix, "bin", name) if prefix else "",
+                  *[os.path.join(b, name) for b in _nvm_bins(home)],
+                  os.path.join(home, ".volta", "bin", name)]
     cands += list(extra)
     for p in cands:
-        if p and os.path.exists(p):
+        if p and os.path.isfile(p):
             return p
     return None
 

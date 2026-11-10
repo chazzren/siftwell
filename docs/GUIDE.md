@@ -112,6 +112,13 @@ The first time, a window says *"Setting up Siftwell. This happens once and takes
 ### 1. Follow the page in the Siftwell window
 The Siftwell window shows Siftwell, which runs on your computer at **http://127.0.0.1:8766** (if another program already uses that port, it picks the next free one, 8767 to 8775, and keeps using it). Links to other websites, such as job postings and the Claude sign-in page, open in your normal web browser, and resume downloads show a normal Save dialog. If your computer can't show the Siftwell window (it needs the free Microsoft Edge WebView2 component that Windows 11 includes), Siftwell says so and opens in your web browser instead. You'll be asked to add the first person, then a short setup walks you through your resume, location, pay and goals.
 
+**Connecting Claude during setup.** If Claude isn't connected yet, the resume step shows a **Connect Claude** box, so you can do it right there without leaving setup. Claude Code is a free app from Anthropic that lets Siftwell use your Claude account; installing it is free, using it needs a paid Claude plan (such as Pro or Max). The box shows only what's still needed:
+- **Not installed:** click **Install Claude Code** (Siftwell runs the official installer; it takes a minute or two), then sign in.
+- **Installed but not signed in:** click **Sign in to Claude**. The Claude sign-in page opens in your normal web browser (if it doesn't, copy the link the box shows into your browser). Sign in, copy the code the page shows, paste it into the box and click **Finish sign-in**.
+- **Already connected:** the box says so and the step goes straight to uploading your resume.
+
+When Claude is connected, the step switches to **Add your resume** and Claude reads it for you. If you installed Claude Code or signed in from a terminal instead, come back to the Siftwell window (or click **Check again**) and it notices. Don't want Claude? Click **Skip Claude and fill in a short form** (see **Using Siftwell without Claude** below); you can connect it later. The same box appears on the **Direction** step (behind **Connect Claude now**) and on the tailoring-questions step. The welcome page also has a **Connect Claude first (optional)** button that opens the **Get started** checklist.
+
 ### 2. Finish setup with the "Get started" checklist
 Open **Get started** (linked from the welcome page; once you have a profile it is the first item in **Settings**, the gear icon at the top, and the gear shows a small number while required steps are missing). It checks your computer and fixes things with buttons:
 - **Browser for resume PDFs:** found automatically (Edge is already on Windows).
@@ -266,7 +273,7 @@ Claude is an optional upgrade. Without it Siftwell still fetches listings, filte
 - **Tailor my resume**, the Astra review, tailoring questions, **Target** suggestions and ratings, reading a resume with Claude, and plain-English search that understands what you mean.
 - Looking up **company facts** (updates skip it quietly; facts already gathered still show).
 
-Where something needs Claude, Siftwell shows one note ("Connect Claude to get Match ratings and tailoring → Settings → Get started") and a dash where the Match number would be, instead of an error. Once you connect Claude, upload your resume and Claude reads it to improve the profile you filled in.
+Where something needs Claude, Siftwell shows one note ("Connect Claude to get Match ratings and tailoring → Settings → Get started") and a dash where the Match number would be, instead of an error. Once you connect Claude, upload your resume and Claude reads it to improve the profile you filled in. You can connect Claude during first-time setup (the **Connect Claude** box on the resume step) or any time later in **Settings → Get started**.
 
 ## Your data stays on your computer
 

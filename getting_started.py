@@ -832,7 +832,9 @@ def handle_post(h, path, body):
     act = path.rsplit("/", 1)[1]
     try:
         if act == "install":
-            if os.environ.get("SIFTWELL_TEST_INSTALL_CMD") is None:
+            # Never install over an existing Claude Code. (A test installer alone skips this check, because the dev PC
+            # has the real one; with SIFTWELL_TEST_CLAUDE_EXE the stand-in decides what counts as installed.)
+            if os.environ.get("SIFTWELL_TEST_INSTALL_CMD") is None or os.environ.get("SIFTWELL_TEST_CLAUDE_EXE"):
                 import claude_cli
                 if claude_cli.path():
                     return h._send(200, {"ok": True, "already": True}) or True
@@ -966,6 +968,7 @@ BODY = """<div class="wrap">
     """ + report.MARK + """<h1>Get started</h1>
   </div>
 </header>
+<p style="margin:8px 0 0"><a href="/" style="color:var(--accent);font-weight:600">&larr; Back to Siftwell</a> <span style="color:var(--muted);font-size:13.5px">(add the first person and set up your board when you're done here)</span></p>
 <main>
 """ + PANE_HTML + """
 </main>

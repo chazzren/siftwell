@@ -243,9 +243,11 @@ def claude_login(action, code=""):
     import claude_cli, time
     with LOGIN["lock"]:
         p = LOGIN["proc"]
-        if action == "status":
-            s = claude_cli.state()
-            return 200, {"logged_in": s == "ready", "installed": s != "not_installed", "ready": s == "ready"}
+        if action in ("status", "check"):  # "check": a fresh look (not the 30 s cache), so an install or sign-in done
+            import getting_started           # in a terminal is picked up at once (setup's Connect Claude card)
+            s = claude_cli.state(fresh=action == "check")
+            return 200, {"logged_in": s == "ready", "installed": s != "not_installed", "ready": s == "ready", "state": s,
+                         "install": getting_started.install_state()}
         if action == "cancel":
             if p and p.poll() is None:
                 p.kill()

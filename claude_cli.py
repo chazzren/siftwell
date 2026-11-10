@@ -36,10 +36,16 @@ def stop_requested():
 
 PRETEND_ENV = "SIFTWELL_PRETEND_NO_CLAUDE"   # =1: act as if Claude Code isn't installed (tests of the no-Claude experience)
 
+TEST_EXE_ENV = "SIFTWELL_TEST_CLAUDE_EXE"  # tests only: a stand-in `claude` (a fake that answers `auth status` and
+                                            # `auth login`); when set, only that file counts, never the real Claude Code
+
 def pretend_none():
-    return os.environ.get(PRETEND_ENV) == "1"
+    return os.environ.get(PRETEND_ENV) == "1" and not os.environ.get(TEST_EXE_ENV)
 
 def path():
+    test = os.environ.get(TEST_EXE_ENV)
+    if test:
+        return test if os.path.isfile(test) else None
     if pretend_none():
         return None
     return osdeps.find_exe("claude")

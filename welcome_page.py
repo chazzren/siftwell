@@ -26,6 +26,9 @@ CSS = """<style>
 .welcome .privacy b{color:var(--ink)}
 .welcome .privacy small{display:block;margin-top:6px;font-size:12px;word-break:break-all}
 .welcome .brandline{margin-bottom:8px}.welcome .brandline h1{margin:0}
+.welcome .claude{margin-top:10px;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.welcome .claude .btn{text-decoration:none;white-space:normal;text-align:center}
+.welcome .claude p{margin:0;font-size:13.5px}
 .welcome .msg{color:var(--bad);font-size:13px;margin-top:10px;min-height:1em}
 </style>
 """
@@ -38,9 +41,11 @@ BODY = """<div class="wrap"><main class="welcome">
     <button class="btn primary" type="submit">Add the first person</button>
   </form>
   <div class="msg" id="msg" role="status"></div>
+  <div class="claude"><a class="btn" href="/getting-started">Connect Claude first (optional)</a>
+    <p>Claude reads your resume, rates how well each job fits you, and tailors your resume. You can also connect it during setup, or skip it: Siftwell works without it.</p></div>
   <div class="privacy"><b>Your information stays on this computer.</b> Siftwell keeps your resume, profiles, saved jobs and ratings in a folder on this PC (not in the cloud). If you connect Claude, job descriptions and your resume are sent to Claude only to rate jobs and tailor resumes.<small>Data folder: <code>""" + html.escape(paths.DATA) + """</code></small></div>
   """ + backup.WELCOME_HTML + """
-  <p class="more">New here? The <a href="/getting-started">Get started checklist</a> checks this computer and sets up Claude, PDFs and phone access with buttons.</p>
+  <p class="more">The <a href="/getting-started">Get started checklist</a> also checks this computer for PDFs, starting at sign-in and phone access.</p>
 </main></div>
 """
 

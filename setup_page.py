@@ -7,6 +7,7 @@ Open it with ?mock=1 (or from a file:// URL) to run against an in-page fake serv
 import json
 
 import claude_cli
+import connect_claude
 import manual_profile
 import people
 import setup_flow
@@ -18,7 +19,8 @@ def render_setup_html() -> str:
             "radii": setup_flow.RADII, "industries": setup_flow.INDUSTRY_IDEAS, "steps": setup_flow.STEPS}
     boot["claude_ready"] = claude_cli.claude_ready()
     return (PAGE.replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
-            .replace("/*__MANUAL_CSS__*/", manual_profile.CSS).replace("/*__MANUAL_JS__*/", manual_profile.JS))
+            .replace("/*__MANUAL_CSS__*/", manual_profile.CSS + connect_claude.CSS)
+            .replace("/*__MANUAL_JS__*/", manual_profile.JS + connect_claude.JS))
 
 
 PAGE = r"""<!doctype html>
@@ -370,7 +372,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 /*__MANUAL_JS__*/
 // Claude is optional: false when it isn't installed / signed in (the server says so in /api/setup and in BOOT).
 const NOCL = () => !MOCK && ((S && S.claude) ? S.claude.ready === false : BOOT.claude_ready === false);
-const NEED_CL = "Needs Claude. You can connect it later in Settings, then Get started.";
+const NEED_CL = "Needs Claude. Connect it below, or later in Settings.";
+// The inline Connect Claude card (connect_claude.py): installs Claude Code and signs in without leaving setup. Once
+// connected, refresh the state and redraw the current step in its with-Claude form (the resume step switches to upload).
+function mountConnect(el){
+  ConnectClaude.mount(el, {onReady: async () => {
+    BOOT.claude_ready = true;
+    try { const d = await api("GET", "/api/setup"); if (d && d.values) S = d; } catch(e) {}
+    S.claude = Object.assign({}, S.claude, {ready: true});
+    toast("Claude is connected.");
+    if (cur === "direction") V.direction = radio("dir") || V.direction;
+    if (cur === "resume") local = {mode: ""};
+    if (["resume", "direction", "questions"].includes(cur)) render();
+  }});
+}
 
 // ------------------------------------------------------------------ state
 let S = null;          // last state from the server
@@ -536,12 +551,18 @@ SCREENS.resume = {
       <p class="lede">${r.manual ? "You filled it in yourself. Use it as is, or change it." : "Use it as is, or upload a newer one."}</p>
       <div class="have"><span class="ico">${I.doc}</span><div><b>${esc((r.file || "Resume").replace(/^\d{8}-\d{6}_/, ""))}</b><small>${r.manual ? "Filled in by you" : "Read and ready"}</small></div></div>
       <div class="alt"><button type="button" class="linkbtn" id="replace">${r.manual ? "Change it" : "Upload a different resume"}</button></div>`;
-    if (local.mode === "manual" || (NOCL() && !local.mode)) return `
+    if (local.mode === "manual") return `
       <p class="eyebrow">Your profile</p>
       <h1 class="q" tabindex="-1">Tell us about your work.</h1>
-      <p class="lede">${NOCL() ? "Claude isn’t connected, so we can’t read a resume for you. Fill in this short form instead (a Word or text resume can fill it in for you). You can connect Claude later in Settings." : "Fill in the short form below instead of uploading a resume."} Your answers stay on this computer.</p>
+      <p class="lede">${NOCL() ? "Fill in this short form instead of having Claude read a resume (a Word or text resume can fill it in for you)." : "Fill in the short form below instead of uploading a resume."} Your answers stay on this computer.</p>
       <div id="mpRoot"></div>${errBox("_")}
-      ${NOCL() ? "" : `<div class="alt"><button type="button" class="linkbtn" id="modeFile">Upload a resume instead</button></div>`}`;
+      <div class="alt"><button type="button" class="linkbtn" id="modeFile">${NOCL() ? "Connect Claude instead" : "Upload a resume instead"}</button></div>`;
+    if (NOCL() && !local.mode) return `
+      <p class="eyebrow">Your resume</p>
+      <h1 class="q" tabindex="-1">Add your resume.</h1>
+      <p class="lede">Claude reads your resume to build your profile, so we can match jobs to you and tailor applications later. Connect Claude here first (a couple of minutes), or skip Claude and fill in a short form.</p>
+      <div id="ccRoot"></div>
+      <div class="alt"><button type="button" class="linkbtn" id="modeManual">Skip Claude and fill in a short form</button></div>${errBox("_")}`;
     return `
       <p class="eyebrow">Your resume</p>
       <h1 class="q" tabindex="-1">Add your resume.</h1>
@@ -571,7 +592,8 @@ SCREENS.resume = {
     const r = S.resume;
     if (r.status === "reading" || local.reading) return {next: false, back: false};
     if (r.status !== "none" && !local.replace) return {nextLabel: r.manual ? "Use this profile" : "Use this resume"};
-    if (local.mode === "manual" || (NOCL() && !local.mode)) return {nextLabel: "Save my profile", skip: true, skipLabel: "Skip for now"};
+    if (local.mode === "manual") return {nextLabel: "Save my profile", skip: true, skipLabel: "Skip for now"};
+    if (NOCL() && !local.mode) return {next: false, skip: true, skipLabel: "Skip for now"};
     if (local.mode === "paste" || local.mode === "gdoc") return {nextLabel: "Read my resume", skip: true, skipLabel: "Skip for now"};
     return {next: false, skip: true, skipLabel: "Skip for now"};
   },
@@ -590,6 +612,7 @@ SCREENS.resume = {
     on("modeFile", () => { local = {...local, mode: ""}; render(); });
     on("modeManual", () => { local = {...local, mode: "manual"}; render(); });
     if ($("mpRoot")) ManualProfile.mount($("mpRoot"), {name: S.name});
+    if ($("ccRoot")) mountConnect($("ccRoot"));
     if ($("pick")) $("pick").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
     if ($("file")) $("file").addEventListener("change", e => e.target.files[0] && this.sendFile(e.target.files[0]));
     const drop = $("drop");
@@ -626,7 +649,7 @@ SCREENS.resume = {
   },
   pollId: 0,
   async next(){
-    if (local.mode === "manual" || (NOCL() && !local.mode && (S.resume.status === "none" || local.replace))) {
+    if (local.mode === "manual") {
       busy(true, "Saving your profile");
       try { await ManualProfile.submit(); }
       catch(e) { busy(false); footer(this.foot()); return showErr("_", e.message); }
@@ -802,11 +825,13 @@ SCREENS.direction = {
         ${radioCard("dir", "specific", d === "specific", "Aim at something specific", "A role, industry or kind of company you have in mind.", {icon: I.target})}
         ${radioCard("dir", "unsure", d === "unsure", "I’m not sure yet", NOCL() ? NEED_CL : "We’ll suggest a few directions based on your resume and what’s hiring.", {icon: I.compass, disabled: NOCL()})}
       </div>${errBox("direction")}
-      ${NOCL() ? `<p class="fine">Without Claude, a direction you type is saved and starts working once you connect it.</p>` : ""}
+      ${NOCL() ? `<p class="fine">Without Claude, a direction you type is saved and starts working once you connect it.</p>
+        <div class="alt" id="dirConnectRow"><button type="button" class="linkbtn" id="dirConnect">Connect Claude now</button></div><div id="ccRoot"></div>` : ""}
       <div id="dirMore" style="margin-top:20px"></div>`;
   },
   mount(){
     document.querySelectorAll('input[name="dir"]').forEach(i => i.addEventListener("change", () => this.more()));
+    if ($("dirConnect")) $("dirConnect").addEventListener("click", () => { $("dirConnectRow").hidden = true; mountConnect($("ccRoot")); });
     this.more();
   },
   more(){
@@ -918,7 +943,8 @@ SCREENS.questions = {
     if (!q && NOCL()) return `
       <p class="eyebrow">Optional</p>
       <h1 class="q" tabindex="-1">Tailoring questions need Claude.</h1>
-      <p class="lede">Siftwell can ask a few quick questions about skills and tools your resume doesn’t show, but that part needs Claude. You can connect it later (Settings, then Get started) and answer them then.</p>`;
+      <p class="lede">Siftwell can ask a few quick questions about skills and tools your resume doesn’t show, but that part needs Claude. Connect it here, or press Continue and answer them later from the board.</p>
+      <div id="ccRoot"></div>`;
     if (!q) return `
       <p class="eyebrow">Optional</p>
       <h1 class="q" tabindex="-1">Got experience your resume doesn’t show?</h1>
@@ -948,6 +974,7 @@ SCREENS.questions = {
     const last = q.i === q.questions.length - 1;
     return {nextLabel: last ? "Save answers" : "Next question", skip: true, skipLabel: last ? "Skip and finish" : "Skip this one"};
   },
+  mount(){ if ($("ccRoot")) mountConnect($("ccRoot")); },
   keep(){ const q = local.q; if (q && q.questions && $("ans")) q.answers[q.i] = {level: radio("lvl") || "", answer: $("ans").value.trim()}; },
   async start(){
     local.q = {running: true}; render();
@@ -1003,7 +1030,7 @@ SCREENS.board = {
     <p class="lede" id="bLede">This takes about 15 minutes the first time. You can close this page; we’ll keep working and your board will be ready when you come back.</p>
     <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bBar"><i></i></div>
     <ol class="checklist" id="bList" aria-live="polite"></ol>${errBox("_")}
-    <p class="lede" style="margin-top:20px">While you wait: the <a href="/settings#get-started" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Get started checklist</a> checks Claude, PDFs, starting at login and phone access.</p>`,
+    <p class="lede" style="margin-top:20px">While you wait: the Get started checklist (in <a href="/settings#get-started" style="color:var(--accent);font-weight:600">Settings</a>) checks Claude, PDFs, starting at login and phone access. Your board keeps getting ready if you go there.</p>`,
   foot: () => ({back: false, skip: false, nextLabel: "Go to my board"}),
   next(){ location.href = "/"; },
   async mount(){
