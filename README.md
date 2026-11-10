@@ -17,7 +17,7 @@ Siftwell checks the career pages of the companies you care about every night, fi
 
 ## What it does
 
-- **Goes straight to the source.** Siftwell reads job listings directly from employers' own career sites (Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters and 13 more), including smaller and nonprofit employers whose jobs often never reach the big job sites.
+- **Goes straight to the source.** Siftwell reads job listings directly from employers' own career sites (Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, SAP SuccessFactors, Taleo and 15 more), including smaller and nonprofit employers whose jobs often never reach the big job sites.
 - **Filters to what fits you.** Distance from your home ZIP code, remote or in person, pay floor, seniority, travel, security clearance, and degree or license requirements you don't meet.
 - **Two scores for every job:**
   - **Appeal:** how good the job is for *you* (pay, location, level, company, travel).
@@ -136,7 +136,7 @@ Leave that Terminal window open while you use Siftwell. Run `server.py <port>` t
 </details>
 
 ### 5. Add companies to watch
-A new install starts with no companies. Open the **Catalog** page (the database icon at the top, next to Re-rate), go to **Companies**, and paste the link to a company's careers page (for example `https://boards.greenhouse.io/examplecompany`) under **Add a company**. Siftwell figures out which job system it uses, checks that it can read the listings, adds it, and fetches its jobs right away. Besides the common job systems (Greenhouse, Lever, Workday and others), Siftwell can also read many custom careers sites that publish standard job data (the markup Google Jobs uses); if a site still can't be read, Siftwell tells you so when you paste the link. (You can still add a company from **My profile → Companies** too.) For safety Siftwell only opens ordinary public web links (`https://` or `http://`): it refuses links to this computer or to devices on your home network, and links on unusual ports.
+A new install starts with no companies. Open the **Catalog** page (the database icon at the top, next to Re-rate), go to **Companies**, and paste the link to a company's careers page (for example `https://boards.greenhouse.io/examplecompany`) under **Add a company**. Siftwell figures out which job system it uses, checks that it can read the listings, adds it, and fetches its jobs right away. Besides the common job systems (Greenhouse, Lever, Workday, SAP SuccessFactors, Taleo and others; for a company on SuccessFactors or Taleo you can paste its careers page or its job-search page, and Siftwell finds the job system behind it), Siftwell can also read many custom careers sites that publish standard job data (the markup Google Jobs uses); if a site still can't be read, Siftwell tells you so when you paste the link. (You can still add a company from **My profile → Companies** too.) For safety Siftwell only opens ordinary public web links (`https://` or `http://`): it refuses links to this computer or to devices on your home network, and links on unusual ports.
 
 Don't know where to start? Use **Catalog → Find employers near me** (see **The Catalog page** below): Claude looks up employers in your area and Siftwell checks which ones it can read, so you can add them with a tick. (The repository also includes `packs/dc-area.json`, a list of ~800 Washington, DC area employers it was first built with.)
 

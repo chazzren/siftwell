@@ -33,6 +33,7 @@ PATTERNS = [
     ("paycom", re.compile(r"paycomonline\.net/v4/ats/web\.php/(?:jobs\?clientkey=|portal/)([A-F0-9]{32})")),
     ("saashr", re.compile(r"(secure\d*\.saashr\.com)/ta/(\d+)\.careers", re.I)),
     ("dayforce", re.compile(r"jobs\.dayforcehcm\.com/(?:[a-z]{2}-[A-Z]{2}/)?([a-zA-Z0-9]+)/([A-Za-z0-9]+)")),
+    ("taleo", re.compile(r"https?://((?:[a-z0-9-]+\.)?[a-z0-9-]+\.taleo\.net)/careersection/(?!rest/|theme/|sitemap|jobdetail|jobsearch)([A-Za-z0-9_.-]+)/", re.I)),
 ]
 BAD_TOKENS = {"www", "app", "api", "apply", "assets", "static", "cdn", "help", "support", "jobs", "careers", "widget", "embed", "j"}
 
@@ -71,6 +72,10 @@ def _match(text):
                 return {"ats": "saashr", "host": m.group(1), "cid": m.group(2)}
             if ats == "dayforce":
                 return {"ats": "dayforce", "ns": m.group(1), "board": m.group(2)}
+            if ats == "taleo":
+                if m.group(1).lower() in ("www.taleo.net", "tbe.taleo.net"):
+                    continue
+                return {"ats": "taleo", "host": m.group(1).lower(), "section": m.group(2)}
             return {"ats": ats, "token": m.group(1)}
     return None
 
@@ -96,13 +101,19 @@ def detect(url):
         found = _match(page)
         if not found:
             try:
+                import ats_sap_taleo
+                found = ats_sap_taleo.detect_page(url, page)  # (a SuccessFactors Recruiting Marketing site: judged by its page scripts)
+            except Exception:
+                found = None
+        if not found:
+            try:
                 import jsonld_fetcher
                 found = jsonld_fetcher.detect_config(url, page)
             except Exception:
                 found = None
     if not found:
         raise ValueError("Couldn't find a supported job board on that page, and the site doesn't publish standard job data Siftwell can read. Supported: Greenhouse, Lever, Ashby, Workday, "
-                         "SmartRecruiters, iCIMS, UKG, Oracle, Paylocity, ADP, Workable, BambooHR, JazzHR, Breezy, Recruitee, Paycom, Dayforce, Rippling, and custom careers sites that publish standard job data. Tip: open the company's job list and paste the link from the address bar.")
+                         "SmartRecruiters, iCIMS, UKG, Oracle, Paylocity, ADP, Workable, BambooHR, JazzHR, Breezy, Recruitee, Paycom, Dayforce, Rippling, SAP SuccessFactors, Taleo, and custom careers sites that publish standard job data. Tip: open the company's job list and paste the link from the address bar.")
     cfg, why = netsafe.clean_config(found)
     if cfg is None:
         raise ValueError(f"Found a job board on that page, but its settings look wrong ({why}).")
@@ -133,6 +144,11 @@ def verify(c):
             body = json.dumps({"appliedFacets": {}, "limit": 1, "offset": 0, "searchText": ""}).encode()
             d = json.loads(_get(f"https://{c['tenant']}.{c['wd']}.myworkdayjobs.com/wday/cxs/{c['tenant']}/{c['site']}/jobs", body))
             return d.get("total", 0), None
+        if a in ("successfactors", "taleo"):
+            import sys
+            sys.path.insert(0, HERE)
+            import ats_sap_taleo
+            return ats_sap_taleo.verify(dict(c, name="check"))
         if a in ("icims", "ukg", "oracle", "paylocity", "adp", "rippling", "workable", "bamboohr", "jazzhr", "breezy",
                  "recruitee", "paycom", "saashr", "dayforce", "phenom", "jibe", "amazon", "clearcompany"):
             import sys
@@ -166,6 +182,10 @@ def default_name(c, suggested=None, name=""):
         import urllib.parse
         h = urllib.parse.urlsplit(c.get("list_url") or c.get("sitemap") or "").netloc.lower().removeprefix("www.").split(":")[0]
         suggested = h.rsplit(".", 1)[0].split(".")[-1] if "." in h else h
+    if c["ats"] == "successfactors" and not (name or suggested):
+        h = re.sub(r"^https://(www\.)?", "", c.get("base", "")).split("/")[0]
+        lab = [x for x in h.split(".")[:-1] if x not in ("jobs", "careers", "career", "www", "co", "com")]
+        suggested = (lab[-1] if lab else h).replace("-", " ").title()
     ident = c.get("token") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key") or c.get("id") or re.sub(r"^https://|\..*$", "", c.get("base", "")).replace("careers-", "")
     # (no commas: an update for named companies takes a comma-separated list)
     return (name or suggested or str(ident).replace("-", " ").replace("_", " ").title()).replace(",", "").strip()[:60]
