@@ -43,7 +43,16 @@ import paths
 import people
 import report
 
-VERSION = "1"
+def _read_version():
+    """The release number from the VERSION file next to the app ("dev" when it's missing), e.g. "0.1.0"."""
+    try:
+        with open(os.path.join(paths.APP, "VERSION"), encoding="utf-8") as f:
+            return f.read().strip().splitlines()[0].strip() or "dev"
+    except (OSError, IndexError):
+        return "dev"
+
+
+VERSION = _read_version()
 NETWORK = os.path.join(paths.DATA, "network.json")
 APP = paths.APP
 TASK_NAME = "Job Board server"                       # scheduled task made by older installs (starts the server at sign-in)
@@ -178,6 +187,8 @@ def _app_python():
 
 
 def _win_lnk():
+    if os.environ.get("SIFTWELL_TEST_LNK"):   # tests only: a stand-in shortcut path, so the real one is never touched
+        return os.environ["SIFTWELL_TEST_LNK"]
     return os.path.join(os.environ.get("APPDATA") or os.path.expanduser(r"~\AppData\Roaming"),
                         "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "Siftwell.lnk")
 
@@ -328,7 +339,7 @@ def startup_state():
     return {"on": own, "via": "autostart" if own else None, "task": False, "task_enabled": False, "own": own}
 
 
-def switch_startup(elevated=False):
+def switch_startup(elevated=False, h=None):
     """Move sign-in startup from the older "Job Board server" task to our own Startup shortcut (Windows). The task is
     turned off first and the shortcut made after, so a failure never leaves both starting a server. Doesn't stop the
     running server. Returns "ok" or what _task_set returned."""
@@ -354,14 +365,14 @@ def switch_startup(elevated=False):
     return "ok"
 
 
-def unswitch_startup(elevated=False):
+def unswitch_startup(elevated=False, h=None):
     """Undo switch_startup: remove our shortcut, turn the older task back on. Never leaves both on."""
     if not osdeps.WINDOWS:
         raise RuntimeError("This only applies to Windows.")
     _slow.clear()
     had = os.path.exists(_win_lnk())
     if had:
-        set_startup(False)
+        set_startup(False, "undo switch", h)
     if _task_exists() and not _task_enabled():
         res = _task_set(True, elevated)
         _slow.clear()
@@ -416,12 +427,25 @@ def _write_mac_plist(py, reload=True):
         subprocess.run(["launchctl", "load", "-w", pl], capture_output=True, timeout=30)
 
 
-def set_startup(on):
+def _record(action, detail=""):
+    import actionlog
+    actionlog.log(action, None, None, detail)
+
+
+def set_startup(on, why="", h=None):
+    """Turn the start-at-sign-in entry on or off. Only ever called for an explicit user action (the Get started
+    switch, Switch / Undo) or to rewrite an entry that is already on (heal_startup); every removal is written to
+    DATA/actions.log. `why` says which action asked. A server running on test data (JOBBOARD_DATA or SIFTWELL_RUNTIME
+    set) never touches the real entry unless SIFTWELL_TEST_LNK points the Windows shortcut somewhere else."""
+    if (os.environ.get("JOBBOARD_DATA") or os.environ.get("SIFTWELL_RUNTIME")) and not os.environ.get("SIFTWELL_TEST_LNK"):
+        raise RuntimeError("This server is running on test data, so it won't change the real start-at-sign-in entry.")
     py = _app_python()
     if osdeps.WINDOWS:
         lnk = _win_lnk()
         if not on:
             if os.path.exists(lnk):
+                import actionlog
+                actionlog.log("start-at-sign-in shortcut removed", None, h, why or "unspecified")
                 os.remove(lnk)
             return
         os.makedirs(os.path.dirname(lnk), exist_ok=True)
@@ -437,6 +461,7 @@ def set_startup(on):
         pl = _mac_plist()
         if not on:
             if os.path.exists(pl):
+                _record("start-at-sign-in entry removed", why or "unspecified")
                 # If launchd started this server, unloading would stop it mid-answer; removing the file is enough then.
                 if os.environ.get("XPC_SERVICE_NAME") != MAC_LABEL:
                     subprocess.run(["launchctl", "unload", pl], capture_output=True, timeout=30)
@@ -447,6 +472,7 @@ def set_startup(on):
         df = _linux_desktop()
         if not on:
             if os.path.exists(df):
+                _record("start-at-sign-in entry removed", why or "unspecified")
                 os.remove(df)
             return
         os.makedirs(os.path.dirname(df), exist_ok=True)
@@ -755,11 +781,14 @@ def handle_post(h, path, body):
             start_install()
             h._send(202, {"ok": True})
         elif act == "startup":
-            on = bool(body.get("on"))
+            if not isinstance(body.get("on"), bool):   # a missing or odd value must never be read as "turn off"
+                return h._send(400, {"error": "Say whether to turn it on or off."}) or True
+            on = body["on"]
             if on and osdeps.WINDOWS and _task_enabled():
                 return h._send(409, {"error": "An older setup already starts Siftwell at sign-in. Use Switch to the new startup instead, "
                                               "so two copies never start."}) or True
-            set_startup(on)
+            h._act("start at sign-in turned " + ("on" if on else "off"))
+            set_startup(on, "toggle on the Get started page", h)
             _slow.clear()
             h._send(200, status(fresh=True))
         elif act in ("switch", "unswitch"):
@@ -767,7 +796,8 @@ def handle_post(h, path, body):
                 return h._send(400, {"error": "This only applies to Windows."}) or True
             el = bool(body.get("elevated"))
             undo = act == "unswitch"
-            res = (unswitch_startup if undo else switch_startup)(el)
+            h._act("switch startup: " + ("undo" if undo else "switch"))
+            res = (unswitch_startup if undo else switch_startup)(el, h)
             if res == "ok":
                 msg = ("Undone. The older setup starts Siftwell at sign-in again." if undo else
                        "Done. Siftwell keeps running now, and the new startup takes over the next time you sign in to Windows.")
@@ -786,6 +816,7 @@ def handle_post(h, path, body):
             why = CTX["busy"]() or (install_state()["running"] and "Claude Code is installing")
             if why:
                 return h._send(409, {"error": f"{why}. Restarting now would stop it. Try again when it finishes."}) or True
+            h._act("restart")
             try:
                 restart_now()
             except Exception as e:

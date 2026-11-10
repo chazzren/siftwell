@@ -146,6 +146,9 @@ So you can delete the Siftwell folder and download the latest version (or move i
 - **"Claude Code is signed out":** click **Sign in to Claude** on the board, open the link, sign in, and paste the code back.
 - **Another program is using port 8766:** Start Siftwell picks the next free port (8767 to 8775) by itself and remembers it; **Settings → Get started** shows which port Siftwell is using. Phone links need that port too.
 - **My phone can't connect:** check **Use Siftwell on my phone** is on (**Settings → Get started**), the phone is on the same Wi-Fi, and Windows Firewall allowed Siftwell (Start menu → "Allow an app through Windows Firewall").
+- **Which version am I running?** Open **Settings**: the version (for example "Siftwell 0.1.0") is shown small under the list of categories.
+- **What happened, and when?** Siftwell keeps a plain-text diary of everything done from the pages (updates, re-rates, adding or removing people and companies, saved settings, changing start at sign-in, restarts): `actions.log` in your data folder. Each line has the time, the action, the profile, which device did it and its browser. It never records passwords or keys. When it gets big it starts a new file and keeps the old one as `actions.log.1`.
+- **The board says "A background job is running":** an update or re-rate is still going (for example one that started before Siftwell was restarted). Wait for it to finish; Siftwell won't restart itself while it runs.
 - **Resume PDFs don't build:** install Google Chrome or Microsoft Edge.
 
 ## License

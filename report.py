@@ -1762,7 +1762,7 @@ if (SERVED) {
     fetch("/api/tailor/continue", {method: "POST", headers: H, body: JSON.stringify({id, answers})}).then(() => pollTailor(id, slug, btn));
   }
 
-  let wasRunning = false;
+  let wasRunning = false, bgShown = false;
   const PH = {fetch: "Checking company job boards", ai: "Claude is scoring new jobs", pivot: "Claude is rating AI-pivot jobs"};
   function poll(){
     fetch("/api/status").then(r => r.json()).then(s => {
@@ -1778,6 +1778,15 @@ if (SERVED) {
         $("progBar").style.width = s.total ? (100 * s.done / s.total) + "%" : "4%";
         $("progLog").textContent = s.lines.slice(-6).join("\n");
         setTimeout(poll, 2000);
+      } else if (s.job && s.job.alive && !s.job.mine) {  // the job lock is held by another process (e.g. a fetch started before a restart)
+        bgShown = true; $("progress").hidden = false;
+        const t = s.job.at ? new Date(s.job.at * 1000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) : "";
+        $("progTitle").textContent = `A background job is running (${s.job.kind})` + (t ? ` since ${t}` : "");
+        $("progNote").textContent = "It will finish on its own; Update and Re-rate wait for it.";
+        $("progBar").style.width = "4%"; $("progLog").textContent = "";
+        setTimeout(poll, 5000);
+      } else if (bgShown && !wasRunning) {
+        bgShown = false; $("progress").hidden = true; setTimeout(poll, 5000);
       } else if (wasRunning) {
         if (s.exit === 0) location.reload();
         else { $("progTitle").textContent = "Update failed"; $("progNote").textContent = "Last output:"; $("progLog").textContent = s.lines.join("\n"); }

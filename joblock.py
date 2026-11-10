@@ -178,6 +178,20 @@ def holder():
     return rec
 
 
+def info():
+    """For status pages: None when no job holds the lock, else {kind, at (epoch seconds), pid, alive, mine}. alive says
+    whether a process named in the lock is still running (False = an orphaned lock that will be taken over); mine says
+    this very process holds it. A lock that can't be read right now is reported as alive with an unknown kind."""
+    rec = holder()
+    if not rec:
+        return None
+    if rec.get("busy"):
+        return {"kind": "job", "at": None, "pid": None, "alive": True, "mine": False}
+    alive = any(_alive(rec.get(k), rec.get(k + "_ct"))[0] for k in ("pid", "child"))
+    return {"kind": str(rec.get("kind") or "job"), "at": rec.get("at"), "pid": rec.get("pid"), "alive": alive,
+            "mine": rec.get("pid") == os.getpid()}
+
+
 def _stale(rec, mtime=None):
     if rec is None or rec.get("released"):
         return True
