@@ -410,6 +410,17 @@ ol.rows{gap:0;background:var(--surface);border:1px solid var(--line);border-radi
 .dsec .snipp{white-space:pre-line;color:var(--muted);font-size:13.5px;max-width:75ch;margin:0}
 .dempty{padding:48px 24px;text-align:center;color:var(--muted)}
 .dempty b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
+/* Empty Jobs tab: Start your job search / running / nothing passed your filters (first_search.py via /api/search) */
+.startcard{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--r);padding:18px 20px;margin:12px 0;display:flex;flex-direction:column;gap:10px}
+.startcard h2{margin:0;font-size:19px;letter-spacing:-.01em;color:var(--ink)}
+.startcard p{margin:0;color:var(--muted);max-width:70ch;font-size:14px}
+.startcard .sacts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.startcard .sacts .btn{text-decoration:none}
+.startcard ul{margin:0;padding-left:18px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:4px}
+.startcard .chk{font-size:14px;color:var(--ink)}
+.startcard .smsg{font-size:13px;color:var(--bad)}
+.startcard .smsg:empty{display:none}
+#view-jobs.nojobs #list .dempty,#view-jobs.nojobs .countrow,#view-jobs.nojobs .split .detail{display:none}
 .reqbox{display:flex;flex-direction:column;gap:8px}
 .reqbox .chip{white-space:normal}
 .chip.req-unmet{background:var(--bad-soft);color:var(--bad);border-color:transparent}
@@ -466,9 +477,9 @@ $("themeBtn").addEventListener("click", () => {
 });
 """
 
-# Header icon row (Home, Update, Re-rate, Catalog, My profile, Theme, Settings, profile menu): shared by the board and settings_page.py.
+# Header icon row (Home, Find new jobs (#updateBtn), Re-rate, Catalog, My profile, Theme, Settings, profile menu): shared by the board and settings_page.py.
 TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></a>
-    <button class="iconBtn" type="button" id="updateBtn" title="Update job listings now: checks every employer for new jobs (about 40 min)" aria-label="Update job listings now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span class="vh" id="updSmall">every employer, ~40 min</span></button>
+    <button class="iconBtn" type="button" id="updateBtn" title="Find new jobs: check every company for new openings (about 40 min)" aria-label="Find new jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span class="vh" id="updSmall">every company, ~40 min</span></button>
     <button class="iconBtn" type="button" id="rerateBtn" title="Re-rate: choose how Claude re-rates your jobs, no new listings" aria-label="Re-rate jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="rrbadge" id="rrBadge" hidden></span><span class="vh" id="rrSmall">Claude only, no new listings</span></button>
     <a class="iconBtn" id="catalogBtn" href="/catalog" title="Catalog: every company and listing, run history, Find employers near me, sharing" aria-label="Catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg></a>
     <a class="iconBtn" id="resumeBtn" href="/profile" title="My profile: resume, about you, job search, target, companies" aria-label="My profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.5 17c.6-1.9 2-3 3.5-3s2.9 1.1 3.5 3"/><path d="M15 9.5h3.5M15 13h3.5"/></svg></a>
@@ -560,6 +571,7 @@ BODY = """<div class="wrap">
 <nav class="tabs"><a href="#jobs" id="tab-jobs">Jobs</a><a href="#pivot" id="tab-pivot">Target</a><a href="#saved" id="tab-saved">Saved</a><a href="#applied" id="tab-applied">Applied</a><a href="#tailored" id="tab-tailored">Resumes</a><a href="#companies" id="tab-companies">Companies</a></nav>
 
 <section id="view-jobs">
+  <div class="startcard" id="startCard" role="region" aria-labelledby="scTitle" aria-live="polite" hidden></div>
   <div class="filters">
     <div class="frow">
       <input type="search" id="q" enterkeyhint="search" placeholder="Describe a job, industry, company or role, then press Enter" aria-label="Describe what you're looking for">
@@ -1259,7 +1271,7 @@ document.addEventListener("click", e => {
       if (!ok) throw Object.assign(new Error(d.error || "Sign-in didn't go through."), {expired: !!d.expired});
       const inSearch = box.id === "nlBar";
       box.className = box.className.replace(" err", "");
-      box.innerHTML = `<span class="clok">Signed in to Claude.</span> <span>${inSearch ? "Running your search now." : "Ratings pick up again with the next update, or use Update now in the profile menu."}</span>`;
+      box.innerHTML = `<span class="clok">Signed in to Claude.</span> <span>${inSearch ? "Running your search now." : "Ratings pick up again the next time you find new jobs (the circular-arrow icon at the top)."}</span>`;
       if (inSearch) { nlSeq++; runNL(); }
       else document.querySelectorAll(".nlbar.err").forEach(x => x.hidden = true);
     }).catch(err => {
@@ -1274,8 +1286,8 @@ if (SERVED) clPost({action: "status"}).then(({d}) => {
   const ready = !!d.logged_in && d.installed !== false;
   if (!ready && !NOAI) { NOAI = true; applyNoAI(!!d.installed); }  // Claude went away since this board was built
   else if (!ready && d.installed && NOAI) noClaudeBanner(true);  // installed but signed out: offer the sign-in button
-  else if (ready && NOAI) { NOAI = false; applyNoAI(false); $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude is connected. Use Update now in the profile menu (or the Re-rate sparkle icon) to get Match ratings."; }
-  if (d.logged_in && (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out")) $("aiBanner").textContent = "Claude Code is signed in. Ratings pick up again with the next update, or use Update now in the profile menu.";
+  else if (ready && NOAI) { NOAI = false; applyNoAI(false); $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude is connected. Use Find new jobs (the circular-arrow icon at the top) or the Re-rate sparkle icon to get Match ratings."; }
+  if (d.logged_in && (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out")) $("aiBanner").textContent = "Claude Code is signed in. Ratings pick up again the next time you find new jobs (the circular-arrow icon at the top).";
 }).catch(() => {});
 // Settings gear badge: number of missing required Get started items (hidden when none); settings_page.py has the same logic.
 function setGsBadge(s){
@@ -1331,6 +1343,64 @@ $("cos").innerHTML = D.companies.slice().sort((a,b)=>b.matched-a.matched || a.co
   <td>${esc(c.company)}</td><td>${esc(c.sector)}</td><td>${TIER[c.tier]||esc(c.tier)}</td><td>${esc(c.ats)}</td>
   <td class="n">${c.raw_jobs.toLocaleString()}</td><td class="n">${c.matched}</td>
   <td class="${c.status==="ok"?"":"err"}">${c.status==="ok"?"OK":esc(c.status)}</td></tr>`).join("");
+
+// ---- Empty Jobs tab (this board has no jobs): "Start your job search" (never searched), its progress while it runs,
+// or "No jobs passed your filters" with the usual fixes. State and plan come from /api/search (first_search.py).
+if (SERVED && !jobs.length) (function(){
+  const box = $("startCard"); let sawRun = false;
+  const n = x => (x || 0).toLocaleString();
+  const show = html => { box.innerHTML = html; box.hidden = false; $("view-jobs").classList.add("nojobs"); };
+  const findName = (f, lbl) => f.remote_only ? "remote-friendly employers in your field" : "employers near " + esc(lbl || f.label);
+  function load(){ fetch("/api/search").then(r => r.json()).then(draw).catch(() => setTimeout(load, 5000)); }
+  function draw(s){
+    const p = s.plan, f = p.find, job = s.mine ? s.job : {}, up = s.update || {};
+    if (s.running) {
+      sawRun = true;
+      let line = "Getting started…", frac = .03;
+      if (job.running && job.phase === "find") { const c = s.find || {}; line = `Finding ${findName(f, c.label)}: ${n(c.found)} found so far, ${n(c.readable)} Siftwell can read.`; frac = c.kinds ? .3 * c.kinds_done / c.kinds : .03; }
+      else if (up.running && up.phase === "fetch") { line = `Checking career pages for openings: ${up.total ? `${n(up.done)} of ${n(up.total)} companies` : "starting"}.`; frac = .3 + (up.total ? .5 * up.done / up.total : 0); }
+      else if (up.running && (up.phase === "ai" || up.phase === "pivot")) { line = "Claude is reading the best matches against your resume."; frac = .85; }
+      else if (up.running) { line = "Almost done: building your board."; frac = .95; }
+      else if (job.running && job.phase === "build") { line = "Every company was checked today already, so Siftwell is building your board from what it found."; frac = .9; }
+      else if (s.find_live) line = "Finding employers (a search started from the Catalog). Jobs are checked when it’s done.";
+      else if (job.running) line = "Waiting for another job to finish…";
+      show(`<h2 id="scTitle">Your job search is running</h2><p>${line}</p><div class="prog" role="progressbar" aria-label="Job search progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(frac * 100)}"><i style="width:${Math.round(frac * 100)}%"></i></div><p>Your jobs show up here when it’s done. You can leave this page; the search keeps going as long as Siftwell is running.</p>`);
+      setTimeout(load, 3000);
+      return;
+    }
+    if (sawRun) { saveFilters(); location.reload(); return; }  // it finished: show the new board
+    const err = job.error ? `<p class="smsg">${esc(job.error)}</p>` : "";
+    if (!p.started_before) {
+      const findOn = f.possible && f.default, nothing = !p.companies && !p.catalog && !f.possible;
+      const what = `check the career pages of ${p.companies ? `the ${n(p.companies)} companies in your lists` : "your companies"}${f.possible ? " (and the employers it finds near you, if you tick the box)" : ""} for openings and keep the ones that fit your search${p.claude ? ", and Claude rates the best matches" : ""}`;
+      show(`<h2 id="scTitle">Start your job search</h2>
+        <p>Siftwell hasn’t looked for jobs for you yet. When you start, it will ${what}. The first search takes a while; you can leave this page while it runs.</p>
+        ${f.possible ? `<label class="chk"><input type="checkbox" id="scFind"${findOn ? " checked" : ""}><span>${f.prior ? `Look for more ${findName(f)} (${n(f.near)} already on your Near me list)` : `First find ${findName(f)} (recommended)`}: Claude searches the web, using your Claude plan; ${esc(f.estimate)}</span></label>` : ""}
+        ${f.reason === "no_claude" ? `<p>Finding employers near you needs Claude. <a href="/settings#get-started">Connect Claude in Settings, then Get started</a>.</p>` : ""}
+        ${f.reason === "no_place" ? `<p>Add your home ZIP (Filters, then My search) so Siftwell can look for employers near you.</p>` : ""}
+        ${nothing ? `<p><b>There are no companies to check yet.</b> Add one by its careers link${p.claude ? "" : ", or connect Claude so Siftwell can find employers near you"}.</p>` : ""}
+        <div class="sacts"><button class="btn primary" type="button" id="scGo"${nothing ? " disabled" : ""}>Start my job search</button>${nothing ? `<a class="btn" href="/catalog#companies">Add a company by link</a>` : ""}</div>
+        <div class="smsg" id="scMsg" role="status"></div>${err}`);
+      $("scGo").addEventListener("click", () => {
+        const fb = $("scFind"); $("scGo").disabled = true; $("scMsg").textContent = "";
+        fetch("/api/search/start", {method: "POST", headers: H, body: JSON.stringify({find: !!(fb && fb.checked)})})
+          .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+            if (!ok) { $("scGo").disabled = false; $("scMsg").textContent = d.error || "The search couldn’t start."; return; }
+            load();
+          }).catch(() => { $("scGo").disabled = false; $("scMsg").textContent = "Couldn’t reach Siftwell. Try again."; });
+      });
+      return;
+    }
+    show(`<h2 id="scTitle">No jobs passed your filters</h2>
+      <p>${p.companies ? `Siftwell checked the ${n(p.companies)} companies in your lists, but none of their openings fit your search right now.` : "Your company lists don’t have any companies in them yet, so there was nothing to check."} Things that usually help:</p>
+      <ul>
+        <li><a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (Filters, then My search).</li>
+        <li><a href="/catalog#find">Find employers near me</a>: Claude looks up employers in your area${p.claude ? "" : " (needs Claude)"}, and you add the ones Siftwell can read.</li>
+        <li><a href="/catalog#companies">Add a company by its careers link</a>.</li>
+      </ul>${err}`);
+  }
+  load();
+})();
 
 let PIN = "";
 function route(){
@@ -1498,8 +1568,8 @@ function applyNoAI(signIn){
 if (NOAI) applyNoAI(false);
 else if (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out") { $("aiBanner").hidden = false; if (SERVED) signInOffer($("aiBanner"), "Claude fit scoring is paused because Claude Code is signed out."); else $("aiBanner").textContent = "Claude fit scoring is paused because Claude Code is signed out. Open the board from the server to sign in."; }
 else if (D.ai_status === "no_claude") { NOAI = true; applyNoAI(false); }
-else if (D.ai_status === "no_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude fit scoring is off. Add an Anthropic API key in Settings, then use Update now in the profile menu."; }
-else if (D.ai_status === "bad_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "The saved Anthropic API key was rejected. Replace it in Settings, then use Update now in the profile menu."; }
+else if (D.ai_status === "no_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude fit scoring is off. Add an Anthropic API key in Settings, then use Find new jobs (the circular-arrow icon at the top)."; }
+else if (D.ai_status === "bad_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "The saved Anthropic API key was rejected. Replace it in Settings, then use Find new jobs (the circular-arrow icon at the top)."; }
 
 if (SERVED) {
   $("tools").hidden = false;
@@ -1723,8 +1793,8 @@ if (SERVED) {
   function poll(){
     fetch("/api/status").then(r => r.json()).then(s => {
       $("updateBtn").disabled = s.running; $("updateBtn").classList.toggle("busy", !!s.running);
-      $("updSmall").textContent = s.running ? "running now…" : "every employer, ~40 min";
-      $("updateBtn").title = s.running ? "Updating job listings now…" : "Update job listings now: checks every employer for new jobs (about 40 min)";
+      $("updSmall").textContent = s.running ? "running now…" : "every company, ~40 min";
+      $("updateBtn").title = s.running ? "Finding new jobs now…" : "Find new jobs: check every company for new openings (about 40 min)";
       if (s.next_run) { const n = new Date(s.next_run); $("nextRun").textContent = "· next update " + (n.toDateString() === new Date().toDateString() ? "today " : "tomorrow ") + n.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); }
       else $("nextRun").textContent = "· automatic updates off";
       if (s.running) {
@@ -1738,14 +1808,14 @@ if (SERVED) {
         bgShown = true; $("progress").hidden = false;
         const t = s.job.at ? new Date(s.job.at * 1000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) : "";
         $("progTitle").textContent = `A background job is running (${s.job.kind})` + (t ? ` since ${t}` : "");
-        $("progNote").textContent = "It will finish on its own; Update and Re-rate wait for it.";
+        $("progNote").textContent = "It will finish on its own; Find new jobs and Re-rate wait for it.";
         $("progBar").style.width = "4%"; $("progLog").textContent = "";
         setTimeout(poll, 5000);
       } else if (bgShown && !wasRunning) {
         bgShown = false; $("progress").hidden = true; setTimeout(poll, 5000);
       } else if (wasRunning) {
         if (s.exit === 0) location.reload();
-        else { $("progTitle").textContent = "Update failed"; $("progNote").textContent = "Last output:"; $("progLog").textContent = s.lines.join("\n"); }
+        else { $("progTitle").textContent = "Finding new jobs failed"; $("progNote").textContent = "Last output:"; $("progLog").textContent = s.lines.join("\n"); }
       }
     }).catch(() => setTimeout(poll, 5000));
   }
@@ -1893,7 +1963,7 @@ if (SERVED) {
   $("rerateBtn").addEventListener("click", rrOpen);
   pollRerate();
   $("updateBtn").addEventListener("click", () => {
-    if (!confirm("Update job listings now?\n\nChecks every employer's job board for new and removed jobs, then Claude rates the new ones for each profile. Takes about 40 minutes.")) return;
+    if (!confirm("Find new jobs now?\n\nChecks every company's job board for new and removed openings, then Claude rates the new ones for each profile. Takes about 40 minutes.")) return;
     fetch("/api/update", {method: "POST", headers: H, body: "{}"}).then(() => { wasRunning = true; poll(); });
   });
   poll();

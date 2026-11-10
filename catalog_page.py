@@ -475,7 +475,7 @@ $("lsPrev").addEventListener("click", () => { lsPage--; loadListings().then(() =
 $("lsNext").addEventListener("click", () => { lsPage++; loadListings().then(() => $("lsCount").scrollIntoView({block: "nearest"})); });
 
 // ---- Runs & updates
-const KIND = {fetch: "Update", recompute: "Board rebuild", rerate: "Re-rate", rescore: "Re-read listings", migrate: "Catalog set up", find: "Find employers near me"};
+const KIND = {fetch: "Find new jobs", recompute: "Board rebuild", rerate: "Re-rate", rescore: "Re-read listings", migrate: "Catalog set up", find: "Find employers near me"};
 function runRow(r){
   const d = r.details || {};
   let what = KIND[r.kind] || r.kind;
@@ -742,7 +742,7 @@ applyTheme();
 const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
 $("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
 $("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
-$("updateBtn").title = "Update job listings now (opens the board): checks every employer for new jobs (about 40 min)";
+$("updateBtn").title = "Find new jobs (opens the board): check every company for new openings (about 40 min)";
 $("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Claude re-rates your jobs, no new listings";
 if ($("resumeBtn") && $("resumeBtn").tagName === "BUTTON") $("resumeBtn").addEventListener("click", () => toBoard(["jb.openResume", "1"]));
 fetch("/api/rerate").then(r => r.json()).then(s => { if (s.running) { $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Re-rating your best jobs now…"; } }).catch(() => {});

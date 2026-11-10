@@ -2,7 +2,8 @@
 
 render_setup_html() returns a self-contained page (inline CSS/JS, same tokens and light/dark behaviour as
 report.py). It talks to GET /api/setup, POST /api/setup/step, POST /api/setup/finish and the existing
-/api/resume, /api/target/suggest, /api/questions, /api/answers, /api/status and /api/people routes.
+/api/resume, /api/target/suggest, /api/questions, /api/answers, /api/search and /api/people routes (the last screen
+explains Start my job search, first_search.py, and shows its progress).
 Open it with ?mock=1 (or from a file:// URL) to run against an in-page fake server for previewing."""
 import json
 
@@ -248,6 +249,11 @@ h1.q.qtext{font-size:clamp(20px,4.6vw,24px);font-weight:600;line-height:1.3;lett
 .qwhy{color:var(--muted);margin:0 0 20px}
 
 /* board */
+.plan{list-style:none;margin:8px 0 0;padding:0;counter-reset:pl;display:flex;flex-direction:column;gap:2px}
+.plan li{counter-increment:pl;display:grid;grid-template-columns:28px minmax(0,1fr);column-gap:14px;padding:10px 0}
+.plan li::before{content:counter(pl);grid-row:1 / span 2;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:14px}
+.plan b{font-weight:600}
+.plan small{display:block;color:var(--muted);font-size:14px}
 .checklist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
 .checklist li{display:flex;gap:14px;align-items:flex-start;padding:12px 0}
 .checklist .st{flex:0 0 auto;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:2px solid var(--line);color:transparent;transition:all .2s}
@@ -263,6 +269,8 @@ h1.q.qtext{font-size:clamp(20px,4.6vw,24px);font-weight:600;line-height:1.3;lett
 .foot{position:sticky;bottom:0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:12px max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
 .foot .in{max-width:620px;margin:0 auto;display:flex;align-items:center;gap:8px}
 .foot .sp{flex:1}
+.foot #next{margin-left:auto}
+@media (max-width:420px){.foot .in{flex-wrap:wrap}.foot .btn{padding:0 14px}}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:var(--h);padding:0 22px;border-radius:var(--r);border:1.5px solid var(--line);background:var(--surface);font-weight:600;font-size:16px;cursor:pointer;white-space:nowrap;text-decoration:none;color:var(--ink)}
 .btn:hover{border-color:var(--muted)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);min-width:140px}
@@ -333,7 +341,7 @@ const clone = o => JSON.parse(JSON.stringify(o));
 
 // Steps and how they map onto the ten progress dots (the highlights screen shares the resume dot).
 const DOT = {welcome:0, resume:1, highlights:1, where:2, pay:3, level:4, direction:5, dealbreakers:6, companies:7, questions:8, board:9};
-const DOT_NAMES = ["Welcome", "Resume", "Where", "Pay", "Level", "Direction", "Dealbreakers", "Companies", "Questions", "Your board"];
+const DOT_NAMES = ["Welcome", "Resume", "Where", "Pay", "Level", "Direction", "Dealbreakers", "Companies", "Questions", "Start your search"];
 const STEPS = BOOT.steps;
 
 const I = {
@@ -383,7 +391,7 @@ function mountConnect(el){
     toast("Claude is connected.");
     if (cur === "direction") V.direction = radio("dir") || V.direction;
     if (cur === "resume") local = {mode: ""};
-    if (["resume", "direction", "questions"].includes(cur)) render();
+    if (["resume", "direction", "questions", "board"].includes(cur)) render();
   }});
 }
 
@@ -1022,66 +1030,174 @@ SCREENS.questions = {
   },
 };
 
+// The last screen: what Start my job search will do (first_search.plan), the button, then its progress checklist.
 SCREENS.board = {
-  title: "Setting up your board",
-  html: () => `
-    <p class="eyebrow">Almost there</p>
-    <h1 class="q" tabindex="-1" id="bTitle">Setting up your board…</h1>
-    <p class="lede" id="bLede">This takes about 15 minutes the first time. You can close this page; we’ll keep working and your board will be ready when you come back.</p>
-    <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bBar"><i></i></div>
-    <ol class="checklist" id="bList" aria-live="polite"></ol>${errBox("_")}
-    <p class="lede" style="margin-top:20px">While you wait: the Get started checklist (in <a href="/settings#get-started" style="color:var(--accent);font-weight:600">Settings</a>) checks Claude, PDFs, starting at login and phone access. Your board keeps getting ready if you go there.</p>`,
-  foot: () => ({back: false, skip: false, nextLabel: "Go to my board"}),
-  next(){ location.href = "/"; },
+  title: "Start your job search",
+  view: "load", plan: null, kick: null, finished: false, findOn: false,
+  html(){
+    return `<div id="bBody"><div class="working"><div class="spinner" aria-hidden="true"></div><p>Getting ready…</p></div></div>`;
+  },
+  foot(){
+    if (this.view === "summary") return {back: true, skip: true, skipLabel: "Skip for now", nextLabel: "Start my job search", disabled: !this.canStart()};
+    if (this.view === "progress") return {back: false, skip: false, nextLabel: "Go to my board"};
+    return {back: true, skip: true, skipLabel: "Skip for now", next: false};
+  },
+  canStart(){ const p = this.plan; return !!p && (p.companies > 0 || p.catalog > 0 || (this.findOn && p.find.possible)); },
   async mount(){
-    const items = [
-      {id: "save", t: "Saving your answers"},
-      {id: "target", t: "Working out which jobs fit your direction", only: () => !!(this.kick && this.kick.interpret_target)},
-      {id: "fetch", t: "Gathering openings from the companies you picked"},
-      {id: "score", t: "Reading the best matches against your resume", only: () => !NOCL()},
-      {id: "build", t: "Building your board"},
-    ];
-    const st = {save: "run"}; let sub = {};
+    let s = null;
+    try { s = await api("GET", "/api/search"); } catch(e) {}
+    if (cur !== "board") return;
+    this.plan = s ? s.plan : null;
+    if (s && (s.running || (s.mine && s.job.phase !== "done" && s.job.running))) { this.view = "progress"; this.finished = S.done; return this.progress(s); }
+    if (!this.plan) { this.view = "summary"; $("bBody").innerHTML = `<h1 class="q" tabindex="-1">Start your job search</h1>${errBox("_")}`; footer(this.foot()); return showErr("_", "We couldn’t load your search plan. Reload the page to try again."); }
+    this.findOn = this.plan.find.default;
+    this.view = "summary"; this.summary();
+  },
+  summary(){
+    const p = this.plan, f = p.find, cl = p.claude, v = S.values;
+    const where = v.home_zip && (v.workplaces || []).some(w => w !== "remote") ? `within ${v.radius_miles} miles of ${esc(f.label || v.home_zip)}${(v.workplaces || []).includes("remote") ? " (or remote)" : ""}` : "that are remote";
+    const findTitle = f.remote_only ? "Find remote-friendly employers in your field" : `Find employers near ${esc(f.label)}`;
+    const findText = f.remote_only
+      ? `Claude searches the web for about ${f.size} employers anywhere in the US that hire remotely for your kind of work, using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your Near me list. Takes ${esc(f.estimate)}.`
+      : `Claude searches the web for about ${f.size} employers within ${f.radius} miles (big employers, hospitals, universities, government, nonprofits, startups and more), using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your Near me list. Takes ${esc(f.estimate)}.`;
+    const lists = p.companies ? `the ${p.companies.toLocaleString()} ${p.companies === 1 ? "company" : "companies"} in your lists` : "your companies";
+    let findBox = "";
+    if (f.possible) {
+      const t = f.prior ? (f.remote_only ? "Look for more remote-friendly employers" : `Look for more employers near ${esc(f.label)}`) : findTitle + " first";
+      const sub = f.prior ? `An earlier search already found employers for you: ${f.near.toLocaleString()} ${f.near === 1 ? "is" : "are"} on your Near me list. Tick this to search again for ones it missed (uses your Claude plan, ${esc(f.estimate)}).`
+                          : "Recommended for your first search, so your board has employers near you to choose from.";
+      findBox = `<div class="choices" style="margin-top:20px">${radioCard("findOn", "1", this.findOn, t, sub, {type: "checkbox"})}</div>`;
+    } else if (f.reason === "no_claude") {
+      findBox = `<div class="note" style="margin-top:20px">Finding employers near you needs Claude (it searches the web with your Claude plan). Connect it here, or start with ${p.companies ? "the companies you already have" : "a company you add yourself"}.</div><div id="ccRoot"></div>`;
+    } else if (f.reason === "no_place") {
+      findBox = `<div class="note" style="margin-top:20px">Add your home ZIP on the <button type="button" class="linkbtn" id="toWhere" style="padding:0 2px">Where</button> step so Siftwell can look for employers near you.</div>`;
+    }
+    const steps = [];
+    if (f.possible && this.findOn) steps.push([findTitle, findText]);
+    const found = f.possible && this.findOn;
+    steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just found" : "") : found ? "the employers it just found" : lists}. About ${p.fetch_minutes} minutes the first time.`]);
+    steps.push(["Keep the jobs that fit", `Jobs ${where}, paying at least ${fmtK(v.salary_floor)}, at your level, minus your dealbreakers.`]);
+    if (cl) steps.push(["Rate the best matches", "Claude reads the top jobs against your resume and gives each a Match rating, using your Claude plan."]);
+    const none = !this.canStart();
+    $("bBody").innerHTML = `
+      <p class="eyebrow">Last step</p>
+      <h1 class="q" tabindex="-1">Start your job search</h1>
+      <p class="lede">Siftwell doesn’t search until you say so. Here’s what happens when you press <b>Start my job search</b>:</p>
+      <ol class="plan">${steps.map(([t, d]) => `<li><b>${t}</b><small>${d}</small></li>`).join("")}</ol>
+      ${findBox}
+      ${none ? `<div class="hint" style="margin-top:20px">${I.info}<div><b>There are no companies to check yet.</b><small>The lists you picked don’t have any companies in this Siftwell. ${p.claude ? "Tick the box above to find employers near you, or " : "Connect Claude above to find employers near you, or "}add a company by its careers link.</small>
+        <div class="alt" style="justify-content:flex-start;margin-top:8px"><button type="button" class="linkbtn" id="toCos">Back to Companies</button><a class="linkbtn" href="/catalog#companies" style="text-decoration:none">Add a company by link</a></div></div></div>` : ""}
+      ${errBox("_")}
+      <p class="fine">You can leave this page while it runs; the search keeps going as long as Siftwell is running. Or press Skip for now and start it later from your board.</p>`;
+    footer(this.foot());
+    const fb = document.querySelector('input[name="findOn"]');
+    if (fb) fb.addEventListener("change", () => { this.findOn = fb.checked; this.summary(); const n = document.querySelector('input[name="findOn"]'); if (n) n.focus({preventScroll: true}); });
+    if ($("ccRoot")) mountConnect($("ccRoot"));
+    if ($("toWhere")) $("toWhere").addEventListener("click", () => go("where", -1));
+    if ($("toCos")) $("toCos").addEventListener("click", () => go("companies", -1));
+  },
+  async next(){
+    if (this.view === "progress") { location.href = "/"; return; }
+    if (!this.canStart()) return;
+    showErr(); busy(true, "Starting");
+    try {
+      const r = await api("POST", "/api/setup/finish", {search: true, find: !!(this.findOn && this.plan.find.possible)});
+      this.kick = r.kick || {}; this.finished = true; S.done = true; S.step = "board";
+      if (r.search && !r.search.started && !/already running/i.test(r.search.error || "")) { busy(false); footer(this.foot()); return showErr("_", r.search.error || "The search couldn’t start."); }
+    } catch(e) { busy(false); footer(this.foot()); return showErr(e.field || "_", e.message); }
+    busy(false);
+    this.view = "progress"; say("Your job search has started.");
+    let s = null; try { s = await api("GET", "/api/search"); } catch(e) {}
+    this.progress(s);
+  },
+  async skip(){
+    showErr(); busy(true, "Saving");
+    try { await api("POST", "/api/setup/finish", {search: false}); location.href = "/"; }
+    catch(e) { busy(false); footer(this.foot()); showErr(e.field || "_", e.message); }
+  },
+  async progress(s0){
+    $("bBody").innerHTML = `
+      <p class="eyebrow">Your job search</p>
+      <h1 class="q" tabindex="-1" id="bTitle">Your job search is running…</h1>
+      <p class="lede" id="bLede">You can leave this page; the search keeps going as long as Siftwell is running, and your board fills in when it’s done.</p>
+      <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bBar"><i></i></div>
+      <ol class="checklist" id="bList" aria-live="polite"></ol>${errBox("_")}
+      <p class="lede" style="margin-top:20px" id="bWait">While you wait: the Get started checklist (in <a href="/settings#get-started" style="color:var(--accent);font-weight:600">Settings</a>) checks Claude, PDFs, starting at login and phone access. Your search keeps going if you go there.</p>`;
+    footer(this.foot());
+    const self = this, kick = this.kick || {};
+    let s = s0, sawRun = false, n = 0;
+    const st = {save: this.finished || S.done ? "done" : "run"};
+    const items = () => {
+      const job = s && s.mine ? s.job : {};
+      return [
+        {id: "save", t: "Saving your answers"},
+        kick.interpret_target ? {id: "target", t: "Working out which jobs fit your direction"} : null,
+        job.find ? {id: "find", t: (s.find && s.find.label && s.plan.find.remote_only) || (s.plan && s.plan.find.remote_only) ? "Finding remote-friendly employers in your field" : `Finding employers near ${(s.find && s.find.label) || (s.plan && s.plan.find.label) || "you"}`} : null,
+        {id: "fetch", t: "Checking career pages for openings"},
+        s && s.plan && s.plan.claude ? {id: "score", t: "Reading the best matches against your resume"} : null,
+        {id: "build", t: "Building your board"},
+      ].filter(Boolean);
+    };
+    if (kick.interpret_target) st.target = "run";
+    const sub = {};
     const draw = () => {
-      const shown = items.filter(i => !i.only || i.only());
+      if (cur !== "board" || !$("bList")) return;
+      const shown = items();
       const done = shown.filter(i => st[i.id] === "done").length;
       let frac = done / shown.length;
-      if (st.fetch === "run" && sub.total) frac += (sub.done / sub.total) / shown.length * .99;
-      if (st.score === "run" && sub.total) frac += (sub.done / sub.total) / shown.length * .99;
+      for (const k of ["find", "fetch", "score"]) if (st[k] === "run" && sub[k + "_frac"]) frac += sub[k + "_frac"] / shown.length * .99;
       $("bBar").firstElementChild.style.width = Math.round(frac * 100) + "%"; $("bBar").setAttribute("aria-valuenow", Math.round(frac * 100));
       $("bList").innerHTML = shown.map(i => {
-        const s = st[i.id] || "wait";
-        const note = s === "run" && sub[i.id] ? `<small>${esc(sub[i.id])}</small>` : "";
-        return `<li class="${s}"><span class="st" aria-hidden="true">${s === "done" ? I.check : ""}</span><div><b>${esc(i.t)}</b>${note}</div><span class="sr">${s === "done" ? "done" : s === "run" ? "in progress" : "waiting"}</span></li>`;
+        const x = st[i.id] || "wait";
+        const note = (x === "run" || x === "done") && sub[i.id] ? `<small>${esc(sub[i.id])}</small>` : "";
+        return `<li class="${x}"><span class="st" aria-hidden="true">${x === "done" ? I.check : ""}</span><div><b>${esc(i.t)}</b>${note}</div><span class="sr">${x === "done" ? "done" : x === "run" ? "in progress" : "waiting"}</span></li>`;
       }).join("");
     };
-    draw();
-    if (!this.finished) {
-      try { const r = await api("POST", "/api/setup/finish", {}); this.kick = r.kick || {}; this.finished = true; }
-      catch(e) { st.save = "wait"; draw(); return showErr("_", e.message); }
-    }
-    st.save = "done"; if (this.kick.interpret_target) st.target = "run"; draw();
-    let sawRun = false;
-    for (let n = 0; cur === "board"; n++) {
-      await sleep(MOCK ? 700 : 3000);
+    const apply = () => {
+      if (!s) return false;
+      const job = s.mine ? s.job : {}, up = s.update || {};
+      st.save = "done";
+      if (s.find) {
+        const f = s.find;
+        sub.find = `${f.found} found · ${f.readable} Siftwell can read` + (job.phase === "find" && f.kinds ? ` · ${f.kinds_done} of ${f.kinds} kinds of employer done` : "");
+        sub.find_frac = f.kinds ? f.kinds_done / f.kinds : 0;
+      }
+      if (job.find) st.find = job.phase === "find" ? "run" : "done";
+      if (job.find && job.phase !== "find" && job.added != null && s.find) sub.find = `${job.added} added to your Near me list` + (s.find.found ? ` (out of ${s.find.found} found)` : "");
+      if (up.running && up.phase !== "facts") {
+        sawRun = true;
+        if (job.find) st.find = "done";
+        if (up.phase === "fetch") { st.fetch = "run"; sub.fetch = up.total ? `${up.done} of ${up.total} companies checked` : "Starting…"; sub.fetch_frac = up.total ? up.done / up.total : 0; }
+        else { st.fetch = "done"; st.score = "run"; sub.score = up.total ? `Batch ${up.done} of ${up.total}` : "Starting…"; sub.score_frac = up.total ? up.done / up.total : 0; }
+      } else if (job.running && job.phase === "build") {
+        st.fetch = "done"; sub.fetch = "Every company was checked today already"; st.score = "done"; st.build = "run";
+      } else if (job.running && job.phase === "fetch") {
+        st.fetch = "run"; sub.fetch = "Waiting for another job to finish…";
+      }
+      const ended = (up.running && up.phase === "facts") || (!s.running && (sawRun || job.phase === "done" || n > 3));
+      return ended;
+    };
+    for (;; n++) {
       if (cur !== "board") return;
       try {
-        if (st.target === "run") { const p = await api("GET", "/api/people"); if (!(p.target_job || {}).running) st.target = "done"; }
-        const s = await api("GET", "/api/status");
-        if (s.running && s.phase !== "facts") {  // (the facts step comes after the board is built: it keeps going in the background)
-          sawRun = true;
-          if (s.phase === "fetch") { st.fetch = "run"; sub = {done: s.done, total: s.total, fetch: s.total ? `${s.done} of ${s.total} companies checked` : "Starting…"}; }
-          else { st.fetch = "done"; st.score = "run"; sub = {done: s.done, total: s.total, score: s.total ? `Batch ${s.done} of ${s.total}` : "Starting…"}; }
-        } else if (sawRun || n > 3) {
-          ["fetch", "score", "build", "target"].forEach(k => { st[k] = "done"; });
-          draw();
-          $("bTitle").textContent = "Your board is ready.";
-          $("bLede").textContent = s.exit && s.exit !== 0 ? "Some companies couldn’t be reached this time; they’ll be tried again on the next update." : "Everything’s in place. Have a look.";
-          say("Your board is ready.");
-          return;
-        }
+        if (st.target === "run") { const pp = await api("GET", "/api/people"); if (!(pp.target_job || {}).running) st.target = "done"; }
       } catch(e) {}
+      if (apply()) {
+        ["find", "fetch", "score", "build", "target"].forEach(k => { st[k] = "done"; });
+        delete sub.fetch; delete sub.score;
+        draw();
+        if ($("bWait")) $("bWait").hidden = true;
+        const job = s.mine ? s.job : {}, up = s.update || {};
+        if (job.error) { $("bTitle").textContent = "The search couldn’t finish."; $("bLede").textContent = job.error; say(job.error); return; }
+        $("bTitle").textContent = "Your board is ready.";
+        $("bLede").textContent = [job.note, up.exit && up.exit !== 0 && up.exit !== 3 ? "Some companies couldn’t be reached this time; they’ll be tried again the next time you find new jobs." : "Everything’s in place. Have a look."].filter(Boolean).join(" ");
+        say("Your board is ready.");
+        return;
+      }
       draw();
+      await sleep(MOCK ? 700 : 3000);
+      if (cur !== "board") return;
+      try { s = await api("GET", "/api/search"); } catch(e) {}
     }
   },
 };
@@ -1188,11 +1304,21 @@ const Mock = {
         {requirement: "Hiring and managing people", question: "Have you hired or directly managed people? How many, and for how long?", why: "Director-level postings usually require people management.", hint: "e.g. “Managed 4 analysts for 3 years; hired 2.”"},
       ]};
     } else if (path === "/api/answers") out = {added: (body.answers || []).length};
-    else if (path === "/api/setup/finish") { s.done = true; s.step = "board"; t.fin = now; out = {ok: true, kick: {interpret_target: !!s.values.target_text, update: true}}; }
+    else if (path === "/api/setup/finish") { s.done = true; s.step = "board"; t.fin = body.search === false ? 0 : now; t.find = !!body.find; out = {ok: true, kick: {interpret_target: !!s.values.target_text, update: body.search !== false}, search: {started: body.search !== false, error: null}}; }
     else if (path === "/api/people") out = {target_job: {running: now - t.fin < 3000}};
-    else if (path === "/api/status") {
-      const e = (now - t.fin) / 1000;
-      out = e < 9 ? {running: true, phase: "fetch", done: Math.round(e / 9 * 186), total: 186} : e < 15 ? {running: true, phase: "ai", done: Math.round((e - 9) / 6 * 8), total: 8} : {running: false, exit: 0};
+    else if (path === "/api/search") {
+      const plan = {claude: true, companies: 0, catalog: 0, fetch_minutes: 8, started_before: !!t.fin,
+                    find: {possible: true, reason: null, remote_only: false, label: "22201 (Arlington, VA)", location: "22201", radius: s.values.radius_miles || 35, size: 80, estimate: "about 20 to 40 minutes", near: 0, prior: null, default: true}};
+      const e = t.fin ? (now - t.fin) / 1000 : -1, f0 = t.find ? 8 : 0;
+      let job = {running: false, phase: "", find: t.find}, up = {running: false}, find = null;
+      if (e >= 0) {
+        if (e < f0) { job = {running: true, phase: "find", find: true}; find = {found: Math.round(e * 9), readable: Math.round(e * 6), kinds: 8, kinds_done: Math.floor(e), label: plan.find.label}; }
+        else if (e < f0 + 9) { job = {running: true, phase: "fetch", find: t.find, added: t.find ? 48 : 0}; up = {running: true, phase: "fetch", done: Math.round((e - f0) / 9 * 48), total: 48}; }
+        else if (e < f0 + 15) { job = {running: true, phase: "fetch", find: t.find, added: t.find ? 48 : 0}; up = {running: true, phase: "ai", done: Math.round((e - f0 - 9) / 6 * 8), total: 8}; }
+        else { job = {running: false, phase: "done", find: t.find, added: t.find ? 48 : 0}; up = {running: false, exit: 0}; }
+        if (t.find && e >= f0) find = {found: 72, readable: 48, kinds: 8, kinds_done: 8, label: plan.find.label};
+      }
+      out = {plan, job, mine: true, update: up, find_live: job.phase === "find", find, running: !!(job.running || up.running)};
     } else out = {};
     this.save();
     return out;

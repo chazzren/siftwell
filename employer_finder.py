@@ -356,9 +356,13 @@ def estimate(location, radius, categories, budget):
 
 # ---------------------------------------------------------------- runs
 def start(pid, location, radius, focus, categories, size, budget=None):
-    """Validate the inputs and create the search (not started yet). Returns run id. Raises ValueError."""
-    location, lat, lon, label, radius = _where(location, radius)
+    """Validate the inputs and create the search (not started yet). Returns run id. Raises ValueError.
+    A remote-only search (categories just ["remote"]) may leave the location empty: it then searches the whole US."""
     cats = [c for c in CAT_IDS if c in (categories or [])]
+    if cats == ["remote"] and not str(location or "").strip() and size != EXHAUSTIVE:
+        location, label, radius = "", "the United States", 0
+    else:
+        location, lat, lon, label, radius = _where(location, radius)
     if not cats:
         raise ValueError("Pick at least one kind of employer.")
     if size not in SIZES and size != EXHAUSTIVE:
@@ -440,7 +444,8 @@ def _research(d, cat, cancel):
     desc = desc.replace("{field}", d.get("field") or "their field")
     known = _known_names()
     if cat == "remote":
-        where = f"Employers anywhere in the United States that hire remotely (the person lives near {d['label']})."
+        where = "Employers anywhere in the United States that hire remotely" + (
+            f" (the person lives near {d['label']})." if d.get("location") else ".")
     else:
         where = f"Employers within about {d['radius']} miles of {d['label']}."
     prompt = (f"Find up to {d['per_category']} employers in this category: {label}: {desc}.\n{where}\n"
@@ -463,7 +468,8 @@ def _research_pass(run_id, d, cat, angle, k, cancel):
     desc = desc.replace("{field}", d.get("field") or "their field")
     city = (d.get("label") or "").split(",")[0]
     if cat == "remote":
-        where = f"Employers anywhere in the United States that hire remotely (the person lives near {d['label']})."
+        where = "Employers anywhere in the United States that hire remotely" + (
+            f" (the person lives near {d['label']})." if d.get("location") else ".")
     else:
         where = f"Employers within about {d['radius']} miles of {d['label']}."
         if d.get("areas"):

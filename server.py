@@ -313,7 +313,7 @@ def find_job(job_id):
     data = read_json(people.pdir("jobs.json"), {"jobs": []})
     job = next((j for j in data["jobs"] if j["id"] == job_id), None)
     if not job:
-        raise ValueError("That job is no longer in the list. Click Update jobs and try again.")
+        raise ValueError("That job is no longer in the list. Click Find new jobs (the circular-arrow icon) and try again.")
     desc = catalog.description(job_id) or job.get("snippet", "")
     return job, desc
 
@@ -1039,12 +1039,13 @@ class H(BaseHTTPRequestHandler):
             if setup_flow.needs_setup(pid):
                 self.send_response(303); self.send_header("Location", "/setup"); self.end_headers(); return
             rp = people.pdir("report.html")
-            if not os.path.exists(rp) and people.load_index() and catalog.stats()["open"]:
+            if not os.path.exists(rp):  # no board yet: an empty one, whose Jobs tab offers Start your job search
                 empty_board(pid)
-            if not os.path.exists(rp):
-                return self._send(200, "<p>No data yet. Starting first refresh…</p><script>fetch('/api/update',{method:'POST',headers:{'X-Jobboard':'1'}}).then(()=>setTimeout(()=>location.reload(),5000))</script>", "text/html")
             st_ = os.stat(rp)
             return self._send(200, lambda: open(rp, "rb").read(), "text/html", gz_key=(rp, st_.st_mtime_ns, st_.st_size))
+        if path == "/api/search":
+            import first_search
+            return self._send(200, first_search.status(pid))
         if path == "/api/status":
             with lock:
                 s = dict(state)
@@ -1292,17 +1293,25 @@ class H(BaseHTTPRequestHandler):
                 out = setup_flow.finish(pid)
             except ValueError as e:
                 return self._send(400, {"error": str(e), "field": getattr(e, "field", None)})
-            request_recompute([pid])  # the board fills from the catalog right away; the update below adds fresh listings
+            request_recompute([pid])  # the board fills from the catalog right away; the search below adds fresh listings
             if out["kick"]["interpret_target"]:
                 ps()["target"] = {"running": True, "error": None}; spawn(bg_interpret)
+            # Start my job search (the last setup screen) sends search: true; Skip for now sends false.
+            out["kick"]["update"] = bool(body.get("search", True))
             if out["kick"]["update"]:
-                with lock:
-                    busy = state["running"]
-                    if not busy:
-                        state["running"] = True
-                if not busy:
-                    threading.Thread(target=run_update, daemon=True).start()
+                import first_search
+                ok, err = first_search.start(pid, body.get("find"))
+                out["search"] = {"started": ok, "error": err}
+                if ok:
+                    self._act("job search started", pid, "from setup")
             return self._send(200, out)
+        if path == "/api/search/start":
+            import first_search
+            ok, err = first_search.start(pid, body.get("find"))
+            if not ok:
+                return self._send(409, {"error": err})
+            self._act("job search started", pid, "from the board")
+            return self._send(202, {"ok": True})
         if path == "/api/rate":
             ids = [str(x) for x in (body.get("ids") or [])][:60]
             if not ids:
@@ -1679,6 +1688,8 @@ def busy_reason():
 
 import catalog_api
 catalog_api.configure(sys.modules[__name__])
+import first_search
+first_search.configure(sys.modules[__name__])
 def after_restore():
     """Backup & move just swapped DATA's contents: re-read the access key and the people index, drop in-memory
     per-profile state, and rebuild every board from the restored catalog (restart-free)."""

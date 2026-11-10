@@ -37,6 +37,7 @@ SETUP_DEFAULTS = {
     "direction": "",
     "setup_done": False,
     "setup_step": "welcome",
+    "search_started": "",   # when Start my job search first ran for this profile (first_search.py); empty = never
 }
 
 INDUSTRY_IDEAS = ["Defense & weapons", "Government contracting", "Gambling", "Tobacco & vaping", "Crypto",

@@ -320,11 +320,11 @@ HEADER_JS = r"""// ---- header: Update / Re-rate run on the board, which has the
 const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
 $("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
 $("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
-$("updateBtn").title = "Update job listings now (opens the board): checks every employer for new jobs (about 40 min)";
+$("updateBtn").title = "Find new jobs (opens the board): check every company for new openings (about 40 min)";
 $("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Claude re-rates your jobs, no new listings";
 fetch("/api/status").then(r => r.json()).then(s => {
   if (!s.running) return;
-  $("updateBtn").disabled = true; $("updateBtn").classList.add("busy"); $("updateBtn").title = "Updating job listings now…";
+  $("updateBtn").disabled = true; $("updateBtn").classList.add("busy"); $("updateBtn").title = "Finding new jobs now…";
 }).catch(() => {});
 fetch("/api/rerate").then(r => r.json()).then(s => {
   if (!s.running) return;

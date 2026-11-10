@@ -28,9 +28,9 @@ The first time, Windows may say **"Windows protected your PC"**: click **More in
 
 1. **Open Siftwell** and add yourself (several people can share one Siftwell).
 2. **Set up your profile**: upload a resume (or fill in a short form), your home ZIP and radius, and the pay you're after.
-3. **Add companies**: open **Catalog → Find employers near me**, or paste any company's careers-page link.
+3. **Click Start my job search** at the end of setup. With Claude connected, Siftwell first finds employers near you, then checks their career pages. Your board fills in with the openings that fit you.
 
-Then click **Update** to fetch jobs. Your board fills in with the openings that fit you.
+Later, **Find new jobs** (the circular-arrow icon) checks every company again, and you can add any company by its careers-page link in **Catalog**.
 
 ## What it does
 
