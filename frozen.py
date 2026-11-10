@@ -81,6 +81,10 @@ def _stop():
 def _run_server(rest):
     import paths
     import runpy
+    bad = paths.data_problem()
+    if bad:
+        print(bad, file=sys.stderr)
+        return 1
     port = rest[0] if rest and rest[0].isdigit() else str(paths.read_port())
     sys.argv = [os.path.join(APP, "server.py"), port]
     os.chdir(APP)

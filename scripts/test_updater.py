@@ -30,6 +30,7 @@ STUB = b"MZ-fake-installer-bytes-" + b"x" * 5000
 STUB_SHA = hashlib.sha256(STUB).hexdigest()
 NOTES = "Fixes things.\n<img src=x onerror=alert(1)> & more"
 
+CUR = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VERSION")).read().strip()  # the version under test
 SC = {"mode": "newer", "version": "0.3.0", "digest": "good", "size": "good", "hits": []}
 
 
@@ -40,6 +41,8 @@ def release(version, prerelease=False, installer=True, port=0):
         digest = "sha256:" + (STUB_SHA if SC["digest"] == "good" else "0" * 64)
         assets.append({"name": f"Siftwell-Setup-{version}.exe", "size": size, "digest": digest if SC["digest"] != "none" else None,
                        "browser_download_url": f"http://127.0.0.1:{port}/dl/Siftwell-Setup-{version}.exe"})
+        assets.append({"name": f"Siftwell-Portable-{version}.zip", "size": 10,
+                       "browser_download_url": f"http://127.0.0.1:{port}/dl/portable.zip"})
         assets.append({"name": f"Siftwell-{version}.zip", "size": 10, "browser_download_url": f"http://127.0.0.1:{port}/dl/zip"})
     return {"tag_name": "v" + version, "name": "Siftwell " + version, "body": NOTES, "draft": False, "prerelease": prerelease,
             "html_url": f"https://github.com/{REPO}/releases/tag/v{version}", "assets": assets}
@@ -83,7 +86,7 @@ class Fake(BaseHTTPRequestHandler):
             if self.path.endswith("/latest"):
                 return self._json(404, {"message": "Not Found"})
             return self._json(200, [release("0.2.0", True, port=port), release("0.3.0", True, port=port), {"tag_name": "v9.9.9", "draft": True}])
-        v = {"newer": SC["version"], "dl404": SC["version"], "same": "0.1.0", "older": "0.0.9"}[mode]
+        v = {"newer": SC["version"], "dl404": SC["version"], "same": CUR, "older": "0.0.9"}[mode]
         if self.path.endswith("/latest"):
             return self._json(200, release(v, port=port))
         return self._json(200, [release(v, port=port)])
@@ -185,7 +188,7 @@ def main():
     fake = ThreadingHTTPServer(("127.0.0.1", fake_port), Fake)
     threading.Thread(target=fake.serve_forever, daemon=True).start()
     data = os.path.join(scratch, "data")
-    cur = "0.1.0"
+    cur = CUR
     try:
         # ---- check results
         SC["mode"] = "newer"

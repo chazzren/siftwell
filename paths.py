@@ -14,12 +14,15 @@ RUNTIME the launcher's Python runtime (uv, Python, packages, virtualenv), per ma
           macOS    ~/Library/Application Support/Siftwell/runtime
           Linux    $XDG_CACHE_HOME/siftwell/runtime (default ~/.cache/siftwell/runtime)
         Set SIFTWELL_RUNTIME to use another folder (tests).
+Portable (Siftwell-Portable-x.y.z.zip, the bundle with a portable.txt next to Siftwell.exe): DATA is the "data" folder next
+to Siftwell.exe, so the whole folder (app + data) can live on a USB stick or in Dropbox. JOBBOARD_DATA still overrides it.
 Installed from Siftwell-Setup-x.y.z.exe, APP is the program's own bundle folder (read-only; no RUNTIME needed).
 Nothing at run time writes into APP, so the app folder can be deleted and replaced by a new download at any time.
 
 On first start after an upgrade, an old in-app data/ folder (plus the root companies.json and config.json) is copied
 into DATA and the old folder is renamed data.migrated-<date>. See migrate()."""
 import datetime as dt
+import hashlib
 import json
 import os
 import shutil
@@ -30,12 +33,16 @@ APP = (getattr(sys, "_MEIPASS", None) if FROZEN else None) or os.path.dirname(os
 ASSETS = os.path.join(APP, "assets")
 PACKS = os.path.join(APP, "packs")
 CONFIG_DEFAULT = os.path.join(APP, "config.default.json")
+EXE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+PORTABLE = FROZEN and os.path.isfile(os.path.join(EXE_DIR, "portable.txt"))   # portable copy: data next to the app, no traces
 
 
 def _data_dir():
     env = os.environ.get("JOBBOARD_DATA")
     if env:
         return os.path.abspath(os.path.expanduser(env))
+    if PORTABLE:
+        return os.path.join(EXE_DIR, "data")
     if sys.platform == "win32":
         return os.path.join(os.environ.get("APPDATA") or os.path.expanduser(r"~\AppData\Roaming"), "JobBoard")
     if sys.platform == "darwin":
@@ -88,8 +95,46 @@ def legacy_python(windowed=False):
     return p if os.path.exists(p) else None
 
 
-def read_port(default=8766):
+DEFAULT_PORT = 8766
+
+
+def default_port():
+    """8766, or SIFTWELL_DEFAULT_PORT (tests only: the fallback ports are then the nine after it)."""
+    p = os.environ.get("SIFTWELL_DEFAULT_PORT", "")
+    return int(p) if p.isdigit() and 1024 <= int(p) <= 65500 else DEFAULT_PORT
+
+
+def fallback_ports():
+    d = default_port()
+    return list(range(d + 1, d + 10))      # 8767-8775 normally
+
+
+def data_id():
+    """A short identifier of this data folder (a hash of its absolute path, never the path), returned by /api/ping so a
+    window or launcher only attaches to a Siftwell that uses the same data folder."""
+    return hashlib.sha256(os.path.normcase(os.path.abspath(DATA)).encode("utf-8", "replace")).hexdigest()[:12]
+
+
+def data_problem():
+    """None when DATA can be created and written to, else a plain-language message for the person."""
+    try:
+        os.makedirs(DATA, exist_ok=True)
+        probe = os.path.join(DATA, ".write-test-%d" % os.getpid())
+        with open(probe, "w") as f:
+            f.write("x")
+        os.remove(probe)
+        return None
+    except OSError:
+        if PORTABLE:
+            return ("Siftwell can't save its data here, because this folder isn't writable.\n\nMove the Siftwell folder to a "
+                    "folder you can write to, for example Documents, and open it again.")
+        return f"Siftwell can't save its data in {DATA} (the folder isn't writable)."
+
+
+def read_port(default=None):
     """The remembered port: DATA/port, else an older launcher's <app>/.siftwell/port (copied into DATA once), else default."""
+    if default is None:
+        default = default_port()
     for f in (PORT_FILE, os.path.join(LEGACY_RUN_DIR, "port")):
         try:
             p = int(open(f).read().strip())

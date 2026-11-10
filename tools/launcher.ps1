@@ -101,8 +101,22 @@ function Get-Url($port, $path) {
     }
 }
 
+function Get-DataId {
+    # Same as paths.data_id(): first 12 hex digits of SHA-256 of the lower-cased absolute data folder path.
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $h = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($DataDir.ToLowerInvariant()))
+    return (($h | ForEach-Object { $_.ToString("x2") }) -join "").Substring(0, 12)
+}
+
 function Test-Siftwell($port) {
-    # True if a Siftwell (Job Board) server answers on this port.
+    # True if a Siftwell (Job Board) server of THIS data folder answers on this port. A Siftwell that uses another data
+    # folder (the main copy next to a test copy) is not ours: never attached to; the port counts as taken. An older
+    # build that doesn't report a data id is treated as ours.
+    $p = Get-Url $port "/api/ping"
+    if ($p.Code -eq 200 -and $p.Body -match '"app":\s*"siftwell"') {
+        $m = [regex]::Match($p.Body, '"data":\s*"([0-9a-f]+)"')
+        return (-not $m.Success) -or ($m.Groups[1].Value -eq (Get-DataId))
+    }
     $s = Get-Url $port "/api/status"
     if ($s.Code -eq 200 -and $s.Body -match '"schedule"' -and $s.Body -match '"recomputing"') { return $true }
     $r = Get-Url $port "/"

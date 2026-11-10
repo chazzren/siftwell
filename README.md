@@ -59,6 +59,17 @@ That's all: it installs just for you (into `%LOCALAPPDATA%\Programs\Siftwell`), 
 
 **Uninstalling.** Open **Settings → Apps → Installed apps**, find **Siftwell**, click **Uninstall**. Your data (profiles, resumes, ratings, saved jobs, settings; `%APPDATA%\JobBoard`) is **kept** unless you tick **Also remove my Siftwell data** in the window that appears (that cannot be undone). Install Siftwell again later and everything is back.
 
+### Portable version (no install)
+Want to run Siftwell from a USB stick, a Dropbox folder, or a computer where you can't install programs? Use the portable version. On the **Releases** page, under **Assets**, download **Siftwell-Portable-x.y.z.zip**, right-click it and choose **Extract all** (anywhere you like), open the **Siftwell** folder and double-click **Siftwell.exe**. Then carry on at **step 3** below.
+
+- **Nothing is installed**, and by default nothing is written outside the Siftwell folder. Your profiles, resumes, ratings and settings are kept in a **data** folder right next to `Siftwell.exe`. **Deleting the Siftwell folder deletes your data**, so keep a copy of the `data` folder (or use **Settings → Backup & move**).
+- The folder must be one you can write to (Documents, the Desktop, a USB stick). If it isn't, Siftwell says so: move the folder to Documents and open it again.
+- **Start Siftwell when I sign in** and **Even when Siftwell is closed** (automatic job updates) are **off**. You can still turn them on in **Settings**; Siftwell reminds you that this adds something to this computer, outside the Siftwell folder.
+- **Updating:** Siftwell shows **Download the new portable version**. Close Siftwell, unzip the new ZIP over the old folder (choose to replace files), or unzip it somewhere new and copy your old `data` folder into it, then open `Siftwell.exe` again. Siftwell never replaces itself.
+- **Moving to another computer or drive:** close Siftwell and copy the whole folder; the data goes with it, and a changed drive letter (a USB stick on E: or F:) doesn't matter. On the new computer your phone link changes (**Settings → Get started** shows the new one) and you sign in to Claude Code again there.
+- **Between the installed and the portable version:** with Siftwell closed, use **Settings → Backup & move** (export on one, import on the other), or copy the contents of `%APPDATA%\JobBoard` into the portable `data` folder (or the other way round).
+- **Trying a new version side by side:** unzip the portable version into a test folder and, if you like, copy your data folder into its `data` folder first. It runs on its own port (the window title reads "Siftwell (test copy, port 8767)") and never stops, reuses or opens your main copy. **Settings → About & updates** shows which data folder a copy is using.
+
 ### Mac or advanced: use the ZIP (works on Windows too)
 #### 1. Download Siftwell
 On this page, open **Releases** (on the right side, or under the repository name on a phone), click the **latest** release, and under **Assets** download **Siftwell-x.y.z.zip** (for example `Siftwell-0.1.0.zip`). Unzip it somewhere permanent, for example `Documents\Siftwell` (Windows: right-click the ZIP → **Extract All**; Mac: double-click the ZIP).
@@ -225,6 +236,7 @@ Siftwell looks for a newer version on the project's GitHub **Releases** page: on
 
 When a newer version exists, a small bar appears on the board and in Settings: **Siftwell 0.3.0 is available. What's new · Update**. **What's new** shows the release notes as plain text. **Dismiss** hides the bar for that version (**About & updates** still shows it).
 - **Installed with the Windows installer:** click **Update**. Siftwell downloads **Siftwell-Setup-x.y.z.exe** into the `_updates` folder inside your data folder, checks it arrived whole (size and, when GitHub lists one, its checksum), then runs it quietly in the background, closes, and opens again by itself when the new version is in. Your profiles, ratings and settings stay as they are. If the download or the install fails, Siftwell shows why and keeps running the version you have. It won't start while an update or re-rate is running; try again when it finishes.
+- **Portable version:** Siftwell never replaces itself. The bar shows **Download the new portable version** with the steps (close Siftwell, unzip the new ZIP over the old folder or copy your `data` folder into the new one, open `Siftwell.exe`).
 - **Using the ZIP (or a Mac):** Siftwell never replaces itself. The bar shows **Download the new version**, which opens the release page. Download the new ZIP the same way as the first time (step 1 of **Install**), unzip it, double-click **Stop Siftwell** in the old folder and then **Start Siftwell** in the new one. Everything carries over, and you can delete the old folder.
 
 ## Moving to another computer / backups

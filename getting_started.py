@@ -221,8 +221,10 @@ def _app_python():
 def _win_lnk():
     if os.environ.get("SIFTWELL_TEST_LNK"):   # tests only: a stand-in shortcut path, so the real one is never touched
         return os.environ["SIFTWELL_TEST_LNK"]
+    # A portable copy uses its own shortcut name, so it never shows or removes the installed copy's entry.
     return os.path.join(os.environ.get("APPDATA") or os.path.expanduser(r"~\AppData\Roaming"),
-                        "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "Siftwell.lnk")
+                        "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
+                        "Siftwell (portable).lnk" if paths.PORTABLE else "Siftwell.lnk")
 
 
 def _mac_plist():
@@ -361,9 +363,11 @@ def startup_state():
     "own" is our Startup shortcut; "legacy_dir" the folder the older task points at; "wake" the older 5:25 wake task."""
     if osdeps.WINDOWS:
         lnk, task, active = os.path.exists(_win_lnk()), _task_exists(), _task_enabled()
+        if paths.PORTABLE:      # the older scheduled tasks belong to an installed copy; a portable copy ignores them
+            task = active = False
         return {"on": lnk or active, "via": "shortcut" if lnk else "task" if active else None, "task": task,
                 "task_enabled": active, "own": lnk, "legacy_dir": (_task_info().get("wd") or "") if task else "",
-                "wake": _wake_exists()}
+                "wake": _wake_exists() and not paths.PORTABLE}
     if osdeps.MAC:
         own = os.path.exists(_mac_plist())
         return {"on": own, "via": "launchagent" if own else None, "task": False, "task_enabled": False, "own": own}
@@ -543,8 +547,8 @@ def heal_startup(log=print):
     or portable server using other data must not take it over. Also skipped when SIFTWELL_RUNTIME is set (a dev or test
     copy), when SIFTWELL_NO_SELFHEAL=1, and unless this server runs on the launcher's runtime Python or the legacy
     <app>/.venv (a stray interpreter must never become the sign-in shortcut)."""
-    if os.environ.get("JOBBOARD_DATA") or os.environ.get("SIFTWELL_NO_SELFHEAL") or os.environ.get("SIFTWELL_RUNTIME"):
-        return "skipped"
+    if paths.PORTABLE or os.environ.get("JOBBOARD_DATA") or os.environ.get("SIFTWELL_NO_SELFHEAL") or os.environ.get("SIFTWELL_RUNTIME"):
+        return "skipped"      # (portable: never creates or repairs anything outside its own folder)
     if not (frozen.FROZEN or _under(sys.executable, paths.RUNTIME) or _under(sys.executable, os.path.join(APP, ".venv"))):
         return "skipped"
     py = _app_python()
@@ -594,7 +598,7 @@ def heal_overnight_job(log=print):
     update" scheduled task (it doesn't reference the app folder); the older "Job Board server" task is only ever
     turned off or on from the Get started page (switch_startup / unswitch_startup)."""
     import autoupdate
-    return autoupdate.heal(log)
+    return "skipped" if paths.PORTABLE else autoupdate.heal(log)
 
 
 def heal_entries(log=print):
@@ -775,7 +779,7 @@ def status(fresh=False):
     return {
         "items": items, "done": done, "total": len(req), "complete": done == len(req),
         "missing": [i["id"] for i in req if not i["done"]],
-        "port": port, "windows": osdeps.WINDOWS, "mac": osdeps.MAC,
+        "port": port, "windows": osdeps.WINDOWS, "mac": osdeps.MAC, "portable": paths.PORTABLE,
         "claude": {"installed": bool(cpath), "signed_in": bool(signed)},
         "browser": {"found": bool(chrome), "name": "Edge" if chrome and "edge" in chrome.lower() else "Chrome" if chrome else ""},
         "startup": st,
@@ -798,7 +802,7 @@ GET_PATHS = ("/getting-started", "/api/setup-status", "/api/getting-started/inst
 
 
 def ping():
-    return {"app": "siftwell", "version": VERSION, "port": CTX["port"]}
+    return {"app": "siftwell", "version": VERSION, "port": CTX["port"], "data": paths.data_id()}
 
 
 def handle_get(h, path, pid, query=""):
@@ -1016,6 +1020,7 @@ function taskSteps(enable){
 }
 function rowStartup(){
   const s = S.startup, sw = ui.sw, b = ui.busy.startup;
+  const pnote = S.portable ? `<span class="gsmsg">This adds something to this computer (outside the Siftwell folder).</span>` : "";
   const wake = s.wake ? `<span class="gsmsg">Your PC wakes at 5:25 for the nightly update. That still works.</span>` : "";
   if (S.windows && s.task_enabled) {
     const dir = s.legacy_dir ? s.legacy_dir : "an older folder";
@@ -1027,7 +1032,7 @@ function rowStartup(){
     if (sw && sw.op === "switch" && sw.state === "denied") body += `<div class="gswarn">Windows needs administrator permission to turn off that older task. <button class="btn sm primary" type="button" data-act="switch-admin" ${b ? "disabled" : ""}>Allow (asks for administrator permission)</button></div><details><summary>Or turn it off by hand</summary>${taskSteps(false)}</details>`;
     else if (sw && sw.op === "switch" && sw.state === "declined") body += `<div class="gsmsg err">The administrator permission prompt was declined, so nothing was changed. You can turn the older task off by hand instead:</div>${taskSteps(false)}`;
     else if (sw && sw.op === "switch" && sw.state === "failed") body += `<div class="gsmsg err">${esc(sw.message)}</div>${taskSteps(false)}`;
-    return {desc, body: body + wake + msgHtml("startup")};
+    return {desc, body: body + pnote + wake + msgHtml("startup")};
   }
   let desc = "Siftwell starts by itself when you sign in to this computer, so the board is always ready.";
   if (s.on) desc = "On. Siftwell will start the next time you sign in to this computer.";
@@ -1038,7 +1043,7 @@ function rowStartup(){
     if (sw && sw.op === "undo" && sw.state === "denied") body += `<div class="gswarn">Windows needs administrator permission to turn that older task back on. <button class="btn sm primary" type="button" data-act="undo-admin" ${b ? "disabled" : ""}>Allow (asks for administrator permission)</button></div><details><summary>Or turn it on by hand</summary>${taskSteps(true)}</details>`;
     else if (sw && sw.op === "undo" && (sw.state === "declined" || sw.state === "failed")) body += `<div class="gsmsg err">${esc(sw.message)}</div>${taskSteps(true)}`;
   }
-  return {desc, body: body + wake + msgHtml("startup")};
+  return {desc, body: body + pnote + wake + msgHtml("startup")};
 }
 function rowPhone(){
   const p = S.phone;

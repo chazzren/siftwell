@@ -102,17 +102,58 @@ def get_port():
     return paths.read_port()
 
 
+def window_title(port):
+    """"Siftwell", or "Siftwell (test copy, port 8767)" when this copy isn't on the normal port, so copies can be told apart."""
+    return TITLE if port == paths.DEFAULT_PORT else f"{TITLE} (test copy, port {port})"
+
+
 def fetch(url, timeout=3, cookie=None):
     req = urllib.request.Request(url, headers={"Cookie": cookie} if cookie else {})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
 
 
-def server_up(port):
+def ping(port):
+    """The /api/ping answer of a Siftwell on this port (any data folder), or None."""
     try:
-        return json.loads(fetch(f"http://127.0.0.1:{port}/api/ping")).get("app") == "siftwell"
+        d = json.loads(fetch(f"http://127.0.0.1:{port}/api/ping"))
+        return d if isinstance(d, dict) and d.get("app") == "siftwell" else None
     except Exception:
-        return False
+        return None
+
+
+def server_up(port):
+    """A Siftwell that uses THIS data folder answers on the port (one without a data id is an older build of the same
+    app: counted as ours). A Siftwell with another data folder, such as the main copy next to a test copy, is not ours."""
+    d = ping(port)
+    return bool(d) and d.get("data") in (None, paths.data_id())
+
+
+def other_siftwell(port):
+    d = ping(port)
+    return bool(d) and d.get("data") not in (None, paths.data_id())
+
+
+def choose_port(port):
+    """-> (port, explain). Keeps `port` unless something that isn't this copy's Siftwell holds it (another copy's Siftwell
+    or any other program); then the first free port of the fallback range (8767-8775), remembered in THIS data folder's
+    port file. Never touches whatever holds the port. A Siftwell server of ours that is starting up counts as ours."""
+    if server_up(port) or not (other_siftwell(port) or _port_in_use(port)):
+        return port, ""
+    pid = read_pid_file(paths.PID_FILE)
+    if pid and verify_siftwell(pid, "server", paths.PID_FILE)[0]:
+        return port, ""                    # our own server, still starting
+    for p in [paths.default_port()] + paths.fallback_ports():
+        if p != port and not _port_in_use(p):
+            if not os.environ.get("SIFTWELL_PORT"):
+                try:
+                    os.makedirs(paths.DATA, exist_ok=True)
+                    with open(paths.PORT_FILE, "w") as f:
+                        f.write(str(p))
+                except OSError:
+                    pass
+            return p, f"port {port} is taken by another {'Siftwell copy' if other_siftwell(port) else 'program'}; using port {p}"
+    return None, f"port {port} is taken and so are the fallback ports"
 
 
 def wait_server(port, timeout):
@@ -369,7 +410,7 @@ def stop_server_report(port=None):
         return True, "Siftwell has stopped."
     if r == "refused":
         return False, ("The program recorded as Siftwell's isn't Siftwell, so nothing was stopped. " + NOT_RUNNING_HINT)
-    if port and server_up(port):
+    if port and ping(port):
         return False, (f"Siftwell is answering on port {port}, but it wasn't started from this copy, so Stop can't end it. "
                        + NOT_RUNNING_HINT)
     if port and _port_in_use(port):
@@ -410,7 +451,7 @@ def _focus_existing():
                 if p.value == pid and user32.IsWindowVisible(hwnd):
                     buf = ctypes.create_unicode_buffer(64)
                     user32.GetWindowTextW(hwnd, buf, 64)
-                    if buf.value == TITLE:
+                    if buf.value.startswith(TITLE):
                         found.append(hwnd)
                 return True
             user32.EnumWindows(cb, 0)
@@ -569,7 +610,7 @@ def set_window_icon(window=None):
                 if p.value == me and user32.IsWindowVisible(hwnd):
                     buf = ctypes.create_unicode_buffer(64)
                     user32.GetWindowTextW(hwnd, buf, 64)
-                    if buf.value == TITLE:
+                    if buf.value.startswith(TITLE):
                         hwnds.append(hwnd)
                 return True
             user32.EnumWindows(cb, 0)
@@ -619,11 +660,23 @@ def main(argv=None, ready=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     owns = "--owns-server" in argv
     _no_std_streams()
+    bad = paths.data_problem()
+    if bad:
+        log("data folder not writable")
+        message(bad)
+        return 1
     port = get_port()
-    url = f"http://127.0.0.1:{port}/"
 
     if _focus_existing():
         return 0
+
+    port, why = choose_port(port)
+    if port is None:
+        message("Siftwell couldn't find a free port. Close some programs or restart the computer, then try again.")
+        return 1
+    if why:
+        log(why)
+    url = f"http://127.0.0.1:{port}/"
 
     proc = None
     if not server_up(port):
@@ -655,7 +708,7 @@ def main(argv=None, ready=None):
     state = {"max": False, "min": False, "geom": dict(geom)}
     api = Api()
     window = webview.create_window(
-        TITLE, url, js_api=api, width=geom["width"], height=geom["height"], x=geom["x"], y=geom["y"],
+        window_title(port), url, js_api=api, width=geom["width"], height=geom["height"], x=geom["x"], y=geom["y"],
         min_size=MIN_SIZE, maximized=geom["maximized"], text_select=True, zoomable=True, confirm_close=False)
     state["max"] = geom["maximized"]
 
