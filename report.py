@@ -641,6 +641,7 @@ const D = window.__DATA__, CUR = window.__CURRENT__;
 const $ = id => document.getElementById(id);
 const fmt = n => n == null ? "" : "$" + Math.round(n/1000) + "k";
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const safeUrl = u => { const s = String(u ?? "").trim(); return /^https?:\/\/[^\s\/?#]/i.test(s) && !/[\s\x00-\x1f]/.test(s) ? s : ""; };  // links from postings: http(s) only
 const SERVED = location.protocol.startsWith("http");
 const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 let status = {};
@@ -793,10 +794,10 @@ function drawTailored(){
     return `<li class="job tlcard">
       <div class="scores">${j ? `<div class="score" title="Overall">${j.score}<small>OVERALL</small></div>` : ""}${m != null ? `<div class="score match ${m >= 70 ? "hi" : m >= 45 ? "mid" : "lo"}">${m}<small>MATCH</small></div>` : ""}</div>
       <div style="min-width:0">
-        <a class="title" href="${esc(x.job.url || "#")}" target="_blank" rel="noopener">${esc(x.job.title || "")}</a>
+        ${safeUrl(x.job.url) ? `<a class="title" href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">${esc(x.job.title || "")}</a>` : `<span class="title">${esc(x.job.title || "")}</span>`}
         <div class="meta"><span class="coname">${esc(x.job.company || "")}</span><span>Tailored ${esc(when)}</span><span>${j ? "Still open" : "No longer on your board"}</span>${x.gaps ? `<span>${x.gaps} gaps flagged</span>` : ""}${reviewBadge(x.review)}</div>
         ${x.headline ? `<div class="tl2">${esc(x.headline)}</div>` : ""}
-        <div class="acts">${x.review && x.review.status === "interrupted" ? `<button class="pri" data-resume="${esc(x.job.id)}" data-slug="${x.slug}">Resume review</button>` : ""}${x.review && x.review.status === "needs_answers" ? `<button class="pri" data-astra="${esc(x.job.id)}" data-slug="${x.slug}">Answer Astra's questions</button>` : ""}<a class="pri" href="/tailored/${x.slug}.pdf">Download PDF</a><a href="/tailored/${x.slug}" target="_blank" rel="noopener">Review</a><a href="/tailored/${x.slug}.docx">Word</a>${x.job.url ? `<a href="${esc(x.job.url)}" target="_blank" rel="noopener">Posting</a>` : ""}<button class="danger" data-del="${x.slug}">Remove</button></div>
+        <div class="acts">${x.review && x.review.status === "interrupted" ? `<button class="pri" data-resume="${esc(x.job.id)}" data-slug="${x.slug}">Resume review</button>` : ""}${x.review && x.review.status === "needs_answers" ? `<button class="pri" data-astra="${esc(x.job.id)}" data-slug="${x.slug}">Answer Astra's questions</button>` : ""}<a class="pri" href="/tailored/${x.slug}.pdf">Download PDF</a><a href="/tailored/${x.slug}" target="_blank" rel="noopener">Review</a><a href="/tailored/${x.slug}.docx">Word</a>${safeUrl(x.job.url) ? `<a href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">Posting</a>` : ""}<button class="danger" data-del="${x.slug}">Remove</button></div>
       </div></li>`;
   }).join("");
 }
@@ -829,7 +830,7 @@ function coLine(j){
 }
 function coPanel(j){
   const c = CI[j.company] || {};
-  const src = (u, t) => u ? ` <a href="${esc(u)}" target="_blank" rel="noopener">${t || "source"}</a>` : ` <span class="asof">(unverified)</span>`;
+  const src = (u, t) => safeUrl(u) ? ` <a href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${t || "source"}</a>` : ` <span class="asof">(unverified)</span>`;
   const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
   const glass = "https://www.glassdoor.com/Search/results.htm?keyword=" + encodeURIComponent(j.company.replace(/\s*\(.*\)|\s*\/.*$/g, ""));
   const facts = [
@@ -847,7 +848,7 @@ function coPanel(j){
   ].join("");
   return `<details class="copanel" open><summary>About ${esc(j.company)}</summary>
     ${c.blurb ? `<p>${esc(c.blurb)}</p>` : ""}<dl>${facts}</dl>
-    <div class="colinks">${c.levels_url ? `<a href="${esc(c.levels_url)}" target="_blank" rel="noopener">Pay on Levels.fyi</a>` : ""}<a href="${glass}" target="_blank" rel="noopener">Reviews on Glassdoor</a></div>
+    <div class="colinks">${safeUrl(c.levels_url) ? `<a href="${esc(safeUrl(c.levels_url))}" target="_blank" rel="noopener">Pay on Levels.fyi</a>` : ""}<a href="${glass}" target="_blank" rel="noopener">Reviews on Glassdoor</a></div>
     ${c.ownership ? "" : `<p class="asof">Company facts not researched yet.</p>`}</details>`;
 }
 
@@ -891,7 +892,7 @@ function detail(j){
     <div class="dacts acts">${tailorBtns}
       <button class="btn" type="button" data-k="saved" aria-pressed="${s==="saved"}">${s==="saved" ? "★ Saved" : "☆ Save"}</button>
       <button class="btn" type="button" data-k="applied" aria-pressed="${s==="applied"}">${s==="applied" ? "✓ Applied" : "Mark applied"}</button>
-      <a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener">View posting ↗</a>
+      ${safeUrl(j.url) ? `<a class="btn" href="${esc(safeUrl(j.url))}" target="_blank" rel="noopener">View posting ↗</a>` : ""}
       <button class="btn ghost" type="button" data-k="hidden" aria-pressed="${s==="hidden"}">${s==="hidden" ? "Unhide" : "Not for me"}</button></div>
     <section class="dsec"><h3>How you stack up</h3><div class="dscores">
       ${pvm ? `<div class="dsc"><div class="ring" style="--p:${sc}"><b>${sc}</b></div><p><strong>Overall</strong>Odds, pay and quality of life combined.</p></div>`

@@ -219,6 +219,7 @@ SCRIPT = r"""<script>
 (function(){
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const safeUrl = u => { const s = String(u ?? "").trim(); return /^https?:\/\/[^\s\/?#]/i.test(s) && !/[\s\x00-\x1f]/.test(s) ? s : ""; };  // http(s) links only
 const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 const phone = () => matchMedia("(max-width:720px)").matches;
 const n = x => (x || 0).toLocaleString();
@@ -403,7 +404,7 @@ function loadListings(){
       const locs = (r.locations || []).slice(0, 3).join("; ") + ((r.locations || []).length > 3 ? ` +${r.locations.length - 3}` : "");
       const seen = `First seen ${when(r.first_seen)} · last seen ${when(r.last_seen)}` + (r.closed_at ? ` · closed ${when(r.closed_at)}` : "") + (r.partial ? " · details come with the next update" : "");
       const who = r.people.length ? r.people.map(whoChip).join("") : `<span class="chip">Passes nobody's filters</span>`;
-      const title = r.url && /^https?:/.test(r.url) ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>` : esc(r.title);
+      const title = safeUrl(r.url) ? `<a href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener">${esc(r.title)}</a>` : esc(r.title);
       return `<div class="crow lrow"><div><b>${title}</b><small>${esc(r.company)}${locs ? " · " + esc(locs) : ""}${r.workplace ? " · " + esc(r.workplace) : ""}</small><small>${esc(seen)}</small><div class="whochips">${who}</div></div>
         <div>${r.closed_at ? '<span class="pill">Closed</span>' : '<span class="pill ok">Open</span>'}</div></div>`;
     }).join("");
@@ -544,11 +545,11 @@ function renderFind(){
   $("fdOk").innerHTML = ok.length ? ok.map(c => `<div class="crow frow">${c.status === "added" ? `<span class="pill ok">Added</span>` : `<input type="checkbox" value="${c.id}" aria-label="Add ${esc(c.name)}"${prevTicked.has(String(c.id)) ? " checked" : ""}>`}
       <div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}${c.location_note ? " · " + esc(c.location_note) : ""}</small>${c.why ? `<small>${esc(c.why)}</small>` : ""}</div>
       <div><span>${esc(atsName(c.ats))}</span><small>${n(c.open_jobs)} open job${c.open_jobs === 1 ? "" : "s"}${c.added_as && c.added_as !== c.name ? " · added as " + esc(c.added_as) : ""}</small></div>
-      <div><a href="${esc(c.url)}" target="_blank" rel="noopener" class="note">Careers page</a></div></div>`).join("")
+      <div>${safeUrl(c.url) ? `<a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener" class="note">Careers page</a>` : ""}</div></div>`).join("")
     : `<div class="srow"><span class="note">${d.live ? "Readable employers show up here as they're checked." : !bad.length && known.length ? "Every employer found is already in your catalog." : "None of the new employers found could be read by Siftwell."}</span></div>`;
   $("fdAdd").disabled = $("fdAddAll").disabled = !ok.some(c => c.status === "readable");
   $("fdBadWrap").hidden = !bad.length; $("fdBadSum").textContent = `${n(bad.length)} employer${bad.length === 1 ? "" : "s"} Siftwell can't read`;
-  $("fdBad").innerHTML = bad.map(c => `<div class="crow"><div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}${c.location_note ? " · " + esc(c.location_note) : ""}</small></div><div><small>${esc(c.reason || "")}</small><a href="${esc(c.url)}" target="_blank" rel="noopener" class="sm">${esc(c.url)}</a></div></div>`).join("");
+  $("fdBad").innerHTML = bad.map(c => `<div class="crow"><div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}${c.location_note ? " · " + esc(c.location_note) : ""}</small></div><div><small>${esc(c.reason || "")}</small>${safeUrl(c.url) ? `<a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener" class="sm">${esc(c.url)}</a>` : `<span class="sm">${esc(c.url)}</span>`}</div></div>`).join("");
   $("fdKnownWrap").hidden = !known.length; $("fdKnownSum").textContent = `${n(known.length)} already in your catalog`;
   $("fdKnown").innerHTML = known.map(c => `<div class="crow"><div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}</small></div><div><small>${esc(c.reason || "")}</small></div></div>`).join("");
 }

@@ -112,10 +112,13 @@ def _http_json(url, body=None, tries=6):
     hdr = {"User-Agent": UA, "Accept": "application/json"}
     if data:
         hdr["Content-Type"] = "application/json"
+    import netsafe
     for i in range(tries):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=hdr), timeout=30) as r:
+            with netsafe.urlopen(urllib.request.Request(url, data=data, headers=hdr), timeout=30) as r:
                 return json.loads(r.read())
+        except netsafe.UnsafeURL:
+            raise  # (refused: not worth retrying)
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 502, 503) and i < tries - 1:
                 ra = e.headers.get("Retry-After") if e.headers else None
@@ -672,6 +675,8 @@ def process(c):
     out = []
     c.pop("_truncated", None)
     try:
+        import netsafe
+        netsafe.check_config(c)  # (a malformed or unsafe board config is never fetched)
         known = catalog.known(c["name"])
         for j in FETCHERS[c["ats"]](c):
             raw += 1

@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS listings(
   data TEXT NOT NULL, desc TEXT, desc_hash TEXT);
 CREATE INDEX IF NOT EXISTS listings_open ON listings(closed_at);
 CREATE INDEX IF NOT EXISTS listings_company ON listings(company);
+CREATE INDEX IF NOT EXISTS listings_page ON listings(closed_at, partial, last_seen DESC);
 CREATE TABLE IF NOT EXISTS seen(id TEXT PRIMARY KEY, first_seen TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS runs(
   id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, started TEXT NOT NULL, finished TEXT, status TEXT,
@@ -241,6 +242,9 @@ def record_fetch(company, summary, listings, con):
 
 
 def put_listing(con, j, first_seen, last_seen, partial=False, closed_at=None):
+    import netsafe
+    if j.get("url") and not netsafe.clean_link(j["url"]):
+        j = dict(j, url="")  # only http(s) links are kept (no javascript:, data:, file: ...): boards render it as a link
     desc = j.get("desc") or ""
     data = {k: v for k, v in j.items() if k not in PERSON_KEYS and not k.startswith("_")
             and not (k.startswith(("ai_", "pv_")) and k != "ai_track")}

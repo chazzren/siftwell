@@ -243,6 +243,9 @@ def render_html(s):
     lst = lambda items: "".join(f"<li>{e(i)}</li>" for i in items) or "<li>None</li>"
     contact = "".join(f'<div class="{"name" if i == 0 else "ct"}">{e(c)}</div>' for i, c in enumerate(t.get("contact", [])))
     j = t["job"]
+    import netsafe
+    link = netsafe.clean_link(j.get("url"))  # (http/https only)
+    posting = f'<a href="{e(link)}" target="_blank" rel="noopener">Open posting</a>' if link else ""
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tailored: {e(j['title'])}</title>
 <style>
@@ -271,7 +274,7 @@ aside h3{{margin:0 0 6px;font-size:13px}} aside ul{{font-size:13px}} .gaps{{back
    <button id="toggle" type="button">Hide sources</button>
    <a class="primary" href="/tailored/{s}.pdf">Download PDF</a>
    <a href="/tailored/{s}.docx">Download Word</a>
-   <a href="{e(j.get('url') or '#')}" target="_blank" rel="noopener">Open posting</a>
+   {posting}
   </div></div>
  <div class="paper">
   {contact}
