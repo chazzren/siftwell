@@ -55,12 +55,15 @@ echo "ping -> $(cat "$WORK/ping.json")"
 grep -q '"siftwell"' "$WORK/ping.json" || { echo "unexpected ping answer" >&2; exit 1; }
 curl -fsS "http://127.0.0.1:$PORT/" > /dev/null && echo "/ answers"
 
-"$EXE" --stop
+"$EXE" --stop; echo "--stop exit code: $?"
+# a stopped child can linger as a zombie until the shell reaps it, so "gone" = no longer answering and not running
+alive() { local s; s="$(ps -o stat= -p "$1" 2>/dev/null | tr -d " ")"; [ -n "$s" ] && [ "${s#Z}" = "$s" ]; }
 for i in $(seq 1 20); do
-  kill -0 "$SERVER_PID" 2>/dev/null || break
+  if ! curl -fsS "http://127.0.0.1:$PORT/api/ping" > /dev/null 2>&1 && ! alive "$SERVER_PID"; then break; fi
   sleep 1
 done
-if kill -0 "$SERVER_PID" 2>/dev/null; then echo "--stop did not stop the server" >&2; exit 1; fi
+echo "--- window.log"; cat "$JOBBOARD_DATA/window.log" 2>/dev/null || true
 if curl -fsS "http://127.0.0.1:$PORT/api/ping" > /dev/null 2>&1; then echo "the server still answers after --stop" >&2; exit 1; fi
+if alive "$SERVER_PID"; then echo "--stop did not stop the server" >&2; exit 1; fi
 SERVER_PID=""
 echo "smoke test passed"
