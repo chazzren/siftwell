@@ -1,4 +1,4 @@
-"""Small cross-platform helpers so the job board runs the same on macOS and Windows 11.
+"""Small cross-platform helpers so Siftwell runs the same on macOS and Windows 11.
 
 - finding the Claude Code / Codex command-line apps (Windows npm installs are .cmd wrappers that need cmd /c)
 - finding a Chromium browser that can print HTML to PDF (Chrome or, on Windows, the built-in Edge)

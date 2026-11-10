@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Server for the DMV Job Board: serves the report, runs refreshes on demand, stores marks and settings.
+"""Server for Siftwell: serves the report, runs refreshes on demand, stores marks and settings.
 Listens on the home network; every request needs the access key (cookie set by visiting /?k=KEY once),
 except requests from this computer itself.   Usage: python server.py [port] (normally started by "Start Siftwell")"""
 import base64, datetime as dt, hmac, json, os, re, secrets, subprocess, sys, threading
@@ -57,6 +57,11 @@ def empty_board(pid):
                   "person": {"id": pid, "name": people.name(pid)}, "people": people.load_index(),
                   "current": {"base": st.get("current_base"), "label": st.get("current_label") or ""},
                   "profile": None, "companies": [], "jobs": []}, people.pdir("report.html", pid=pid))
+
+def _people_list():
+    """The household for /api/people: id, name, and whether the person has an approved resume profile yet."""
+    return [dict(p, profile=os.path.exists(people.pdir("profile.json", pid=p["id"]))) for p in people.load_index()]
+
 
 def refresh_stale_boards():
     """After an app update, re-render each board from its saved jobs.json when report.html is older than report.py
@@ -713,7 +718,7 @@ class H(BaseHTTPRequestHandler):
         if self._login():
             return
         if not self._host_ok():
-            return self._send(403, "<p style='font:16px system-ui;padding:24px'>Open the job board with your access link (it ends in ?k=…).</p>", "text/html")
+            return self._send(403, "<p style='font:16px system-ui;padding:24px'>Open Siftwell with your access link (it ends in ?k=…).</p>", "text/html")
         path = self.path.split("?")[0]
         pid = self._person()
         import getting_started
@@ -856,7 +861,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/target/suggest":
             return self._send(200, ps().get("suggest") or {"running": False, "missing": True})
         if path == "/api/people":
-            return self._send(200, {"people": people.load_index(), "current": pid, "settings": people.settings(), "prefs": people.prefs(),
+            return self._send(200, {"people": _people_list(), "current": pid, "settings": people.settings(), "prefs": people.prefs(),
                                     "target_job": ps().get("target") or {"running": False}})
         if path == "/api/companies/mine":
             import company_add
@@ -1064,6 +1069,14 @@ class H(BaseHTTPRequestHandler):
                 return self._send(502, {"error": f"Claude couldn't read that search ({str(e)[:120]})."})
             ranked = nlsearch.rank(jobs, catalog.descriptions(j["id"] for j in jobs), crit)
             return self._send(200, {"q": q, "criteria": crit, "ids": [i for i, _ in ranked], "scores": [s for _, s in ranked]})
+        if path == "/api/people/rename":
+            who, nm = str(body.get("id", "")), str(body.get("name", "")).strip()
+            if not people.exists(who):
+                return self._send(404, {"error": "No such profile."})
+            if not nm:
+                return self._send(400, {"error": "Type a name first."})
+            people.rename(who, nm)
+            return self._send(200, {"ok": True, "people": _people_list(), "current": pid})
         if path == "/api/people/remove":
             gone = str(body.get("id", ""))
             if not people.exists(gone):
@@ -1244,7 +1257,7 @@ if __name__ == "__main__":
         print(f"Port {PORT} is already in use by another program. Stop it, or run on another port: "
               f"python server.py <port>", flush=True)
         sys.exit(1)
-    print(f"Job Board on http://127.0.0.1:{PORT}" + (f"  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)" if BIND == "0.0.0.0" else "  (this computer only)"), flush=True)
+    print(f"Siftwell on http://127.0.0.1:{PORT}" + (f"  (other devices: http://<this computer's IP>:{PORT}/?k=<key in {TOKEN_FILE}>)" if BIND == "0.0.0.0" else "  (this computer only)"), flush=True)
     threading.Thread(target=scheduler, daemon=True).start()
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
     # start-at-sign-in entry still pointing at an old app folder or runtime? rewrite it (see getting_started.heal_startup)

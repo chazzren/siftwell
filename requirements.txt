@@ -1,4 +1,4 @@
-# Job Board: Python 3.12+ packages (same on macOS and Windows)
+# Siftwell: Python 3.12+ packages (same on macOS and Windows)
 anthropic==2.6.0
 pillow==13.0.0
 pypdf==7.0.0

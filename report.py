@@ -3,7 +3,8 @@ import json
 
 CURRENT = {}  # current pay comes from each profile's settings (payload["current"])
 
-HEAD = """<title>Job Board</title>
+HEAD = """<title>Siftwell</title>
+<script>try{var t=localStorage.getItem("jb.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -300,6 +301,8 @@ header.top{align-items:center}
 a.iconBtn{text-decoration:none}
 .iconBtn:disabled{opacity:.55;cursor:default}
 .iconBtn svg{width:18px;height:18px}
+#themeBtn .ti{display:none}
+#themeBtn:not([data-mode]) .ti-system,#themeBtn[data-mode="system"] .ti-system,#themeBtn[data-mode="light"] .ti-light,#themeBtn[data-mode="dark"] .ti-dark{display:block}
 .iconBtn.busy svg{animation:nlspin 1.4s linear infinite}
 @media (prefers-reduced-motion:reduce){.iconBtn.busy svg{animation:none}}
 .rrbadge{position:absolute;top:-4px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--surface);font-size:10.5px;font-weight:700;display:grid;place-items:center}
@@ -311,11 +314,7 @@ a.iconBtn{text-decoration:none}
 .amenu button:hover{background:var(--bg)}
 .amenu button[aria-current="true"]{font-weight:700}
 .amenu button[aria-current="true"]::after{content:"✓";color:var(--accent)}
-.amenu .sep{height:1px;background:var(--line);margin:6px 0}
 .amenu small{color:var(--muted);font-weight:400}
-.amenu a{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;color:var(--ink);font-size:14px;font-weight:500;text-decoration:none}
-.amenu a:hover{background:var(--bg)}
-.amenu a small{color:var(--muted);font-weight:400}
 .banner.gsbn{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);color:var(--ink)}
 .banner.gsbn span{flex:1 1 220px}
 nav.tabs a .n{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:4px;font-weight:500}
@@ -415,18 +414,33 @@ details.howto .legend{margin-top:8px}
 </style>
 """
 
-# Header icon row (Home, Update, Re-rate, Settings, profile menu): shared by the board and settings_page.py.
+THEME_JS = r"""// ---- theme button: Auto -> Light -> Dark -> Auto; saves display.theme and applies it at once. Needs $, H, PREFS, applyTheme().
+function themeMode(){ const t = PREFS["display.theme"]; return t === "light" || t === "dark" ? t : "system"; }
+function themeSync(){
+  const b = $("themeBtn"); if (!b) return;
+  const m = themeMode(), name = {system: "Auto (follows your device)", light: "Light", dark: "Dark"}, nxt = {system: "light", light: "dark", dark: "system"}[m];
+  b.dataset.mode = m;
+  b.title = "Theme: " + name[m] + ". Click for " + name[nxt].split(" ")[0]; b.setAttribute("aria-label", b.title);
+}
+$("themeBtn").addEventListener("click", () => {
+  const nxt = {system: "light", light: "dark", dark: "system"}[themeMode()];
+  PREFS["display.theme"] = nxt; applyTheme(); if (typeof fillPrefs === "function") fillPrefs();
+  fetch("/api/prefs", {method: "POST", headers: H, body: JSON.stringify({prefs: {"display.theme": nxt}})}).then(r => r.json())
+    .then(d => { if (d.prefs) { PREFS = d.prefs; applyTheme(); if (typeof fillPrefs === "function") fillPrefs(); } }).catch(() => {});
+});
+"""
+
+# Header icon row (Home, Update, Re-rate, My profile, Theme, Settings, profile menu): shared by the board and settings_page.py.
 TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></a>
     <button class="iconBtn" type="button" id="updateBtn" title="Update job listings now: checks every employer for new jobs (about 40 min)" aria-label="Update job listings now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span class="vh" id="updSmall">every employer, ~40 min</span></button>
     <button class="iconBtn" type="button" id="rerateBtn" title="Re-rate with my latest info: Claude re-scores your best jobs, no new listings" aria-label="Re-rate with my latest info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="rrbadge" id="rrBadge" hidden></span><span class="vh" id="rrSmall">Claude only, no new listings</span></button>
-    <a class="iconBtn" id="prefsBtn" href="/settings" title="Settings: resume PDFs, review, Claude usage, display" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
+    <button class="iconBtn" type="button" id="resumeBtn" aria-expanded="false" title="My profile: resume, search settings, target, companies" aria-label="My profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.5 17c.6-1.9 2-3 3.5-3s2.9 1.1 3.5 3"/><path d="M15 9.5h3.5M15 13h3.5"/></svg></button>
+    <button class="iconBtn" type="button" id="themeBtn" title="Theme: Auto (follows your device). Click for Light" aria-label="Theme: Auto (follows your device). Click for Light"><svg class="ti ti-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg><svg class="ti ti-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="ti ti-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    <a class="iconBtn" id="prefsBtn" href="/settings" title="Settings: setup checklist, resume PDFs, review, Claude usage, display" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="rrbadge" id="gsBadge" hidden></span></a>
     <div class="menuWrap">
       <button class="avatarBtn" id="avatarBtn" aria-haspopup="menu" aria-expanded="false"><span class="av" id="avInit">·</span><span id="avName">Profile</span></button>
       <div class="amenu" id="amenu" role="menu" hidden>
         <div id="amPeople"></div>
-        <div class="sep"></div>
-        <button role="menuitem" id="resumeBtn" aria-expanded="false">My profile<small>resume, pay, target</small></button>
-        <a role="menuitem" id="gsMenu" href="/getting-started">Get started checklist<small>set up this computer</small></a>
       </div>
     </div>
 """
@@ -434,7 +448,7 @@ TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-l
 BODY = """<div class="wrap">
 <header class="top">
   <div class="brandline">
-    <h1>Job Board</h1>
+    <h1>Siftwell</h1>
     <span class="fresh" id="sub"></span><span class="fresh" id="nextRun"></span>
   </div>
   <div class="tools" id="tools" hidden>
@@ -491,7 +505,7 @@ BODY = """<div class="wrap">
     <div class="row"><button class="btn" type="button" id="psSuggest">Not sure? Suggest targets</button></div>
     <div id="psSuggestions" class="factlist"></div>
     <div class="row"><button class="btn primary" type="button" id="psSave">Save settings</button><span class="note" id="psMsg"></span></div>
-    <div class="row rmrow"><button class="btn rmbtn" type="button" id="psRemove">Remove this profile</button><span class="note" id="psRemoveMsg"></span></div>
+    <div class="row rmrow"><span class="note">Add, rename or remove profiles in <a href="/settings#profiles">Settings → Profiles</a>.</span></div>
   </details>
   <div id="coBox" hidden>
     <h2 class="sec">Companies</h2>
@@ -756,6 +770,7 @@ function applyTheme(){
   const t = PREFS["display.theme"];
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
   try { localStorage.setItem("jb.theme", t); } catch(e) {}
+  themeSync();
 }
 try { const t = localStorage.getItem("jb.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch(e) {}
 function applyDisplayDefaults(){
@@ -1147,15 +1162,23 @@ if (SERVED) clPost({action: "status"}).then(({d}) => {
   if (d.installed && !d.logged_in && $("aiBanner").hidden) signInOffer($("aiBanner"), "Claude Code is signed out on the computer running the board, so ratings, tailoring and search are paused.");
   if (d.logged_in && (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out")) $("aiBanner").textContent = "Claude Code is signed in. Ratings pick up again with the next update, or use Update now in the profile menu.";
 }).catch(() => {});
-// ---- "Finish setting up" banner: links to /getting-started while required checklist items are missing; Dismiss is remembered in this browser
+// Settings gear badge: number of missing required Get started items (hidden when none); settings_page.py has the same logic.
+function setGsBadge(s){
+  const n = s && !s.complete && s.missing ? s.missing.length : 0, b = $("gsBadge");
+  if (!b) return;
+  b.hidden = !n; b.textContent = n || "";
+  $("prefsBtn").setAttribute("aria-label", n ? `Settings, ${n} required setup step${n > 1 ? "s" : ""} left` : "Settings");
+}
+// ---- "Finish setting up" banner: links to /settings#get-started while required checklist items are missing; Dismiss is remembered in this browser
 if (SERVED) {
   let gsOff = ""; try { gsOff = localStorage.getItem("jb.gsOff") || ""; } catch(e) {}
   fetch("/api/setup-status").then(r => r.json()).then(s => {
+    setGsBadge(s);
     if (!s || s.complete || !s.total) return;
     const miss = (s.missing || []).slice().sort().join(","), seen = gsOff.split(",");
     if (gsOff && (s.missing || []).every(m => seen.includes(m))) return;  // dismissed; shows again if something new is missing
     const b = $("gsBanner");
-    b.innerHTML = `<span>Finish setting up Siftwell (${s.done} of ${s.total} done)</span><a class="btn sm primary" href="/getting-started">Open the checklist</a><button class="btn sm ghost" type="button" id="gsOff">Dismiss</button>`;
+    b.innerHTML = `<span>Finish setting up Siftwell (${s.done} of ${s.total} done)</span><a class="btn sm primary" href="/settings#get-started">Open the checklist</a><button class="btn sm ghost" type="button" id="gsOff">Dismiss</button>`;
     b.hidden = false;
     $("gsOff").addEventListener("click", () => { b.hidden = true; try { localStorage.setItem("jb.gsOff", miss); } catch(e) {} });
   }).catch(() => {});
@@ -1308,6 +1331,7 @@ function saveFilters(){
 }
 setLabelOptions();
 window.addEventListener("hashchange", route); route();
+""" + THEME_JS + r"""
 // Home: back to the Jobs tab with the detail sheet and side panels closed, keeping search and filters.
 $("homeBtn").addEventListener("click", e => {
   e.preventDefault();
@@ -1428,9 +1452,8 @@ if (SERVED) {
     PREFS = d.prefs || PREFS; applyDisplayDefaults();
     const s = d.settings, me = d.people.find(p => p.id === d.current) || {};
     $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
-    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button>`;
+    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
     document.querySelector(".ptitle").textContent = "Profile · " + (me.name || "");
-    $("psRemove").parentElement.hidden = d.people.length < 2;  // the last profile can't be removed
     $("psName").value = me.name || ""; $("psFloor").value = s.salary_floor || ""; $("psBase").value = s.current_base || "";
     $("psZip").value = s.home_zip || ""; $("psRadius").value = String([10,25,35,50,75].includes(+s.radius_miles) ? s.radius_miles : 35); $("psRemote").checked = s.remote_us !== false;
     $("psLabel").value = s.current_label || ""; $("psLevel").value = String(s.seniority_mine || 4); $("psGoals").value = s.goals || "";
@@ -1443,31 +1466,12 @@ if (SERVED) {
     const b = e.target.closest("button"); if (!b) return;
     $("amenu").hidden = true;
     const v = b.dataset.person; if (!v) return;
+    if (v === "__manage") { location.href = "/settings#profiles"; return; }
     if (v === "__add") { $("addPersonPanel").hidden = false; $("newPersonName").focus(); scrollTo(0, 0); return; }
     if (v === curPerson) return;
     fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => { location.hash = ""; location.reload(); });
   });
   $("addPersonCancel").addEventListener("click", () => { $("addPersonPanel").hidden = true; });
-  // ---- remove a profile: first click arms, second click (within 6 s) removes. The folder is kept in data\people_removed.
-  let rmTimer = null;
-  $("psRemove").addEventListener("click", () => {
-    const b = $("psRemove"), who = $("psName").value || "this profile";
-    if (b.dataset.armed !== "1") {
-      b.dataset.armed = "1"; b.textContent = `Click again to remove ${who}`;
-      $("psRemoveMsg").textContent = "Their resume, saved jobs, tailored resumes and settings leave the board.";
-      clearTimeout(rmTimer);
-      rmTimer = setTimeout(() => { b.dataset.armed = ""; b.textContent = "Remove this profile"; $("psRemoveMsg").textContent = ""; }, 6000);
-      return;
-    }
-    clearTimeout(rmTimer); b.disabled = true; b.textContent = "Removing…";
-    fetch("/api/people/remove", {method: "POST", headers: H, body: JSON.stringify({id: curPerson})})
-      .then(r => r.json().then(d => ({ok: r.ok, d})))
-      .then(({ok, d}) => {
-        if (!ok) throw new Error(d.error || "Couldn't remove it.");
-        location.hash = ""; location.reload();
-      })
-      .catch(e => { b.disabled = false; b.dataset.armed = ""; b.textContent = "Remove this profile"; $("psRemoveMsg").textContent = e.message; });
-  });
   $("addPersonForm").addEventListener("submit", e => {
     e.preventDefault();
     fetch("/api/people/add", {method: "POST", headers: H, body: JSON.stringify({name: $("newPersonName").value})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
@@ -1677,7 +1681,7 @@ if (SERVED) {
         $("qSheet").close(); startTailor(id, btn, false); return;
       }
       drawQuestions(qCtx.questions);
-    }).catch(() => qWait("Lost contact with the job board. Check the connection and try again."));
+    }).catch(() => qWait("Lost contact with Siftwell. Check the connection and try again."));
   }
   $("qGo").addEventListener("click", () => {
     if (qCtx.astra) { continueTailor(collectAnswers()); return; }

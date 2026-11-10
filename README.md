@@ -4,7 +4,7 @@
 
 Siftwell checks the career pages of the companies you care about every night, filters the openings down to your location, pay and level, has Claude rate how well each one fits your resume, and tailors your resume for the jobs worth applying to. Several people in one household can each have their own profile.
 
-> **Status: early preview.** Siftwell works day to day: it starts with a double-click, and a **Get started** page inside the app installs Claude Code and signs you in. Coming next: a Catalog page for managing companies, with **Find employers near me** (Claude researches employers in your area for you), a Re-rate panel, and a proper desktop app window.
+> **Status: early preview.** Siftwell works day to day: it starts with a double-click, and a **Get started** checklist inside the app installs Claude Code and signs you in. Coming next: a Catalog page for managing companies, with **Find employers near me** (Claude researches employers in your area for you), a Re-rate panel, and a proper desktop app window.
 
 ---
 
@@ -55,10 +55,10 @@ The first time, a window says *"Setting up Siftwell. This happens once and takes
 - **Mac** "cannot be opened because it is from an unidentified developer" (or "Apple could not verify..."): click **Done** or **Cancel**, then right-click **Start Siftwell** → **Open** → **Open**. On macOS 15 (Sequoia) or newer, if there's no Open button: open **System Settings → Privacy & Security**, scroll down to the message about "Start Siftwell", click **Open Anyway**, and confirm.
 
 ### 3. Follow the page in your browser
-Siftwell opens at **http://127.0.0.1:8766** (if another program already uses that port, it picks the next free one, 8767 to 8775, and keeps using it). You'll be asked to add the first person, then a short setup walks you through your resume, location, pay and goals. The pages may still say "Job Board": that's Siftwell's old name.
+Siftwell opens at **http://127.0.0.1:8766** (if another program already uses that port, it picks the next free one, 8767 to 8775, and keeps using it). You'll be asked to add the first person, then a short setup walks you through your resume, location, pay and goals.
 
-### 4. Finish setup on the "Get started" page
-Open **Get started** (linked from the welcome page, and from your profile menu at the top right). It checks your computer and fixes things with buttons:
+### 4. Finish setup with the "Get started" checklist
+Open **Get started** (linked from the welcome page; once you have a profile it is the first item in **Settings**, the gear icon at the top, and the gear shows a small number while required steps are missing). It checks your computer and fixes things with buttons:
 - **Claude Code installed:** click **Install Claude Code** and Siftwell runs the official installer for you.
 - **Signed in to Claude:** click **Sign in to Claude**, open the link, sign in with your Claude account, and paste the code it shows back into Siftwell.
 - **Browser for resume PDFs:** found automatically (Edge is already on Windows).
@@ -87,7 +87,7 @@ irm https://astral.sh/uv/install.ps1 | iex          # installs uv (sets up Pytho
 & "$HOME\.local\bin\uv.exe" pip install --python .venv\Scripts\python.exe -r requirements.txt
 .venv\Scripts\python.exe -X utf8 server.py
 ```
-Leave that PowerShell window open while you use Siftwell. Run `server.py <port>` to use a port other than 8766. To start Siftwell when you sign in, use the switch on the Get started page.
+Leave that PowerShell window open while you use Siftwell. Run `server.py <port>` to use a port other than 8766. To start Siftwell when you sign in, use the switch in **Settings → Get started**.
 
 **Mac** (Terminal, in the Siftwell folder):
 ```bash
@@ -110,13 +110,14 @@ Coming soon: **Find employers near me**, where Claude researches employers in yo
 
 ## Using it day to day
 
-- **Starting and stopping:** double-click **Start Siftwell** any time to open it (if it's already running, it just opens your browser). Siftwell keeps running in the background after the window closes, so the board and the nightly update keep working. To stop it, double-click **Stop Siftwell**. After restarting your computer, double-click **Start Siftwell** again, or turn on **Start Siftwell when I sign in** on the Get started page.
+- **Starting and stopping:** double-click **Start Siftwell** any time to open it (if it's already running, it just opens your browser). Siftwell keeps running in the background after the window closes, so the board and the nightly update keep working. To stop it, double-click **Stop Siftwell**. After restarting your computer, double-click **Start Siftwell** again, or turn on **Start Siftwell when I sign in** in **Settings → Get started**.
 - **The board** shows your matching jobs with **Appeal** and **Match** scores. Click a job for Claude's read on it, then **Save**, **Mark applied**, **Not for me**, or **Tailor my resume**.
-- **Header icons:** Home · Update job listings (checks every company, ~40 min) · Re-rate (Claude re-scores your best jobs after you change your resume or settings) · Settings · your profile menu.
+- **Header icons:** Home · Update job listings (checks every company, ~40 min) · Re-rate (Claude re-scores your best jobs after you change your resume or settings) · **My profile** (your resume, search settings, target and companies) · **Theme** (click to cycle Auto, Light and Dark; Auto follows your device, and it is the same choice as Settings → Display → Theme) · Settings (display, resume PDF, Claude usage, and the **Get started** setup checklist as its first item; a small number on the gear shows how many required setup steps are still missing, and it disappears once you're set up) · your profile menu at the top right (switch person, add a person, manage profiles).
+- **Adding, renaming and removing people:** open **Settings → Profiles**. It lists everyone in your household with **Rename** and **Remove** buttons (Remove asks you to tap twice) and an **Add a person** button. Siftwell won't remove the last profile, or anyone while an update is running. A removed person isn't deleted: their folder is moved to `people_removed` inside your data folder, so it can be recovered by hand.
 - **Getting a newer version:** download it the same way (step 1), unzip it, and double-click **Start Siftwell** in the new folder (stop the old one first with **Stop Siftwell**). You can delete the old Siftwell folder whenever you like. Everything carries over: profiles, ratings, your port and your phone link, with nothing re-rated and no new setup download unless the new version needs different packages. If you turned on **Start Siftwell when I sign in** on the Get started page, it switches to the new folder by itself the first time the new version starts. If you came from an older Siftwell or Job Board, see **Upgrading from an older Siftwell / Job Board** below.
-- **Upgrading from an older Siftwell / Job Board (Windows):** older versions started Siftwell at sign-in with a Windows scheduled task called **Job Board server**, which points at the old folder and stops working once you delete it. After you start the new version, open **Get started** and click **Switch to the new startup**. That turns on the new sign-in startup and turns off the old task (it isn't deleted, and **Undo** turns it back on). Siftwell keeps running meanwhile; the new startup takes over the next time you sign in. If Windows says it needs administrator permission, click **Allow (asks for administrator permission)** and approve the Windows prompt, or follow the steps shown (Task Scheduler, **Job Board server**, **Disable**). Your PC's early-morning wake-up for the nightly update (the task **Job Board wake for nightly update**) keeps working as it is. Once the switch is done you can delete the old folder.
+- **Upgrading from an older Siftwell / Job Board (Windows):** older versions started Siftwell at sign-in with a Windows scheduled task called **Job Board server**, which points at the old folder and stops working once you delete it. After you start the new version, open **Settings → Get started** and click **Switch to the new startup**. That turns on the new sign-in startup and turns off the old task (it isn't deleted, and **Undo** turns it back on). Siftwell keeps running meanwhile; the new startup takes over the next time you sign in. If Windows says it needs administrator permission, click **Allow (asks for administrator permission)** and approve the Windows prompt, or follow the steps shown (Task Scheduler, **Job Board server**, **Disable**). Your PC's early-morning wake-up for the nightly update (the task **Job Board wake for nightly update**) keeps working as it is. Once the switch is done you can delete the old folder.
 - **Nightly update:** every morning at 5:30 Siftwell checks for new and removed jobs and rates the new ones. You can change or turn this off.
-- **On your phone:** new installs only answer on this computer. To use your phone, turn on **Use Siftwell on my phone** on the Get started page (Siftwell restarts once), then scan the QR code or open the link it shows (it ends in `?k=…`). Keep that link private: anyone on your home network with it can open your board. On Windows, click **Allow access** on the firewall prompt the first time.
+- **On your phone:** new installs only answer on this computer. To use your phone, turn on **Use Siftwell on my phone** in **Settings → Get started** (Siftwell restarts once), then scan the QR code or open the link it shows (it ends in `?k=…`). Keep that link private: anyone on your home network with it can open your board. On Windows, click **Allow access** on the firewall prompt the first time.
 
 ## Your data stays on your computer
 
@@ -143,8 +144,8 @@ So you can delete the Siftwell folder and download the latest version (or move i
 - **Hidden `.siftwell` or `.venv` folder inside the Siftwell folder:** older versions put the setup there. This version doesn't use them (an old `.venv` is only a fallback if the new setup can't finish) and remembers your port from `.siftwell` automatically. After Siftwell has started once with this version you can delete `.siftwell`, and `.venv` too unless you started Siftwell by hand from it (**Advanced / manual install**).
 - **I moved the Siftwell folder:** that's fine; stop Siftwell first, then double-click **Start Siftwell** in the new place. If **Start Siftwell when I sign in** is on, Siftwell points it at the new place the next time it starts.
 - **"Claude Code is signed out":** click **Sign in to Claude** on the board, open the link, sign in, and paste the code back.
-- **Another program is using port 8766:** Start Siftwell picks the next free port (8767 to 8775) by itself and remembers it; the Get started page shows which port Siftwell is using. Phone links need that port too.
-- **My phone can't connect:** check **Use Siftwell on my phone** is on (Get started page), the phone is on the same Wi-Fi, and Windows Firewall allowed Siftwell (Start menu → "Allow an app through Windows Firewall").
+- **Another program is using port 8766:** Start Siftwell picks the next free port (8767 to 8775) by itself and remembers it; **Settings → Get started** shows which port Siftwell is using. Phone links need that port too.
+- **My phone can't connect:** check **Use Siftwell on my phone** is on (**Settings → Get started**), the phone is on the same Wi-Fi, and Windows Firewall allowed Siftwell (Start menu → "Allow an app through Windows Firewall").
 - **Resume PDFs don't build:** install Google Chrome or Microsoft Edge.
 
 ## License

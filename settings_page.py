@@ -11,6 +11,7 @@ report.py's script picks the request up and runs it with its usual confirm and p
 import html
 import json
 
+import getting_started
 import people
 import report
 
@@ -83,6 +84,8 @@ CATEGORIES = [
         ]),
     ]),
 ]
+GS_CAT = ("get-started", "Get started", '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>')
+PROF_CAT = ("profiles", "Profiles", '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')
 KEY_CAT = ("apikey", "API key", '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>')
 
 e = html.escape
@@ -118,14 +121,22 @@ def _pane_head(cid, name):
 
 def _render_parts():
     nav, panes = [], []
-    for cid, name, icon, groups in CATEGORIES + [KEY_CAT + (None,)]:
+    for cid, name, icon, groups in [GS_CAT + ("checklist",), PROF_CAT + ("profiles",)] + CATEGORIES + [KEY_CAT + (None,)]:
+        count = '<span class="scount" id="gsCount" hidden></span>' if cid == "get-started" else ""
         nav.append(f'<a class="scat" href="#{cid}" data-cat="{cid}"><span class="sico">{_SVG.format(icon)}</span>'
-                   f'<span class="sname">{e(name)}</span><span class="schev" aria-hidden="true">›</span></a>')
-        if groups is None:
+                   f'<span class="sname">{e(name)}</span>{count}<span class="schev" aria-hidden="true">›</span></a>')
+        if groups == "checklist":
+            body = getting_started.PANE_HTML
+        elif groups == "profiles":
+            body = (_group("Everyone in this household", "Removing a profile takes it off the board. Its folder is kept in the people_removed "
+                           "folder inside your Siftwell data folder, not deleted.", ['<div id="profList"></div>']) +
+                    '<div class="sbtns" style="margin-top:14px"><button class="btn primary" type="button" id="profAdd">Add a person</button></div>'
+                    '<p class="note" id="profMsg" role="status" aria-live="polite" style="margin:8px 14px 0"></p>')
+        elif groups is None:
             body = (_group("Status", "", [_row("<span>Anthropic API key</span>", "", '<span class="note" id="keyState">Checking…</span>')]) +
                     _group("Change key", "Scoring runs through your Claude subscription using the Claude Code app on this computer, so a key is "
                            "optional: only if you would rather bill scoring separately. A saved key stays on this computer "
-                           "(secrets.json in your Job Board data folder) and is sent only to Anthropic. Ratings are cached, so later updates only rate what's new.",
+                           "(secrets.json in your Siftwell data folder) and is sent only to Anthropic. Ratings are cached, so later updates only rate what's new.",
                            ['<form class="srow stack" id="keyForm"><input type="password" id="keyInput" placeholder="Paste an Anthropic API key (sk-ant-…)" '
                             'autocomplete="off" aria-label="Anthropic API key"><div class="sbtns"><button class="btn primary" type="submit">Save key</button>'
                             '<button class="btn" type="button" id="keyClear">Remove key</button></div></form>']))
@@ -150,15 +161,16 @@ def render_settings_html(pid=None) -> str:
     p = people.prefs(pid)
     nav, panes = _render_parts()
     tools = report.TOOLS.replace('id="prefsBtn" href="/settings"', 'id="prefsBtn" href="/settings" aria-current="page"')
-    head = report.HEAD.replace("<title>Job Board</title>", "<title>Settings · " + name + "</title>")
+    head = report.HEAD.replace("<title>Siftwell</title>", "<title>Settings · " + name + "</title>")
     body = BODY.replace("__TOOLS__", tools).replace("__NAV__", nav).replace("__PANES__", panes).replace("__NAME__", name)
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             # Apply the saved theme before first paint so the page doesn't flash the wrong colours.
             "<script>(function(){var t=" + json.dumps(p.get("display.theme")) +
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
-            head + CSS + "</head><body>" + body + "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") +
-            ";</script>\n" + SCRIPT + "</body></html>")
+            head + CSS + getting_started.CSS + "</head><body>" + body + '<script src="/assets/vendor/qrcode.js"></script>\n' +
+            "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") +
+            ";</script>\n" + SCRIPT.replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS).replace("/*__THEME__*/", report.THEME_JS) + "</body></html>")
 
 
 CSS = """<style>
@@ -171,6 +183,10 @@ CSS = """<style>
 .scat[aria-current="page"] .sico{background:var(--surface)}
 .sico svg{width:16px;height:16px}
 .sname{flex:1;min-width:0}
+.pbtns{gap:6px}
+.pinput{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;width:100%;min-width:0}
+.scount{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--accent);color:var(--surface);font-size:11.5px;font-weight:700;display:grid;place-items:center}
+.scount[hidden]{display:none}
 .schev,.sback{display:none}
 .spanes{min-width:0;max-width:760px}
 .sphead{margin-bottom:6px}
@@ -242,13 +258,14 @@ function applyTheme(){
   const t = PREFS["display.theme"];
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
   try { localStorage.setItem("jb.theme", t); } catch(e) {}
+  themeSync();
 }
 applyTheme();
 
 // ---- categories: the URL hash picks one (/settings#display); at phone width no hash means "show the list"
 const CATS = [...document.querySelectorAll(".spane")].map(p => p.dataset.cat);
 function route(){
-  const h = location.hash.slice(1), sel = CATS.includes(h) ? h : "", shown = sel || CATS[0];
+  const h = location.hash.slice(1), sel = CATS.includes(h) ? h : "", shown = sel || "resume";  // the desktop default is the first real setting, not Get started
   $("slayout").classList.toggle("atList", !sel);
   document.querySelectorAll(".scat").forEach(a => a.setAttribute("aria-current", a.dataset.cat === shown ? "page" : "false"));
   document.querySelectorAll(".spane").forEach(p => p.hidden = p.dataset.cat !== shown);
@@ -357,6 +374,7 @@ $("keyForm").addEventListener("submit", e => {
 });
 $("keyClear").addEventListener("click", () => fetch("/api/settings", {method: "POST", headers: H, body: JSON.stringify({clear: true})}).then(keyState));
 
+/*__THEME__*/
 // ---- header: Update / Re-rate run on the board, which has the confirm and progress panel
 const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
 $("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
@@ -372,22 +390,79 @@ fetch("/api/rerate").then(r => r.json()).then(s => {
   $("rerateBtn").disabled = true; $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Re-rating your best jobs now…";
 }).catch(() => {});
 
+// ---- My profile (opens the board's panel)
+$("resumeBtn").addEventListener("click", () => toBoard(["jb.openResume", "1"]));
+// ---- Get started (the first category): its missing-required count also shows on the Settings gear; lazy, fails silently
+function setGsBadge(s){
+  const n = s && !s.complete && s.missing ? s.missing.length : 0;
+  [$("gsBadge"), $("gsCount")].forEach(b => { b.hidden = !n; b.textContent = n || ""; });
+  $("prefsBtn").setAttribute("aria-label", n ? `Settings, ${n} required setup step${n > 1 ? "s" : ""} left` : "Settings");
+}
+const onStatus = setGsBadge;
+/*__CHECKLIST__*/
+load(false);
 // ---- profile menu
-let curPerson = "";
-fetch("/api/people").then(r => r.json()).then(d => {
-  curPerson = d.current;
-  const me = d.people.find(p => p.id === d.current) || {};
-  $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
-  $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button>`;
-}).catch(() => {});
+let curPerson = "", PEOPLE = [];
+function loadPeople(){
+  return fetch("/api/people").then(r => r.json()).then(d => {
+    curPerson = d.current; PEOPLE = d.people;
+    const me = d.people.find(p => p.id === d.current) || {};
+    $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
+    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
+    renderProfiles();
+  }).catch(() => {});
+}
+// ---- Profiles pane: rename inline, remove with a two-tap confirm (the server keeps the folder in people_removed)
+const profMsg = (t, bad) => { const m = $("profMsg"); m.textContent = t || ""; m.style.color = bad ? "var(--bad)" : ""; };
+function renderProfiles(){
+  $("profList").innerHTML = PEOPLE.map(p => `<div class="srow" data-id="${esc(p.id)}"><div class="slab"><span>${esc(p.name)}${p.id === curPerson ? " (viewing now)" : ""}</span><small>${p.profile ? "Resume and profile set up" : "No resume yet"}</small></div><div class="sctl pbtns"><button class="btn sm" type="button" data-rn>Rename</button><button class="btn sm rmbtn" type="button" data-rm>Remove</button></div></div>`).join("");
+}
+function profPost(url, body){
+  return fetch(url, {method: "POST", headers: H, body: JSON.stringify(body)}).then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error || "Something went wrong."); return d; }));
+}
+let rmTimer = null;
+$("profList").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const row = b.closest(".srow"), id = row.dataset.id, p = PEOPLE.find(x => x.id === id) || {};
+  if (b.hasAttribute("data-rn")) {
+    profMsg("");
+    row.querySelector(".slab").innerHTML = `<input type="text" class="pinput" maxlength="40" value="${esc(p.name)}" aria-label="Name">`;
+    row.querySelector(".sctl").innerHTML = `<button class="btn sm primary" type="button" data-rnsave>Save</button><button class="btn sm" type="button" data-rncancel>Cancel</button>`;
+    row.querySelector("input").focus(); row.querySelector("input").select();
+  } else if (b.hasAttribute("data-rncancel")) renderProfiles();
+  else if (b.hasAttribute("data-rnsave")) {
+    b.disabled = true;
+    profPost("/api/people/rename", {id, name: row.querySelector("input").value})
+      .then(() => { profMsg("Saved."); return loadPeople(); })
+      .catch(err => { b.disabled = false; profMsg(err instanceof TypeError ? "Couldn't save. Check the connection." : err.message, true); });
+  } else if (b.hasAttribute("data-rm")) {
+    if (b.dataset.armed !== "1") {
+      renderProfiles(); const nb = $("profList").querySelector(`[data-id="${id}"] [data-rm]`);
+      nb.dataset.armed = "1"; nb.textContent = "Tap again to remove";
+      profMsg(`Removing ${p.name} takes their resume, saved jobs, tailored resumes and settings off the board. The folder is kept in people_removed in your data folder.`);
+      clearTimeout(rmTimer); rmTimer = setTimeout(() => { renderProfiles(); profMsg(""); }, 6000); return;
+    }
+    clearTimeout(rmTimer); b.disabled = true; b.textContent = "Removing…";
+    profPost("/api/people/remove", {id})
+      .then(() => { if (id === curPerson) { location.reload(); return; } profMsg(`${p.name} was removed.`); return loadPeople(); })
+      .catch(err => { renderProfiles(); profMsg(err instanceof TypeError ? "Couldn't remove it. Check the connection." : err.message, true); });
+  }
+});
+$("profList").addEventListener("keydown", e => {
+  const inp = e.target.closest("input"); if (!inp) return;
+  if (e.key === "Enter") { e.preventDefault(); inp.closest(".srow").querySelector("[data-rnsave]").click(); }
+  else if (e.key === "Escape") renderProfiles();
+});
+$("profAdd").addEventListener("click", () => toBoard(["jb.run", "addPerson"]));
+loadPeople();
 $("avatarBtn").addEventListener("click", e => { e.stopPropagation(); const h = $("amenu").hidden; $("amenu").hidden = !h; $("avatarBtn").setAttribute("aria-expanded", h); });
 document.addEventListener("click", e => { if (!e.target.closest(".menuWrap")) { $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false"); } });
 $("amenu").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false");
-  if (b.id === "resumeBtn") return toBoard(["jb.openResume", "1"]);
   const v = b.dataset.person; if (!v) return;
   if (v === "__add") return toBoard(["jb.run", "addPerson"]);
+  if (v === "__manage") { location.href = "/settings#profiles"; return; }
   if (v === curPerson) return;
   fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => location.reload());
 });

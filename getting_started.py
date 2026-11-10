@@ -728,7 +728,10 @@ def handle_get(h, path, pid, query=""):
         h._send(200, data, ctype, cache="max-age=86400")
         return True
     if path == "/getting-started":
-        h._send(200, render_html(pid), "text/html")
+        if pid is not None:  # the checklist lives in Settings now; old links and bookmarks land there
+            h.send_response(303); h.send_header("Location", "/settings#get-started"); h.end_headers()
+        else:  # no profile yet (fresh install): Settings isn't available, so show the checklist on its own
+            h._send(200, render_html(), "text/html")
         return True
     if path == "/api/setup-status":
         h._send(200, status(fresh="fresh=1" in query))
@@ -799,24 +802,13 @@ def handle_post(h, path, body):
 
 
 # ---------------------------------------------------------------- page
-def render_html(pid=None) -> str:
-    named = pid is not None
-    name = html.escape(people.name(pid)) if named else ""
-    theme = None
-    if named:
-        try:
-            theme = people.prefs(pid).get("display.theme")
-        except Exception:
-            theme = None
-    tools = report.TOOLS if named else ""
-    head = report.HEAD.replace("<title>Job Board</title>", "<title>Get started</title>")
-    body = BODY.replace("__TOOLS__", f'<div class="tools" id="tools">\n{tools}  </div>' if named else "")
+# The checklist lives in Settings (settings_page.py reuses PANE_HTML, CSS and CHECKLIST_JS). Only a fresh install with
+# no profile yet gets it as a standalone page, because Settings needs a profile.
+def render_html() -> str:
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
-            "<script>(function(){var t=" + json.dumps(theme) +
-            ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
-            head + CSS + "</head><body>" + body + '<script src="/assets/vendor/qrcode.js"></script>\n' +
-            "<script>window.__NAMED__=" + json.dumps(named) + ";</script>\n" + SCRIPT + "</body></html>")
+            '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
+            report.HEAD.replace("<title>Siftwell</title>", "<title>Get started · Siftwell</title>") + CSS + "</head><body>" + BODY +
+            '<script src="/assets/vendor/qrcode.js"></script>\n' + SCRIPT + "</body></html>")
 
 
 CSS = """<style>
@@ -862,30 +854,30 @@ CSS = """<style>
 </style>
 """
 
+PANE_HTML = """<div class="gs">
+  <div class="gsum"><b id="sumText">Checking this computer…</b><div class="gsbar" aria-hidden="true"><i id="sumBar"></i></div>
+    <p class="gsrun" id="runLine"></p></div>
+  <ul class="gsl" id="list"></ul>
+  <h3 class="gsopt">Optional</h3>
+  <p class="gsoptp">Nice to have. These never count toward setup.</p>
+  <ul class="gsl" id="listOpt"></ul>
+</div>"""
+
 BODY = """<div class="wrap">
 <header class="top">
   <div class="brandline">
     <h1>Get started</h1>
   </div>
-__TOOLS__
 </header>
-<main class="gs">
-  <div class="gsum"><b id="sumText">Checking this computer…</b><div class="gsbar" aria-hidden="true"><i id="sumBar"></i></div>
-    <p class="gsrun" id="runLine"></p></div>
-  <ul class="gsl" id="list"></ul>
-  <h2 class="gsopt">Optional</h2>
-  <p class="gsoptp">Nice to have. These never count toward setup.</p>
-  <ul class="gsl" id="listOpt"></ul>
+<main>
+""" + PANE_HTML + """
 </main>
 </div>
 """
 
-SCRIPT = r"""<script>
-(function(){
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
-const api = (m, u, b) => fetch(u, {method: m, headers: m === "POST" ? H : undefined, body: b ? JSON.stringify(b) : undefined})
+# The checklist's JS, shared by the standalone page and Settings. The host script must define $, esc, H and onStatus(status)
+# (called each time /api/setup-status arrives) before this code, and call load(false) after it.
+CHECKLIST_JS = r"""const api = (m, u, b) => fetch(u, {method: m, headers: m === "POST" ? H : undefined, body: b ? JSON.stringify(b) : undefined})
   .then(r => r.json().then(d => { if (!r.ok) throw Object.assign(new Error(d.error || "Something went wrong."), {data: d}); return d; }));
 let S = null;
 const ui = {msg: {}, login: null, loginMsg: "", restarting: false, busy: {}};
@@ -1009,7 +1001,7 @@ function render(only){
   drawQR();
 }
 function load(fresh){
-  return api("GET", "/api/setup-status" + (fresh ? "?fresh=1" : "")).then(d => { S = d; render(); if (d.install.running) pollInstall(); })
+  return api("GET", "/api/setup-status" + (fresh ? "?fresh=1" : "")).then(d => { S = d; onStatus(d); render(); if (d.install.running) pollInstall(); })
     .catch(e => { $("sumText").textContent = "Couldn't check this computer."; $("runLine").textContent = e instanceof TypeError ? "Is Siftwell still running?" : e.message; });
 }
 let polling = false;
@@ -1076,31 +1068,15 @@ function restart(){
     setTimeout(wait, 1500);
   }).catch(err => { ui.restarting = false; say("phone", err.message, "err"); render("phone"); });
 }
+"""
 
-// ---- header (only when there is a profile): Update / Re-rate hand off to the board; profile menu
-if (window.__NAMED__ && $("tools")) {
-  const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
-  $("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
-  $("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
-  let curPerson = "";
-  fetch("/api/people").then(r => r.json()).then(d => {
-    curPerson = d.current;
-    const me = d.people.find(p => p.id === d.current) || {};
-    $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
-    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button>`;
-  }).catch(() => {});
-  $("avatarBtn").addEventListener("click", e => { e.stopPropagation(); const h = $("amenu").hidden; $("amenu").hidden = !h; $("avatarBtn").setAttribute("aria-expanded", h); });
-  document.addEventListener("click", e => { if (!e.target.closest(".menuWrap")) { $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false"); } });
-  $("amenu").addEventListener("click", e => {
-    const b = e.target.closest("button"); if (!b) return;
-    $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false");
-    if (b.id === "resumeBtn") return toBoard(["jb.openResume", "1"]);
-    const v = b.dataset.person; if (!v) return;
-    if (v === "__add") return toBoard(["jb.run", "addPerson"]);
-    if (v === curPerson) return;
-    fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => location.reload());
-  });
-}
+SCRIPT = r"""<script>
+(function(){
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
+const onStatus = () => {};
+""" + CHECKLIST_JS + """
 load(false);
 })();
 </script>

@@ -287,7 +287,7 @@ h1.q.qtext{font-size:clamp(20px,4.6vw,24px);font-weight:600;line-height:1.3;lett
 <div class="shell">
   <div>
     <div class="top">
-      <div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)"/><path d="M7 9h10M7 12.5h6M7 16h8" stroke="var(--surface)" stroke-width="2" stroke-linecap="round"/></svg><span>Job Board setup</span></div>
+      <div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)"/><path d="M7 9h10M7 12.5h6M7 16h8" stroke="var(--surface)" stroke-width="2" stroke-linecap="round"/></svg><span>Siftwell setup</span></div>
       <a class="later" id="later" href="/">Finish later</a>
     </div>
     <ol class="dots" id="dots" aria-label="Setup progress"></ol>
@@ -408,7 +408,7 @@ function render(){
   const f = st.querySelector("[data-autofocus]") || st.querySelector("h1.q");
   if (f) f.focus({preventScroll: true});
   window.scrollTo({top: 0});
-  document.title = (scr.title || "Set up your board") + " · Job Board";
+  document.title = (scr.title || "Set up your board") + " · Siftwell";
 }
 
 function footer(o){
@@ -960,7 +960,7 @@ SCREENS.board = {
     <p class="lede" id="bLede">This takes about 15 minutes the first time. You can close this page; we’ll keep working and your board will be ready when you come back.</p>
     <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bBar"><i></i></div>
     <ol class="checklist" id="bList" aria-live="polite"></ol>${errBox("_")}
-    <p class="lede" style="margin-top:20px">While you wait: the <a href="/getting-started" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Get started checklist</a> checks Claude, PDFs, starting at login and phone access.</p>`,
+    <p class="lede" style="margin-top:20px">While you wait: the <a href="/settings#get-started" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Get started checklist</a> checks Claude, PDFs, starting at login and phone access.</p>`,
   foot: () => ({back: false, skip: false, nextLabel: "Go to my board"}),
   next(){ location.href = "/"; },
   async mount(){
