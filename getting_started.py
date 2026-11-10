@@ -576,12 +576,13 @@ def heal_startup(log=print):
 
 
 def heal_overnight_job(log=print):
-    """Hook for an OS-level overnight job (Windows scheduled task / launchd / cron) created by this app. None exists
-    yet: the nightly update runs inside the server (server.scheduler). If one is added, check here on every start
-    that it points at APP and the current runtime, the same way heal_startup() does. Never touch the older
-    "Job Board wake for nightly update" scheduled task (it doesn't reference the app folder); the older "Job Board
-    server" task is only ever turned off or on from the Get started page (switch_startup / unswitch_startup)."""
-    return "none"
+    """The OS-level automatic-update job ("Even when Siftwell is closed": Windows task / LaunchAgent / crontab line, see
+    autoupdate.py): on every start make sure it points at APP and the current runtime, the same way heal_startup() does,
+    or remove a leftover one when the setting is something else. Never touch the older "Job Board wake for nightly
+    update" scheduled task (it doesn't reference the app folder); the older "Job Board server" task is only ever
+    turned off or on from the Get started page (switch_startup / unswitch_startup)."""
+    import autoupdate
+    return autoupdate.heal(log)
 
 
 def heal_entries(log=print):
