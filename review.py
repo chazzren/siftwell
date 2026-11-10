@@ -14,19 +14,22 @@ MODEL = "gpt-6-astra"
 WEIGHTS = {"appearance": 20, "grammar": 20, "density": 15, "ats": 30, "claims": 15}
 
 def codex_path():
-    return osdeps.find_exe("codex")
+    # The Codex desktop app on Windows keeps its CLI here, and it isn't always on the PATH Siftwell starts with.
+    local = os.environ.get("LOCALAPPDATA", "")
+    extra = [os.path.join(local, "Programs", "OpenAI", "Codex", "bin", "codex.exe")] if osdeps.WINDOWS and local else []
+    return osdeps.find_exe("codex", extra)
 
 def codex_ready():
     p = codex_path()
     if not p:
-        return False, "The Codex app isn't installed on this Mac."
+        return False, "Couldn't find the Codex app on this computer, so Astra couldn't review it. Install Codex and sign in with ChatGPT, or turn Astra off in Settings."
     try:
         r = osdeps.run_hidden([*osdeps.cmd(p), "login", "status"], capture_output=True, text=True, timeout=30)
         if "Logged in" in (r.stdout + r.stderr):
             return True, ""
     except Exception:
         pass
-    return False, "Codex isn't signed in. Run `codex login` in Terminal once and choose Sign in with ChatGPT."
+    return False, "Codex isn't signed in. Open the Codex app (or run `codex login` in a terminal) and sign in with ChatGPT."
 
 # ------------------------------------------------------------------ mechanical checks
 STOP = set("""a an and are as at be by for from has have in into is it of on or our that the their this to was we with will you your
