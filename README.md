@@ -9,9 +9,9 @@
 
 **Your own job search assistant that runs on your computer.**
 
-Siftwell checks the career pages of the companies you care about every night, filters the openings down to your location, pay and level, can have Claude rate how well each one fits your resume, and tailors your resume for the jobs worth applying to. Claude is optional: Siftwell works without it (see **Using Siftwell without Claude**). Several people in one household can each have their own profile.
+Siftwell checks the career pages of the companies you care about (whenever you click Update, or automatically on a schedule you choose), filters the openings down to your location, pay and level, can have Claude rate how well each one fits your resume, and tailors your resume for the jobs worth applying to. Claude is optional: Siftwell works without it (see **Using Siftwell without Claude**). Several people in one household can each have their own profile.
 
-> **Status: early preview.** Siftwell works day to day: install it with **Siftwell-Setup.exe** on Windows (or the ZIP on a Mac), and the **Get started** checklist inside the app helps you connect Claude if you want its ratings and tailoring. Coming next: updating Siftwell from inside the app, and a signed installer without the Windows security warning.
+> **Status: early preview.** Siftwell works day to day: install it with **Siftwell-Setup.exe** on Windows (or the ZIP on a Mac), and the **Get started** checklist inside the app helps you connect Claude if you want its ratings and tailoring. Coming next: reading more job systems (SAP SuccessFactors, Oracle Taleo, Avature, Eightfold, Radancy), an **Exhaustive** mode for Find employers near me, a built-in list of large US employers for every new install, and a signed installer without the Windows security warning.
 
 ---
 
@@ -86,10 +86,12 @@ The first time, a window says *"Setting up Siftwell. This happens once and takes
 - **Windows** "Windows protected your PC": click **More info**, then **Run anyway**. If you see "Open File – Security Warning" instead, click **Run**. A "Windows Security" firewall window may also ask about Python: click **Allow** if you want to open Siftwell from your phone, otherwise **Cancel** (Siftwell still works on this computer either way).
 - **Mac** "cannot be opened because it is from an unidentified developer" (or "Apple could not verify..."): click **Done** or **Cancel**, then right-click **Start Siftwell** → **Open** → **Open**. On macOS 15 (Sequoia) or newer, if there's no Open button: open **System Settings → Privacy & Security**, scroll down to the message about "Start Siftwell", click **Open Anyway**, and confirm.
 
-### 3. Follow the page in the Siftwell window
+## First run (all versions)
+
+### 1. Follow the page in the Siftwell window
 The Siftwell window shows Siftwell, which runs on your computer at **http://127.0.0.1:8766** (if another program already uses that port, it picks the next free one, 8767 to 8775, and keeps using it). Links to other websites, such as job postings and the Claude sign-in page, open in your normal web browser, and resume downloads show a normal Save dialog. If your computer can't show the Siftwell window (it needs the free Microsoft Edge WebView2 component that Windows 11 includes), Siftwell says so and opens in your web browser instead. You'll be asked to add the first person, then a short setup walks you through your resume, location, pay and goals.
 
-### 4. Finish setup with the "Get started" checklist
+### 2. Finish setup with the "Get started" checklist
 Open **Get started** (linked from the welcome page; once you have a profile it is the first item in **Settings**, the gear icon at the top, and the gear shows a small number while required steps are missing). It checks your computer and fixes things with buttons:
 - **Browser for resume PDFs:** found automatically (Edge is already on Windows).
 
@@ -135,7 +137,7 @@ Leave that Terminal window open while you use Siftwell. Run `server.py <port>` t
 
 </details>
 
-### 5. Add companies to watch
+### 3. Add companies to watch
 A new install starts with no companies. Open the **Catalog** page (the database icon at the top, next to Re-rate), go to **Companies**, and paste the link to a company's careers page (for example `https://boards.greenhouse.io/examplecompany`) under **Add a company**. Siftwell figures out which job system it uses, checks that it can read the listings, adds it, and fetches its jobs right away. Besides the common job systems (Greenhouse, Lever, Workday and others), Siftwell can also read many custom careers sites that publish standard job data (the markup Google Jobs uses); if a site still can't be read, Siftwell tells you so when you paste the link. (You can still add a company from **My profile → Companies** too.) For safety Siftwell only opens ordinary public web links (`https://` or `http://`): it refuses links to this computer or to devices on your home network, and links on unusual ports.
 
 Don't know where to start? Use **Catalog → Find employers near me** (see **The Catalog page** below): Claude looks up employers in your area and Siftwell checks which ones it can read, so you can add them with a tick. (The repository also includes `packs/dc-area.json`, a list of ~800 Washington, DC area employers it was first built with.)
