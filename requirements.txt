@@ -5,3 +5,5 @@ pypdf==7.0.0
 pypdfium2==5.15.2
 python-docx==1.2.0
 pillow-heif; sys_platform == "win32"
+# Siftwell's own window (Windows: Edge WebView2 through pythonnet, which installs as ready-made wheels; Mac: WKWebView). Not used on Linux.
+pywebview==6.2.1; sys_platform != "linux"

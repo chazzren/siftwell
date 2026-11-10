@@ -4,7 +4,9 @@ Required checks (counted, drive the banner): Claude Code installed, signed in, a
 Optional (listed apart, never counted): start at sign-in, phone access, Codex for Astra.
 server.py only routes here (handle_get / handle_post / ping) and asks bind_host() which address to listen on.
 
-Phone access is a saved setting, DATA/network.json {"lan": bool}. New installs listen on this computer only (127.0.0.1);
+Phone access is a saved setting, DATA/network.json {"lan": bool, "keep": bool}; "keep" (default off) means the server keeps
+running headless after the Siftwell window (app_window.py) is closed, so phones can still reach it.
+Phone access (lan) New installs listen on this computer only (127.0.0.1);
 an install that already had profiles when this setting first appeared keeps LAN access on (bind_host() records that choice
 on the first start). Changing it needs a restart: restart_now() starts a replacement that waits for the port to free.
 """
@@ -134,12 +136,38 @@ def bind_host():
     return "0.0.0.0" if on else "127.0.0.1"
 
 
-def save_network(on):
+def _read_network():
+    try:
+        d = json.load(open(NETWORK, encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_network(d):
     os.makedirs(paths.DATA, exist_ok=True)
     tmp = NETWORK + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"lan": bool(on)}, f)
+        json.dump(d, f)
     os.replace(tmp, NETWORK)
+
+
+def save_network(on):
+    d = _read_network()
+    d["lan"] = bool(on)
+    _write_network(d)
+
+
+def keep_available():
+    """True when the server should keep running (headless) after the Siftwell window is closed. Default off."""
+    return bool(_read_network().get("keep"))
+
+
+def save_keep(on):
+    d = _read_network()
+    d.setdefault("lan", lan_enabled())     # never lose the phone-access choice when the file is first written here
+    d["keep"] = bool(on)
+    _write_network(d)
 
 
 def _private(ip):
@@ -712,6 +740,7 @@ def status(fresh=False):
     chrome = _cached("chrome", osdeps.chrome_path)
     st = startup_state()
     lan = lan_enabled()
+    keep = keep_available()
     ip = _cached("ip", lan_ip) if lan else None
     url = f"http://{ip}:{port}/?k={CTX['token']}" if lan and ip else None
     codex = _cached("codex", lambda: osdeps.find_exe("codex"))
@@ -721,6 +750,7 @@ def status(fresh=False):
         {"id": "browser", "title": "Browser for resume PDFs", "done": bool(chrome), "optional": False},
         {"id": "startup", "title": "Start Siftwell when I sign in", "done": st["on"], "optional": True},
         {"id": "phone", "title": "Use Siftwell on my phone", "done": lan, "optional": True},
+        {"id": "keep", "title": "Keep Siftwell available to my phone when the window is closed", "done": keep, "optional": True},
         {"id": "astra", "title": "Astra resume reviews", "done": bool(codex), "optional": True},
     ]
     req = [i for i in items if not i["optional"]]
@@ -733,6 +763,7 @@ def status(fresh=False):
         "browser": {"found": bool(chrome), "name": "Edge" if chrome and "edge" in chrome.lower() else "Chrome" if chrome else ""},
         "startup": st,
         "phone": {"on": lan, "bound": CTX["bound_lan"], "restart_needed": lan != CTX["bound_lan"], "restart_manual": lan != CTX["bound_lan"] and task_managed(), "ip": ip, "url": url, "port": port},
+        "keep": {"on": keep},
         "astra": {"found": bool(codex)},
         "install": install_state(),
     }
@@ -811,6 +842,9 @@ def handle_post(h, path, body):
                                                           "op": "undo" if undo else "switch", "message": msg}))
         elif act == "network":
             save_network(bool(body.get("on")))
+            h._send(200, status())
+        elif act == "keep":
+            save_keep(bool(body.get("on")))
             h._send(200, status())
         elif act == "restart":
             why = CTX["busy"]() or (install_state()["running"] and "Claude Code is installing")
@@ -991,6 +1025,14 @@ function rowPhone(){
   }
   return {desc, body: body + msgHtml("phone")};
 }
+function rowKeep(){
+  const k = S.keep, p = S.phone;
+  let desc = k.on ? "On. When you close the Siftwell window, Siftwell keeps running in the background so your phone can still open it. Use Stop Siftwell to end it."
+                  : "Off. Closing the Siftwell window stops Siftwell. Turn this on if you want your phone to keep working after you close the window.";
+  let body = `<label class="gsw"><input type="checkbox" class="sw" role="switch" id="swKeep" ${k.on ? "checked" : ""} ${ui.busy.keep ? "disabled" : ""}><span>${k.on ? "On" : "Off"}</span></label>`;
+  if (k.on && !p.on) body += `<span class="gsmsg">Phone access above is off, so only this computer can open Siftwell while it runs in the background.</span>`;
+  return {desc, body: body + msgHtml("keep")};
+}
 function rowAstra(){
   const a = S.astra;
   if (a.found) return {desc: "Codex is installed. Run `codex login` once with ChatGPT if you haven't, and Astra can grade tailored resumes.", body: ""};
@@ -1001,7 +1043,7 @@ function rowAstra(){
       <li>Run <code>codex login</code> and sign in with your ChatGPT account.</li>
       <li>Come back here and re-check.</li></ol></details><button class="btn ghost" type="button" data-act="recheck">Re-check</button>`};
 }
-const ROWS = {claude: rowClaude, signin: rowSignin, browser: rowBrowser, startup: rowStartup, phone: rowPhone, astra: rowAstra};
+const ROWS = {claude: rowClaude, signin: rowSignin, browser: rowBrowser, startup: rowStartup, phone: rowPhone, keep: rowKeep, astra: rowAstra};
 
 function drawQR(){
   const el = $("qr"); if (!el || !S.phone.url || typeof qrcode !== "function") return;
@@ -1080,11 +1122,11 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   const el = e.target;
-  if (el.id === "swStartup" || el.id === "swPhone") {
-    const k = el.id === "swStartup" ? "startup" : "phone", on = el.checked;
+  if (el.id === "swStartup" || el.id === "swPhone" || el.id === "swKeep") {
+    const k = el.id === "swStartup" ? "startup" : el.id === "swKeep" ? "keep" : "phone", on = el.checked;
     ui.busy[k] = true; say(k, ""); render(k);
-    api("POST", "/api/getting-started/" + (k === "phone" ? "network" : "startup"), {on})
-      .then(d => { S = d; say(k, k === "startup" ? (on ? "Turned on." : "Turned off.") : "", "ok"); })
+    api("POST", "/api/getting-started/" + (k === "phone" ? "network" : k), {on})
+      .then(d => { S = d; say(k, k === "phone" ? "" : (on ? "Turned on." : "Turned off."), "ok"); })
       .catch(err => say(k, err.message, "err")).finally(() => { ui.busy[k] = false; render(); });
   }
 });

@@ -1,6 +1,11 @@
 # Siftwell launcher for Windows. Used by "Start Siftwell.cmd" and "Stop Siftwell.cmd".
-#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\launcher.ps1          start (or open) Siftwell
+#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\launcher.ps1          start Siftwell and open its window
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\launcher.ps1 -Stop    stop the Siftwell started from this folder
+#
+# Siftwell opens in its own window (app_window.py: pywebview with the Edge WebView2 that Windows 11 includes). Closing the
+# window stops Siftwell, unless "Keep Siftwell available to my phone when the window is closed" is on, or the window
+# was opened on a server that was already running (for example the start-at-sign-in one). If the window can't be used
+# (pywebview missing, no WebView2) Siftwell opens in the web browser instead and says so.
 #
 # Nothing is written into the app folder, so it can be deleted and replaced by a newer download at any time:
 #   - Python runtime (uv, Python, package cache, virtualenv): %LOCALAPPDATA%\Siftwell\runtime (per computer, rebuilt
@@ -13,7 +18,7 @@
 # Optional environment variables (mainly for testing):
 #   SIFTWELL_PORT=8790        use this port instead of the remembered one / 8766
 #   SIFTWELL_RUNTIME=<dir>    keep the Python runtime here instead of %LOCALAPPDATA%\Siftwell\runtime
-#   SIFTWELL_NO_BROWSER=1     don't open a browser window
+#   SIFTWELL_NO_BROWSER=1     don't open the Siftwell window (or a browser)
 #   SIFTWELL_NO_PAUSE=1       don't wait a few seconds after Stop
 # Exit code 0 = fine; anything else = the .cmd keeps the window open so the message can be read.
 # Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less files in the legacy code page.
@@ -43,6 +48,8 @@ $Stamp  = Join-Path $Rt "requirements.sha256"
 $SetupLog = Join-Path $Rt "setup.log"
 $PortFile = Join-Path $DataDir "port"
 $PidFile  = Join-Path $DataDir "server.pid"
+$WinPidFile = Join-Path $DataDir "window.pid"   # written by app_window.py
+$AppWindow  = Join-Path $App "app_window.py"
 $ErrLog   = Join-Path $DataDir "start-error.log"
 $LegacyPortFile = Join-Path $App ".siftwell\port"        # older launchers kept the port here
 $LegacyPy  = Join-Path $App ".venv\Scripts\python.exe"   # older launchers' environment
@@ -132,6 +139,45 @@ function Test-OwnProcess($p) {
     return ($cl -match ($lead + '"?' + $srv + '"?(\s+\d+)?\s*$') -or $cl -match ($lead + '"?' + $gs + '"?\s+--serve\s*$'))
 }
 
+function Test-PidFileServer($p) {
+    # DATA/server.pid names a Siftwell server of ours when that process is a live Python running a script called
+    # server.py (or getting_started.py --serve), with the path written absolute or relative. Older installs (the
+    # "Job Board server" scheduled task) start "<base python>\pythonw.exe -X utf8 server.py": relative path, base
+    # interpreter, nothing in the command line pointing at this folder. A relative path can't be checked against this
+    # folder (the pid file is ours), but an absolute one that points into another app folder is not ours to stop.
+    # Anything else (an editor, `python -c "...server.py..."`, a non-Python process) is refused.
+    if (-not $p -or -not $p.CommandLine) { return $false }
+    if ([string]$p.Name -notmatch '^pythonw?[\d.]*\.exe$') { return $false }
+    $lead = '^\s*(?:"[^"]*"|\S+)\s+(?:-X\s+\S+\s+|-[BEIOsSuvx]+\s+)*'
+    $m = [regex]::Match($p.CommandLine, $lead + '(?:"([^"]*[\x5c/])?(server\.py)"|(\S*[\x5c/])?(server\.py))(?:\s+\d+)?\s*$')
+    $g = [regex]::Match($p.CommandLine, $lead + '(?:"([^"]*[\x5c/])?(getting_started\.py)"|(\S*[\x5c/])?(getting_started\.py))\s+--serve\s*$')
+    $hit = if ($m.Success) { $m } elseif ($g.Success) { $g } else { $null }
+    if (-not $hit) { return $false }
+    $dir = if ($hit.Groups[1].Success) { $hit.Groups[1].Value } elseif ($hit.Groups[3].Success) { $hit.Groups[3].Value } else { "" }
+    if ($dir -and $dir -match '^(?:[A-Za-z]:|[\x5c/]{2})') {
+        # absolute: must be this app folder
+        return ($dir.TrimEnd('\', '/') -ieq $App)
+    }
+    return $true
+}
+
+function Stop-AppWindow {
+    # The Siftwell window of this folder (pid in DATA\window.pid), so it doesn't sit there pointing at a stopped server.
+    if (-not (Test-Path $WinPidFile)) { return $false }
+    $stopped = $false
+    $p = (Get-Content $WinPidFile -Raw -ErrorAction SilentlyContinue)
+    if ($p -and $p.Trim() -match '^\d+$') {
+        $w = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $p.Trim()) -ErrorAction SilentlyContinue
+        if ($w -and $w.CommandLine -and ([string]$w.Name -match '^pythonw?[\d.]*\.exe$') -and
+            $w.CommandLine.IndexOf($AppWindow, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            try { cmd.exe /c "taskkill /PID $($p.Trim()) /T /F >nul 2>&1" } catch {}
+            $stopped = $true
+        }
+    }
+    Remove-Item $WinPidFile -Force -ErrorAction SilentlyContinue
+    return $stopped
+}
+
 function Get-OwnServers {
     @(Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue | Where-Object { Test-OwnProcess $_ })
 }
@@ -148,9 +194,38 @@ function Read-Port {
     return $DefaultPort
 }
 
-function Open-Board($port) {
+function Test-HasWebview($exe) {
+    # Is the pywebview package installed for this Python? (find_spec only looks; nothing is imported.)
+    try {
+        $null = & $exe -c "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec('webview') else 1)" 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch { return $false }
+}
+
+function Find-WindowPython {
+    # pythonw.exe of an environment that has pywebview (the runtime first, then an older install's .venv), or $null.
+    foreach ($pair in @(@($Py, $Pyw), @($LegacyPy, $LegacyPyw))) {
+        if ((Test-Path $pair[1]) -and (Test-PyOk $pair[0]) -and (Test-HasWebview $pair[0])) { return $pair[1] }
+    }
+    return $null
+}
+
+function Open-Board($port, $ownsServer) {
+    # Opens the Siftwell window (closing it stops the server when $ownsServer, i.e. we just started it for this window),
+    # else the browser, saying so.
     $url = "http://127.0.0.1:$port/"
     if ($env:SIFTWELL_NO_BROWSER) { Say "Siftwell is running at $url"; return }
+    $wp = Find-WindowPython
+    if ($wp) {
+        Say "Opening the Siftwell window"
+        $env:SIFTWELL_PORT = [string]$port     # the window uses the same port as this launcher
+        $a = "-X utf8 `"" + $AppWindow + "`""
+        if ($ownsServer) { $a += " --owns-server" }
+        $null = Start-Process -FilePath $wp -ArgumentList $a -WorkingDirectory $App -PassThru
+        return
+    }
+    Say "Siftwell's own window isn't available on this computer (it needs the pywebview package and Microsoft Edge WebView2),"
+    Say "so Siftwell opens in your web browser instead. It keeps running until you double-click 'Stop Siftwell'."
     Say "Opening $url"
     Start-Process $url
 }
@@ -197,27 +272,29 @@ function Get-ReqHash { (Get-FileHash -Algorithm SHA256 -Path $Req).Hash }
 # ---------------------------------------------------------------- stop
 
 if ($Stop) {
+    $hadWindow = Stop-AppWindow
     $procs = Get-OwnServers
     $ids = @($procs | ForEach-Object { [int]$_.ProcessId })
     if (Test-Path $PidFile) {
         $p = (Get-Content $PidFile -Raw -ErrorAction SilentlyContinue)
         if ($p -and $p.Trim() -match '^\d+$') {
-            # Only trust the pid file if that process is still one of ours.
+            # Only trust the pid file if that process is still a Siftwell server (see Test-PidFileServer).
             $pp = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $p.Trim()) -ErrorAction SilentlyContinue
-            if (Test-OwnProcess $pp) { $ids += [int]$p.Trim() }
+            if ((Test-OwnProcess $pp) -or (Test-PidFileServer $pp)) { $ids += [int]$p.Trim() }
             elseif (-not $pp) { Remove-Item $PidFile -Force -ErrorAction SilentlyContinue }   # stale
         }
     }
     $ids = @($ids | Sort-Object -Unique)
     if ($ids.Count -eq 0) {
-        Say "Siftwell isn't running (from this folder)."
+        if ($hadWindow) { Say "The Siftwell window was closed." } else { Say "Siftwell isn't running (from this folder)." }
     } else {
         foreach ($id in $ids) {
             # /T also ends anything the server started (for example a running job update).
             try { cmd.exe /c "taskkill /PID $id /T /F >nul 2>&1" } catch {}
         }
         Start-Sleep -Milliseconds 500
-        if ((Get-OwnServers).Count -gt 0) { Fail "Some Siftwell processes are still running." "Try again, or restart the computer." }
+        $left = @($ids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })
+        if ((Get-OwnServers).Count -gt 0 -or $left.Count -gt 0) { Fail "Some Siftwell processes are still running." "Try again, or restart the computer." }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
         Say "Siftwell has stopped. Double-click 'Start Siftwell' to start it again."
     }
@@ -230,9 +307,64 @@ if ($Stop) {
 $Host.UI.RawUI.WindowTitle = "Siftwell"
 $port = Read-Port
 
-# 1. Already running? Just open it.
+# One-time setup (or repair) of the runtime: uv, Python, packages (pywebview for the window included). Skipped when the
+# runtime is already there and requirements.txt hasn't changed since it was set up (any copy of the app folder shares it).
+$netHint = "Please check that this computer is connected to the internet, then double-click 'Start Siftwell' again.`r`nDetails are in: $SetupLog"
+
+function Setup-Runtime {
+    # Returns "" on success, else a short message (details in setup.log).
+    if ($script:needUv -or $script:needVenv) {
+        Say "Setting up Siftwell. This happens once and takes a couple of minutes..."
+        Say ""
+    } elseif ($script:needPkgs) {
+        Say "Updating Siftwell's components..."
+    }
+    if ($script:needUv -or $script:needVenv -or $script:needPkgs) {
+        Set-Content -Path $SetupLog -Value ("Siftwell setup " + (Get-Date -Format s) + " for " + $App) -Encoding ASCII
+    }
+    if ($script:needUv) {
+        Step "Downloading the installer tool (uv)"
+        New-Item -ItemType Directory -Force -Path $UvDir | Out-Null
+        $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+        $cmd = "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; " +
+               "`$ProgressPreference='SilentlyContinue'; irm https://astral.sh/uv/install.ps1 | iex"
+        $code = Run-Quiet $ps ("-NoProfile -ExecutionPolicy Bypass -Command `"" + $cmd + "`"")
+        if ($code -ne 0 -or -not (Test-UvOk)) { return "Downloading uv failed." }
+    }
+    if ($script:needVenv) {
+        Step "Downloading Python 3.12 and creating Siftwell's private environment"
+        $code = Run-Quiet $UvExe ("venv --quiet --clear --managed-python --python 3.12 `"" + $Venv + "`"")
+        if ($code -ne 0 -or -not (Test-PyOk $Py)) { return "Setting up Python failed." }
+        Remove-Item $Stamp -Force -ErrorAction SilentlyContinue
+    }
+    if ($script:needPkgs) {
+        Step "Installing Siftwell's packages"
+        $code = Run-Quiet $UvExe ("pip install --quiet --python `"" + $Py + "`" -r `"" + $Req + "`"")
+        if ($code -ne 0) { return "Installing packages failed." }
+        Set-Content -Path $Stamp -Value $script:hash -Encoding ASCII
+        Step "Done"
+        Say ""
+    }
+    return ""
+}
+
+function Ensure-Runtime {
+    # Returns "" when the runtime is ready, else a short message.
+    New-Item -ItemType Directory -Force -Path $Rt | Out-Null
+    New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+    $script:needUv   = -not (Test-UvOk)
+    $script:needVenv = -not (Test-PyOk $Py)
+    $script:hash     = Get-ReqHash
+    $oldHash  = if (Test-Path $Stamp) { (Get-Content $Stamp -Raw).Trim() } else { "" }
+    $script:needPkgs = $script:needVenv -or ($script:hash -ne $oldHash)
+    return (Setup-Runtime)
+}
+
+# 1. Already running? Open its window.
 if (Test-Siftwell $port) {
-    Open-Board $port
+    $problem = Ensure-Runtime
+    if ($problem) { Show-LogTail $SetupLog 4; Say ""; Say "Couldn't finish updating Siftwell's components ($problem)." }
+    Open-Board $port $false
     exit 0
 }
 
@@ -243,62 +375,19 @@ if ($own.Count -gt 0) {
     if ($m.Success) { $port = [int]$m.Groups[1].Value }
     Say "Siftwell is starting up..."
     for ($i = 0; $i -lt 60; $i++) {
-        if (Test-Siftwell $port) { Open-Board $port; exit 0 }
+        if (Test-Siftwell $port) {
+            $problem = Ensure-Runtime
+            if ($problem) { Show-LogTail $SetupLog 4; Say ""; Say "Couldn't finish updating Siftwell's components ($problem)." }
+            Open-Board $port $false
+            exit 0
+        }
         Start-Sleep -Seconds 1
     }
     Fail "Siftwell is running but not answering on port $port." "Double-click 'Stop Siftwell', then 'Start Siftwell' again."
 }
 
-# 2. One-time setup (or repair) of the runtime: uv, Python, packages. Skipped when the runtime is already there and
-#    requirements.txt hasn't changed since it was set up (any copy of the app folder shares it).
-New-Item -ItemType Directory -Force -Path $Rt | Out-Null
-New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
-
-$needUv   = -not (Test-UvOk)
-$needVenv = -not (Test-PyOk $Py)
-$hash     = Get-ReqHash
-$oldHash  = if (Test-Path $Stamp) { (Get-Content $Stamp -Raw).Trim() } else { "" }
-$needPkgs = $needVenv -or ($hash -ne $oldHash)
-$netHint  = "Please check that this computer is connected to the internet, then double-click 'Start Siftwell' again.`r`nDetails are in: $SetupLog"
-
-function Setup-Runtime {
-    # Returns "" on success, else a short message (details in setup.log).
-    if ($needUv -or $needVenv) {
-        Say "Setting up Siftwell. This happens once and takes a couple of minutes..."
-        Say ""
-    } elseif ($needPkgs) {
-        Say "Updating Siftwell's components..."
-    }
-    if ($needUv -or $needVenv -or $needPkgs) {
-        Set-Content -Path $SetupLog -Value ("Siftwell setup " + (Get-Date -Format s) + " for " + $App) -Encoding ASCII
-    }
-    if ($needUv) {
-        Step "Downloading the installer tool (uv)"
-        New-Item -ItemType Directory -Force -Path $UvDir | Out-Null
-        $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-        $cmd = "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; " +
-               "`$ProgressPreference='SilentlyContinue'; irm https://astral.sh/uv/install.ps1 | iex"
-        $code = Run-Quiet $ps ("-NoProfile -ExecutionPolicy Bypass -Command `"" + $cmd + "`"")
-        if ($code -ne 0 -or -not (Test-UvOk)) { return "Downloading uv failed." }
-    }
-    if ($needVenv) {
-        Step "Downloading Python 3.12 and creating Siftwell's private environment"
-        $code = Run-Quiet $UvExe ("venv --quiet --clear --managed-python --python 3.12 `"" + $Venv + "`"")
-        if ($code -ne 0 -or -not (Test-PyOk $Py)) { return "Setting up Python failed." }
-        Remove-Item $Stamp -Force -ErrorAction SilentlyContinue
-    }
-    if ($needPkgs) {
-        Step "Installing Siftwell's packages"
-        $code = Run-Quiet $UvExe ("pip install --quiet --python `"" + $Py + "`" -r `"" + $Req + "`"")
-        if ($code -ne 0) { return "Installing packages failed." }
-        Set-Content -Path $Stamp -Value $hash -Encoding ASCII
-        Step "Done"
-        Say ""
-    }
-    return ""
-}
-
-$problem = Setup-Runtime
+# 2. Set up the runtime (fatal if it can't be done and there is no older environment to use).
+$problem = Ensure-Runtime
 if ($problem) {
     if (Test-PyOk $LegacyPy) {
         # An older install's environment inside the app folder still works: use it this time.
@@ -324,16 +413,17 @@ if (-not (Test-PortFree $port)) {
 }
 if (-not $env:SIFTWELL_PORT) { Set-Content -Path $PortFile -Value $port -Encoding ASCII }   # a one-off SIFTWELL_PORT is never remembered
 
-# 4. Start the server in the background (pythonw: no window; it keeps running after this window closes).
+# 4. Start the server in the background (pythonw: no window). The Siftwell window below owns it: closing that window
+#    stops it, unless "keep available to my phone" is on.
 Say "Starting Siftwell..."
 $server = Join-Path $App "server.py"
 $proc = Start-Process -FilePath $Pyw -ArgumentList ("-X utf8 `"" + $server + "`" " + $port) -WorkingDirectory $App -PassThru
 Set-Content -Path $PidFile -Value $proc.Id -Encoding ASCII
 
-# 5. Wait until it answers, then open the browser.
+# 5. Wait until it answers, then open the Siftwell window.
 for ($i = 0; $i -lt 60; $i++) {
     if (Test-Siftwell $port) {
-        Open-Board $port
+        Open-Board $port $true
         exit 0
     }
     if ($proc.HasExited -and (Get-OwnServers).Count -eq 0) { break }

@@ -25,7 +25,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ---- Easy-to-edit lists -------------------------------------------------------------------------
-REQUIRED_FILES = ["README.md", "LICENSE", "requirements.txt", "server.py", "VERSION"]
+REQUIRED_FILES = ["README.md", "LICENSE", "requirements.txt", "server.py", "app_window.py", "VERSION"]
 LAUNCHER_FILES = ["Start Siftwell.cmd", "Start Siftwell.command", "tools/launcher.ps1"]  # warning with --local
 PAGE_MODULES = ["report", "settings_page", "setup_page", "welcome_page", "getting_started"]  # missing = skipped
 LEAK_SKIP_PREFIXES = ["assets/geo/"]
