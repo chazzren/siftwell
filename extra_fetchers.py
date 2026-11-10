@@ -287,3 +287,6 @@ def f_adp(c):
 
 FETCHERS = {"icims": f_icims, "ukg": f_ukg, "paylocity": f_paylocity, "adp": f_adp, "amazon": f_amazon, "phenom": f_phenom, "oracle": f_oracle, "jibe": f_jibe,
             "clearcompany": f_clearcompany, "rippling": f_rippling}
+
+import jsonld_fetcher
+FETCHERS.update(jsonld_fetcher.FETCHERS)  # custom careers sites that publish schema.org JobPosting data

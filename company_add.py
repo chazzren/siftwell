@@ -85,9 +85,15 @@ def detect(url):
         except Exception as e:
             raise ValueError(f"Couldn't open that page ({type(e).__name__}).")
         found = _match(page)
+        if not found:
+            try:
+                import jsonld_fetcher
+                found = jsonld_fetcher.detect_config(url, page)
+            except Exception:
+                found = None
     if not found:
-        raise ValueError("Couldn't find a supported job board on that page. Supported: Greenhouse, Lever, Ashby, Workday, "
-                         "SmartRecruiters, iCIMS, UKG, Oracle, Paylocity, ADP, Workable, BambooHR, JazzHR, Breezy, Recruitee, Paycom, Dayforce, Rippling. Tip: open the company's job list and paste the link from the address bar.")
+        raise ValueError("Couldn't find a supported job board on that page, and the site doesn't publish standard job data Siftwell can read. Supported: Greenhouse, Lever, Ashby, Workday, "
+                         "SmartRecruiters, iCIMS, UKG, Oracle, Paylocity, ADP, Workable, BambooHR, JazzHR, Breezy, Recruitee, Paycom, Dayforce, Rippling, and custom careers sites that publish standard job data. Tip: open the company's job list and paste the link from the address bar.")
     return found
 
 def verify(c):
@@ -123,6 +129,15 @@ def verify(c):
                 if n >= 400:
                     break
             return n, None
+        if a == "jsonld":
+            import sys
+            sys.path.insert(0, HERE)
+            import jsonld_fetcher
+            cc = dict(c, name="check")
+            posts = list(jsonld_fetcher.fetch_postings(cc, cap=8, sample=True))
+            if not posts:
+                raise ValueError("no JobPosting found")
+            return max(len(posts), cc.get("_url_count", 0)), next((p["org"] for p in posts if p["org"]), None)
     except Exception as e:
         raise ValueError(f"Found a {a} board, but its job feed didn't respond ({type(e).__name__}).")
     raise ValueError("Unsupported job board.")
@@ -133,6 +148,10 @@ def add(url, name="", scope="me"):
     if not total:
         raise ValueError("That job board is reachable but has no open jobs right now.")
     pid = people.current()
+    if c["ats"] == "jsonld" and not suggested:
+        import urllib.parse
+        h = urllib.parse.urlsplit(c.get("list_url") or c.get("sitemap") or "").netloc.lower().removeprefix("www.").split(":")[0]
+        suggested = h.rsplit(".", 1)[0].split(".")[-1] if "." in h else h
     ident = c.get("token") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key") or c.get("id") or re.sub(r"^https://|\..*$", "", c.get("base", "")).replace("careers-", "")
     nm = (name or suggested or ident.replace("-", " ").replace("_", " ").title()).strip()[:60]
     with _lock:

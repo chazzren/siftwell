@@ -103,7 +103,7 @@ Leave that Terminal window open while you use Siftwell. Run `server.py <port>` t
 </details>
 
 ### 5. Add companies to watch
-A new install starts with no companies. Open **My profile → Companies** and paste the link to a company's careers page (for example `https://boards.greenhouse.io/examplecompany`). Siftwell figures out which job system it uses, checks that it can read the listings, and adds it. Then use **Update job listings** (the circular-arrow icon) to fetch jobs.
+A new install starts with no companies. Open **My profile → Companies** and paste the link to a company's careers page (for example `https://boards.greenhouse.io/examplecompany`). Siftwell figures out which job system it uses, checks that it can read the listings, and adds it. Then use **Update job listings** (the circular-arrow icon) to fetch jobs. Besides the common job systems (Greenhouse, Lever, Workday and others), Siftwell can also read many custom careers sites that publish standard job data (the markup Google Jobs uses); if a site still can't be read, Siftwell tells you so when you paste the link.
 
 Coming soon: **Find employers near me**, where Claude researches employers in your area (big employers, hospitals, universities, nonprofits, startups and more), Siftwell checks which ones it can read, and you tick the ones to add. (The repository also includes `packs/dc-area.json`, a list of ~800 Washington, DC area employers it was first built with.)
 
