@@ -642,6 +642,9 @@ def load_extra():
     if os.path.exists(os.path.join(HERE, "ats_more.py")):
         import ats_more
         FETCHERS.update(ats_more.FETCHERS)
+    if os.path.exists(os.path.join(HERE, "ats_public.py")):
+        import ats_public
+        FETCHERS.update(ats_public.FETCHERS)
 
 # ---------------------------------------------------------------- pipeline
 BARE_US = re.compile(r"\s*(us|usa|u\.s\.|united states( of america)?|dragos usa)\s*")

@@ -651,6 +651,18 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Cargill",
+   "tier": "national",
+   "sector": "",
+   "ats": "radancy",
+   "base": "https://careers.cargill.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1358,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "CarMax",
    "tier": "national",
    "sector": "Auto retail",
@@ -663,6 +675,18 @@
    ],
    "verified_total": 1185,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Carnival Corporation",
+   "tier": "national",
+   "sector": "",
+   "ats": "radancy",
+   "base": "https://jobs.carnivalcorp.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 129,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Caterpillar",
@@ -1045,6 +1069,19 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Deere & Company",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "careers.deere.com",
+   "domain": "johndeere.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 158,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "Devon Energy",
    "tier": "national",
    "sector": "Oil and gas",
@@ -1166,6 +1203,19 @@
    ],
    "verified_total": 1279,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Eaton",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "eaton.eightfold.ai",
+   "domain": "eaton.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1204,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "eBay",
@@ -1355,6 +1405,19 @@
    ],
    "verified_total": 855,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Frontier Communications",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "careers.frontier.com",
+   "domain": "ftr.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 19,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "GameStop",
@@ -1849,6 +1912,33 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Keurig Dr Pepper",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "kdrp.eightfold.ai",
+   "domain": "kdrp.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 636,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
+   "name": "KeyCorp",
+   "tier": "national",
+   "sector": "",
+   "ats": "workday",
+   "tenant": "keybank",
+   "wd": "wd5",
+   "site": "External_Career_Site",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 585,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "KLA",
    "tier": "national",
    "sector": "Semiconductor equipment",
@@ -1861,6 +1951,19 @@
    ],
    "verified_total": 1156,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Koch Industries",
+   "tier": "national",
+   "sector": "",
+   "ats": "avature",
+   "base": "https://koch.avature.net",
+   "portal": "careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 16,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Kohl's",
@@ -1902,6 +2005,19 @@
    ],
    "verified_total": 1734,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Lam Research",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "careers.lamresearch.com",
+   "domain": "lamresearch.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 585,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Land O'Lakes",
@@ -1960,6 +2076,19 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Lumen Technologies",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "careers.lumen.com",
+   "domain": "lumen.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 91,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "Marriott International",
    "tier": "national",
    "sector": "Hotels",
@@ -2013,6 +2142,18 @@
    ],
    "verified_total": 277,
    "verified_at": "2026-11-10T18:42:39Z"
+  },
+  {
+   "name": "McKesson",
+   "tier": "national",
+   "sector": "",
+   "ats": "radancy",
+   "base": "https://careers.mckesson.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 658,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Merck",
@@ -2092,6 +2233,19 @@
    ],
    "verified_total": 314,
    "verified_at": "2026-11-10T18:42:39Z"
+  },
+  {
+   "name": "Morgan Stanley",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "morganstanley.eightfold.ai",
+   "domain": "morganstanley.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 862,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Motorola Solutions",
@@ -2284,6 +2438,19 @@
    "verified_at": "2026-11-10T18:42:39Z"
   },
   {
+   "name": "PayPal",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "paypal.eightfold.ai",
+   "domain": "paypal.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 192,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "PBF Energy",
    "tier": "national",
    "sector": "Refining",
@@ -2338,6 +2505,19 @@
    ],
    "verified_total": 500,
    "verified_at": "2026-11-10T18:42:39Z"
+  },
+  {
+   "name": "Qualcomm",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "careers.qualcomm.com",
+   "domain": "qualcomm.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 795,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Quest Diagnostics",
@@ -2418,6 +2598,19 @@
    ],
    "verified_total": 288,
    "verified_at": "2026-11-10T18:42:39Z"
+  },
+  {
+   "name": "Starbucks",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "apply.starbucks.com",
+   "domain": "starbucks.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 19862,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "State Street",
@@ -2555,6 +2748,20 @@
    ],
    "verified_total": 500,
    "verified_at": "2026-11-10T18:42:39Z"
+  },
+  {
+   "name": "Trane Technologies",
+   "tier": "national",
+   "sector": "",
+   "ats": "jsonld",
+   "list_url": "https://careers.tranetechnologies.com/",
+   "sitemap": "https://careers.tranetechnologies.com/global/en/sitemap_index.xml",
+   "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 500,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Travelers",
@@ -2778,6 +2985,19 @@
    ],
    "verified_total": 370,
    "verified_at": "2026-11-10T18:42:39Z"
+  },
+  {
+   "name": "Xerox",
+   "tier": "national",
+   "sector": "",
+   "ats": "avature",
+   "base": "https://xerox.avature.net",
+   "portal": "careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 20,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Xylem",
@@ -3076,18 +3296,6 @@
    "note": "The careers address returned an HTTP error to automated access (blocked, moved, or wrong path); not worked around. Needs a manual lookup."
   },
   {
-   "name": "Cargill",
-   "platform": "SuccessFactors",
-   "careers_url": "https://careers.cargill.com/en",
-   "note": "Job system not supported yet."
-  },
-  {
-   "name": "Carnival Corporation",
-   "platform": "Radancy/TMP",
-   "careers_url": "https://jobs.carnivalcorp.com",
-   "note": "Job system not supported yet."
-  },
-  {
    "name": "Carrier Global",
    "platform": "unresolved",
    "careers_url": "https://careers.carrier.com/",
@@ -3196,12 +3404,6 @@
    "note": "Job system not supported yet."
   },
   {
-   "name": "Deere & Company",
-   "platform": "Eightfold",
-   "careers_url": "https://careers.deere.com/careers",
-   "note": "Job system seen on the careers page but not readable by Siftwell yet (or job list loads via script)."
-  },
-  {
    "name": "Dell Technologies",
    "platform": "custom/unknown",
    "careers_url": "https://enterpriseplatform.dell.com/hcmUI/CandidateExperience/en/sites/careers",
@@ -3254,12 +3456,6 @@
    "platform": "custom/unknown",
    "careers_url": "https://www.eastman.com/en/careers",
    "note": "Custom or JavaScript-only careers site; no standard feed found."
-  },
-  {
-   "name": "Eaton",
-   "platform": "Eightfold",
-   "careers_url": "https://eaton.eightfold.ai/careers",
-   "note": "Job system seen on the careers page but not readable by Siftwell yet (or job list loads via script)."
   },
   {
    "name": "Ecolab",
@@ -3355,12 +3551,6 @@
    "name": "Freeport-McMoRan",
    "platform": "custom/unknown",
    "careers_url": "https://fcx.com/careers",
-   "note": "Custom or JavaScript-only careers site; no standard feed found."
-  },
-  {
-   "name": "Frontier Communications",
-   "platform": "custom/unknown",
-   "careers_url": "https://careers.frontier.com/careers",
    "note": "Custom or JavaScript-only careers site; no standard feed found."
   },
   {
@@ -3478,18 +3668,6 @@
    "note": "Careers address did not connect; real job-search page not confirmed. Needs a manual lookup."
   },
   {
-   "name": "Keurig Dr Pepper",
-   "platform": "Eightfold",
-   "careers_url": "https://careers.keurigdrpepper.com/en",
-   "note": "Job system not supported yet."
-  },
-  {
-   "name": "KeyCorp",
-   "platform": "unresolved",
-   "careers_url": "https://careers.key.com/",
-   "note": "Careers address did not connect; real job-search page not confirmed. Needs a manual lookup."
-  },
-  {
    "name": "Kimberly-Clark",
    "platform": "custom/unknown",
    "careers_url": "https://careers.kimberly-clark.com",
@@ -3508,12 +3686,6 @@
    "note": "Custom or JavaScript-only careers site; no standard feed found."
   },
   {
-   "name": "Koch Industries",
-   "platform": "Avature",
-   "careers_url": "https://www.kochinc.com/career-opportunities",
-   "note": "Job system not supported yet."
-  },
-  {
    "name": "Kraft Heinz",
    "platform": "custom/unknown",
    "careers_url": "https://careers.kraftheinzcompany.com/",
@@ -3524,12 +3696,6 @@
    "platform": "unresolved",
    "careers_url": "https://jobs.kroger.com/",
    "note": "Careers address did not connect; real job-search page not confirmed. Needs a manual lookup."
-  },
-  {
-   "name": "Lam Research",
-   "platform": "SuccessFactors",
-   "careers_url": "https://careers.lamresearch.com/careers",
-   "note": "Job system not supported yet."
   },
   {
    "name": "Las Vegas Sands",
@@ -3586,12 +3752,6 @@
    "note": "Custom or JavaScript-only careers site; no standard feed found."
   },
   {
-   "name": "Lumen Technologies",
-   "platform": "custom/unknown",
-   "careers_url": "https://jobs.lumen.com/global/en/",
-   "note": "Custom or JavaScript-only careers site; no standard feed found."
-  },
-  {
    "name": "Lyft",
    "platform": "custom/unknown",
    "careers_url": "https://www.lyft.com/careers",
@@ -3626,12 +3786,6 @@
    "platform": "unresolved (blocked or moved)",
    "careers_url": "https://careers.mcdonalds.com/",
    "note": "The careers address returned an HTTP error to automated access (blocked, moved, or wrong path); not worked around. Needs a manual lookup."
-  },
-  {
-   "name": "McKesson",
-   "platform": "Radancy/TMP",
-   "careers_url": "https://careers.mckesson.com/en/",
-   "note": "Job system seen on the careers page but not readable by Siftwell yet (or job list loads via script)."
   },
   {
    "name": "Medtronic",
@@ -3674,12 +3828,6 @@
    "platform": "unresolved (blocked or moved)",
    "careers_url": "https://www.monsterenergy.com/en-us/careers/",
    "note": "The careers address returned an HTTP error to automated access (blocked, moved, or wrong path); not worked around. Needs a manual lookup."
-  },
-  {
-   "name": "Morgan Stanley",
-   "platform": "Eightfold",
-   "careers_url": "https://www.morganstanley.com/careers/career-opportunities-search",
-   "note": "Job system seen on the careers page but not readable by Siftwell yet (or job list loads via script)."
   },
   {
    "name": "Mosaic",
@@ -3844,12 +3992,6 @@
    "note": "Job system detected, but its list returned zero jobs to Siftwell (likely a hub page or script-only list)."
   },
   {
-   "name": "PayPal",
-   "platform": "Eightfold",
-   "careers_url": "https://paypal.eightfold.ai/careers",
-   "note": "Job system seen on the careers page but not readable by Siftwell yet (or job list loads via script)."
-  },
-  {
    "name": "Penske Automotive Group",
    "platform": "unresolved (blocked or moved)",
    "careers_url": "https://www.penskeautomotive.com/careers",
@@ -3938,12 +4080,6 @@
    "platform": "unresolved",
    "careers_url": "https://careers.pultegroupinc.com/",
    "note": "Careers address did not connect; real job-search page not confirmed. Needs a manual lookup."
-  },
-  {
-   "name": "Qualcomm",
-   "platform": "Eightfold",
-   "careers_url": "https://careers.qualcomm.com/careers",
-   "note": "Job system seen on the careers page but not readable by Siftwell yet (or job list loads via script)."
   },
   {
    "name": "Quanta Services",
@@ -4084,12 +4220,6 @@
    "note": "Careers address did not connect; real job-search page not confirmed. Needs a manual lookup."
   },
   {
-   "name": "Starbucks",
-   "platform": "Eightfold",
-   "careers_url": "https://apply.starbucks.com/",
-   "note": "Job system seen on the careers page but not readable by Siftwell yet (or job list loads via script)."
-  },
-  {
    "name": "State Farm",
    "platform": "iCIMS/other (no jobs listed)",
    "careers_url": "https://www.statefarm.com/careers",
@@ -4154,12 +4284,6 @@
    "platform": "unresolved",
    "careers_url": "https://careers.tractorsupply.com/",
    "note": "Careers address did not connect; real job-search page not confirmed. Needs a manual lookup."
-  },
-  {
-   "name": "Trane Technologies",
-   "platform": "Phenom",
-   "careers_url": "https://careers.tranetechnologies.com/",
-   "note": "Job system seen on the careers page but not readable by Siftwell yet (or job list loads via script)."
   },
   {
    "name": "Uber",
@@ -4312,12 +4436,6 @@
    "note": "Careers address did not connect; real job-search page not confirmed. Needs a manual lookup."
   },
   {
-   "name": "Xerox",
-   "platform": "Avature",
-   "careers_url": "https://xerox.avature.net/careers",
-   "note": "Job system seen on the careers page but not readable by Siftwell yet (or job list loads via script)."
-  },
-  {
    "name": "Xpo",
    "platform": "unresolved (blocked or moved)",
    "careers_url": "https://xpo.wd5.myworkdayjobs.com/XPOCareers",
@@ -4354,5 +4472,5 @@
    "note": "Custom or JavaScript-only careers site; no standard feed found."
   }
  ],
- "verified_total": 173625
+ "verified_total": 201295
 }

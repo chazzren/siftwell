@@ -60,6 +60,18 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "AGCO",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://careers.agcocorp.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 335,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "AIG",
    "tier": "national",
    "sector": "Insurance",
@@ -463,6 +475,18 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Boston Scientific",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://jobs.bostonscientific.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 559,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "Bristol-Myers Squibb",
    "tier": "national",
    "sector": "Pharma",
@@ -561,6 +585,18 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Cargill",
+   "tier": "national",
+   "sector": "",
+   "ats": "radancy",
+   "base": "https://careers.cargill.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1358,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "CarMax",
    "tier": "national",
    "sector": "Auto retail",
@@ -573,6 +609,18 @@
    ],
    "verified_total": 1185,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Carnival Corporation",
+   "tier": "national",
+   "sector": "",
+   "ats": "radancy",
+   "base": "https://jobs.carnivalcorp.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 129,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Caterpillar",
@@ -712,6 +760,31 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Cincinnati Financial",
+   "tier": "national",
+   "sector": "",
+   "ats": "taleo",
+   "host": "cinfin.taleo.net",
+   "section": "ex",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 108,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
+   "name": "Cintas",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://careers.cintas.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 3050,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "Cisco",
    "tier": "national",
    "sector": "Networking",
@@ -779,6 +852,18 @@
    ],
    "verified_total": 240,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Colgate-Palmolive",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://jobs.colgate.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 574,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Comcast",
@@ -865,6 +950,18 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Dana",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://jobs.dana.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 359,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "Danaher",
    "tier": "national",
    "sector": "Life sciences",
@@ -877,6 +974,19 @@
    ],
    "verified_total": 1458,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Deere & Company",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "careers.deere.com",
+   "domain": "johndeere.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 158,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Devon Energy",
@@ -904,6 +1014,18 @@
    ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Dominion Energy",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://careers.dominionenergy.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 90,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Dover",
@@ -976,6 +1098,19 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Eaton",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "eaton.eightfold.ai",
+   "domain": "eaton.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 1204,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "eBay",
    "tier": "national",
    "sector": "E-commerce",
@@ -1015,6 +1150,31 @@
    ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Entergy",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://jobs.entergy.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 370,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
+   "name": "Enterprise Products Partners",
+   "tier": "national",
+   "sector": "",
+   "ats": "taleo",
+   "host": "epco.taleo.net",
+   "section": "it",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 92,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Equifax",
@@ -1057,6 +1217,18 @@
    ],
    "verified_total": 124,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "ExxonMobil",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://jobs.exxonmobil.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 519,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "FedEx",
@@ -1113,6 +1285,19 @@
    ],
    "verified_total": 855,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Frontier Communications",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "careers.frontier.com",
+   "domain": "ftr.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 19,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "GameStop",
@@ -1281,6 +1466,18 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Halliburton",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://jobs.halliburton.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 564,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "Hartford (The Hartford)",
    "tier": "national",
    "sector": "Insurance",
@@ -1432,6 +1629,18 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Ingersoll Rand",
+   "tier": "national",
+   "sector": "",
+   "ats": "successfactors",
+   "base": "https://careers.irco.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 279,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "Ingram Micro",
    "tier": "national",
    "sector": "Technology distribution",
@@ -1571,6 +1780,33 @@
    "verified_at": "2026-11-10T16:22:25Z"
   },
   {
+   "name": "Keurig Dr Pepper",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "kdrp.eightfold.ai",
+   "domain": "kdrp.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 636,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
+   "name": "KeyCorp",
+   "tier": "national",
+   "sector": "",
+   "ats": "workday",
+   "tenant": "keybank",
+   "wd": "wd5",
+   "site": "External_Career_Site",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 585,
+   "verified_at": "2026-11-11T15:14:04Z"
+  },
+  {
    "name": "KLA",
    "tier": "national",
    "sector": "Semiconductor equipment",
@@ -1583,6 +1819,19 @@
    ],
    "verified_total": 1156,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Koch Industries",
+   "tier": "national",
+   "sector": "",
+   "ats": "avature",
+   "base": "https://koch.avature.net",
+   "portal": "careers",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 16,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Kohl's",
@@ -1624,6 +1873,19 @@
    ],
    "verified_total": 1734,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Lam Research",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "careers.lamresearch.com",
+   "domain": "lamresearch.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 585,
+   "verified_at": "2026-11-11T15:14:04Z"
   },
   {
    "name": "Land O'Lakes",
@@ -1680,6 +1942,19 @@
    ],
    "verified_total": 13034,
    "verified_at": "2026-11-10T16:22:25Z"
+  },
+  {
+   "name": "Lumen Technologies",
+   "tier": "national",
+   "sector": "",
+   "ats": "eightfold",
+   "host": "careers.lumen.com",
+   "domain": "lumen.com",
+   "sets": [
+    "large"
+   ],
+   "verified_total": 91,
+   "verified_at": "2026-11-11T15:14:04Z"
   }
  ],
  "unsupported": [
@@ -1712,12 +1987,6 @@
    "platform": "unresolved",
    "careers_url": "",
    "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
-  },
-  {
-   "name": "AGCO",
-   "platform": "SuccessFactors",
-   "careers_url": "https://careers.agcocorp.com",
-   "note": "Job system not supported yet."
   },
   {
    "name": "Agilent Technologies",
@@ -1936,12 +2205,6 @@
    "note": "Custom or JavaScript-only careers site; no standard feed found."
   },
   {
-   "name": "Boston Scientific",
-   "platform": "SuccessFactors",
-   "careers_url": "https://jobs.bostonscientific.com",
-   "note": "Job system not supported yet."
-  },
-  {
    "name": "Boyd Gaming",
    "platform": "custom/unknown",
    "careers_url": "https://www.boydgaming.com/careers",
@@ -1976,18 +2239,6 @@
    "platform": "unresolved",
    "careers_url": "",
    "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
-  },
-  {
-   "name": "Cargill",
-   "platform": "SuccessFactors",
-   "careers_url": "https://careers.cargill.com/en",
-   "note": "Job system not supported yet."
-  },
-  {
-   "name": "Carnival Corporation",
-   "platform": "Radancy/TMP",
-   "careers_url": "https://jobs.carnivalcorp.com",
-   "note": "Job system not supported yet."
   },
   {
    "name": "Carrier Global",
@@ -2026,18 +2277,6 @@
    "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
   },
   {
-   "name": "Cincinnati Financial",
-   "platform": "Taleo",
-   "careers_url": "https://www.cinfin.com/cincinnati-insurance-careers",
-   "note": "Job system not supported yet."
-  },
-  {
-   "name": "Cintas",
-   "platform": "SuccessFactors",
-   "careers_url": "https://careers.cintas.com",
-   "note": "Job system not supported yet."
-  },
-  {
    "name": "CME Group",
    "platform": "unresolved",
    "careers_url": "",
@@ -2054,12 +2293,6 @@
    "platform": "custom/unknown",
    "careers_url": "https://careers.cognizant.com/global-en/",
    "note": "Custom or JavaScript-only careers site; no standard feed found."
-  },
-  {
-   "name": "Colgate-Palmolive",
-   "platform": "SuccessFactors",
-   "careers_url": "https://jobs.colgate.com",
-   "note": "Job system not supported yet."
   },
   {
    "name": "Comerica",
@@ -2116,12 +2349,6 @@
    "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
   },
   {
-   "name": "Dana",
-   "platform": "SuccessFactors",
-   "careers_url": "https://jobs.dana.com:443/",
-   "note": "Job system not supported yet."
-  },
-  {
    "name": "Darden Restaurants",
    "platform": "unresolved",
    "careers_url": "",
@@ -2132,12 +2359,6 @@
    "platform": "Phenom",
    "careers_url": "https://careers.davita.com",
    "note": "Job system not supported yet."
-  },
-  {
-   "name": "Deere & Company",
-   "platform": "unresolved",
-   "careers_url": "",
-   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
   },
   {
    "name": "Dell Technologies",
@@ -2182,12 +2403,6 @@
    "note": "Job system not supported yet."
   },
   {
-   "name": "Dominion Energy",
-   "platform": "SuccessFactors",
-   "careers_url": "https://careers.dominionenergy.com",
-   "note": "Job system not supported yet."
-  },
-  {
    "name": "Domino's",
    "platform": "custom/unknown",
    "careers_url": "https://jobs.dominos.com/us/",
@@ -2204,12 +2419,6 @@
    "platform": "custom/unknown",
    "careers_url": "https://www.eastman.com/en/careers",
    "note": "Custom or JavaScript-only careers site; no standard feed found."
-  },
-  {
-   "name": "Eaton",
-   "platform": "unresolved",
-   "careers_url": "",
-   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
   },
   {
    "name": "Ecolab",
@@ -2236,22 +2445,10 @@
    "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
   },
   {
-   "name": "Entergy",
-   "platform": "SuccessFactors",
-   "careers_url": "https://jobs.entergy.com/",
-   "note": "Job system not supported yet."
-  },
-  {
    "name": "Enterprise Holdings",
    "platform": "unresolved",
    "careers_url": "",
    "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
-  },
-  {
-   "name": "Enterprise Products Partners",
-   "platform": "Taleo",
-   "careers_url": "https://enterpriseproducts.com/careers/",
-   "note": "Job system not supported yet."
   },
   {
    "name": "EOG Resources",
@@ -2282,12 +2479,6 @@
    "platform": "custom/unknown",
    "careers_url": "https://www.expeditors.com/careers",
    "note": "Custom or JavaScript-only careers site; no standard feed found."
-  },
-  {
-   "name": "ExxonMobil",
-   "platform": "SuccessFactors",
-   "careers_url": "https://jobs.exxonmobil.com",
-   "note": "Job system not supported yet."
   },
   {
    "name": "Fidelity Investments",
@@ -2332,12 +2523,6 @@
    "note": "Custom or JavaScript-only careers site; no standard feed found."
   },
   {
-   "name": "Frontier Communications",
-   "platform": "custom/unknown",
-   "careers_url": "https://careers.frontier.com/careers",
-   "note": "Custom or JavaScript-only careers site; no standard feed found."
-  },
-  {
    "name": "Gap Inc.",
    "platform": "custom/unknown",
    "careers_url": "https://www.gapinc.com/en-us/careers",
@@ -2353,12 +2538,6 @@
    "name": "H&R Block",
    "platform": "iCIMS",
    "careers_url": "https://careers.hrblock.com/careers-home",
-   "note": "Job system not supported yet."
-  },
-  {
-   "name": "Halliburton",
-   "platform": "SuccessFactors",
-   "careers_url": "https://jobs.halliburton.com",
    "note": "Job system not supported yet."
   },
   {
@@ -2422,12 +2601,6 @@
    "note": "Custom or JavaScript-only careers site; no standard feed found."
   },
   {
-   "name": "Ingersoll Rand",
-   "platform": "SuccessFactors",
-   "careers_url": "https://careers.irco.com",
-   "note": "Job system not supported yet."
-  },
-  {
    "name": "Insight Enterprises",
    "platform": "custom/unknown",
    "careers_url": "https://www.insight.com/en_US/careers.html",
@@ -2470,18 +2643,6 @@
    "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
   },
   {
-   "name": "Keurig Dr Pepper",
-   "platform": "Eightfold",
-   "careers_url": "https://careers.keurigdrpepper.com/en",
-   "note": "Job system not supported yet."
-  },
-  {
-   "name": "KeyCorp",
-   "platform": "unresolved",
-   "careers_url": "",
-   "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
-  },
-  {
    "name": "Kimberly-Clark",
    "platform": "custom/unknown",
    "careers_url": "https://careers.kimberly-clark.com",
@@ -2500,12 +2661,6 @@
    "note": "Custom or JavaScript-only careers site; no standard feed found."
   },
   {
-   "name": "Koch Industries",
-   "platform": "Avature",
-   "careers_url": "https://www.kochinc.com/career-opportunities",
-   "note": "Job system not supported yet."
-  },
-  {
    "name": "Kraft Heinz",
    "platform": "custom/unknown",
    "careers_url": "https://careers.kraftheinzcompany.com/",
@@ -2516,12 +2671,6 @@
    "platform": "unresolved",
    "careers_url": "",
    "note": "Careers page not found or not reachable with the guessed address; needs a manual lookup."
-  },
-  {
-   "name": "Lam Research",
-   "platform": "SuccessFactors",
-   "careers_url": "https://careers.lamresearch.com/careers",
-   "note": "Job system not supported yet."
   },
   {
    "name": "Las Vegas Sands",
@@ -2575,12 +2724,6 @@
    "name": "Lockheed Martin",
    "platform": "custom/unknown",
    "careers_url": "https://www.lockheedmartinjobs.com/cgi-bin/ext_redir.pl",
-   "note": "Custom or JavaScript-only careers site; no standard feed found."
-  },
-  {
-   "name": "Lumen Technologies",
-   "platform": "custom/unknown",
-   "careers_url": "https://jobs.lumen.com/global/en/",
    "note": "Custom or JavaScript-only careers site; no standard feed found."
   },
   {
