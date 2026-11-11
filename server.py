@@ -1046,6 +1046,9 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/search":
             import first_search
             return self._send(200, first_search.status(pid))
+        if path == "/api/directory":
+            import directory
+            return directory.handle_get(self, path, pid)
         if path == "/api/status":
             with lock:
                 s = dict(state)
@@ -1300,14 +1303,17 @@ class H(BaseHTTPRequestHandler):
             out["kick"]["update"] = bool(body.get("search", True))
             if out["kick"]["update"]:
                 import first_search
-                ok, err = first_search.start(pid, body.get("find"))
+                ok, err = first_search.start(pid, body.get("find"), body.get("directory"))
                 out["search"] = {"started": ok, "error": err}
                 if ok:
                     self._act("job search started", pid, "from setup")
             return self._send(200, out)
+        if path == "/api/directory/apply":  # Add employers near me from the Siftwell directory (no Claude)
+            import directory
+            return directory.handle_post(self, path, body, pid, sys.modules[__name__])
         if path == "/api/search/start":
             import first_search
-            ok, err = first_search.start(pid, body.get("find"))
+            ok, err = first_search.start(pid, body.get("find"), body.get("directory"))
             if not ok:
                 return self._send(409, {"error": err})
             self._act("job search started", pid, "from the board")
@@ -1738,6 +1744,8 @@ if __name__ == "__main__":
     threading.Thread(target=scheduler, daemon=True).start()
     threading.Thread(target=refresh_stale_boards, daemon=True).start()
     appupdate.start_background()  # looks for a newer Siftwell on GitHub at most once a day (Settings -> About & updates)
+    import directory
+    directory.start_background()  # the Siftwell employer directory: weekly refresh + newly indexed employers near each person
     threading.Thread(target=recount_old_boards, daemon=True).start()
     # start-at-sign-in entry still pointing at an old app folder or runtime? rewrite it (see getting_started.heal_startup)
     threading.Thread(target=getting_started.heal_entries, kwargs={"log": lambda m: print(m, flush=True)}, daemon=True).start()

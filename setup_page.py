@@ -1042,7 +1042,7 @@ SCREENS.board = {
     if (this.view === "progress") return {back: false, skip: false, nextLabel: "Go to my board"};
     return {back: true, skip: true, skipLabel: "Skip for now", next: false};
   },
-  canStart(){ const p = this.plan; return !!p && (p.companies > 0 || p.catalog > 0 || (this.findOn && p.find.possible)); },
+  canStart(){ const p = this.plan; return !!p && (p.companies > 0 || p.catalog > 0 || !!(p.directory && p.directory.possible) || (this.findOn && p.find.possible)); },
   async mount(){
     let s = null;
     try { s = await api("GET", "/api/search"); } catch(e) {}
@@ -1056,26 +1056,28 @@ SCREENS.board = {
   summary(){
     const p = this.plan, f = p.find, cl = p.claude, v = S.values;
     const where = v.home_zip && (v.workplaces || []).some(w => w !== "remote") ? `within ${v.radius_miles} miles of ${esc(f.label || v.home_zip)}${(v.workplaces || []).includes("remote") ? " (or remote)" : ""}` : "that are remote";
-    const findTitle = f.remote_only ? "Find remote-friendly employers in your field" : `Find employers near ${esc(f.label)}`;
+    const d = p.directory || {};
+    const findTitle = f.remote_only ? "Find more remote-friendly employers with Claude" : "Find more employers with Claude";
     const findText = f.remote_only
-      ? `Claude searches the web for about ${f.size} employers anywhere in the US that hire remotely for your kind of work, using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your Near me list. Takes ${esc(f.estimate)}.`
-      : `Claude searches the web for about ${f.size} employers within ${f.radius} miles (big employers, hospitals, universities, government, nonprofits, startups and more), using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your Near me list. Takes ${esc(f.estimate)}.`;
+      ? `Claude also searches the web for about ${f.size} employers anywhere in the US that hire remotely for your kind of work, using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your Near me list. Takes ${esc(f.estimate)}.`
+      : `Claude also searches the web for about ${f.size} employers within ${f.radius} miles that the directory may not have (big employers, hospitals, universities, government, nonprofits, startups and more), using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your Near me list. Takes ${esc(f.estimate)}.`;
     const lists = p.companies ? `the ${p.companies.toLocaleString()} ${p.companies === 1 ? "company" : "companies"} in your lists` : "your companies";
     let findBox = "";
     if (f.possible) {
-      const t = f.prior ? (f.remote_only ? "Look for more remote-friendly employers" : `Look for more employers near ${esc(f.label)}`) : findTitle + " first";
-      const sub = f.prior ? `An earlier search already found employers for you: ${f.near.toLocaleString()} ${f.near === 1 ? "is" : "are"} on your Near me list. Tick this to search again for ones it missed (uses your Claude plan, ${esc(f.estimate)}).`
-                          : "Recommended for your first search, so your board has employers near you to choose from.";
-      findBox = `<div class="choices" style="margin-top:20px">${radioCard("findOn", "1", this.findOn, t, sub, {type: "checkbox"})}</div>`;
-    } else if (f.reason === "no_claude") {
-      findBox = `<div class="note" style="margin-top:20px">Finding employers near you needs Claude (it searches the web with your Claude plan). Connect it here, or start with ${p.companies ? "the companies you already have" : "a company you add yourself"}.</div><div id="ccRoot"></div>`;
+      const sub = (f.prior ? `An earlier Claude search already found employers for you. ` : "") + `Optional: uses your Claude plan and takes ${esc(f.estimate)}. The free directory above is usually enough to start.`;
+      findBox = `<div class="choices" style="margin-top:20px">${radioCard("findOn", "1", this.findOn, findTitle, sub, {type: "checkbox"})}</div>`;
+    } else if (f.reason === "no_claude" && d.possible) {
+      findBox = `<div class="note" style="margin-top:20px">Optional: connect Claude and it can also search the web for employers the directory doesn’t have (with your Claude plan). You don’t need it to start.</div><div id="ccRoot"></div>`;
     } else if (f.reason === "no_place") {
-      findBox = `<div class="note" style="margin-top:20px">Add your home ZIP on the <button type="button" class="linkbtn" id="toWhere" style="padding:0 2px">Where</button> step so Siftwell can look for employers near you.</div>`;
+      findBox = `<div class="note" style="margin-top:20px">Add your home ZIP on the <button type="button" class="linkbtn" id="toWhere" style="padding:0 2px">Where</button> step so Siftwell can add employers near you.</div>`;
     }
     const steps = [];
+    if (d.possible) steps.push([d.remote_only ? "Add remote-friendly employers from the Siftwell directory" : `Add employers near ${esc(d.label)} from the Siftwell directory`,
+      d.remote_only ? "Siftwell’s free employer directory lists employers whose job pages it can read. The ones with the most remote jobs in the US go on your Near me list. Takes a few seconds; no Claude needed."
+                    : `Siftwell’s free employer directory lists employers whose job pages it can read, and where they hire. Every one with openings within ${d.radius} miles goes on your Near me list. Takes a few seconds; no Claude needed.`]);
     if (f.possible && this.findOn) steps.push([findTitle, findText]);
-    const found = f.possible && this.findOn;
-    steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just found" : "") : found ? "the employers it just found" : lists}. About ${p.fetch_minutes} minutes the first time.`]);
+    const found = d.possible || (f.possible && this.findOn);
+    steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just added" : "") : found ? "the employers it just added" : lists}. About ${p.fetch_minutes} minutes the first time.`]);
     steps.push(["Keep the jobs that fit", `Jobs ${where}, paying at least ${fmtK(v.salary_floor)}, at your level, minus your dealbreakers.`]);
     if (cl) steps.push(["Rate the best matches", "Claude reads the top jobs against your resume and gives each a Match rating, using your Claude plan."]);
     const none = !this.canStart();
@@ -1085,7 +1087,7 @@ SCREENS.board = {
       <p class="lede">Siftwell doesn’t search until you say so. Here’s what happens when you press <b>Start my job search</b>:</p>
       <ol class="plan">${steps.map(([t, d]) => `<li><b>${t}</b><small>${d}</small></li>`).join("")}</ol>
       ${findBox}
-      ${none ? `<div class="hint" style="margin-top:20px">${I.info}<div><b>There are no companies to check yet.</b><small>The lists you picked don’t have any companies in this Siftwell. ${p.claude ? "Tick the box above to find employers near you, or " : "Connect Claude above to find employers near you, or "}add a company by its careers link.</small>
+      ${none ? `<div class="hint" style="margin-top:20px">${I.info}<div><b>There are no companies to check yet.</b><small>The lists you picked don’t have any companies in this Siftwell. Add your home ZIP on the Where step so Siftwell can add employers near you, or add a company by its careers link.</small>
         <div class="alt" style="justify-content:flex-start;margin-top:8px"><button type="button" class="linkbtn" id="toCos">Back to Companies</button><a class="linkbtn" href="/catalog#companies" style="text-decoration:none">Add a company by link</a></div></div></div>` : ""}
       ${errBox("_")}
       <p class="fine">You can leave this page while it runs; the search keeps going as long as Siftwell is running. Or press Skip for now and start it later from your board.</p>`;
@@ -1132,6 +1134,7 @@ SCREENS.board = {
       return [
         {id: "save", t: "Saving your answers"},
         kick.interpret_target ? {id: "target", t: "Working out which jobs fit your direction"} : null,
+        job.dir ? {id: "dir", t: s.plan && s.plan.directory && s.plan.directory.remote_only ? "Adding remote-friendly employers from the Siftwell directory" : `Adding employers near ${(s.plan && s.plan.directory && s.plan.directory.label) || "you"} from the Siftwell directory`} : null,
         job.find ? {id: "find", t: (s.find && s.find.label && s.plan.find.remote_only) || (s.plan && s.plan.find.remote_only) ? "Finding remote-friendly employers in your field" : `Finding employers near ${(s.find && s.find.label) || (s.plan && s.plan.find.label) || "you"}`} : null,
         {id: "fetch", t: "Checking career pages for openings"},
         s && s.plan && s.plan.claude ? {id: "score", t: "Reading the best matches against your resume"} : null,
@@ -1157,6 +1160,10 @@ SCREENS.board = {
       if (!s) return false;
       const job = s.mine ? s.job : {}, up = s.update || {};
       st.save = "done";
+      if (job.dir) {
+        st.dir = job.phase === "directory" ? "run" : "done";
+        if (job.phase !== "directory") sub.dir = job.dir_added ? `${job.dir_added.toLocaleString()} added to your Near me list` : "No new employers to add";
+      }
       if (s.find) {
         const f = s.find;
         sub.find = `${f.found} found · ${f.readable} Siftwell can read` + (job.phase === "find" && f.kinds ? ` · ${f.kinds_done} of ${f.kinds} kinds of employer done` : "");
@@ -1167,6 +1174,7 @@ SCREENS.board = {
       if (up.running && up.phase !== "facts") {
         sawRun = true;
         if (job.find) st.find = "done";
+        if (job.dir) st.dir = "done";
         if (up.phase === "fetch") { st.fetch = "run"; sub.fetch = up.total ? `${up.done} of ${up.total} companies checked` : "Starting…"; sub.fetch_frac = up.total ? up.done / up.total : 0; }
         else { st.fetch = "done"; st.score = "run"; sub.score = up.total ? `Batch ${up.done} of ${up.total}` : "Starting…"; sub.score_frac = up.total ? up.done / up.total : 0; }
       } else if (job.running && job.phase === "build") {
@@ -1183,7 +1191,7 @@ SCREENS.board = {
         if (st.target === "run") { const pp = await api("GET", "/api/people"); if (!(pp.target_job || {}).running) st.target = "done"; }
       } catch(e) {}
       if (apply()) {
-        ["find", "fetch", "score", "build", "target"].forEach(k => { st[k] = "done"; });
+        ["dir", "find", "fetch", "score", "build", "target"].forEach(k => { st[k] = "done"; });
         delete sub.fetch; delete sub.score;
         draw();
         if ($("bWait")) $("bWait").hidden = true;
@@ -1308,14 +1316,17 @@ const Mock = {
     else if (path === "/api/people") out = {target_job: {running: now - t.fin < 3000}};
     else if (path === "/api/search") {
       const plan = {claude: true, companies: 0, catalog: 0, fetch_minutes: 8, started_before: !!t.fin,
-                    find: {possible: true, reason: null, remote_only: false, label: "22201 (Arlington, VA)", location: "22201", radius: s.values.radius_miles || 35, size: 80, estimate: "about 20 to 40 minutes", near: 0, prior: null, default: true}};
-      const e = t.fin ? (now - t.fin) / 1000 : -1, f0 = t.find ? 8 : 0;
-      let job = {running: false, phase: "", find: t.find}, up = {running: false}, find = null;
+                    find: {possible: true, reason: null, remote_only: false, label: "22201 (Arlington, VA)", location: "22201", radius: s.values.radius_miles || 35, size: 80, estimate: "about 20 to 40 minutes", near: 0, prior: null, default: false},
+                    directory: {possible: true, label: "22201 (Arlington, VA)", radius: s.values.radius_miles || 35, remote_only: false, applied: null, default: true}};
+      const e = t.fin ? (now - t.fin) / 1000 : -1, f0 = (t.find ? 8 : 0) + 2;
+      let job = {running: false, phase: "", find: t.find, dir: true, dir_added: 0}, up = {running: false}, find = null;
       if (e >= 0) {
-        if (e < f0) { job = {running: true, phase: "find", find: true}; find = {found: Math.round(e * 9), readable: Math.round(e * 6), kinds: 8, kinds_done: Math.floor(e), label: plan.find.label}; }
-        else if (e < f0 + 9) { job = {running: true, phase: "fetch", find: t.find, added: t.find ? 48 : 0}; up = {running: true, phase: "fetch", done: Math.round((e - f0) / 9 * 48), total: 48}; }
-        else if (e < f0 + 15) { job = {running: true, phase: "fetch", find: t.find, added: t.find ? 48 : 0}; up = {running: true, phase: "ai", done: Math.round((e - f0 - 9) / 6 * 8), total: 8}; }
-        else { job = {running: false, phase: "done", find: t.find, added: t.find ? 48 : 0}; up = {running: false, exit: 0}; }
+        job.dir_added = e < 2 ? 0 : 212;
+        if (e < 2) job = {running: true, phase: "directory", find: t.find, dir: true, dir_added: 0};
+        else if (e < f0) { job = {running: true, phase: "find", find: true, dir: true, dir_added: 212}; find = {found: Math.round(e * 9), readable: Math.round(e * 6), kinds: 8, kinds_done: Math.floor(e), label: plan.find.label}; }
+        else if (e < f0 + 9) { job = {running: true, phase: "fetch", find: t.find, dir: true, dir_added: 212, added: t.find ? 48 : 0}; up = {running: true, phase: "fetch", done: Math.round((e - f0) / 9 * 48), total: 48}; }
+        else if (e < f0 + 15) { job = {running: true, phase: "fetch", find: t.find, dir: true, dir_added: 212, added: t.find ? 48 : 0}; up = {running: true, phase: "ai", done: Math.round((e - f0 - 9) / 6 * 8), total: 8}; }
+        else { job = {running: false, phase: "done", find: t.find, dir: true, dir_added: 212, added: t.find ? 48 : 0}; up = {running: false, exit: 0}; }
         if (t.find && e >= f0) find = {found: 72, readable: 48, kinds: 8, kinds_done: 8, label: plan.find.label};
       }
       out = {plan, job, mine: true, update: up, find_live: job.phase === "find", find, running: !!(job.running || up.running)};

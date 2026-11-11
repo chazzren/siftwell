@@ -1,0 +1,93 @@
+name: Employer directory
+
+# Builds the Siftwell employer directory once a week (and on demand: Actions -> Employer directory -> Run workflow)
+# and publishes it on the `index` branch of this repository as a single commit, force-pushed each run. The app reads it
+# from raw.githubusercontent.com (directory.py); it is not a GitHub Release, so the app's update check never sees it.
+#
+# The builder (scripts/build_index.py) is stdlib Python. It reads public sources only; the optional keyed sources run
+# only when their secrets exist (Settings -> Secrets and variables -> Actions):
+#   USAJOBS_API_KEY, USAJOBS_EMAIL           federal job postings (free key: https://developer.usajobs.gov/)
+#   CAREERONESTOP_TOKEN, CAREERONESTOP_USERID  CareerOneStop job postings (free: https://www.careeronestop.org/Developers/WebAPI/registration.aspx)
+# Keys are only passed to the builder as environment variables; nothing it publishes contains them.
+#
+# Time: discovery takes about 15-25 minutes; reading boards is time-boxed (--minutes) so the job stays well inside the
+# 6-hour limit. Boards not reached this week are read first next week (the builder's state lives in _state/ on the
+# index branch).
+on:
+  schedule:
+    - cron: "17 6 * * 1"        # Mondays 06:17 UTC
+  workflow_dispatch:
+    inputs:
+      states:
+        description: "Only these states (comma-separated, e.g. OH,CO). Empty = all"
+        required: false
+        type: string
+      minutes:
+        description: "Minutes for reading job boards (time box)"
+        required: false
+        default: "270"
+        type: string
+      limit:
+        description: "Read at most this many boards (empty = no limit)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: employer-directory
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    steps:
+      - name: Check out the app (default branch)
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bring back the previous directory (builder state and files)
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          if git fetch --depth=1 origin index 2>/dev/null; then
+            git archive FETCH_HEAD | tar -x -C "$RUNNER_TEMP/out"
+            echo "Previous directory restored."
+          else
+            echo "No index branch yet: first build."
+          fi
+
+      - name: Build the directory
+        env:
+          USAJOBS_API_KEY: ${{ secrets.USAJOBS_API_KEY }}
+          USAJOBS_EMAIL: ${{ secrets.USAJOBS_EMAIL }}
+          CAREERONESTOP_TOKEN: ${{ secrets.CAREERONESTOP_TOKEN }}
+          CAREERONESTOP_USERID: ${{ secrets.CAREERONESTOP_USERID }}
+          STATES: ${{ inputs.states }}
+          MINUTES: ${{ inputs.minutes || '270' }}
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          args=(--out "$RUNNER_TEMP/out" --work "$RUNNER_TEMP/work" --minutes "$MINUTES")
+          if [ -n "$STATES" ]; then args+=(--states "$STATES"); fi
+          if [ -n "$LIMIT" ]; then args+=(--limit "$LIMIT"); fi
+          python -X utf8 scripts/build_index.py "${args[@]}"
+          du -sh "$RUNNER_TEMP/out"
+          cat "$RUNNER_TEMP/out/manifest.json" | head -c 3000
+
+      - name: Publish to the index branch (one commit, force-pushed)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "$RUNNER_TEMP/out"
+          rm -rf .git
+          git init -q -b index
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Employer directory $(date -u +%F)"
+          git push -f -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" index:index
+          echo "Published $(git ls-files | wc -l) files to the index branch."

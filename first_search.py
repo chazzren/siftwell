@@ -1,17 +1,20 @@
 """Start my job search: the first search for a profile (the last step of /setup and the board's Start card).
 
 What it runs, in order, in one background thread:
-  1. Find employers near the person's home (employer_finder, the standard Medium search; remote-only people get the
-     "Remote-friendly employers in my field" kind instead). It runs through catalog_api's Find employers thread, so it
-     uses the same job lock, progress and Stop as the Catalog page. Every employer Siftwell can read is then added to the
-     person's "Near me" list (near-<pid>, which people.company_sets() already watches). Skipped when Claude isn't
-     connected, when the person has no home ZIP (and isn't remote-only), or when a search for this place already ran
-     for them (they can still ask to "Look for more").
-  2. The first job fetch: exactly what the board's Find new jobs (Update) button runs (server.run_update). When the
+  1. The Siftwell employer directory (directory.py; free, no key, no Claude): every indexed employer within the person's
+     radius (the top remote-friendly ones for remote-only searches) goes on their "Near me" list (near-<pid>, which
+     people.company_sets() already watches), plus the job-snapshot sources with postings near them. Takes seconds.
+     Skipped without a home ZIP (unless remote-only); offline it just notes that the directory couldn't be reached.
+  2. Only when the person asks for it ("Find more with Claude", never by default): Claude's Find employers near the
+     person's home (employer_finder, the standard Medium search; remote-only people get the "Remote-friendly employers
+     in my field" kind instead). It runs through catalog_api's Find employers thread, so it uses the same job lock,
+     progress and Stop as the Catalog page. Every employer Siftwell can read is then added to the Near me list too.
+     Not possible when Claude isn't connected or the person has no home ZIP (and isn't remote-only).
+  3. The first job fetch: exactly what the board's Find new jobs (Update) button runs (server.run_update). When the
      catalog was already fully fetched today, only the newly added employers are fetched.
-  3. The fetch rebuilds every board and (with Claude) rates the new jobs, as every update does.
+  4. The fetch rebuilds every board and (with Claude) rates the new jobs, as every update does.
 
-Routes (wired in server.py): GET /api/search -> status(pid), POST /api/search/start -> start(pid, find)."""
+Routes (wired in server.py): GET /api/search -> status(pid), POST /api/search/start -> start(pid, find, directory)."""
 import datetime as dt
 import threading
 import time
@@ -23,7 +26,7 @@ S = None          # the server module (configure)
 SIZE = "medium"   # the standard Find employers size (not Exhaustive)
 PER_MINUTE = 12   # rough companies checked per minute on a first fetch (for the "about N minutes" estimate)
 JOB = {"running": False, "pid": None, "phase": "", "find": False, "find_run": None, "added": 0, "note": "",
-       "error": None, "started": None, "finished": None}
+       "dir": False, "dir_added": 0, "dir_near": 0, "error": None, "started": None, "finished": None}
 _LOCK = threading.Lock()
 
 
@@ -125,11 +128,15 @@ def plan(pid):
     if prior:
         find["prior"] = {"status": prior["status"], "found": prior.get("companies"), "readable": prior.get("fetched"),
                          "finished": prior.get("finished")}
-    # A finished search for this place isn't run again by default ("Look for more" asks for it); a stopped one resumes.
-    find["default"] = find["possible"] and not (prior and prior["status"] in ("ok", "partial", "budget"))
-    expected = mine + (find["size"] // 2 if find["default"] else 0)
+    # Claude's search runs only when the person ticks "Find more with Claude" (it uses their Claude plan).
+    find["default"] = False
+    import directory
+    drec = directory.record(pid)
+    dirp = {"possible": bool(location or remote_only), "label": find["label"], "radius": find["radius"],
+            "remote_only": remote_only, "applied": drec.get("applied"), "default": bool(location or remote_only)}
+    expected = mine + (100 if dirp["default"] and not drec.get("applied") else 0)
     stats = catalog.stats()
-    return {"claude": claude, "companies": mine, "catalog": total, "find": find,
+    return {"claude": claude, "companies": mine, "catalog": total, "find": find, "directory": dirp,
             "fetch_minutes": max(2, round((total + (expected - mine)) / PER_MINUTE)),
             "started_before": bool(st.get("search_started")), "last_full_fetch": stats.get("last_full_fetch"),
             "open_listings": stats.get("open", 0)}
@@ -160,21 +167,24 @@ def status(pid):
     return out
 
 
-def start(pid, find=None):
-    """Start the search for this person. find: True / False, or None for the plan's default. Returns (ok, error)."""
+def start(pid, find=None, directory=None):
+    """Start the search for this person. find (Claude) / directory: True / False, or None for the plan's default.
+    Returns (ok, error)."""
     p = plan(pid)
     want_find = p["find"]["default"] if find is None else bool(find) and p["find"]["possible"]
-    if not want_find and not p["companies"] and not p["catalog"]:
-        return False, "There are no companies to check yet. Add one by its careers link in the Catalog" + (
-            "." if p["claude"] else ", or connect Claude so Siftwell can find employers near you.")
+    want_dir = p["directory"]["default"] if directory is None else bool(directory) and p["directory"]["possible"]
+    if not want_find and not want_dir and not p["companies"] and not p["catalog"]:
+        return False, ("There are no companies to check yet. Add your home ZIP so Siftwell can add employers near you, "
+                       "or add a company by its careers link in the Catalog.")
     with _LOCK:
         if JOB["running"]:
             return False, "A job search is already running."
-        JOB.update(running=True, pid=pid, phase="find" if want_find else "fetch", find=want_find, find_run=None, added=0,
-                   note="", error=None, started=_now(), finished=None)
+        JOB.update(running=True, pid=pid, phase="directory" if want_dir else "find" if want_find else "fetch", find=want_find,
+                   find_run=None, added=0, note="", dir=want_dir, dir_added=0, dir_near=0, error=None, started=_now(),
+                   finished=None)
     import setup_flow
     setup_flow._write(pid, {"search_started": _now()})
-    threading.Thread(target=_work, args=(pid, want_find, p), daemon=True, name="first-search").start()
+    threading.Thread(target=_work, args=(pid, want_find, p, want_dir), daemon=True, name="first-search").start()
     return True, None
 
 
@@ -230,12 +240,32 @@ def _link_known(pid, cands):
     return out
 
 
-def _work(pid, want_find, p):
+def _run_directory(pid):
+    """Step 1: the Siftwell directory's employers near this person onto their Near me list. Returns their names."""
+    import directory
+    r = directory.apply(pid)
+    if not r["available"]:
+        if r["reason"] == "offline":
+            _set(note="Siftwell couldn't download its employer directory this time (are you online?), so it checked the companies you already have.")
+        return []
+    names = r["added"] + r["linked"]
+    _set(dir_added=len(names), dir_near=r["near"])
+    S._actlog("companies added", pid, f"{len(names)} from the Siftwell directory")
+    return names
+
+
+def _work(pid, want_find, p, want_dir=False):
     try:
         added = []
-        if want_find:
+        if want_dir:
             try:
-                added = _run_find(pid, p)
+                added += _run_directory(pid)
+            except Exception as e:
+                _set(note=f"The employer directory didn't work this time ({type(e).__name__}: {str(e)[:120]}).")
+        if want_find:
+            _set(phase="find")
+            try:
+                added += _run_find(pid, p)
             except Exception as e:
                 _set(note=f"Finding employers near you didn't work this time ({type(e).__name__}: {str(e)[:120]}).")
         _set(phase="fetch")

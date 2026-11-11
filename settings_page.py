@@ -15,6 +15,7 @@ import json
 import autoupdate
 import appupdate
 import backup
+import directory
 import getting_started
 import people
 import report
@@ -132,7 +133,7 @@ def _pane_head(cid, name, back_href="/settings", back_label="Settings"):
 
 def _render_parts():
     nav, panes = [], []
-    for cid, name, icon, groups in [GS_CAT + ("checklist",), PROF_CAT + ("profiles",)] + CATEGORIES + [UPDATES_CAT + ("updates",), ABOUT_CAT + ("about",), BACKUP_CAT + ("backup",), KEY_CAT + (None,)]:
+    for cid, name, icon, groups in [GS_CAT + ("checklist",), PROF_CAT + ("profiles",)] + CATEGORIES + [UPDATES_CAT + ("updates",), directory.CAT + ("directory",), ABOUT_CAT + ("about",), BACKUP_CAT + ("backup",), KEY_CAT + (None,)]:
         count = '<span class="scount" id="gsCount" hidden></span>' if cid == "get-started" else ""
         nav.append(f'<a class="scat" href="#{cid}" data-cat="{cid}"><span class="sico">{_SVG.format(icon)}</span>'
                    f'<span class="sname">{e(name)}</span>{count}<span class="schev" aria-hidden="true">›</span></a>')
@@ -146,6 +147,8 @@ def _render_parts():
                     '<p class="note" style="margin:8px 14px 0">Resume, search settings, target and companies for the person you are viewing are on <a href="/profile">My profile</a>.</p>')
         elif groups == "updates":
             body = autoupdate.PANE_HTML
+        elif groups == "directory":
+            body = directory.PANE_HTML
         elif groups == "about":
             body = appupdate.PANE_HTML
         elif groups == "backup":
@@ -188,7 +191,7 @@ def render_settings_html(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + CSS + getting_started.CSS + backup.CSS + appupdate.CSS + "</head><body>" + body + '<script src="/assets/vendor/qrcode.js"></script>\n' +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") +
-            ";</script>\n" + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + autoupdate.SCRIPT + appupdate.BANNER_SCRIPT + appupdate.PANE_SCRIPT + "</body></html>")
+            ";</script>\n" + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + autoupdate.SCRIPT + appupdate.BANNER_SCRIPT + appupdate.PANE_SCRIPT + directory.PANE_SCRIPT + "</body></html>")
 
 
 CSS = """<style>

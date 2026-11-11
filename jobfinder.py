@@ -642,6 +642,8 @@ def load_extra():
     if os.path.exists(os.path.join(HERE, "ats_more.py")):
         import ats_more
         FETCHERS.update(ats_more.FETCHERS)
+    import directory   # job snapshots from the Siftwell employer directory (USAJOBS ...), read from its cached files
+    FETCHERS.update(directory.FETCHERS)
 
 # ---------------------------------------------------------------- pipeline
 BARE_US = re.compile(r"\s*(us|usa|u\.s\.|united states( of america)?|dragos usa)\s*")

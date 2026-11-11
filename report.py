@@ -420,6 +420,8 @@ ol.rows{gap:0;background:var(--surface);border:1px solid var(--line);border-radi
 .startcard .chk{font-size:14px;color:var(--ink)}
 .startcard .smsg{font-size:13px;color:var(--bad)}
 .startcard .smsg:empty{display:none}
+.startcard .dmsg{color:var(--ink)}
+.startcard ul .linkbtn{font-size:inherit;padding:0;text-align:left}
 #view-jobs.nojobs #list .dempty,#view-jobs.nojobs .countrow,#view-jobs.nojobs .split .detail{display:none}
 .reqbox{display:flex;flex-direction:column;gap:8px}
 .reqbox .chip{white-space:normal}
@@ -1357,7 +1359,8 @@ if (SERVED && !jobs.length) (function(){
     if (s.running) {
       sawRun = true;
       let line = "Getting started…", frac = .03;
-      if (job.running && job.phase === "find") { const c = s.find || {}; line = `Finding ${findName(f, c.label)}: ${n(c.found)} found so far, ${n(c.readable)} Siftwell can read.`; frac = c.kinds ? .3 * c.kinds_done / c.kinds : .03; }
+      if (job.running && job.phase === "directory") { const d = p.directory || {}; line = d.remote_only ? "Adding remote-friendly employers from the Siftwell directory…" : `Adding employers near ${esc(d.label || "you")} from the Siftwell directory…`; frac = .05; }
+      else if (job.running && job.phase === "find") { const c = s.find || {}; line = `Finding ${findName(f, c.label)}: ${n(c.found)} found so far, ${n(c.readable)} Siftwell can read.`; frac = c.kinds ? .3 * c.kinds_done / c.kinds : .03; }
       else if (up.running && up.phase === "fetch") { line = `Checking career pages for openings: ${up.total ? `${n(up.done)} of ${n(up.total)} companies` : "starting"}.`; frac = .3 + (up.total ? .5 * up.done / up.total : 0); }
       else if (up.running && (up.phase === "ai" || up.phase === "pivot")) { line = "Claude is reading the best matches against your resume."; frac = .85; }
       else if (up.running) { line = "Almost done: building your board."; frac = .95; }
@@ -1371,19 +1374,18 @@ if (SERVED && !jobs.length) (function(){
     if (sawRun) { saveFilters(); location.reload(); return; }  // it finished: show the new board
     const err = job.error ? `<p class="smsg">${esc(job.error)}</p>` : "";
     if (!p.started_before) {
-      const findOn = f.possible && f.default, nothing = !p.companies && !p.catalog && !f.possible;
-      const what = `check the career pages of ${p.companies ? `the ${n(p.companies)} companies in your lists` : "your companies"}${f.possible ? " (and the employers it finds near you, if you tick the box)" : ""} for openings and keep the ones that fit your search${p.claude ? ", and Claude rates the best matches" : ""}`;
+      const d = p.directory || {}, findOn = f.possible && f.default, nothing = !p.companies && !p.catalog && !d.possible && !f.possible;
+      const what = `${d.possible ? (d.remote_only ? "add remote-friendly employers from its free employer directory (no Claude needed), then " : `add employers near ${esc(d.label)} from its free employer directory (no Claude needed), then `) : ""}check the career pages of ${p.companies ? `the ${n(p.companies)} companies in your lists` : "your companies"} for openings and keep the ones that fit your search${p.claude ? ", and Claude rates the best matches" : ""}`;
       show(`<h2 id="scTitle">Start your job search</h2>
         <p>Siftwell hasn’t looked for jobs for you yet. When you start, it will ${what}. The first search takes a while; you can leave this page while it runs.</p>
-        ${f.possible ? `<label class="chk"><input type="checkbox" id="scFind"${findOn ? " checked" : ""}><span>${f.prior ? `Look for more ${findName(f)} (${n(f.near)} already on your Near me list)` : `First find ${findName(f)} (recommended)`}: Claude searches the web, using your Claude plan; ${esc(f.estimate)}</span></label>` : ""}
-        ${f.reason === "no_claude" ? `<p>Finding employers near you needs Claude. <a href="/settings#get-started">Connect Claude in Settings, then Get started</a>.</p>` : ""}
-        ${f.reason === "no_place" ? `<p>Add your home ZIP (Filters, then My search) so Siftwell can look for employers near you.</p>` : ""}
-        ${nothing ? `<p><b>There are no companies to check yet.</b> Add one by its careers link${p.claude ? "" : ", or connect Claude so Siftwell can find employers near you"}.</p>` : ""}
+        ${f.possible ? `<label class="chk"><input type="checkbox" id="scFind"${findOn ? " checked" : ""}><span>Also find more ${findName(f)} with Claude (optional): Claude searches the web, using your Claude plan; ${esc(f.estimate)}</span></label>` : ""}
+        ${f.reason === "no_place" ? `<p>Add your home ZIP (Filters, then My search) so Siftwell can add employers near you.</p>` : ""}
+        ${nothing ? `<p><b>There are no companies to check yet.</b> Add your home ZIP, or add a company by its careers link.</p>` : ""}
         <div class="sacts"><button class="btn primary" type="button" id="scGo"${nothing ? " disabled" : ""}>Start my job search</button>${nothing ? `<a class="btn" href="/catalog#companies">Add a company by link</a>` : ""}</div>
         <div class="smsg" id="scMsg" role="status"></div>${err}`);
       $("scGo").addEventListener("click", () => {
         const fb = $("scFind"); $("scGo").disabled = true; $("scMsg").textContent = "";
-        fetch("/api/search/start", {method: "POST", headers: H, body: JSON.stringify({find: !!(fb && fb.checked)})})
+        fetch("/api/search/start", {method: "POST", headers: H, body: JSON.stringify({find: !!(fb && fb.checked), directory: true})})
           .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
             if (!ok) { $("scGo").disabled = false; $("scMsg").textContent = d.error || "The search couldn’t start."; return; }
             load();
@@ -1395,9 +1397,20 @@ if (SERVED && !jobs.length) (function(){
       <p>${p.companies ? `Siftwell checked the ${n(p.companies)} companies in your lists, but none of their openings fit your search right now.` : "Your company lists don’t have any companies in them yet, so there was nothing to check."} Things that usually help:</p>
       <ul>
         <li><a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (Filters, then My search).</li>
-        <li><a href="/catalog#find">Find employers near me</a>: Claude looks up employers in your area${p.claude ? "" : " (needs Claude)"}, and you add the ones Siftwell can read.</li>
+        ${(p.directory || {}).possible ? `<li><button type="button" class="linkbtn" id="scDir">Add employers near me from the Siftwell directory</button>: free, no Claude; Siftwell then checks their openings.<span class="dmsg" id="scDirMsg" role="status"></span></li>` : ""}
+        <li><a href="/catalog#find">Find more employers with Claude</a>: Claude looks up employers in your area${p.claude ? "" : " (needs Claude)"}, and you add the ones Siftwell can read.</li>
         <li><a href="/catalog#companies">Add a company by its careers link</a>.</li>
       </ul>${err}`);
+    if ($("scDir")) $("scDir").addEventListener("click", () => {
+      $("scDir").disabled = true; $("scDirMsg").textContent = " Adding…";
+      fetch("/api/directory/apply", {method: "POST", headers: H, body: JSON.stringify({fetch: true})})
+        .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+          if (!ok) { $("scDir").disabled = false; $("scDirMsg").textContent = " " + (d.error || "That didn’t work."); return; }
+          const k = (d.added || []).length + (d.linked || []).length;
+          $("scDirMsg").textContent = k ? ` Added ${n(k)} to your Near me list${d.fetching ? "; checking their openings now" : ""}.` : " No new employers near you in the directory right now.";
+          if (d.fetching) setTimeout(load, 1500);
+        }).catch(() => { $("scDir").disabled = false; $("scDirMsg").textContent = " Couldn’t reach Siftwell. Try again."; });
+    });
   }
   load();
 })();

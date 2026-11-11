@@ -28,7 +28,7 @@ The first time, Windows may say **"Windows protected your PC"**: click **More in
 
 1. **Open Siftwell** and add yourself (several people can share one Siftwell).
 2. **Set up your profile**: upload a resume (or fill in a short form), your home ZIP and radius, and the pay you're after.
-3. **Click Start my job search** at the end of setup. With Claude connected, Siftwell first finds employers near you, then checks their career pages. Your board fills in with the openings that fit you.
+3. **Click Start my job search** at the end of setup. Siftwell adds employers near you from its free employer directory (no Claude needed), then checks their career pages. Your board fills in with the openings that fit you.
 
 Later, **Find new jobs** (the circular-arrow icon) checks every company again, and you can add any company by its careers-page link in **Catalog**.
 
@@ -38,7 +38,7 @@ Later, **Find new jobs** (the circular-arrow icon) checks every company again, a
 - Filters by distance from your home, remote or in person, pay, seniority, travel and requirements.
 - Scores every job on **Appeal** (how good it is for you) and, with Claude, **Match** (how well your resume fits).
 - Plain-English search, saved and applied tracking, and resume tailoring (PDF or Word).
-- Finds employers near you, and lets you share company lists with friends.
+- A free, weekly-updated [employer directory](docs/GUIDE.md#the-siftwell-employer-directory) finds employers near you (only state-level files are downloaded; Claude can optionally find more), and you can share company lists with friends.
 - Works on your phone over your home Wi-Fi, and tells you when a new version is out (the installed version updates itself).
 
 ## What you need
