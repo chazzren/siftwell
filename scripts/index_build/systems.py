@@ -35,13 +35,16 @@ SYSTEMS = [
     System("paycom", ("net,paycomonline,www)/v4/ats/",), (), None, "https://www.paycomonline.net/v4/ats/web.php/jobs?clientkey={key}"),
     System("saashr", ("com,saashr,",), (), None, "https://{host}/ta/{cid}.careers"),
     System("adp", ("com,adp,workforcenow)/mascsr/",), (), None, "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid={cid}"),
-    # Rows for systems another builder is adding to the app (fill in when their fetchers land; field names must match
-    # their config). Kept here, commented, so the directory picks them up with one line each:
+    # Public-employer systems (ats_public.py): school districts, hospitals, small governments.
+    System("applitrack", ("com,applitrack,www)/",), (), re.compile(r"applitrack\.com/(?P<slug>[A-Za-z0-9][A-Za-z0-9_.-]{0,59})/onlineapp", re.I), "https://www.applitrack.com/{slug}/onlineapp/"),
+    System("schoolspring", ("com,schoolspring,",), ("schoolspring.com",), re.compile(r"(?://|^)(?!www\.|api\.)(?P<sub>[a-z0-9][a-z0-9-]{0,60})\.schoolspring\.com", re.I), "https://{sub}.schoolspring.com/"),
+    System("jobvite", ("com,jobvite,jobs)/",), (), re.compile(r"jobs\.jobvite\.com/(?P<slug>[A-Za-z0-9][A-Za-z0-9_.-]{0,59})", re.I), "https://jobs.jobvite.com/{slug}/jobs"),
+    # Not read on purpose: NEOGOV / GovernmentJobs.com and PeopleAdmin forbid every crawler in robots.txt. If that
+    # changes and the app gains readers, they are one row each, e.g.:
     # System("neogov", ("com,governmentjobs,www)/careers/",), (), re.compile(r"governmentjobs\.com/careers/(?P<agency>[A-Za-z0-9_-]+)"), "https://www.governmentjobs.com/careers/{agency}"),
-    # System("schoolspring", ("com,schoolspring,www)/",), (), re.compile(r"schoolspring\.com/.*?[?&]employer=(?P<employer>\d+)"), "https://www.schoolspring.com/jobs?employer={employer}"),
-    # System("applitrack", ("com,applitrack,www)/",), (), re.compile(r"applitrack\.com/(?P<client>[A-Za-z0-9_-]+)/onlineapp"), "https://www.applitrack.com/{client}/onlineapp/"),
     # System("peopleadmin", ("com,peopleadmin,",), ("peopleadmin.com",), re.compile(r"(?P<host>[a-z0-9-]+\.peopleadmin\.com)"), "https://{host}/postings/search"),
-    # System("phenom", (), (), None, ""),   # (custom domains: found through the jsonld/WDC route instead)
+    # Systems on employers' own domains (Phenom, Oracle Recruiting Cloud on custom hosts, SuccessFactors career sites)
+    # come in through the Web Data Commons route (gov.resolve_domain), which runs company_add's own detection.
 ]
 BY_ID = {s.id: s for s in SYSTEMS}
 
@@ -68,7 +71,7 @@ def parse(url):
                     break
     if not c:
         return None
-    tok = str(c.get("token") or c.get("tenant") or "").lower()
+    tok = str(c.get("token") or c.get("tenant") or c.get("slug") or c.get("sub") or "").lower()
     if tok in BAD or tok.startswith("embed"):
         return None
     if c.get("ats") == "greenhouse":

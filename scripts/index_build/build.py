@@ -115,6 +115,8 @@ def seed_packs(T):
         for c in d.get("companies") or []:
             import netsafe
             cfg, _ = netsafe.clean_config(c)
+            if cfg:   # (the pack's verification stamps aren't part of the board's identity)
+                cfg = {k: v for k, v in cfg.items() if not k.startswith("verified_")}
             if cfg:
                 T.add(cfg, "pack", c.get("name"))
                 n += 1
@@ -259,21 +261,43 @@ def place_of(label):
     return r
 
 
+FOREIGN_ENTITY = re.compile(r"\b(Ltda|GmbH|S\.?A\.?S?|Pvt|Private Limited|B\.?V\.?|S\.?r\.?l|AG|K\.?K\.?|Pty|Sdn Bhd|"
+                            r"India|Brasil|Brazil|Canada|Mexico|UK|U\.K\.|Ireland|Germany|France|Japan|China|Singapore|"
+                            r"Australia|Philippines|Poland|de C\.?V\.?|S\. de R\.L\.)\b", re.I)
+LEGAL = re.compile(r"[,\s]+(Inc\.?|Incorporated|LLC|L\.L\.C\.|LLP|Corp\.?|Corporation|Company|Co\.|Ltd\.?|Limited|N\.A\.|L\.?P\.?|P\.?C\.?|PLLC)(?:-Federal)?$", re.I)
+
+
+def clean_name(n):
+    """A posting's legal-entity name made presentable: '0101 The Huntington National Bank' -> 'The Huntington National
+    Bank', '00100 LEIDOS, INC' -> 'Leidos'. None when it names a foreign entity or nothing is left."""
+    n = re.sub(r"\s+", " ", str(n or "")).strip()
+    n = re.sub(r"^(?:[A-Z]{1,3}\d{2,6}|0\d{1,5}|\d{3,6})\s*[-–:]?\s+(?=\S)", "", n)   # leading company codes ("0101 ", "US101 ")
+    if not n or FOREIGN_ENTITY.search(n):
+        return None
+    for _ in range(2):
+        n = LEGAL.sub("", n).strip(" ,.-")
+    if n.isupper() and len(re.sub(r"[^A-Z]", "", n)) > 5:
+        n = " ".join(w if len(w) <= 3 and not re.search(r"[AEIOU]", w) else w.capitalize() for w in n.split())
+    return n[:60] if len(n) >= 2 else None
+
+
+def host_name(c):
+    """Last resort: a name from the board's address (uhhospitals.taleo.net -> Uhhospitals)."""
+    import urllib.parse
+    v = str(c.get("host") or c.get("base") or c.get("list_url") or c.get("url") or c.get("sitemap") or "")
+    h = urllib.parse.urlsplit(v if "//" in v else "https://" + v).netloc.lower()
+    labs = [x for x in h.split(".") if x and x not in ("www", "careers", "career", "jobs", "job", "apply", "recruiting", "secure")]
+    return (labs[0].replace("careers-", "").replace("-", " ").title() if labs else c.get("ats", "Employer").title())[:60]
+
+
 def pick_name(t, s):
     if t.get("pack_name"):
         return t["pack_name"]
     import company_add
     c = t["c"]
-    bn = (s or {}).get("name") or ""
-    slug = re.sub(r"[^a-z0-9]", "", str(c.get("token") or c.get("tenant") or "").lower())
-    if bn and c["ats"] == "workday":   # (Workday gives a posting's legal entity: keep it only when it names the tenant)
-        nb = re.sub(r"[^a-z0-9]", "", bn.lower())
-        if not slug or not (slug[:5] in nb or nb[:5] in slug):
-            bn = ""
-        else:
-            bn = re.sub(r"\b(Inc\.?|LLC|L\.L\.C\.|Corp\.?|Corporation|Company|Co\.|Ltd\.?|N\.A\.|LP)$", "", bn).strip(" ,.")
+    bn = clean_name((s or {}).get("name"))
     if bn:
-        return bn[:60]
+        return bn
     if t.get("gov_name"):
         return t["gov_name"][:60]
     return company_add.default_name(c)
@@ -284,6 +308,7 @@ def lane(c):
 
 
 def read_all(T, args, deadline, want_states):
+    reread = {s.strip() for s in (args.reread or "").split(",") if s.strip()}
     todo = []
     for k, t in T.d.items():
         if t.get("rest_until") and t["rest_until"] > today():
@@ -291,7 +316,7 @@ def read_all(T, args, deadline, want_states):
         s = systems.BY_ID.get(t["c"].get("ats"))
         if s is not None and not s.read:
             continue
-        if t.get("read") and _days_since(t["read"]) < STALE_DAYS:
+        if t.get("read") and _days_since(t["read"]) < STALE_DAYS and t["c"].get("ats") not in reread:
             continue
         todo.append(k)
 
@@ -337,7 +362,7 @@ def read_all(T, args, deadline, want_states):
                 cur = places.get(kk)
                 places[kk] = [p[0], p[1], (cur[2] if cur else 0) + n, p[3], p[2]]
         t.update(read=today(), fail=0, jobs=s["jobs"], remote=s["remote"], places=list(places.values()),
-                 sample=bool(s.get("sample")), name=pick_name(t, s), secs=s.get("secs"))
+                 sample=bool(s.get("sample")), name=pick_name(t, s), bname=s.get("name"), secs=s.get("secs"))
         t.pop("err", None)
         t.pop("rest_until", None)
         stats["ok" if s["jobs"] else "empty"] += 1
@@ -369,7 +394,8 @@ def read_all(T, args, deadline, want_states):
 def entry(t, state=None):
     places = [[p[0], p[1], p[2], p[3]] for p in t.get("places") or [] if state is None or p[4] == state]
     places.sort(key=lambda p: -p[2])
-    e = {"n": t.get("name") or "", "c": t["c"], "u": systems.careers_url(t["c"]), "j": int(t.get("jobs") or 0),
+    name = t.get("pack_name") or clean_name(t.get("bname")) or t.get("gov_name") or clean_name(t.get("name")) or __import__("company_add").default_name(t["c"]) or host_name(t["c"])
+    e = {"n": name, "c": {k: v for k, v in t["c"].items() if not k.startswith("verified_")}, "u": systems.careers_url(t["c"]), "j": int(t.get("jobs") or 0),
          "r": int(t.get("remote") or 0), "p": places[:60], "s": t.get("read")}
     if t.get("sample"):
         e["x"] = 1
@@ -401,6 +427,16 @@ def write(out, T, jobs_by, want_states, stats, t0, prior_manifest):
     man = {"v": 1, "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "states": {}, "jobs": {},
            "sources": {}, "stats": stats}
     live = {k: t for k, t in T.d.items() if t.get("read") and _days_since(t["read"]) <= KEEP_DAYS and int(t.get("jobs") or 0) > 0}
+    # one entry per employer board: a Workday tenant with several career sites lists the same jobs on each (keep the
+    # site with the most), and the same goes for a board found under two spellings of its address
+    best = {}
+    for k, t in live.items():
+        c = t["c"]
+        ident = (c["ats"], str(c.get("tenant") or c.get("token") or c.get("slug") or c.get("sub") or c.get("base") or c.get("host") or k).lower(),
+                 str(c.get("wd") or ""))
+        if ident not in best or ("pack" in t["src"], int(t.get("jobs") or 0)) > ("pack" in live[best[ident]]["src"], int(live[best[ident]].get("jobs") or 0)):
+            best[ident] = k
+    live = {k: live[k] for k in best.values()}
     by_state = {}
     for t in live.values():
         for s in {p[4] for p in t.get("places") or []}:
@@ -456,6 +492,7 @@ def main(argv=None):
     ap.add_argument("--no-wdc", action="store_true")
     ap.add_argument("--no-postings", action="store_true")
     ap.add_argument("--no-read", action="store_true", help="discover only")
+    ap.add_argument("--reread", default="", help="comma-separated job systems to read again even if read this week")
     args = ap.parse_args(argv)
     t0 = time.time()
     out = os.path.abspath(args.out)

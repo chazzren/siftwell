@@ -1074,7 +1074,7 @@ SCREENS.board = {
     const steps = [];
     if (d.possible) steps.push([d.remote_only ? "Add remote-friendly employers from the Siftwell directory" : `Add employers near ${esc(d.label)} from the Siftwell directory`,
       d.remote_only ? "Siftwell’s free employer directory lists employers whose job pages it can read. The ones with the most remote jobs in the US go on your Near me list. Takes a few seconds; no Claude needed."
-                    : `Siftwell’s free employer directory lists employers whose job pages it can read, and where they hire. Every one with openings within ${d.radius} miles goes on your Near me list. Takes a few seconds; no Claude needed.`]);
+                    : `Siftwell’s free employer directory lists employers whose job pages it can read, and where they hire. The ones with the most openings within ${d.radius} miles (up to 400) go on your Near me list. Takes a few seconds; no Claude needed.`]);
     if (f.possible && this.findOn) steps.push([findTitle, findText]);
     const found = d.possible || (f.possible && this.findOn);
     steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just added" : "") : found ? "the employers it just added" : lists}. About ${p.fetch_minutes} minutes the first time.`]);

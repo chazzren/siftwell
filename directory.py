@@ -288,7 +288,9 @@ def near_employers(pid, man=None):
         return [], {"reason": "offline", "error": man["_error"]}
     out, seen = [], set()
     if remote_only:
-        d = _shard("states", "remote", man) or {}
+        d = _shard("states", "remote", man)
+        if d is None:
+            return [], {"states": [], "label": label, "radius": 0, "remote_only": True, "missing": ["remote"]}
         for e in d.get("employers") or []:
             c = _clean_entry(e)
             if c and c["remote"] > 0:
@@ -299,8 +301,12 @@ def near_employers(pid, man=None):
         out.sort(key=lambda c: -c["near"])
         return out[:REMOTE_ADD], {"states": [], "label": label, "radius": 0, "remote_only": True}
     sts = states_near(la, lo, radius)
+    missing = []
     for st in sts:
-        d = _shard("states", st, man) or {}
+        d = _shard("states", st, man)
+        if d is None:
+            missing.append(st)      # (not published yet, or not downloadable right now)
+            continue
         for e in d.get("employers") or []:
             c = _clean_entry(e)
             if not c:
@@ -322,7 +328,42 @@ def near_employers(pid, man=None):
             seen.add(k)
             out.append(dict(c, near=n, where=best[1]))
     out.sort(key=lambda c: (-c["near"], c["name"].lower()))
-    return out, {"states": sts, "label": label, "radius": radius, "remote_only": False}
+    return out, {"states": sts, "label": label, "radius": radius, "remote_only": False, "missing": missing}
+
+
+# ---------------------------------------------------------------- offline starter: the shipped national packs
+PACK_FILES = ("us-large-employers.json", "us-large-employers-AL.json")   # (not dc-area.json: it's regional)
+
+
+def pack_employers():
+    """Readable large US employers shipped with the app (packs/, read-only), deduplicated by board and name. They
+    have no places, so apply() adds them as "starters" and prune_starters() keeps only the ones whose jobs turn out to
+    be near the person (or remote, when remote work is OK) after their first fetch."""
+    import netsafe
+    out, keys, names = [], set(), set()
+    for fn in PACK_FILES:
+        try:
+            with open(os.path.join(paths.PACKS, fn), encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        for c in d.get("companies") or []:
+            if not isinstance(c, dict):
+                continue
+            cfg, _ = netsafe.clean_config(c)
+            name = netsafe.clean_text(c.get("name") or "", 60).replace(",", "").strip()
+            if not cfg or not name:
+                continue
+            cfg = {kk: v for kk, v in cfg.items() if not kk.startswith("verified_")}   # (stamps, not identity)
+            k = _key(cfg)
+            if k in keys or name.lower() in names:
+                continue
+            keys.add(k)
+            names.add(name.lower())
+            out.append({"name": name, "cfg": cfg, "url": "", "jobs": int(c.get("verified_total") or 0), "remote": 0,
+                        "places": [], "near": 0, "where": "", "starter": True, "sector": c.get("sector") or ""})
+    out.sort(key=lambda c: -c["jobs"])
+    return out
 
 
 def near_jobs(pid, man=None):
@@ -383,39 +424,67 @@ def users():
 
 
 # ---------------------------------------------------------------- add to the catalog
-def apply(pid, limit=MAX_ADD):
+def apply(pid, limit=MAX_ADD, weekly=False):
     """Add the directory's employers near this person to their Near me list (and the job-snapshot sources with postings
     near them). Employers offered before are skipped, so taking one off the list sticks. Returns
-    {added: [names], linked: [names already in the catalog, now on the list], near: n, available: bool, reason}."""
+    {added: [names], linked: [names already in the catalog, now on the list], near: n, available: bool, reason,
+     starters: n of those that came from the shipped packs}.
+
+    When the directory can't be had for this person's area (offline, or that state isn't published yet), the large
+    national employers shipped in packs/ are added as starters; prune_starters() later drops the ones with no jobs near
+    the person. Directory data wins whenever it is there (same board = same employer)."""
     import catalog, company_add
     with _APPLY:
         man = manifest()
         emps, info = near_employers(pid, man)
-        if info.get("reason"):
-            return {"added": [], "linked": [], "near": 0, "available": False, "reason": info["reason"], "error": info.get("error")}
+        if info.get("reason") == "no_place":
+            return {"added": [], "linked": [], "near": 0, "available": False, "reason": "no_place", "starters": 0}
+        offline = info.get("reason") == "offline"
+        if offline or info.get("missing"):
+            have = {_key(e["cfg"]) for e in emps}
+            emps = emps + [p for p in pack_employers() if _key(p["cfg"]) not in have]
         rec = record(pid)
         offered = set(rec.get("offered") or [])
+        pending = set(rec.get("starters_pending") or [])
+        # weekly=True (the background refresh) adds only employers that weren't near this person in the directory
+        # the last time: newly indexed ones. The button adds the next ones by jobs nearby, up to the limit each time.
+        seen = set(rec.get("seen") or [])
+        seen_now = {_short(_key(e["cfg"])) for e in emps if not e.get("starter")}
         want = f"near-{pid}"
-        by_key = {catalog.ats_key(c): c for c in catalog.companies()}
-        added, linked = [], []
+        cos = catalog.companies()
+        by_key = {catalog.ats_key(c): c for c in cos}
+        by_name = {c["name"].lower(): c for c in cos}
+        added, linked, starters = [], [], 0
         for e in emps:
             k = _key(e["cfg"])
-            if k in offered:
+            ok_ = "starter:" + k
+            if k in offered or ok_ in offered or (weekly and _short(k) in seen):
                 continue
             if len(added) + len(linked) >= limit:
                 break
-            offered.add(k)
             co = by_key.get(k)
+            if e.get("starter"):
+                if co is None and e["name"].lower() in by_name:
+                    continue            # (the catalog already has this employer under another board)
+                offered.add(ok_)
+            else:
+                offered.add(k)
             if co:
                 if want not in (co.get("sets") or []):
                     entry = {kk: v for kk, v in co.items() if not kk.startswith("_")}
                     entry["sets"] = sorted(set(co.get("sets") or ["tech"]) | {want})
                     catalog.save_company(entry)
                     linked.append(co["name"])
+                    if e.get("starter"):
+                        pending.add(co["name"]); starters += 1
                 continue
-            entry, existing = company_add.save_found(e["cfg"], e["name"], want, pid, sector=SOURCE_SECTOR)
+            entry, existing = company_add.save_found(e["cfg"], e["name"], want, pid,
+                                                     sector=(e.get("sector") or "Large US employer") if e.get("starter") else SOURCE_SECTOR)
             by_key[k] = entry
+            by_name[entry["name"].lower()] = entry
             (linked if existing else added).append(entry["name"])
+            if e.get("starter"):
+                pending.add(entry["name"]); starters += 1
         # job snapshots: one catalog entry per source, shared by everyone near its postings
         jobs = near_jobs(pid, man)
         labels = {s: (man.get("sources") or {}).get(s, {}).get("label") for s in jobs}
@@ -439,11 +508,77 @@ def apply(pid, limit=MAX_ADD):
                          "sets": [want], "added_by": pid}
                 catalog.save_company(entry)
                 added.append(name)
-        rec.update(offered=sorted(offered), applied=_now(), built=man.get("built"),
+        rec.update(offered=sorted(offered), applied=_now(), built=man.get("built"), starters_pending=sorted(pending),
+                   seen=sorted(seen | seen_now),
                    added=int(rec.get("added", 0)) + len(added) + len(linked))
         _save_record(pid, rec)
         return {"added": added, "linked": linked, "near": len(emps), "available": True, "reason": None,
-                "jobs": jobs, "built": man.get("built")}
+                "jobs": jobs, "built": man.get("built"), "starters": starters, "offline": offline,
+                "missing": info.get("missing") or []}
+
+
+def _short(k):
+    return hashlib.sha1(k.encode()).hexdigest()[:12]
+
+
+def prune_starters(pid):
+    """After a fetch: take the shipped-pack starters off this person's Near me list when none of their open jobs is
+    within the radius (or US-remote, when remote work is OK). Starters not fetched successfully yet stay pending.
+    A pruned starter can come back later through the directory (with places that show it hires nearby). Returns the
+    names taken off."""
+    import catalog, geo
+    with _APPLY:
+        rec = record(pid)
+        pending = set(rec.get("starters_pending") or [])
+        if not pending:
+            return []
+        a = area(pid)
+        if not a:
+            return []
+        la, lo, label, radius, remote_only, remote_ok = a
+        want = f"near-{pid}"
+        cos = {c["name"]: c for c in catalog.companies()}
+        listings = {}   # (partial rows count too: Workday stores every posting's place even without its text)
+        with catalog.db() as con:
+            q = f"SELECT company, data FROM listings WHERE closed_at IS NULL AND company IN ({','.join('?' * len(pending))})"
+            for r in con.execute(q, sorted(pending)):
+                try:
+                    listings.setdefault(r["company"], []).append(json.loads(r["data"]))
+                except ValueError:
+                    pass
+        offered = set(rec.get("offered") or [])
+        dropped = []
+        for name in sorted(pending):
+            co = cos.get(name)
+            if co is None or want not in (co.get("sets") or []):
+                pending.discard(name)          # (removed by hand, or gone)
+                continue
+            if (co.get("_fetch") or {}).get("status") != "ok":
+                continue                        # not fetched (successfully) yet: decide next time
+            keep = False
+            for j in listings.get(name, []):
+                remote = bool(j.get("remote_strict") or j.get("remote_bare"))
+                if remote and remote_ok:
+                    keep = True
+                elif not remote_only and la is not None and geo.within(j.get("locations") or [], (la, lo), radius)[0]:
+                    keep = True
+                if keep:
+                    break
+            pending.discard(name)
+            if keep:
+                continue
+            entry = {k: v for k, v in co.items() if not k.startswith("_")}
+            sets = sorted(set(co.get("sets") or []) - {want})
+            if sets:
+                entry["sets"] = sets
+                catalog.save_company(entry)
+            else:
+                catalog.remove_company(name)    # (only this person's starter list had it)
+            offered.discard("starter:" + catalog.ats_key(co))
+            dropped.append(name)
+        rec.update(starters_pending=sorted(pending), offered=sorted(offered))
+        _save_record(pid, rec)
+        return dropped
 
 
 def _source_name(src, label=None):
@@ -486,13 +621,18 @@ def start_background(log=lambda m: print(m, flush=True)):
         time.sleep(float(os.environ.get("SIFTWELL_DIRECTORY_DELAY") or 120))
         while True:
             try:
+                for pid in users():     # starters from the shipped packs whose first fetch has happened since
+                    try:
+                        prune_starters(pid)
+                    except Exception:
+                        pass
                 if users() and _stale():
                     man = refresh(force=True)
                     if not man.get("_error"):
                         for pid in users():
                             import people
                             if people.exists(pid):
-                                r = apply(pid)
+                                r = apply(pid, weekly=True)
                                 if r["added"] or r["linked"]:
                                     log(f"directory: {len(r['added']) + len(r['linked'])} newly indexed employers for {pid}")
             except Exception as e:
@@ -574,7 +714,11 @@ def handle_post(h, path, body, pid, server):
     if names and body.get("fetch") and server.claim_update():
         r["fetching"] = True
         server._actlog("update started", pid, f"Siftwell directory: {len(names)} employers")
-        threading.Thread(target=server.run_update, args=(",".join(names),), daemon=True).start()
+        def run():
+            server.run_update(",".join(names))
+            if prune_starters(pid):
+                server.request_recompute([pid])
+        threading.Thread(target=run, daemon=True).start()
     server._actlog("companies added", pid, f"{len(names)} from the Siftwell directory")
     h._send(200, r)
     return True
@@ -585,7 +729,7 @@ CAT = ("directory", "Employer directory", '<path d="M3 21h18"/><path d="M5 21V7l
 
 PANE_HTML = """<section class="sgsec"><h3 class="sgtitle">Employers near you</h3><div class="sgroup">
 <div class="srow stack"><div class="slab"><span>Siftwell employer directory</span><small id="dirState">Checking…</small></div>
-<div class="bk-btnrow"><button class="btn primary" type="button" id="dirApply">Add employers near me from the Siftwell directory</button></div>
+<div class="bk-btnrow"><button class="btn primary" type="button" id="dirApply" style="white-space:normal;max-width:100%;height:auto;text-align:left">Add employers near me from the Siftwell directory</button></div>
 <span class="note" id="dirMsg" role="status" aria-live="polite"></span></div>
 <div class="srow"><div class="slab"><span>Find more with Claude</span><small>Claude can also search the web for employers the directory doesn't have. It uses your Claude plan, and only runs when you start it.</small></div>
 <div class="sctl"><a class="btn sm" href="/catalog#find">Find employers</a></div></div></div>

@@ -159,6 +159,12 @@ def workday(c):
         rows_summary = s
     else:
         sample_path = next((p.get("externalPath") for p in first.get("jobPostings", []) if p.get("externalPath")), None)
+        if country and country[1]:      # (the name comes from a US posting: others name a foreign legal entity)
+            try:
+                us = net.get_json(api + "/jobs", {"limit": 1, "offset": 0, "searchText": "", "appliedFacets": {country[0]: [country[1]["id"]]}})
+                sample_path = next((p.get("externalPath") for p in us.get("jobPostings", []) if p.get("externalPath")), sample_path)
+            except Exception:
+                pass
     if sample_path and rows_summary["jobs"]:
         try:
             d = net.get_json(api + sample_path)

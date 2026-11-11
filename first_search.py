@@ -245,13 +245,31 @@ def _run_directory(pid):
     import directory
     r = directory.apply(pid)
     if not r["available"]:
-        if r["reason"] == "offline":
-            _set(note="Siftwell couldn't download its employer directory this time (are you online?), so it checked the companies you already have.")
         return []
     names = r["added"] + r["linked"]
+    if r.get("starters") and r.get("offline"):
+        _set(note="Siftwell couldn't download its employer directory this time, so it started with the large US employers it comes with; "
+                  "after this first check it keeps the ones hiring near you. Nearby employers from the directory are added once it can be reached.")
+    elif r.get("starters"):
+        _set(note="The employer directory doesn't cover your area yet, so Siftwell also started with the large US employers it comes with; "
+                  "after this first check it keeps the ones hiring near you.")
     _set(dir_added=len(names), dir_near=r["near"])
-    S._actlog("companies added", pid, f"{len(names)} from the Siftwell directory")
+    S._actlog("companies added", pid, f"{len(names)} from the Siftwell directory"
+              + (f" ({r['starters']} from the shipped large-employer list)" if r.get("starters") else ""))
     return names
+
+
+def _prune(pid):
+    """After the first fetch: shipped-pack starters (offline fallback) with no jobs near the person leave Near me."""
+    import directory
+    try:
+        dropped = directory.prune_starters(pid)
+    except Exception as e:
+        print("prune_starters failed:", type(e).__name__, e, flush=True)
+        return
+    if dropped:
+        S._actlog("companies removed", pid, f"{len(dropped)} large employers with no jobs near you (Near me)")
+        S.request_recompute([pid])
 
 
 def _work(pid, want_find, p, want_dir=False):
@@ -296,6 +314,7 @@ def _work(pid, want_find, p, want_dir=False):
         only = ",".join(added) if added and fresh else None
         S._actlog("update started", pid, "Start my job search" + (f": {len(added)} new employers" if only else ""))
         S.run_update(only)
+        _prune(pid)
     except Exception as e:
         _set(error=f"{type(e).__name__}: {str(e)[:200]}")
     finally:

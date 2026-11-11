@@ -159,10 +159,17 @@ def resolve_domain(dom, log=print):
             c = parse(m.group(0))
             if c:
                 return c
-        try:
-            cfg = jsonld_fetcher.detect_config(url, page)
-        except Exception:
-            cfg = None
+        cfg = None
+        for probe in (lambda: __import__("ats_sap_taleo").detect_page(url, page),   # (the same chain company_add.detect uses)
+                      lambda: __import__("ats_more").detect(url, page),
+                      lambda: __import__("ats_public").detect(url, page),
+                      lambda: jsonld_fetcher.detect_config(url, page)):
+            try:
+                cfg = probe()
+            except Exception:
+                cfg = None
+            if cfg:
+                break
         if cfg:
             import netsafe
             cfg, _ = netsafe.clean_config(cfg)
