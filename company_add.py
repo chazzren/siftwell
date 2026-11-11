@@ -93,6 +93,12 @@ def detect(url):
     found = _match(url)
     if not found:
         try:
+            import ats_public   # (AppliTrack / SchoolSpring / Jobvite: recognised by the link itself)
+            found = ats_public.detect(url)
+        except Exception:
+            found = None
+    if not found:
+        try:
             page = _get(url, timeout=20, cap=3_000_000).decode("utf-8", "replace")
         except netsafe.UnsafeURL as e:
             raise ValueError(f"Couldn't open that page: {e}")
@@ -113,13 +119,19 @@ def detect(url):
                 found = None
         if not found:
             try:
+                import ats_public   # (a district or hospital site linking to its AppliTrack / SchoolSpring / Jobvite board)
+                found = ats_public.detect(url, page)
+            except Exception:
+                found = None
+        if not found:
+            try:
                 import jsonld_fetcher
                 found = jsonld_fetcher.detect_config(url, page)
             except Exception:
                 found = None
     if not found:
         raise ValueError("Couldn't find a supported job board on that page, and the site doesn't publish standard job data Siftwell can read. Supported: Greenhouse, Lever, Ashby, Workday, "
-                         "SmartRecruiters, iCIMS, UKG, Oracle, Paylocity, ADP, Workable, BambooHR, JazzHR, Breezy, Recruitee, Paycom, Dayforce, Rippling, SAP SuccessFactors, Taleo, Radancy, Eightfold, Avature, and custom careers sites that publish standard job data. Tip: open the company's job list and paste the link from the address bar.")
+                         "SmartRecruiters, iCIMS, UKG, Oracle, Paylocity, ADP, Workable, BambooHR, JazzHR, Breezy, Recruitee, Paycom, Dayforce, Rippling, SAP SuccessFactors, Taleo, Radancy, Eightfold, Avature, AppliTrack (Frontline), SchoolSpring, Jobvite, and custom careers sites that publish standard job data. Tip: open the company's job list and paste the link from the address bar.")
     cfg, why = netsafe.clean_config(found)
     if cfg is None:
         raise ValueError(f"Found a job board on that page, but its settings look wrong ({why}).")
@@ -172,6 +184,11 @@ def verify(c):
             sys.path.insert(0, HERE)
             import ats_more
             return ats_more.verify(c)
+        if a in ("applitrack", "schoolspring", "jobvite"):
+            import sys
+            sys.path.insert(0, HERE)
+            import ats_public
+            return ats_public.verify(c)
         if a == "jsonld":
             import sys
             sys.path.insert(0, HERE)
@@ -197,7 +214,7 @@ def default_name(c, suggested=None, name=""):
         h = re.sub(r"^https://(www\.)?", "", c.get("base", "")).split("/")[0]
         lab = [x for x in h.split(".")[:-1] if x not in ("jobs", "careers", "career", "www", "co", "com")]
         suggested = (lab[-1] if lab else h).replace("-", " ").title()
-    ident = c.get("token") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key") or c.get("id") or re.sub(r"^https://|\..*$", "", c.get("base", "")).replace("careers-", "")
+    ident = c.get("token") or c.get("slug") or c.get("sub") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key") or c.get("id") or re.sub(r"^https://|\..*$", "", c.get("base", "")).replace("careers-", "")
     # (no commas: an update for named companies takes a comma-separated list)
     return (name or suggested or str(ident).replace("-", " ").replace("_", " ").title()).replace(",", "").strip()[:60]
 
