@@ -58,7 +58,9 @@ CATEGORIES = [
         ]),
     ]),
     ("review", "Astra review", '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>', [
-        ("Astra (ChatGPT)", "Astra grades each tailored resume and sends it back for rework until it passes.", [
+        ("Astra (ChatGPT)", "Astra grades each tailored resume and sends it back for rework until it passes. It runs through the "
+         "Codex app (a ChatGPT sign-in): without Codex on this computer a tailored resume is marked Not reviewed, and Siftwell's own "
+         "free checks (page count, pronouns, date formats, posting keywords) still run.", [
             ("toggle", "review.enabled", "Grade every tailored resume", ""),
             ("toggle", "review.ask_facts", "Let Astra ask me for facts", ""),
             ("number", "review.threshold", "Pass score", "60 to 95."),
@@ -66,11 +68,14 @@ CATEGORIES = [
         ]),
     ]),
     ("claude", "Claude usage", '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', [
-        ("Ratings", "Applies from the next update.", [
-            ("number", "claude.haiku_per_night", "Quick ratings per night", "Haiku, 0 to 20,000."),
-            ("number", "claude.sonnet_pct", "Sonnet: best % of jobs", "0 to 50."),
-            ("number", "claude.opus_top", "Opus: top jobs", "0 to 1,000."),
-            ("number", "claude.per_update", "Jobs per re-rate", "Most jobs Claude re-rates in one Re-rate or automatic run."),
+        ("How much Claude rates in one run", "A run is one automatic rating after Find new jobs, one overnight re-rate, or one press of "
+         "Rate more or Re-rate. The limits are per run and the same for all of them; they don't grow with the number of jobs in your "
+         "area. Jobs over a limit keep a — for Match until the next run. Which model does what: quick checks use Claude Haiku, second "
+         "looks Sonnet, the most careful rating Opus. Applies from the next run.", [
+            ("number", "claude.haiku_per_night", "Quick checks per run", "New jobs that get a first, quick Match rating, most appealing first. 0 to 500."),
+            ("number", "claude.sonnet_pct", "Second look: best % of rated jobs", "The best-scoring share of your rated jobs get a closer second rating, at most 100 per run. 0 to 50."),
+            ("number", "claude.opus_top", "Most careful rating: your top jobs", "How many of your best jobs get the most careful rating, at most 50 new per run, plus jobs you saved. 0 to 1,000."),
+            ("number", "claude.per_update", "Target-tab ratings per run", "Jobs rated for your Target tab in one run. 0 to 50."),
         ]),
         ("Automatic rating", "", [
             ("toggle", "claude.auto_rate", "Rate new jobs during updates", ""),
@@ -165,6 +170,10 @@ def _render_parts():
             body = "".join(_group(t, f, [_row(f'<label for="{c_id}">{e(lbl)}</label>', hlp, ctl) for c_id, lbl, hlp, ctl in map(_control, rows)])
                            for t, f, rows in groups)
             if cid == "claude":
+                body = _group("What Siftwell has used", "Counted from Claude's own report after each request Siftwell makes on this "
+                              "computer (all profiles). A token is roughly three quarters of a word. Other things you do with Claude "
+                              "aren't included, and looking at this page never uses Claude.",
+                              ['<div class="srow stack" id="usageBox"><span class="note">Loading…</span></div>']) + body
                 body += _group("Ratings from older versions", "", [
                     _row("<span>Keep my current ratings</span>",
                          "Marks ratings made by older versions of Siftwell as up to date, so they aren't re-rated. "
@@ -235,6 +244,12 @@ CSS = """<style>
 .sw:checked{background:var(--accent)}
 .sw:checked::after{transform:translateX(18px)}
 .sver{margin:10px 12px 0;color:var(--muted);font-size:11.5px}
+.utab{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13.5px}
+.utab th,.utab td{padding:5px 0;text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:normal;overflow-wrap:anywhere;text-transform:none;letter-spacing:0;vertical-align:top}
+.utab th:first-child,.utab td:first-child{text-align:left;padding-right:8px;width:36%}
+.utab thead th{color:var(--muted);font-size:12px;font-weight:600}
+.utab tbody tr+tr td,.utab tbody tr+tr th{border-top:1px solid var(--line)}
+.utab small{display:block;color:var(--muted);font-size:12px;font-weight:400}
 .sreset{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
 .sreset .note{color:var(--muted);font-size:12.5px}
 .sreset [data-reset][data-armed="1"]{color:var(--bad)}
@@ -402,6 +417,23 @@ document.querySelectorAll("[data-reset]").forEach(b => {
     post({reset: true}, b).then(() => { if (!b.closest(".spane").querySelector(".ssave.err")) saveState(b, "Defaults restored"); });
   });
 });
+
+// ---- Claude usage: what Siftwell's own requests used today and over the last 7 days (read from a local log, no Claude call)
+(() => {
+  const box = $("usageBox"); if (!box) return;
+  const n = x => (x || 0).toLocaleString();
+  const cell = f => f && f.calls ? `${n(f.tokens)} tokens<small>${n(f.calls)} request${f.calls === 1 ? "" : "s"}${f.jobs ? ` · ${n(f.jobs)} jobs` : ""}</small>` : "—";
+  const tot = s => ({tokens: (s.in || 0) + (s.out || 0) + (s.cache_read || 0) + (s.cache_write || 0), calls: s.calls || 0, jobs: s.jobs || 0});
+  fetch("/api/claude-usage").then(r => r.json()).then(u => {
+    const t = u.today || {}, w = u.week || {};
+    const names = [...new Set([...(w.features || []), ...(t.features || [])].map(f => f.feature))];
+    if (!names.length) { box.innerHTML = '<span class="note">Nothing in the last 7 days. Each request Siftwell makes to Claude is counted here from now on.</span>'; return; }
+    const by = (s, k) => (s.features || []).find(f => f.feature === k);
+    box.innerHTML = `<table class="utab"><thead><tr><th scope="col">Claude usage</th><th scope="col">Today</th><th scope="col">Last 7 days</th></tr></thead><tbody>` +
+      names.map(k => `<tr><th scope="row">${esc(k)}</th><td>${cell(by(t, k))}</td><td>${cell(by(w, k))}</td></tr>`).join("") +
+      `<tr><th scope="row">All together</th><td>${cell(tot(t))}</td><td>${cell(tot(w))}</td></tr></tbody></table>`;
+  }).catch(() => { box.innerHTML = '<span class="note">Couldn’t load the usage numbers.</span>'; });
+})();
 
 // ---- Keep my current ratings: first tap arms, second tap (within 5 s) runs it; counts are shown afterwards
 (() => {

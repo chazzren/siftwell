@@ -35,11 +35,19 @@ def market_summary(limit=160):
         if f:
             fam[f].append(r)
     out = []
+    marked = any(r.get("a") for r in rows)  # only a catalog from an earlier version has companies marked as AI companies
     for f, rs in sorted(fam.items(), key=lambda kv: -len(kv[1]))[:limit]:
         mids = [r["m"] for r in rs if r.get("m")]
         out.append(f"{f} | {len(rs)} openings | median midpoint {'$%dk' % (statistics.median(mids) / 1000) if mids else 'n/a'}"
-                   f" | {round(100 * sum(r['w'] == 'remote' for r in rs) / len(rs))}% remote | {sum(1 for r in rs if r['a'])} at AI companies")
+                   f" | {round(100 * sum(r['w'] == 'remote' for r in rs) / len(rs))}% remote"
+                   + (f" | {sum(1 for r in rs if r['a'])} at AI companies" if marked else ""))
     return "\n".join(out)
+
+def _ai_marked():
+    try:
+        return any(r.get("a") for r in json.load(open(MARKET)))
+    except Exception:
+        return False
 
 # ------------------------------------------------------------------ interpret a target
 ISCHEMA = {
@@ -100,6 +108,13 @@ def suggest():
     if not prof:
         raise ValueError("Upload and approve a resume first, so suggestions can be based on it.")
     st = people.settings()
-    msg = (f"PROFILE\n{resume.profile_text(prof, st.get('goals', ''))[:9000]}\n\nPay floor: ${st['salary_floor']:,} base\n\n"
-           f"MARKET SNAPSHOT (title family | openings | median pay midpoint | % remote | how many at AI companies)\n{market_summary()}")
-    return claude_cli.run_json(suggest_system(st), msg, SSCHEMA, effort="medium", timeout=600).get("options", [])
+    floor = f"${st['salary_floor']:,} base" if st.get("salary_floor") else "none given"
+    marked = _ai_marked()
+    msg = (f"PROFILE\n{resume.profile_text(prof, st.get('goals', ''))[:9000]}\n\nPay floor: {floor}\n\n"
+           f"MARKET SNAPSHOT (title family | openings | median pay midpoint | % remote{' | how many at AI companies' if marked else ''})\n{market_summary()}")
+    opts = claude_cli.run_json(suggest_system(st), msg, SSCHEMA, effort="medium", timeout=600).get("options", [])
+    if not marked:  # no employer here is marked as an AI company, so a target can't be limited to them
+        for o in opts:
+            if isinstance(o, dict):
+                o["scope"] = "all"
+    return opts

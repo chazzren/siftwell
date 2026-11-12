@@ -18,20 +18,56 @@ import copy
 import people
 BASE_CFG = copy.deepcopy(CFG)
 
+def _user_cfg():
+    """The household's own DATA/config.json as written (no shipped defaults), or {}."""
+    try:
+        d = json.load(open(paths.CONFIG, encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+USER_CFG = _user_cfg()
+
+# What config.default.json used to ship. Nothing new gets these: a title filter now comes only from the person's own
+# job titles. Profiles from before that rule (settings "title_rule": "builtin") keep them, unless the household's own
+# config.json sets the list itself, so their boards show the same jobs as before.
+LEGACY_TITLE_INCLUDE = ["engineer", "developer", "architect", "analyst", "scientist", "designer", "manager", "director",
+                        "head of", "lead", "principal", "staff", "senior", "consultant", "specialist", "advisor",
+                        "strategist", "coordinator", "administrator", "officer", "associate", "representative", "nurse",
+                        "teacher", "accountant", "operations", "program", "project", "product", "marketing", "sales",
+                        "customer", "support", "finance", "chief"]
+LEGACY_TITLE_EXCLUDE = ["intern", "internship", "co-op", "new grad"]
+LEGACY_SENIOR_WORDS = ["senior", "sr.", "sr ", "staff", "principal", "lead", "manager", "director", "head", "architect"]
+
+def rate_limits(pr, auto=True):
+    """This person's per-run rating limits from their Settings, never above ai_score.RUN_LIMITS. auto: an automatic
+    run (after an update, the nightly re-rate), which does nothing when they turned automatic rating off."""
+    import ai_score
+    L = ai_score.RUN_LIMITS
+    on = bool(pr["claude.auto_rate"]) or not auto
+    n = lambda k, cap: max(0, min(cap, int(pr[k] or 0))) if on else 0
+    return {"haiku": n("claude.haiku_per_night", L["haiku"]), "sonnet_pct": n("claude.sonnet_pct", 100),
+            "sonnet_max": L["sonnet"] if on else 0, "opus_top": n("claude.opus_top", 1000),
+            "opus_max": L["opus"] if on else 0, "target": n("claude.per_update", L["target"])}
+
 def person_cfg(pid):
     """Config for one person: base config + their settings + keywords from their approved resume profile."""
     c = copy.deepcopy(BASE_CFG)
     st = people.settings(pid)
-    c["salary_floor"] = int(st["salary_floor"])
+    c["salary_floor"] = int(st.get("salary_floor") or 0)
     c["salary_target"] = int(st["salary_target"]) if st.get("salary_target") else None
-    c["seniority"] = {"mine": st["seniority_mine"], "band": st["seniority_band"]}
+    c["seniority"] = {"mine": st.get("seniority_mine"), "band": st.get("seniority_band") or [1, 7]}
     pr = people.prefs(pid)
-    per = pr["claude.per_update"] if pr["claude.auto_rate"] else 0
-    c["ai"]["max_new_per_run"] = per
-    c["funnel"] = {"haiku": pr["claude.haiku_per_night"] if pr["claude.auto_rate"] else 0,
-                   "sonnet_pct": pr["claude.sonnet_pct"] if pr["claude.auto_rate"] else 0,
-                   "opus_top": pr["claude.opus_top"] if pr["claude.auto_rate"] else 0, "sonnet_max": 2000}
-    c["pivot"]["max_new_per_run"] = per
+    lim = rate_limits(pr)
+    c["ai"]["max_new_per_run"] = lim["target"]
+    c["funnel"] = {k: lim[k] for k in ("haiku", "sonnet_pct", "sonnet_max", "opus_top", "opus_max")}
+    c["pivot"]["max_new_per_run"] = lim["target"]
+    if st.get("title_rule") == "builtin":  # a profile from before "only your own job titles": same words as it had
+        if "title_include" not in USER_CFG:
+            c["title_include"] = sorted(set(c["title_include"]) | set(LEGACY_TITLE_INCLUDE))
+        if "title_exclude" not in USER_CFG:
+            c["title_exclude"] = list(dict.fromkeys(c["title_exclude"] + LEGACY_TITLE_EXCLUDE))
+        if "senior_title_words" not in USER_CFG:
+            c["senior_title_words"] = list(LEGACY_SENIOR_WORDS)
     c["pivot_enabled"] = people.target_on(st)
     c["targets"] = [st] if c["pivot_enabled"] else []
     # Where to look: a home ZIP + radius when the person has set one; otherwise the original DC-area place list.
@@ -54,7 +90,7 @@ def person_cfg(pid):
         inc = set(c["title_include"])
         for k in prof.get("title_keywords", []) + [r.lower() for r in prof.get("target_roles", [])]:
             k = k.lower().strip()
-            if k and not any(x in (" " + k + " ") for x in c["title_exclude"]):
+            if k and not excluded_words(k, c["title_exclude"]):
                 inc.add(k)
         c["title_include"] = sorted(inc)
         for k in prof.get("fit_keywords", []):
@@ -68,7 +104,9 @@ def fetch_cfg(cfgs):
     """Loose filter for the shared fetch: anything any person could want."""
     c = copy.deepcopy(BASE_CFG)
     if cfgs:
-        c["title_include"] = sorted(set().union(*(x["title_include"] for x in cfgs)))
+        # someone with no title words takes every title, so the shared fetch must too (an empty list passes everything)
+        c["title_include"] = [] if any(not x["title_include"] for x in cfgs) else sorted(set().union(*(x["title_include"] for x in cfgs)))
+        c["title_exclude"] = [w for w in cfgs[0]["title_exclude"] if all(w in x["title_exclude"] for x in cfgs)]
         c["salary_floor"] = min(x["salary_floor"] for x in cfgs)
         c["pivot_enabled"] = any(x.get("pivot_enabled") for x in cfgs)
         c["targets"] = [t for x in cfgs for t in x.get("targets", [])]
@@ -81,7 +119,7 @@ def target_title_ok(st, title):
     t = " " + title.lower() + " "
     if st.get("target_any_title"):
         allow = CFG.get("pivot", {}).get("title_allow", [])
-        if any(x in t for x in CFG["title_exclude"] if not any(a in t for a in allow if x in a or a in x)):
+        if any(not any(a in t for a in allow if x in a or a in x) for x in excluded_words(title, CFG["title_exclude"])):
             return False
         return not any(re.search(rx, title.lower().strip()) for rx in CFG["title_exclude_regex"])
     kws = st.get("target_keywords") or []
@@ -175,6 +213,45 @@ def is_remote_us(loc):
         return False
     return not is_foreign(loc)
 
+# ---- title excludes are whole words: "intern" drops "Marketing Intern" and "Summer Interns", never "Internal Auditor",
+# "Internal Medicine" or "International Sales Manager". A plural "s"/"es" still counts, and an entry ending in "*" is a
+# word beginning ("recruit*" also drops Recruiter and Recruiting).
+# One exception keeps older households working: entries hand-written in a DATA/config.json from before this rule are
+# matched the old way (anywhere in the title, their spaces kept), because such lists rely on it ("recruit", "tax ").
+# Only the words Siftwell itself ever shipped (WORD_EXCLUDES) are whole words there. Add "title_match": "word" to that
+# config.json to use whole words for everything.
+WORD_EXCLUDES = {"intern", "interns", "internship", "internships", "co-op", "co-ops", "new grad", "new grads"}
+OLD_EXCLUDE_MATCH = "title_exclude" in USER_CFG and USER_CFG.get("title_match") != "word"
+_EXCL_RX = {}
+
+def _excl_rx(word):
+    rx = _EXCL_RX.get(word)
+    if rx is None:
+        w = word.strip().lower()
+        stem = w.endswith("*")
+        w = w.rstrip("*").strip()
+        body = r"\s+".join(re.escape(p) for p in w.split())
+        if w == "new grad":
+            body += r"(?:uate)?"   # "New Graduate" was always covered by this entry
+        rx = _EXCL_RX[word] = re.compile(r"(?<![a-z0-9])" + body + (r"" if stem else r"(?:e?s)?(?![a-z0-9])")) if w else False
+    return rx
+
+def excluded_words(title, words=None):
+    """The exclude entries that this title trips (empty list: the title is fine)."""
+    words = CFG["title_exclude"] if words is None else words
+    low = (title or "").lower()
+    padded = " " + low + " "
+    out = []
+    for x in words:
+        if OLD_EXCLUDE_MATCH and x.strip().lower() not in WORD_EXCLUDES:
+            hit = x in padded
+        else:
+            rx = _excl_rx(x)
+            hit = bool(rx and rx.search(low))
+        if hit:
+            out.append(x)
+    return out
+
 US_STATES = ("alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|"
              "kentucky|louisiana|maine|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|"
              "new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|"
@@ -184,26 +261,28 @@ ELSEWHERE = re.compile(r"\b(" + US_STATES + r")\b|,\s*(?!dc\b|va\b|md\b)[a-z]{2}
 def looks_local_unnamed(loc):
     """A location label that names no other state or country ("Main Campus", "125 E St NW 1st Floor")."""
     l = (loc or "").strip().lower()
-    return bool(l) and not ELSEWHERE.search(l) and not is_foreign(l) and "remote" not in l
+    return bool(l) and not ELSEWHERE.search(l) and not is_foreign(loc) and "remote" not in l
 
 def title_ok(title):
+    """The title filter: no excluded word, and one of the person's own title words. With no title words at all (no
+    job titles on their profile yet), every title passes: there is no built-in vocabulary."""
     t = " " + title.lower() + " "
-    if any(x in t for x in CFG["title_exclude"]):
+    if excluded_words(title):
         return False
     if any(re.search(rx, title.lower().strip()) for rx in CFG["title_exclude_regex"]):
         return False
-    return any(x in t for x in CFG["title_include"])
+    return not CFG["title_include"] or any(x in t for x in CFG["title_include"])
 
 def pivot_title_ok(title):
     """Wider title filter for AI companies: adds go-to-market, policy, threat intel and trust & safety titles."""
     pv = CFG.get("pivot", {})
     t = " " + title.lower() + " "
     allow = pv.get("title_allow", [])
-    if any(x in t for x in CFG["title_exclude"] if not any(a in t for a in allow if x in a or a in x)):
+    if any(not any(a in t for a in allow if x in a or a in x) for x in excluded_words(title)):
         return False
     if any(re.search(rx, title.lower().strip()) for rx in CFG["title_exclude_regex"]):
         return False
-    return any(x in t for x in CFG["title_include"] + pv.get("title_extra", []))
+    return not CFG["title_include"] or any(x in t for x in CFG["title_include"] + pv.get("title_extra", []))
 
 MONEY = r"\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{2,3}(?:\.\d+)?\s?[kK]|\d{2,3})"
 RANGE_RE = re.compile(MONEY + r"\s*(?:USD|usd)?\s*(?:-|–|—|to)\s*" + MONEY + r"(\s*(?:/|per)\s*(?:hr|hour))?")
@@ -328,7 +407,7 @@ def travel(text):
 
 # ---------------------------------------------------------------- seniority
 IC_MANAGER = r"(?:product|program|project|account|success|partner|partnership|relationship|case|community|portfolio|delivery|release|marketing|channel|alliance|territory|solutions?|implementation|deployment|engagement|technical program|technical account|technical product|risk|compliance|vendor|contract|grants?|data|knowledge|content|campaign|brand|events?|office|facility|property|operations program)"
-LEVEL_NAMES = {2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"}
+LEVEL_NAMES = {1: "Entry level", 2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"}
 def title_level(title):
     t = " " + re.sub(r"[^a-z0-9/&+ ]", " ", title.lower()) + " "
     t = re.sub(r"\s+", " ", t)
@@ -440,8 +519,9 @@ def appeal(job):
     if nm is not None and job.get("workplace") != "remote" and nm > 20:
         wp -= min(20, (nm - 20) / 1.5)
     L, sen = job.get("level"), CFG.get("seniority") or {}
-    band, mine = sen.get("band") or [3, 5], sen.get("mine") or 4
-    lvl = 75 if L is None else 100 if L == mine else 85 if band[0] <= L <= band[1] else 55
+    band, mine = sen.get("band") or [1, 7], sen.get("mine")
+    # (no level chosen yet: every level counts the same)
+    lvl = 75 if L is None or not mine else 100 if L == mine else 85 if band[0] <= L <= band[1] else 55
     c = company_facts().get(job["company"]) or {}
     g, n = c.get("gd_rating"), c.get("gd_reviews") or 100
     if g is None:
@@ -727,8 +807,8 @@ def main():
     # Re-rate panel options (with --rerate). Without --tiers, --rerate does the classic run (settings' budgets).
     ap.add_argument("--tiers", help="comma-separated: haiku,sonnet,opus (all three = the full re-rate)")
     ap.add_argument("--force", action="store_true", help="rate the picked jobs again even if their ratings are current")
-    ap.add_argument("--sonnet-pct", type=int, help="Sonnet looks at the top X%% of board jobs (1-100)")
-    ap.add_argument("--opus-top", type=int, help="Opus looks at the top Y board jobs (1-2000), plus saved ones")
+    ap.add_argument("--sonnet-pct", type=int, help="Sonnet looks at the top X%% of the rated jobs (1-100), at most 100 a run")
+    ap.add_argument("--opus-top", type=int, help="Opus looks at the top Y rated jobs (1-2000), at most 50 new a run, plus saved ones")
     ap.add_argument("--no-target", action="store_true", help="don't rate for the Target tab alongside")
     ap.add_argument("--ids-file", help="JSON list of job ids: Haiku only checks these (the automatic check of new jobs)")
     args = ap.parse_args()
@@ -815,7 +895,7 @@ CSV_COLS = ["req_status", "score", "pv_score", "pv_label", "pv_now", "pv_later",
             "salary_min", "salary_max", "salary_mid", "wide_band", "travel", "travel_pct", "clearance", "scif", "posted",
             "first_seen", "sector", "url"]
 
-LIST_SHORT = {"tech": "Tech & AI", "ops": "Business & corporate", "nonprofit": "Nonprofit & mission-driven"}
+LIST_SHORT = dict(people.COMPANY_SETS)   # shared lists from earlier versions, under plain names (only where still used)
 
 def company_lists_payload(pid, jobs, sets, watch):
     """Which of this person's company lists each company on the board belongs to (for the Company list filter)."""
@@ -903,7 +983,7 @@ def eligible_for_claude(j):
     """Skip jobs the person can't or won't pursue: unmet hard requirements, or levels well outside their band."""
     if j.get("req_status") == "unmet":
         return False
-    L, band = j.get("level"), (CFG.get("seniority") or {}).get("band") or [3, 5]
+    L, band = j.get("level"), (CFG.get("seniority") or {}).get("band") or [1, 7]
     return L is None or band[0] - 1 <= L <= band[1] + 1
 
 def score_person(jobs, prof, new_claude=True, refresh=False, opts=None):
@@ -937,7 +1017,7 @@ def score_person(jobs, prof, new_claude=True, refresh=False, opts=None):
         if prof:
             budgets = CFG.get("funnel") or {}
             if not new_claude:
-                budgets = {"haiku": 0, "sonnet_pct": 0, "opus_top": 0}
+                budgets = {"haiku": 0, "sonnet_pct": 0, "sonnet_max": 0, "opus_top": 0, "opus_max": 0}
             extra = {k: opts[k] for k in ("tiers", "force", "pick", "only_ids") if k in opts} if new_claude else {}
             if new_claude and "budgets" in opts:
                 budgets = opts["budgets"]
@@ -1039,7 +1119,8 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
                "profile": {"name": prof.get("name"), "file": prof.get("_source_file"), "approved": prof.get("_approved")} if prof else None,
                "companies": sorted(sums, key=lambda s: s["company"]), "company_info": company_info(jobs),
                "lists": company_lists_payload(pid, jobs, sets, watch), "ratings": ratings_summary(jobs),
-               "rate_batch": {t: v["batch_size"] for t, v in ai_score.TIER_RUN.items()}, "jobs": jobs}
+               "rate_batch": {t: v["batch_size"] for t, v in ai_score.TIER_RUN.items()},
+               "rate_limits": dict(ai_score.RUN_LIMITS), "jobs": jobs}
     import io
     paths.dump_json_atomic(people.pdir("jobs.json", pid=pid), payload, indent=1)
     buf = io.StringIO(newline="")
@@ -1178,21 +1259,26 @@ def rate_opts(pid, args):
     values (X%, top Y) or the person's settings, whether or not automatic rating is on: the person asked for this run."""
     if not args.tiers and not args.ids_file:
         return None
+    import ai_score
+    L = ai_score.RUN_LIMITS
     pr = people.prefs(pid)
+    lim = rate_limits(pr, auto=False)   # the person asked for this run: their limits apply even with automatic rating off
     tiers = [t for t in ("haiku", "sonnet", "opus") if t in (args.tiers or "haiku").split(",")]
     if not tiers:
         raise SystemExit("--tiers needs haiku, sonnet and/or opus")
-    pct = max(1, min(100, args.sonnet_pct if args.sonnet_pct is not None else int(pr["claude.sonnet_pct"] or 15)))
-    top = max(1, min(2000, args.opus_top if args.opus_top is not None else int(pr["claude.opus_top"] or 300)))
+    pct = max(1, min(100, args.sonnet_pct if args.sonnet_pct is not None else (lim["sonnet_pct"] or 15)))
+    top = max(1, min(2000, args.opus_top if args.opus_top is not None else (lim["opus_top"] or L["opus"])))
     full = len(tiers) == 3
+    # Every run has the same fixed limits (ai_score.RUN_LIMITS), single-model runs included: a run that would rate
+    # more stops at the limit, and pressing it again (or "Rate more" on the board) does the next batch.
     o = {"tiers": tiers, "force": bool(args.force) and not full, "pick": "funnel" if full else "best",
-         "budgets": {"haiku": int(pr["claude.haiku_per_night"]) if full else 10 ** 9, "sonnet_pct": pct, "opus_top": top,
-                     "sonnet_max": 2000 if full else 10 ** 9},
-         "target": not args.no_target, "pivot": {"max_new_per_run": int(pr["claude.per_update"] or 300)}}
+         "budgets": {"haiku": lim["haiku"] or L["haiku"], "sonnet_pct": pct, "sonnet_max": L["sonnet"], "opus_top": top,
+                     "opus_max": L["opus"]},
+         "target": not args.no_target, "pivot": {"max_new_per_run": lim["target"] or L["target"]}}
     if args.ids_file:
-        # the automatic check of new jobs: Haiku only, only these jobs, only unrated ones, within the nightly budget
+        # the automatic check of new jobs: Haiku only, only these jobs, only unrated ones, at most RUN_LIMITS["quick"]
         o.update(tiers=["haiku"], force=False, target=False, only_ids=set(json.load(open(args.ids_file))))
-        o["budgets"]["haiku"] = int(pr["claude.haiku_per_night"])
+        o["budgets"]["haiku"] = min(int(pr["claude.haiku_per_night"]), L["quick"])
     return o
 
 def rerate(pid, n=None, opts=None):
@@ -1205,7 +1291,7 @@ def rerate(pid, n=None, opts=None):
         print("No approved resume profile yet.", flush=True); return 1
     rid = catalog.start_run("rerate", details={"person": pid, **({"tiers": opts["tiers"], "force": opts["force"]} if opts else {})})
     if opts is None or len(opts["tiers"]) == 3:
-        print(f"Re-rating {people.name(pid)}'s jobs with the latest info (Haiku check, then Sonnet and Opus for the best)", flush=True)
+        print(f"Rating {people.name(pid)}'s jobs: a quick check first, then a closer look at the best ones", flush=True)
     elif opts.get("only_ids") is not None:
         print(f"Quick check of {len(opts['only_ids'])} new jobs on {people.name(pid)}'s board (Haiku)", flush=True)
     else:

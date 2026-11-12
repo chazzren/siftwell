@@ -78,7 +78,7 @@ def empty_board(pid):
     import report
     st = people.settings(pid)
     report.build({"generated": dt.datetime.now().isoformat(timespec="minutes"), "salary_floor": st["salary_floor"],
-                  "ai_status": "no_profile", "pivot_status": "", "pivot_name": "AI pivot", "pivot_enabled": bool(st["pivot_ai"]),
+                  "ai_status": "no_profile", "pivot_status": "", "pivot_name": "Target", "pivot_enabled": bool(st["pivot_ai"]),
                   "claude_ready": _claude_ready(),
                   "seniority": {"mine": st["seniority_mine"], "band": st["seniority_band"]},
                   "travel_max": st.get("travel_max") or "any", "ai_scored": 0,
@@ -454,18 +454,59 @@ def bg_resume(kind, payload):
         st["error"] = str(e)[:400]
     st.update(running=False, stage="", finished=dt.datetime.now().isoformat(timespec="seconds"))
 
+NO_CODEX_WHY = ("Astra reviews run through the Codex app, which isn't installed on this computer, so this resume wasn't "
+                "graded. Siftwell's own checks below still ran. To turn reviews on, install Codex and sign in with ChatGPT "
+                "(Settings, Get started).")
+
+def review_wanted():
+    """Astra reviews are on only when the person left them on AND Codex is on this computer. Without Codex a tailored
+    resume is simply "not reviewed" (with Siftwell's own free checks), never a failed review."""
+    import review
+    return bool(people.prefs()["review.enabled"]) and bool(review.codex_path())
+
+def checks_only(s, desc, reason, why=""):
+    """No Astra review this time (reason: "no_codex", "codex_signed_out" or "off"): run the free mechanical checks (page
+    count, pronouns, date formats, keyword coverage) and store them with the resume so the Resumes tab can show them."""
+    import review, tailor
+    path = os.path.join(people.pdir("tailored"), s + ".json")
+    t = json.load(open(path))
+    pages = None
+    try:
+        from pypdf import PdfReader
+        pages = len(PdfReader(tailor.make_pdf(s)).pages)
+    except Exception as e:
+        print("page count failed:", e, flush=True)
+    target = {"1": 1, "2": 2}.get(people.prefs()["resume.length"])
+    try:
+        mech = review.mechanical(t, pages or 0, target, desc)
+    except Exception as e:
+        print("mechanical checks failed:", e, flush=True)
+        mech = None
+    rv = {k: v for k, v in (t.get("review") or {}).items() if k in ("rounds", "asked", "threshold", "final", "kept_round")}
+    rv.update(status="not_reviewed", reason=reason, error=why,
+              checks=None if mech is None else {"score": mech.get("score"), "pages": pages, "issues": mech.get("issues") or [],
+                                                "keyword_coverage": mech.get("keyword_coverage"),
+                                                "keywords_missing": (mech.get("keywords_missing") or [])[:12]})
+    t["review"] = rv
+    tailor.save_tailored(s, t)
+
 def review_loop(s, job, desc):
     """Astra grades; below the threshold, either pause for the candidate's answers or have Claude rework. Keeps the best version."""
     import copy, interview, resume, review, tailor
     pr = people.prefs()
     st = ps()["tailor"][s]
-    path = os.path.join(people.pdir("tailored"), s + ".json")
-    t = json.load(open(path))
-    rv = t.setdefault("review", {"rounds": [], "asked": [], "threshold": pr["review.threshold"]})
-    rv["threshold"] = pr["review.threshold"]
+    if not review.codex_path():
+        return checks_only(s, desc, "no_codex", NO_CODEX_WHY)
     ok, why = review.codex_ready()
     if not ok:
-        rv["status"] = "error"; rv["error"] = why; tailor.save_tailored(s, t); return
+        return checks_only(s, desc, "codex_signed_out", why)
+    path = os.path.join(people.pdir("tailored"), s + ".json")
+    t = json.load(open(path))
+    if (t.get("review") or {}).get("status") == "not_reviewed":
+        t.pop("review")  # (Codex has been installed since: start a real review)
+    rv = t.setdefault("review", {"rounds": [], "asked": [], "threshold": pr["review.threshold"]})
+    rv.setdefault("rounds", []); rv.setdefault("asked", [])
+    rv["threshold"] = pr["review.threshold"]
     facts = (resume.load_active() or {}).get("_resume_text", "") + "\n\nCONFIRMED ANSWERS\n" + interview.facts_text()
     target = {"1": 1, "2": 2}.get(pr["resume.length"])
     best = max(rv["rounds"], key=lambda r: r["score"], default=None)
@@ -539,6 +580,13 @@ def bg_resume_review(job_id):
     except Exception as e:
         ps()["tailor"][s] = {"running": False, "error": str(e)[:400], "slug": s}
 
+def _checks_brief(c):
+    """Siftwell's own checks on a tailored resume, short enough for a card on the Resumes tab."""
+    if not isinstance(c, dict):
+        return None
+    return {"pages": c.get("pages"), "keyword_coverage": c.get("keyword_coverage"),
+            "issues": [str(i.get("problem") or "")[:160] for i in (c.get("issues") or [])[:6]]}
+
 def job_card(job_id):
     """Title, company and link for the Resumes tab while a resume is being tailored (before its file exists)."""
     try:
@@ -568,8 +616,12 @@ def bg_tailor(job_id, rescore=False):
             tailor.make_pdf(s)
         except Exception as e:
             print("pdf build failed:", e, flush=True)
-        if people.prefs()["review.enabled"]:
+        if review_wanted():
             review_loop(s, job, desc)
+        else:
+            import review
+            off = not people.prefs()["review.enabled"]
+            checks_only(s, desc, "off" if off else "no_codex", "" if off else NO_CODEX_WHY)
         ps()["tailor"][s] = {"running": False, "error": None, "slug": s, **meta}
     except Exception as e:
         ps()["tailor"][s] = {"running": False, "error": str(e)[:400], "slug": s, **meta}
@@ -621,6 +673,8 @@ def _stop_file(pid):
 def rate_label(o):
     if not o:
         return "Full re-rate"
+    if o.get("more"):
+        return "Rating the next batch"
     if o.get("ids") is not None:
         n = len(o["ids"])
         if o.get("first"):  # a new person's first board: every passing unrated job counts as new (the Haiku cap still applies)
@@ -629,8 +683,8 @@ def rate_label(o):
     t = o.get("tiers") or []
     if len(t) == 3:
         return "Full re-rate"
-    name = {"haiku": "Quick check · Haiku", "sonnet": f"Careful look · Sonnet top {o.get('sonnet_pct')}%",
-            "opus": f"Best judgment · Opus top {o.get('opus_top')}"}[t[0]]
+    name = {"haiku": "Quick check", "sonnet": f"Careful look · best {o.get('sonnet_pct')}%",
+            "opus": f"Best judgment · top {o.get('opus_top')}"}[t[0]]
     return name + ("" if o.get("only_needed", True) else " (fresh look at all)")
 
 def _rate_cmd(pid, n, o):
@@ -719,7 +773,7 @@ def start_rating(pid, o, n=None):
         note_no_claude()
         return "skipped"
     _NO_CLAUDE_NOTE["logged"] = False
-    n = n or int(people.prefs(pid).get("claude.per_update") or 300)
+    n = n or int(people.prefs(pid).get("claude.per_update") or 50)  # (unused by the rating itself; kept for the command line)
     with lock:
         r = RERATE.get(pid)
         if r and r.get("running"):
@@ -814,7 +868,7 @@ def run_scheduled_update():
         for pid in people.ids():
             try:
                 if people.prefs(pid).get("claude.auto_rerate", True):
-                    run_rerate(pid, int(people.prefs(pid).get("claude.per_update") or 300))
+                    run_rerate(pid, None)  # (the same per-run limits as every other rating run: ai_score.RUN_LIMITS)
             except Exception as e:
                 print("nightly re-rate failed for", pid, e, flush=True)
 def scheduler():
@@ -1062,6 +1116,9 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, autoupdate.status())
         if path == "/api/rerate":
             return self._send(200, rating_status(pid))
+        if path == "/api/claude-usage":  # Settings, Claude usage: read from DATA/claude_usage.jsonl; never calls Claude
+            import claude_usage
+            return self._send(200, claude_usage.summary())
         if path == "/api/ratings/accept":
             with lock:
                 r = dict(ACCEPT.get(pid) or {"running": False, "result": None, "error": None})
@@ -1113,7 +1170,9 @@ class H(BaseHTTPRequestHandler):
                             # a Re-tailor running (or failed) on a resume that already exists
                             "work": {"running": bool(live and cur.get("job")), "step": cur.get("step"), "error": cur.get("error") if cur.get("job") else None},
                             "review": {"status": rv.get("status"), "final": rv.get("final") or (rv.get("rounds") or [{}])[-1].get("score"),
-                                       "rounds": len(rv.get("rounds") or []), "threshold": rv.get("threshold"), "pending": len(rv.get("pending") or [])}})
+                                       "rounds": len(rv.get("rounds") or []), "threshold": rv.get("threshold"), "pending": len(rv.get("pending") or []),
+                                       "reason": rv.get("reason"), "why": rv.get("error") if rv.get("status") in ("not_reviewed", "error") else None,
+                                       "checks": _checks_brief(rv.get("checks"))}})
             # Started with Tailor my resume but no file yet: still tailoring, or it failed (Try again / Remove on the card)
             for slug0, cur in list(work.items()):
                 if slug0 in have or not cur.get("job") or not (cur.get("running") or cur.get("error")):
@@ -1176,8 +1235,10 @@ class H(BaseHTTPRequestHandler):
             import company_add
             cos = catalog.companies(include_paused=False)
             counts = {k: sum(1 for c in cos if k in (c.get("sets") or ["tech"])) for k in people.COMPANY_SETS}
-            return self._send(200, {"sets": [{"id": k, "label": v, "count": counts[k]} for k, v in people.COMPANY_SETS.items()],
-                                    "watching": sorted(people.settings().get("company_sets") or ["tech"]), "own": company_add.own()})
+            watching = sorted(people.settings().get("company_sets") or [])
+            # only the earlier shared lists this profile already watches are shown (to keep or drop), under plain names
+            return self._send(200, {"sets": [{"id": k, "label": v, "count": counts[k]} for k, v in people.COMPANY_SETS.items() if k in watching],
+                                    "watching": watching, "own": company_add.own()})
         if path == "/api/facts":
             import interview
             return self._send(200, {"facts": interview.load_facts()})
@@ -1352,11 +1413,16 @@ class H(BaseHTTPRequestHandler):
             st = body.get("settings") or {}
             clean = {}
             try:
-                if "salary_floor" in st: clean["salary_floor"] = max(30000, min(1_000_000, int(st["salary_floor"])))
+                if "salary_floor" in st:  # blank or 0 = no floor
+                    fl = int(st["salary_floor"] or 0)
+                    clean["salary_floor"] = max(30000, min(1_000_000, fl)) if fl > 0 else 0
                 if "current_base" in st: clean["current_base"] = int(st["current_base"]) if st["current_base"] not in (None, "") else None
                 if "seniority_mine" in st:
-                    m = max(2, min(7, int(st["seniority_mine"])))
-                    clean["seniority_mine"], clean["seniority_band"] = m, [max(2, m - 1), min(7, m + 1)]
+                    if st["seniority_mine"] in (None, "", 0, "0"):  # "Any level"
+                        clean["seniority_mine"], clean["seniority_band"] = None, [1, 7]
+                    else:
+                        m = max(1, min(7, int(st["seniority_mine"])))  # 1 = entry level
+                        clean["seniority_mine"], clean["seniority_band"] = m, [max(1, m - 1), min(7, m + 1)]
             except (TypeError, ValueError):
                 return self._send(400, {"error": "Numbers only for pay and level."})
             for k in ("current_label", "goals", "target_text", "prep_text"):
@@ -1387,7 +1453,9 @@ class H(BaseHTTPRequestHandler):
                     return self._send(400, {"error": "Pick how much travel is OK."})
                 clean["travel_max"] = st["travel_max"]
             if "company_sets" in st and isinstance(st["company_sets"], list):
-                clean["company_sets"] = [x for x in st["company_sets"] if x in people.COMPANY_SETS] or ["tech"]
+                # earlier shared lists can be kept or dropped, never newly added: nobody is offered them any more
+                had = set(people.settings().get("company_sets") or [])
+                clean["company_sets"] = [x for x in st["company_sets"] if x in people.COMPANY_SETS and x in had]
             if body.get("name"): people.rename(pid, str(body["name"]))
             before = people.settings()
             saved = people.save_settings(clean)
@@ -1404,14 +1472,21 @@ class H(BaseHTTPRequestHandler):
             return self._send(202, {"ok": True})
         if path == "/api/rerate":  # body {} = classic re-rate; Re-rate panel: {tiers, only_needed, sonnet_pct, opus_top, target}
             o = None
-            if body.get("tiers"):
+            if body.get("more"):
+                # the board's "Rate more": the next batch of jobs that have no rating yet (or an outdated one), the same
+                # steps and per-run limits as the automatic rating (ai_score.RUN_LIMITS), with this person's settings
+                pr = people.prefs(pid)
+                o = {"more": True, "tiers": ["haiku", "sonnet", "opus"], "only_needed": True,
+                     "sonnet_pct": max(1, min(100, int(pr["claude.sonnet_pct"] or 15))),
+                     "opus_top": max(1, min(2000, int(pr["claude.opus_top"] or 50))), "target": True}
+            elif body.get("tiers"):
                 tiers = [t for t in ("haiku", "sonnet", "opus") if t in (body.get("tiers") or [])]
                 try:
                     pct, top = int(body.get("sonnet_pct")), int(body.get("opus_top"))
                 except (TypeError, ValueError):
-                    return self._send(400, {"error": "Enter whole numbers for the Sonnet % and the Opus count."})
+                    return self._send(400, {"error": "Enter whole numbers for the careful-look % and the best-judgment count."})
                 if not tiers or not 1 <= pct <= 100 or not 1 <= top <= 2000:
-                    return self._send(400, {"error": "Sonnet looks at 1 to 100% of your jobs; Opus at 1 to 2,000 jobs."})
+                    return self._send(400, {"error": "The careful look takes 1 to 100% of your rated jobs; best judgment 1 to 2,000 jobs."})
                 o = {"tiers": tiers, "only_needed": body.get("only_needed", True) is not False, "sonnet_pct": pct,
                      "opus_top": top, "target": body.get("target", True) is not False}
             with lock:

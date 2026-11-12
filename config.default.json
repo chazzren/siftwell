@@ -6,67 +6,20 @@
  "close_places": [],
  "close_places_need_va": [],
  "_note_close_places": "Fallback 'nearby' place names for profiles without a home ZIP. Empty by default: set a home ZIP in setup instead. packs/dc-area.json has a ready-made DC-area list.",
- "title_include": [
-  "engineer",
-  "developer",
-  "architect",
-  "analyst",
-  "scientist",
-  "designer",
-  "manager",
-  "director",
-  "head of",
-  "lead",
-  "principal",
-  "staff",
-  "senior",
-  "consultant",
-  "specialist",
-  "advisor",
-  "strategist",
-  "coordinator",
-  "administrator",
-  "officer",
-  "associate",
-  "representative",
-  "nurse",
-  "teacher",
-  "accountant",
-  "operations",
-  "program",
-  "project",
-  "product",
-  "marketing",
-  "sales",
-  "customer",
-  "support",
-  "finance",
-  "chief"
- ],
+ "_note_titles": "No built-in job-title vocabulary: which titles pass comes only from each person's own job titles (My profile, Job titles to search for, plus the title words from their resume). With none, every title passes. Words listed in title_include here are added for everyone in the household. title_exclude entries are whole words (\"intern\" never drops \"Internal Auditor\"); end one with * to match a word beginning (\"recruit*\").",
+ "title_include": [],
  "title_exclude": [
   "intern",
   "internship",
-  "co-op",
-  "new grad"
+  "co-op"
  ],
  "title_exclude_regex": [],
  "fit_keywords": {},
- "senior_title_words": [
-  "senior",
-  "sr.",
-  "sr ",
-  "staff",
-  "principal",
-  "lead",
-  "manager",
-  "director",
-  "head",
-  "architect"
- ],
+ "senior_title_words": [],
  "ai": {
   "model": "claude-opus-5-5",
   "effort": "low",
-  "max_new_per_run": 300,
+  "max_new_per_run": 50,
   "batch_size": 15,
   "concurrency": 5,
   "cli_concurrency": 3
@@ -78,7 +31,7 @@
   "title_allow": [],
   "model": "claude-opus-5-5",
   "effort": "low",
-  "max_new_per_run": 300,
+  "max_new_per_run": 50,
   "batch_size": 12,
   "cli_concurrency": 3
  },
@@ -88,5 +41,6 @@
    3,
    5
   ]
- }
+ },
+ "_note_seniority": "Only read when a very old single-user data folder is turned into a profile. New profiles start with no level chosen (every level shows) until the person picks one."
 }
