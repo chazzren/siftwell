@@ -108,7 +108,8 @@ jobs:
           $out = (& dist\Siftwell\Siftwell.exe --version | Out-String).Trim()
           Write-Host "Siftwell.exe --version -> '$out'"
           if ($out -ne $env:VERSION) { throw "Expected '$env:VERSION' from Siftwell.exe --version" }
-          & dist\Siftwell\Siftwell.exe --check-imports
+          $imp = (& dist\Siftwell\Siftwell.exe --check-imports | Out-String).Trim()
+          Write-Host "Siftwell.exe --check-imports -> '$imp'"
           if ($imp -notmatch "^imports ok") { throw "Siftwell.exe --check-imports failed" }
           "{0:N1} MB" -f ((Get-ChildItem dist\Siftwell -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
 
