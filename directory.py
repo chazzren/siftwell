@@ -1280,6 +1280,7 @@ PANE_HTML = """<section class="sgsec"><h3 class="sgtitle">Employers near you</h3
 <div class="bk-btnrow"><button class="btn" type="button" id="ldStart" style="white-space:normal;max-width:100%;height:auto;min-height:var(--h);text-align:left" disabled>Build my own directory</button>
 <button class="btn" type="button" id="ldPause" hidden>Pause</button></div>
 <label class="note" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="ldDiscover" style="width:auto;height:auto;flex:none;margin-top:3px"><span><b style="font-weight:500">Also look for job sites that aren’t on the list yet</b> (optional). Siftwell then searches public web records (the Common Crawl index) from this computer during a build, slowly and at most once every 30 days, because many copies of Siftwell asking those free services at once would be unfair to them.</span></label>
+<small class="note" id="ldData" style="display:block;margin-top:8px"></small>
 <span class="note" id="ldMsg" role="status" aria-live="polite"></span></div>
 <div class="srow"><div class="slab"><span>Find more with Claude</span><small>Claude can also search the web for employers the directory doesn't have. It uses your Claude plan, and only runs when you start it.</small></div>
 <div class="sctl"><a class="btn sm" href="/catalog#find">Find employers</a></div></div></div>
@@ -1416,7 +1417,7 @@ function ldDraw(d){
     const pct = d.total ? Math.round(100 * d.done / d.total) : 1;
     $("ldLine").textContent = d.line;
     $("ldBar").style.width = pct + "%"; $("ldBarBox").setAttribute("aria-valuenow", pct);
-    $("ldEta").textContent = !d.total ? "" : (d.near_eta_text ? `The job sites last seen hiring near you come first: ${n(d.near_done)} of ${n(d.near_total)} done, ${d.near_eta_text} to go. ` : `The job sites last seen hiring near you are done. `) + `Everything: ${d.eta_text || "a while"} to go, at ${n(Math.round(d.rate))} job sites a minute right now.` + (d.adding ? ` Employers found near you are being added to your list (${n(d.added)} so far).` : " Nothing is added to your list by itself; use Add employers near me above.");
+    $("ldEta").textContent = !d.total ? "" : (d.near_eta_text ? `Employers near you: ${n(d.near_done)} of ${n(d.near_total)} job sites done, ${d.near_eta_text} to go. ` : `The job sites last seen hiring near you are done. `) + `Everything: ${d.eta_text || "a while"} to go.` + ((d.resting || []).length ? ` A job system asked Siftwell to slow down, so it is leaving it alone for a few minutes (${esc(d.resting.join(", "))}).` : "") + (d.adding ? ` Employers found near you are being added to your list (${n(d.added)} so far).` : " Nothing is added to your list by itself; use Add employers near me above.");
     $("ldWhat").textContent = "Siftwell is reading employers’ public job pages on this computer. You can keep using Siftwell, close this page, or pause; it carries on where it stopped. It uses no Claude.";
   } else if (d.running) {
     $("ldWhat").textContent = "Siftwell is doing its weekly check of your directory in the background (about 40 minutes at most). It uses no Claude.";
@@ -1427,6 +1428,9 @@ function ldDraw(d){
   } else {
     $("ldWhat").textContent = d.possible ? (d.offer || "") : "Siftwell needs to know where to look first: add your home ZIP on the board (Filters, then My search).";
   }
+  const du = d.data || {};
+  $("ldData").textContent = (du.first_mb ? `Internet data: a first build uses about ${n(du.first_mb)} MB (${du.measured ? "measured on this computer" : "measured when this version was made"}: about ${du.mb_per_1000} MB for every 1,000 job sites; Siftwell reads only the lists of openings, compressed), the weekly check a small part of that. ` : "")
+    + (d.metered ? "Windows says this connection is metered: Siftwell won’t continue a build or run the weekly check by itself on it, and asks before starting one." : "");
   const b = $("ldStart");
   b.hidden = !!d.running; b.disabled = !d.possible;
   b.textContent = d.unfinished ? "Continue building" : d.local_complete ? "Build it again from the start" : "Build my own directory";
@@ -1448,11 +1452,15 @@ $("ldDiscover").addEventListener("change", () => {
 $("ldStart").addEventListener("click", () => {
   const again = LD && LD.local_complete && !LD.unfinished;
   if (again && !confirm("Build your directory again from the start?\n\nSiftwell reads every job site again (" + ((LD.estimate || {}).all_text || "a few hours") + "). The weekly check already keeps it up to date.")) return;
-  $("ldStart").disabled = true; $("ldMsg").textContent = "Starting…";
-  post("/api/localdir/start", {add: $("ldAdd").checked ? "all" : "none", fresh: !!again}).then(({ok, d}) => {
-    $("ldMsg").textContent = ok ? "" : (d.error || "That didn’t work.");
-    if (ok) ldDraw(d); else $("ldStart").disabled = false;
-  }).catch(() => { $("ldStart").disabled = false; $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
+  const go = meteredOk => {
+    $("ldStart").disabled = true; $("ldMsg").textContent = "Starting…";
+    post("/api/localdir/start", {add: $("ldAdd").checked ? "all" : "none", fresh: !!again, metered_ok: !!meteredOk}).then(({ok, d}) => {
+      if (!ok && d.metered && !meteredOk) { $("ldStart").disabled = false; $("ldMsg").textContent = ""; if (confirm(d.error + "\n\nBuild anyway?")) go(true); return; }
+      $("ldMsg").textContent = ok ? "" : (d.error || "That didn’t work.");
+      if (ok) ldDraw(d); else $("ldStart").disabled = false;
+    }).catch(() => { $("ldStart").disabled = false; $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
+  };
+  go(false);
 });
 $("ldPause").addEventListener("click", () => {
   $("ldPause").disabled = true; $("ldMsg").textContent = "Pausing…";

@@ -20,7 +20,9 @@ SAME files (build.write_states), under DATA/directory/local/:
   progress.json       what the running build is doing (read by localdir.py for the one progress line)
   job.json, stop      written by the app: the areas to build for / "stop now"
 
-Being a good guest: besides the builder's own rules, a job system that starts refusing connections (BREAK_AFTER
+Being a good guest: every request is paced per provider (net.install: about one request a second and one or two
+connections for a shared job system; only listing pages are read, never a page per posting), so the build is slow on
+purpose for each provider and fast only because many different providers are read side by side. On top, a job system that starts refusing connections (BREAK_AFTER
 failures in a row on one host: some systems throttle a home connection that asks for many boards) is left alone for
 COOL_SECS, then twice as long, and after COOL_MAX rests its remaining boards are left for another day. Those boards
 are not counted as failed.
@@ -56,6 +58,8 @@ WD_SITES = 300          # Workday tenants whose robots.txt (list of career sites
 TITLES = 1500           # board pages asked for the employer's name per run, at most
 DEFAULT_SECS = 3.0      # one board's read when nothing has been measured for its system
 MEASURED_MIN = 8        # reads of a system before its own measured average is used
+HEAVY = 1500            # a board last seen with this many open jobs is read after the rest of its group
+REQS_PER_BOARD = 1.5    # requests one board takes on average, for estimates before anything was measured here
 BREAK_AFTER = 6         # this many connection failures in a row on one host: stop asking it for a while
 COOL_SECS = 120         # ... for this long the first time, twice as long each time after
 COOL_MAX = 4            # ... and after this many rests in a row its boards are left for another day
@@ -143,9 +147,16 @@ def rank(t, states, remote=False):
 
 
 def order(tenants, keys, states, remote=False):
-    """keys in reading order (see rank); ties in a stable, deterministic order."""
+    """keys in reading order (see rank); ties in a stable, deterministic order. Within the near-you group the very
+    large boards (HEAVY known jobs or more: many list pages each) go after the others, so a handful of giants on one
+    slow job system never hold back the hundreds of ordinary employers behind them."""
     states = set(states)
-    return sorted(keys, key=lambda k: (rank(tenants[k], states, remote), k))
+
+    def key(k):
+        g, n = rank(tenants[k], states, remote)
+        heavy = 1 if g == 0 and known(tenants[k])[2] >= HEAVY else 0
+        return (g, heavy, n, k)
+    return sorted(keys, key=key)
 
 
 def near_jobs(t, a):
@@ -171,10 +182,23 @@ def host_of(c):
     return h or str(c.get("ats") or "other")
 
 
-def lane_minutes(counts, secs):
-    """Minutes to read {job system: boards} when each system's boards are read LANES at a time and one read takes
-    secs(system) seconds: the slowest lane decides."""
-    return max((n * secs(a) / build.LANES.get(a, build.LANE_DEFAULT) for a, n in counts.items()), default=0.0) / 60.0
+OLD_LANES = {"greenhouse": 3, "lever": 1, "ashby": 3, "workday": 6, "jsonld": 4}   # a seed without "lanes" was measured with these (else 3)
+
+
+def board_secs(a, secs, width=None):
+    """Seconds of its lane one board of system `a` takes: what a read took (secs) spread over the boards read at once
+    when that was measured (width; default: today's lane), but never faster than the provider's own pace allows."""
+    return max(secs / (width or build.LANES.get(a, build.LANE_DEFAULT)), REQS_PER_BOARD / net.system_rate(a))
+
+
+def seed_width(a, lanes=None):
+    return int((lanes or {}).get(a) or OLD_LANES.get(a, 3))
+
+
+def lane_minutes(counts, lane_secs):
+    """Minutes to read {job system: boards}: each system is its own lane, paced per provider; the slowest decides.
+    lane_secs(system) = board_secs(...) for that system."""
+    return max((n * lane_secs(a) for a, n in counts.items()), default=0.0) / 60.0
 
 
 class Local:
@@ -255,6 +279,7 @@ class Local:
             t["seed"] = [b["j"], b["r"], b["st"], b["seen"]]
         if isinstance((s or {}).get("secs"), dict):
             self.meta["seed_secs"] = {str(a): float(v) for a, v in s["secs"].items() if isinstance(v, (int, float))}
+            self.meta["seed_lanes"] = {str(a): int(v) for a, v in (s.get("lanes") or {}).items() if isinstance(v, int) and v > 0}
         return new
 
     def load_seeds(self, paths_):
@@ -317,17 +342,17 @@ class Local:
         return near + rest, len(near)
 
     def avg_secs(self, a, near=False):
-        """Seconds one board of system `a` takes: measured here (near=True: on the boards last seen near the people
-        here, which are read biggest first and so take longer), else by the weekly build (the seed), else a default."""
+        """Lane seconds one board of system `a` takes (board_secs): measured here (near=True: on the boards last seen
+        near the people here, which are bigger and so take longer), else by the weekly build (the seed), else a default."""
         if near:
             m = (self.meta.get("secs_near") or {}).get(a)
             if m and m[1] >= MEASURED_MIN:
-                return m[0] / m[1]
+                return board_secs(a, m[0] / m[1])
         m = (self.meta.get("secs") or {}).get(a)
         if m and m[1] >= MEASURED_MIN:
-            return m[0] / m[1]
+            return board_secs(a, m[0] / m[1])
         s = (self.meta.get("seed_secs") or {}).get(a)
-        return float(s) if s else DEFAULT_SECS
+        return board_secs(a, float(s), seed_width(a, self.meta.get("seed_lanes"))) if s else board_secs(a, DEFAULT_SECS, 3)
 
     def estimate(self, keys):
         """Minutes to read these boards, from the seconds measured per job system (here, else by the weekly build)."""
@@ -414,6 +439,7 @@ class Local:
         states = sorted({s for a in areas for s in a.get("states") or []})
         remote = any(a.get("remote_only") for a in areas)
         t_start = time.time()
+        wire0 = (int(net.STATS.get("wire", 0)), int(net.STATS.get("plain", 0)))
         minutes = float(job.get("minutes") or (WEEKLY_MINUTES if mode == "weekly" else 0))
         deadline = t_start + minutes * 60 if minutes else None
         stopped = lambda: stop() or (deadline is not None and time.time() > deadline)
@@ -563,11 +589,10 @@ class Local:
                     done_at.popleft()
                 span = min(300.0, max(1.0, now - t_start))
                 rate = len(done_at) * 60.0 / span
-                width = lambda a: build.LANES.get(a, build.LANE_DEFAULT)
                 eta0 = lane_minutes({a: n for a, n in left0.items() if n > 0}, lambda a: self.avg_secs(a, near=True))
-                eta = max((((left0.get(a, 0) * self.avg_secs(a, near=True) + max(0, n - left0.get(a, 0)) * self.avg_secs(a)) / width(a))
+                eta = max(((left0.get(a, 0) * self.avg_secs(a, near=True) + max(0, n - left0.get(a, 0)) * self.avg_secs(a))
                            for a, n in left.items() if n > 0), default=0.0) / 60.0
-                resting = sorted(h for h, v in hosts.items() if v["blocked"] or v["until"] > now)
+                resting = sorted(set(net.resting()) | {h for h, v in hosts.items() if v["blocked"] or v["until"] > now})
                 out = {"pid": os.getpid(), "token": job.get("token"), "at": round(now, 1), "mode": mode, "phase": phase, "started": round(t_start, 1),
                        "total": total + counts["todo"] - n_keys,
                        "done": base_done + counts["done"], "run_done": counts["done"], "run_todo": counts["todo"],
@@ -575,7 +600,8 @@ class Local:
                        "eta_min": round(eta, 1), "near_total": near_base + counts["g0"], "near_done": near_base + counts["g0_done"],
                        "near_eta_min": round(eta0, 1), "near": {str(p): len(s) for p, s in near.items()},
                        "stats": dict(st), "rev": rev[0], "discover": dict(disc), "final": final, "resting": resting[:8],
-                       "http": dict(net.STATS)}
+                       "http": dict(net.STATS),
+                       "top": sorted(([k] + v for k, v in list(net.BY.items())), key=lambda x: -x[2])[:12]}
             write_json(os.path.join(self.root, "progress.json"), out)
             return out
 
@@ -648,6 +674,10 @@ class Local:
                 self.meta["pass"]["minutes"] = round(float(self.meta["pass"].get("minutes") or 0) + (time.time() - t_start) / 60, 1)
         elif mode != "weekly":
             self.meta["pass"]["minutes"] = round(float(self.meta["pass"].get("minutes") or 0) + (time.time() - t_start) / 60, 1)
+        use = self.meta.setdefault("use", {"sites": 0, "wire": 0, "plain": 0})
+        use["sites"] = int(use.get("sites", 0)) + st["ok"] + st["empty"]
+        use["wire"] = int(use.get("wire", 0)) + int(net.STATS.get("wire", 0)) - wire0[0]
+        use["plain"] = int(use.get("plain", 0)) + int(net.STATS.get("plain", 0)) - wire0[1]
         if mode == "weekly":
             self.meta["weekly"] = {"at": time.time(), "checked": counts["done"]}
         else:
@@ -698,6 +728,7 @@ def main(argv=None):
     stop_file = os.path.join(root, "stop")
     stop = lambda: os.path.exists(stop_file) or not _parent_alive(args.parent)
     try:
+        net.install()       # every request, also the app readers', paced per provider (net.py: polite by design)
         L = Local(root)
         if L.replayed:
             log(f"carried on from the journal: {L.replayed} job sites read since the last save")

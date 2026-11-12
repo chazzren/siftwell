@@ -65,6 +65,9 @@ def make(tenants, built=""):
             a[1] += 1
     return {"v": 1, "built": built,
             "secs": {a: round(v[0] / v[1], 2) for a, v in sorted(secs.items()) if v[1] >= 5},
+            # (how many boards of a system were read at once when those seconds were measured: a read's seconds
+            # include waiting for its turn, so an estimate divides by this, not by today's lane width)
+            "lanes": {a: build.LANES.get(a, build.LANE_DEFAULT) for a, v in sorted(secs.items()) if v[1] >= 5},
             "groups": [{"a": a, "f": list(f), "t": rows} for (a, f), rows in sorted(groups.items())]}
 
 

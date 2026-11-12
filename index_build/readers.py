@@ -5,8 +5,8 @@ read(cfg) -> {"name": board's own name or None, "jobs": open postings, "remote":
 
 Greenhouse, Lever, Ashby and Workday have light readers here (one or two requests per board: Greenhouse's list
 without job text, Workday's location facets; a Workday board without city facets is sampled across its whole list).
-Every other system uses the app's own reader from jobfinder.FETCHERS, stopped after CAP postings or GENERIC_SECS (so a
-new system the app learns to read is covered without changes here). A board that was only partly read is marked
+Every other system uses the app's own reader from jobfinder.FETCHERS, list only (no per-posting pages: see generic),
+stopped after CAP postings or GENERIC_SECS (so a new system the app learns to read is covered without changes here). A board that was only partly read is marked
 "sample": the directory publishes it as "maybe near" in every state where the sample saw it, and the app keeps it only
 if its first full fetch finds jobs near the person.
 
@@ -18,7 +18,9 @@ from . import net
 
 CAP = 1000           # postings looked at per board through the app's readers (most boards are read whole)
 GENERIC_SECS = 90    # time limit per board through the app's readers
-WD_PAGES = 15        # Workday list pages (20 each) when the board has no city-level location facet, spread over the list
+LIST_PAGES = 3       # list pages read of a board whose list pages are heavy (iCIMS: ~120 KB each; UKG: 100 postings a page)
+JSONLD_PAGES = 20    # posting pages sampled on an employer's own careers site (the count comes from its sitemap)
+WD_PAGES = 15       # Workday list pages (20 each) when the board has no city-level location facet, spread over the list
 WD_LIST_MAX = 2000   # Workday stops paging here
 
 
@@ -227,7 +229,7 @@ def jsonld(c):
     import jsonld_fetcher
     rows, name = [], None
     cc = dict(c, name="directory")
-    for p in jsonld_fetcher.fetch_postings(cc, cap=40, sample=True):
+    for p in jsonld_fetcher.fetch_postings(cc, cap=JSONLD_PAGES, sample=True):   # (each is a whole web page: keep the sample small)
         rows.append((p.get("locations") or [], p.get("workplace") or "", ""))
         name = name or p.get("org")
     s = _summ(rows, name, sample=cc.get("_url_count", 0) > len(rows))
@@ -239,7 +241,10 @@ def jsonld(c):
     return s
 
 
-def generic(c):
+def generic(c, details=0):
+    """A board through the app's own reader, LIST ONLY: the per-posting pages the app fetches for job text are not
+    asked for (extra_fetchers.wanted's "_detail_budget"), except `details` of them when the employer's name has to be
+    learned from a posting. That is one or a few requests per board instead of one per posting."""
     import jobfinder
     if not jobfinder.FETCHERS.get("icims"):
         jobfinder.load_extra()
@@ -254,6 +259,8 @@ def generic(c):
     cc = dict(c, name="directory")
     # the app's own per-employer time budget (jobfinder.over_budget): a reader that pages stops by itself at the limit
     cc["_deadline"], cc["_budget"] = time.time() + GENERIC_SECS, GENERIC_SECS
+    cc["_detail_budget"] = int(details or 0)
+    cc["_max_pages"] = LIST_PAGES       # (readers that page through heavy list pages stop there: iCIMS, UKG)
     def run():
         try:
             for j in fx(cc):
@@ -268,11 +275,18 @@ def generic(c):
     t = threading.Thread(target=run, daemon=True)
     t.start()
     t.join(GENERIC_SECS)
-    if t.is_alive() or cc.get("_truncated"):
-        sample[0] = True
+    if t.is_alive() or cc.get("_truncated") or err:
+        sample[0] = True        # (also when it stopped part-way, e.g. net.OverBudget on an employer's own site)
     if err and not rows:
         raise err[0]
+    if t.is_alive() and not rows:   # (nothing came back in time, e.g. its provider is resting: not "an empty board")
+        raise TimeoutError("the board didn't answer in time")
     out = _summ(list(rows), None, sample=sample[0])
+    pg = cc.get("_pages")
+    if pg and pg[0] and pg[1] > pg[0]:      # only the first pages were read: scale the counts up to the whole board
+        k = pg[1] / pg[0]
+        out["locs"] = {l: max(1, round(v * k)) for l, v in out["locs"].items()}
+        out["jobs"], out["remote"] = round(out["jobs"] * k), round(out["remote"] * k)
     out["texts"], out["btitle"] = list(texts), cc.get("_board_title")
     return out
 
@@ -313,13 +327,13 @@ def board_name(c):
 LIGHT = {"greenhouse": greenhouse, "lever": lever, "ashby": ashby, "workday": workday, "jsonld": jsonld}
 
 
-def read(c):
+def read(c, details=0):
     from .systems import BY_ID
     s = BY_ID.get(c.get("ats"))
     if s is not None and not s.read:
         raise Skip(f"{c['ats']} is not read by the directory (robots.txt)")
-    fn = LIGHT.get(c["ats"], generic)
+    fn = LIGHT.get(c["ats"])
     t0 = time.time()
-    out = fn(c)
+    out = fn(c) if fn else generic(c, details)
     out["secs"] = round(time.time() - t0, 1)
     return out

@@ -37,8 +37,10 @@ import argparse, concurrent.futures as cf, datetime as dt, glob, gzip, hashlib, 
 
 from . import net, systems, readers, cc, ct, gov, postings
 
-LANES = {"greenhouse": 3, "lever": 1, "ashby": 3, "workday": 6, "jsonld": 4}   # boards read at once per job system
-LANE_DEFAULT = 3        # every other system (each system has its own lane: its boards share hosts)
+# Boards read at once per job system. How fast a system is really asked is decided by net.PROVIDERS (requests per
+# second and connections per provider); a lane wider than that only means its readers wait their turn.
+LANES = {"greenhouse": 3, "lever": 1, "ashby": 3, "workday": 4, "jsonld": 6, "paylocity": 1, "workable": 1, "paycom": 1, "saashr": 1}
+LANE_DEFAULT = 2        # every other system (each system has its own lane: its boards share hosts)
 STALE_DAYS = 6          # a board read more recently than this isn't read again
 KEEP_DAYS = 35          # a board unread this long (it kept failing) is left out of the files
 REST_DAYS = 28          # after three failures in a row
@@ -46,6 +48,7 @@ PLACES_MAX = 150        # places per employer in one state file
 PS_MAX = 8              # an entry lists the states it hires in only when there are this few (the app's "all nearby" rule)
 WD_SITES_DAYS = 60      # a Workday tenant's robots.txt (its list of career sites) is read again after this long
 TNAME_DAYS = 120        # a board page is asked for the employer's name again after this long
+NAME_DETAILS = 2        # postings opened on a board known only by a code, to learn the employer's name
 OPAQUE = {"paylocity", "ukg", "dayforce", "paycom", "saashr", "oracle", "adp"}   # systems whose address is only a code
 STAFFING = re.compile(r"(?i)\b(staffing|recruit(?:ing|ers?|ment)|personnel|talent (?:solutions|partners|group)|workforce solutions|"
                       r"temp(?:orary)? (?:services|agency)|employment (?:agency|services|solutions|professionals)|headhunt\w*|"
@@ -468,8 +471,10 @@ def read_tenant(t, title_budget=None):
     name, the date. Returns "ok" (it has jobs), "empty", "failed" (counted; three in a row and the board rests for
     REST_DAYS) or "skipped" (a system the directory doesn't read). title_budget: a one-item list, the board pages that
     may still be asked for the employer's name (None: never ask)."""
+    # (a posting or two are opened only when nothing else names this employer: its text then does, names.derive)
+    named = t.get("pack_name") or t.get("seed_name") or t.get("gov_name") or t.get("tname") or t.get("dname") or ident_name(t["c"])
     try:
-        s = readers.read(dict(t["c"]))
+        s = readers.read(dict(t["c"]), details=0 if named else NAME_DETAILS)
     except readers.Skip:
         return "skipped"
     except Exception as e:
@@ -758,6 +763,7 @@ def main(argv=None):
     ap.add_argument("--reread", default="", help="comma-separated job systems to read again even if read this week")
     ap.add_argument("--reread-states", default="", help="read again (and first) the boards known to hire in these states")
     args = ap.parse_args(argv)
+    net.install()       # every request, also the app readers', paced per provider (net.py: polite by design)
     t0 = time.time()
     out = os.path.abspath(args.out)
     os.makedirs(out, exist_ok=True)

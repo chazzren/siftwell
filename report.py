@@ -1483,7 +1483,8 @@ const dirPreview = refresh => fetch("/api/directory/preview" + (refresh ? "?refr
 const buildOffer = (bd, pre) => bd && bd.offer ? `<span class="dbuild">${esc(bd.offer)} <button type="button" class="btn sm" id="${pre}Build">Build my own directory</button></span>` : "";
 function buildStart(btn, msg, then){
   btn.disabled = true; if (msg) msg.textContent = " Starting…";
-  fetch("/api/localdir/start", {method: "POST", headers: H, body: JSON.stringify({add: "all"})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+  fetch("/api/localdir/start", {method: "POST", headers: H, body: JSON.stringify({add: "all", metered_ok: !!btn.dataset.meteredOk})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+    if (!ok && d.metered && !btn.dataset.meteredOk) { btn.disabled = false; if (msg) msg.textContent = ""; if (confirm(d.error + "\n\nBuild anyway?")) { btn.dataset.meteredOk = "1"; buildStart(btn, msg, then); } return; }
     if (!ok) { btn.disabled = false; if (msg) msg.textContent = " " + (d.error || "That didn’t work."); return; }
     if (msg) msg.textContent = " Started. Employers near you are added to your list as Siftwell finds them.";
     if (then) then(d);
