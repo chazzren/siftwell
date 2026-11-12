@@ -18,8 +18,14 @@ https://download.geonames.org/export/zip/US.zip, CC BY 4.0 - keep the attributio
 API
   geocode_home("10001") / geocode_home("Austin, TX") -> (lat, lon, label)
   locate("US-TX-Austin") -> (lat, lon, confidence) | None
-  locate_all(s) -> [Hit(lat, lon, conf, kind, label, radius_mi)]   kind: zip|place|alias|metro|county|state
+  locate_all(s) -> [Hit(lat, lon, conf, kind, label, radius_mi)]   kind: zip|place|alias|metro|county|state|bare
   within(["McLean, VA", "Remote"], home, 35) -> (bool, nearest_miles|None, [matched strings])
+  within(["Columbus"], home, 35, states={"GA"})   a bare city name is placed in a state the caller has evidence for
+
+A "bare" hit is a city name written without its state that exists in several states ("Columbus": Ohio and Georgia;
+"Portland"; "Springfield"). Its label is the biggest namesake ("Columbus, OH") but it is a guess: jobfinder accepts
+it only with supporting context (the employer's known places, a state named in the posting) and passes that state
+to within(). bare_names(s), place_states(s) and bare_point() are the helpers for that.
   miles(lat1, lon1, lat2, lon2)
 """
 import functools, json, math, os, re, threading, unicodedata
@@ -380,9 +386,18 @@ def _parse_part(part, d):
         # first unpaired name: a unique place (>=2k people) or one 2x bigger than any namesake (>=20k); later names
         # in the same location ("Houston (McKinney)", "Bend - York") or next to a matched city only if a big city
         floor = 300000 if (have_pair or tried) else (20000 if len(c) > 1 else 2000)
+        first = not (have_pair or tried)
         tried = True
+        # A namesake of real size in another state ("Columbus": 913k in Ohio, 202k in Georgia) makes the name a
+        # guess: kind "bare", which callers accept only with a state to back it (see within()).
+        other = max((x[3] for x in c if x[0] != top[0]), default=0)
         if top[3] >= floor and top[3] >= 2 * second:
-            hits.append(Hit(top[1], top[2], 0.7 if top[3] >= 250000 else 0.6, "place", _label(t["phrase"], top[0]), 0))
+            amb = other >= max(BARE_MIN_POP, top[3] / BARE_RATIO)
+            hits.append(Hit(top[1], top[2], 0.7 if top[3] >= 250000 else 0.6, "bare" if amb else "place", _label(t["phrase"], top[0]), 0))
+        elif first and top[3] >= 2000 and other >= 2000:
+            # "Springfield", "Dublin", "Marion": no namesake stands out, so on its own it names nothing (as before);
+            # with a state to back it, within() can still place it. Low confidence marks it as never a guess.
+            hits.append(Hit(top[1], top[2], BARE_WEAK, "bare", _label(t["phrase"], top[0]), 0))
     # a lone state: DC is a city; anything else is just a state centroid (never 'within')
     if not any(h.kind in ("zip", "place", "alias", "metro", "county") for h in hits) and not foreign:
         for s in states:
@@ -395,6 +410,11 @@ def _parse_part(part, d):
                 if la is not None:
                     hits.append(Hit(la, lo, 0.3, "state", STATES[s["state"]].title(), 0))
     return hits
+
+BARE_RATIO = 10        # a bare city name is unambiguous when it is 10x bigger than any namesake in another state ...
+BARE_MIN_POP = 5000    # ... or no such namesake has this many people
+BARE_WEAK = 0.3        # confidence of a bare name that was never resolved without context
+
 
 def _label(phrase, st):
     p = re.sub(r"\s+dc$", "", phrase) if st == "DC" else phrase
@@ -412,13 +432,87 @@ def _locate_all(s):
                     seen.add(k); hits.append(h)
     return tuple(hits)
 
-def locate_all(s):
-    """All places named in a location string, as Hit tuples (kind: zip|place|alias|metro|county|state)."""
-    return list(_locate_all(s or ""))
+def _weak_bare(h):
+    return h.kind == "bare" and h.conf <= BARE_WEAK
+
+
+def locate_all(s, weak=False):
+    """All places named in a location string, as Hit tuples (kind: zip|place|alias|metro|county|state|bare).
+    A "bare" hit is a city name without its state that has namesakes elsewhere: its point is the biggest one, a guess.
+    weak=True also returns bare names with no clear biggest namesake ("Springfield")."""
+    return [h for h in _locate_all(s or "") if weak or not _weak_bare(h)]
+
+
+def bare_names(s):
+    """The bare city names in a location string: [(name, {state: (lat, lon, population)})] with every state that has
+    a town of that name (2,000+ people, or the biggest one), for the caller to pick from with its own evidence."""
+    out = []
+    for h in _locate_all(s or ""):
+        if h.kind != "bare":
+            continue
+        name = h.label.rsplit(",", 1)[0]
+        opts = {}
+        for st, la, lo, pop, kind in _load()["names"].get(_key(name), []):
+            if kind != "a" and (pop >= 2000 or not opts) and (st not in opts or pop > opts[st][2]):
+                opts[st] = (la, lo, pop)
+        out.append((name, opts))
+    return out
+
+
+def bare_point(h, states):
+    """Where a bare hit is, given the states the caller has evidence for: [(lat, lon)] (one per backed state)."""
+    name = h.label.rsplit(",", 1)[0]
+    best = {}
+    for st, la, lo, pop, kind in _load()["names"].get(_key(name), []):
+        if st in states and kind != "a" and (st not in best or pop > best[st][2]):
+            best[st] = (la, lo, pop)
+    return [(v[0], v[1]) for v in best.values()]
+
+
+def place_states(s):
+    """[(place name key, state)] for the places a location string names WITH their state ("Columbus, OH", a ZIP's
+    town, "Franklin County, OH"), plus (None, state) for a state named alone. Bare names are not included."""
+    out = []
+    for h in _locate_all(s or ""):
+        if h.kind in ("place", "alias", "county") and "," in h.label:
+            nm, st = h.label.rsplit(",", 1)
+            out.append((_key(nm), st.strip()))
+        elif h.kind == "zip":
+            z = _load()["zips"].get(h.label)
+            st = state_at(h.lat, h.lon)
+            if st:
+                out.append((_key(re.sub(r",.*$", "", z[2])) if z and z[2] else None, st))
+        elif h.kind == "state":
+            st = STATE_WORDS.get(h.label.lower())
+            if st:
+                out.append((None, st))
+    return out
+
+
+def state_at(lat, lon):
+    """The state of the populated place nearest a point (for ZIP hits, whose label carries no state)."""
+    best = None
+    d = _load()
+    if "by_cell" not in d:
+        cells = {}
+        for cands in d["names"].values():
+            for st, la, lo, pop, kind in cands:
+                if kind != "a":
+                    cells.setdefault((round(la * 2), round(lo * 2)), []).append((la, lo, st))
+        d["by_cell"] = cells
+    cy, cx = round(lat * 2), round(lon * 2)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            for la, lo, st in d["by_cell"].get((cy + dy, cx + dx), ()):
+                dist = (la - lat) ** 2 + (lo - lon) ** 2
+                if best is None or dist < best[0]:
+                    best = (dist, st)
+    return best[1] if best else None
+
 
 def locate(s):
     """Best single point for a location string -> (lat, lon, confidence) or None. State-only strings get conf 0.3."""
-    hs = _locate_all(s or "")
+    hs = [h for h in _locate_all(s or "") if not _weak_bare(h)]
     if not hs:
         return None
     h = max(hs, key=lambda h: h.conf)
@@ -435,7 +529,8 @@ def geocode_home(q):
             raise ValueError(f"unknown ZIP {q}")
         la, lo, city = d["zips"][m.group(1)]
         return (la, lo, f"{m.group(1)} ({city})" if city else m.group(1))
-    hs = [h for h in _locate_all(q) if h.kind in ("zip", "place", "alias", "metro", "county")]
+    # (someone typing just "Columbus" as their home means the big one, as always)
+    hs = [h for h in _locate_all(q) if h.kind in ("zip", "place", "alias", "metro", "county") or (h.kind == "bare" and not _weak_bare(h))]
     if not hs:
         raise ValueError(f"can't geocode home {q!r}")
     h = max(hs, key=lambda h: h.conf)
@@ -467,11 +562,14 @@ def _home(home):
     la, lo, _ = geocode_home(str(home))
     return la, lo
 
-def within(job_locations, home, radius_miles):
+def within(job_locations, home, radius_miles, states=None):
     """Is any job location within radius of home?  -> (bool, nearest_miles or None, [matched location strings]).
     home: (lat, lon[, label]) or a ZIP / 'City, ST'. Metro phrases ("Bay Area", "Greater Boston") match when
     home is inside the metro or its center is within the radius; their distance is to the metro center.
-    State-only and remote strings never match (remote handling stays in classify())."""
+    State-only and remote strings never match (remote handling stays in classify()).
+    states: the states the caller has evidence for (a set, possibly empty). A bare city name ("Columbus") is then
+    placed only in one of them, and nowhere when none fits. Without it (None) a bare name is its biggest namesake,
+    as it always was: only callers that can give context ask for the strict reading."""
     hla, hlo = _home(home)
     if isinstance(job_locations, str):
         job_locations = [job_locations]
@@ -480,6 +578,16 @@ def within(job_locations, home, radius_miles):
         hit = False
         for h in _locate_all(loc or ""):
             if h.kind == "state":
+                continue
+            if h.kind == "bare":
+                pts = ([] if _weak_bare(h) else [(h.lat, h.lon)]) if states is None else bare_point(h, states)
+                for la, lo in pts:
+                    dist = miles(hla, hlo, la, lo)
+                    if dist <= radius_miles:
+                        hit = True
+                        nearest = dist if nearest is None else min(nearest, dist)
+                    elif not _weak_bare(h):
+                        nearest = dist if nearest is None else min(nearest, dist)
                 continue
             dist = miles(hla, hlo, h.lat, h.lon)
             nearest = dist if nearest is None else min(nearest, dist)

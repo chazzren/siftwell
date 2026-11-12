@@ -141,6 +141,16 @@ def save_company(entry, con=None):
         with db() as c:
             return save_company(entry, c)
     cfg = {k: v for k, v in entry.items() if not k.startswith("_")}
+    if not cfg.get("idp") and not con.execute("SELECT 1 FROM companies WHERE name=?", (cfg["name"],)).fetchone():
+        # a NEW company whose name is what a renamed company's listing ids start with gets its own prefix, so the two
+        # can never share a listing id
+        for r in con.execute("SELECT cfg FROM companies WHERE cfg LIKE '%\"idp\"%'"):
+            try:
+                if json.loads(r["cfg"]).get("idp") == cfg["name"]:
+                    cfg["idp"] = cfg["name"] + " (2)"
+                    break
+            except ValueError:
+                pass
     con.execute("""INSERT INTO companies(name, ats, cfg, sets, tier, sector, ai_track, added_by, added_at)
                    VALUES(?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(name) DO UPDATE SET ats=excluded.ats, cfg=excluded.cfg, sets=excluded.sets, tier=excluded.tier,
@@ -166,39 +176,42 @@ def places_map():
     return out
 
 
+def id_prefix(c):
+    """What a company's listing ids start with: the name it had when its first posting was stored ("idp" in its
+    config once it has been renamed), else its name."""
+    return c.get("idp") or c["name"]
+
+
 def rename_company(old, new):
-    """Rename a company; its listings follow (their ids start with the company name, so they are re-keyed too, and so
-    is the first-seen record). False when the new name is taken or the old one isn't there. Claude ratings are keyed
-    by listing id in their own files and are not moved: only use this for names nobody should see (codes)."""
-    new = (new or "").replace(",", "").strip()[:60]
+    """Give a company a new display name. Its listings follow (their company field), but their ids do NOT change:
+    the company remembers the name its ids start with ("idp" in its config, used by jobfinder.J for every later
+    fetch). Claude ratings, saved / applied marks, tailored resumes and first-seen dates are all keyed by listing id,
+    so every one of them stays with its job. False when the new name is taken or the old one isn't there."""
+    new = (new or "").replace(",", "").replace("::", " ").strip()[:60]
     if not new or new == old:
         return False
     with db() as con:
         row = con.execute("SELECT cfg FROM companies WHERE name=?", (old,)).fetchone()
         if not row or con.execute("SELECT 1 FROM companies WHERE name=? COLLATE NOCASE AND name<>?", (new, old)).fetchone():
             return False
+        has = con.execute("SELECT 1 FROM listings WHERE company=? LIMIT 1", (old,)).fetchone()
         try:
             cfg = json.loads(row["cfg"])
             cfg["name"] = new
+            if has:
+                cfg.setdefault("idp", old)      # (a second rename keeps the first prefix)
             cfg = json.dumps(cfg)
         except ValueError:
-            cfg = row["cfg"]
+            return False
         con.execute("UPDATE companies SET name=?, cfg=? WHERE name=?", (new, cfg, old))
-        pre = old + "::"
         for r in con.execute("SELECT id, data FROM listings WHERE company=?", (old,)).fetchall():
-            nid = new + "::" + r["id"][len(pre):] if r["id"].startswith(pre) else r["id"]
             try:
                 d = json.loads(r["data"])
-                d["company"], d["id"] = new, nid
+                d["company"] = new
                 data = json.dumps(d)
             except ValueError:
                 data = r["data"]
-            if nid != r["id"] and con.execute("SELECT 1 FROM listings WHERE id=?", (nid,)).fetchone():
-                con.execute("DELETE FROM listings WHERE id=?", (r["id"],))
-                continue
-            con.execute("UPDATE listings SET id=?, company=?, data=? WHERE id=?", (nid, new, data, r["id"]))
-            if nid != r["id"]:
-                con.execute("UPDATE OR IGNORE seen SET id=? WHERE id=?", (nid, r["id"]))
+            con.execute("UPDATE listings SET company=?, data=? WHERE id=?", (new, data, r["id"]))
     return True
 
 
@@ -436,7 +449,8 @@ def update_run(run_id, details=None, status=None, finished=False):
 
 # ---------------------------------------------------------------- browsing (the Catalog page)
 # everything else in cfg is the job-board config ("dir": where the employer directory says the employer hires)
-COMPANY_META = ("name", "tier", "sector", "sets", "size", "ai_track", "added_by", "dir")
+# ("idp": the name the company's listing ids start with, see rename_company; "nm": its name is settled, see names.learn)
+COMPANY_META = ("name", "tier", "sector", "sets", "size", "ai_track", "added_by", "dir", "idp", "nm")
 
 
 def ats_key(c):

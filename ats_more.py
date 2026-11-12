@@ -234,8 +234,9 @@ def us_locations(labels):
 
 
 def _wp(s):
-    s = (s or "").lower()
-    return "remote" if "remote" in s or "telecommut" in s else "hybrid" if "hybrid" in s else "onsite" if "onsite" in s or "on-site" in s else ""
+    """Workplace from a label or a title: negation first ("Non-Remote" is on-site), whole words."""
+    import jobtext
+    return jobtext.workplace_label(s)
 
 
 def _wanted(c, title):
@@ -497,8 +498,9 @@ def _ef_v2_url(c, start):
 
 
 def _ef_flex(*vals):
-    s = " ".join(str(v or "") for v in vals).lower()
-    return "remote" if "remote" in s else "hybrid" if "hybrid" in s else "onsite" if "onsite" in s else ""
+    import jobtext
+    got = [jobtext.workplace_label(v, typed=True) for v in vals if v]
+    return "remote" if "remote" in got else "hybrid" if "hybrid" in got else "onsite" if "onsite" in got else ""
 
 
 def ef_page(c, start):

@@ -225,6 +225,9 @@ def salary_of(bs):
     raw = (f"${lo:,.2f}".rstrip("0").rstrip(".") if unit_word else f"${lo:,.0f}")
     if hi != lo:
         raw += " - " + (f"${hi:,.2f}".rstrip("0").rstrip(".") if unit_word else f"${hi:,.0f}")
+    native = {"HOUR": "hour", "DAY": "day", "WEEK": "week", "MONTH": "month"}.get(unit)
+    if native and mult == _UNIT.get(unit):     # (the posting's own unit is kept, so hourly pay is shown as hourly)
+        return a, b, (raw + unit_word)[:80], native, min(lo, hi), max(lo, hi)
     return a, b, (raw + unit_word)[:80]
 
 def _tag_text(s):
@@ -249,7 +252,8 @@ def normalize(o, page_url=""):
             locs.append(lab)
         if ctry:
             countries.append(ctry)
-    remote = _s(o.get("jobLocationType")).upper().endswith("TELECOMMUTE")
+    # (TELECOMMUTE on a posting that also gives a street address is an in-person job: iCIMS-style templates do that)
+    remote = __import__("jobtext").telecommute(o)
     alr = o.get("applicantLocationRequirements")
     req = [x for x in (alr if isinstance(alr, list) else [alr] if alr else []) if x]
     req_names = [_s(x) for x in req]

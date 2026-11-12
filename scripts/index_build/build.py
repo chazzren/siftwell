@@ -328,7 +328,8 @@ def place_of(label):
             m = re.search(r", ([A-Z]{2})$", h.label)
             stc = m.group(1) if m else directory.state_of(h.lat, h.lon)
             if stc:
-                weak = h.kind == "place" and h.conf <= 0.6 and not re.search(r",|\d{5}", label)
+                # (kind "bare": a city name with namesakes in other states, see geo.py)
+                weak = h.kind in ("place", "bare") and h.conf <= 0.6 and not re.search(r",|\d{5}", label)
                 r = (round(h.lat, 3), round(h.lon, 3), stc, h.label, weak)
     except Exception:
         r = None

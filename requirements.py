@@ -26,7 +26,8 @@ _LV = [
     ("bachelor", r"bachelor'?s?\b|bachelor’s|baccalaureate|\bb\.s\.|\bb\.a\.|\bbsc\b|\bb\.?eng\b|\bbba\b|\bbsn\b|"
                  r"\bbs(?:ee|me|ce|cs|ie)\b|\bbs\b(?=\s*(?:/|or\b|in\b|degree|,))|\bba\b(?=\s*(?:/|or\b|in\b|degree))|"
                  r"undergraduate degree|college degree|university degree|(?:4|four)[- ]year (?:college |university )?degree"),
-    ("associate", r"associate'?s? degree|associate’s degree|associates degree|\ba\.a\.(?=\s)|\ba\.s\. degree"),
+    ("associate", r"associate'?s? degree|associate’s degree|associates degree|\ba\.a\.(?=\s)|\ba\.s\. degree|"
+                  r"associate(?:'s|’s)(?=\s+(?:of|in)\s)|associates?(?=\s+(?:of|in)\s+(?:nursing|science|arts|applied))|\badn\b|\basn\b"),
 ]
 LV_RX = re.compile("|".join(f"(?P<{n}>{p})" for n, p in _LV), I)
 # A level token only counts when it reads like a credential (not "PhD researchers", "MS Office").
@@ -35,7 +36,8 @@ CRED_AFTER = re.compile(r"^(?:'s|’s|s)?\.?\s*(?:\(\w+\)\s*)?(?:$|degree|diplom
 SPECIFIC_FIELD = {"bsee": "engineering-electrical", "msee": "engineering-electrical", "bsme": "engineering-mechanical",
                   "msme": "engineering-mechanical", "bsce": "engineering-civil", "msce": "engineering-civil",
                   "bscs": "computer-science", "mscs": "computer-science", "bsie": "engineering-other",
-                  "bsn": "nursing", "msn": "nursing", "dnp": "nursing", "msw": "social-sciences", "mph": "life-sciences"}
+                  "bsn": "nursing", "msn": "nursing", "dnp": "nursing", "msw": "social-sciences", "mph": "life-sciences",
+                  "adn": "nursing", "asn": "nursing"}
 BARE_DEGREE = re.compile(r"\b(?:a|an|relevant|related|technical|stem|engineering|science|scientific|business|accredited|formal|"
                          r"appropriate|applicable)\s+(?:\w+\s+){0,2}?degree\b(?!\s+of\b)|\bdegree\s+(?:in|from)\s", I)
 NOT_DEGREE = re.compile(r"degree of|degrees? (?:celsius|fahrenheit)|360|highest degree|some degree|varying degree|certain degree|"
@@ -152,6 +154,20 @@ SKIP_CLAUSE = re.compile(r"cpa firm|transfer of value|recruiting expenses|tradem
                          r"(?:work|working|partner|collaborate|interface|coordinate|liaise)s? (?:closely )?(?:with|alongside)|team of|supervis(?:e|es|ing)|"
                          r"lead(?:s|ing)? a team|our (?:physicians|nurses|attorneys|engineers|lawyers)|"
                          r"\bjd edwards\b|bar chart|bar raiser|raise the bar|high bar|the bar for", I)
+# several licenses named as alternatives in one requirement: "RN or LPN license", "LPN/RN", "RN, LPN or NP"
+LIC_ALT = re.compile(r"\bor\b|/|\beither\b|\bany of\b|\bone of\b|such as|\blike\b|e\.g\.", I)
+# "... will consider other designations like LPN": the license named is an accepted alternative, not one more requirement
+LIC_CONSIDER = re.compile(r"\b(?:will|may|would|can)(?: also)? (?:be )?consider|\balso consider|\bconsider(?:ed|ing)? (?:other|an?|candidates)|"
+                          r"other (?:designations?|licen[sc]es?|licensures?|credentials?)|\bor (?:other|another|similar|comparable) "
+                          r"(?:designation|licen[sc]|credential)|\bin lieu of\b|\balso accept|\baccept(?:ed|able)? (?:alternatives?|as well)", I)
+# A higher credential satisfies a lower one: a nurse practitioner holds an RN license, and an RN does (and may do)
+# everything an LPN posting asks for.
+LIC_COVERS = {"NP": {"RN", "LPN"}, "RN": {"LPN"}}
+LIC_FAMILY = [{"RN", "LPN", "NP"}]
+# The degree a license cannot be held without (so a profile that lists the license but no degree is not flagged for
+# "Associate's in Nursing"): level, field group.
+LIC_IMPLIES_DEGREE = {"RN": ("associate", "nursing"), "NP": ("master", "nursing"), "PE": ("bachelor", "engineering-other"),
+                      "CPA": ("bachelor", "accounting"), "BAR": ("jd", "law"), "MDLIC": ("md", "medicine")}
 JURIS = re.compile(r"\b(DC|D\.C\.|District of Columbia|Maryland|Virginia|New York|California|Texas|Illinois|Massachusetts|"
                    r"Pennsylvania|New Jersey|Florida|Washington|Georgia|Colorado|[A-Z][a-z]+) (?:state )?bar\b|\bbar (?:of|in) (?:the )?(?:state of )?([A-Z][\w.]+(?: [A-Z][a-z]+)?)")
 
@@ -392,10 +408,10 @@ ANCHORS = {
     "SHRM": ([], ["SHRM", "PHR"]), "SIXSIGMA": (["six sigma"], []), "CMA": (["management accountant"], []),
     "CPHQ": ([], ["CPHQ"]), "CIPP": ([], ["CIPP"]), "CFE": (["fraud examiner"], ["CFE"]),
 }
-DEG_CI = ("bachelor", "master", "degree", "ph.d", "phd", "doctor", "baccalaureate", "b.s.", "b.a.", "m.s.", "m.a.", "mba",
+DEG_CI = ("associate's", "associate’s", "associate of", "associates of", "associate in", "associates in", "bachelor", "master", "degree", "ph.d", "phd", "doctor", "baccalaureate", "b.s.", "b.a.", "m.s.", "m.a.", "mba",
           "juris", "j.d.", "bsc", "msc", "m.eng", "meng", "b.eng", "bba", "bsn", "msn", "mph", "mpa", "mpp", "msw", "dnp",
           "pharm", "a.a.", "m.d.", "d.o.", "psy.d", "ed.d", "d.sc", "dsc")
-DEG_CS = ("BS", "BA", "MS", "MA", "JD", "MD")
+DEG_CS = ("BS", "BA", "MS", "MA", "JD", "MD", "ADN", "ASN")
 
 def _active(text, low, entries):
     out = []
@@ -428,7 +444,10 @@ def parse(desc, title=""):
         if not (lic_c or cert_c) or SKIP_CLAUSE.search(c):
             continue
         if lic_c:
-            for k, lab, m in _find(lic_c, c):
+            found = _find(lic_c, c)
+            keys_here = [k for k, _, _ in found]
+            consider = bool(LIC_CONSIDER.search(c))
+            for k, lab, m in found:
                 rest = c[:m.start()] + " " + c[m.end():]
                 if not CRED_WORD.search(rest) and section not in ("req", "pref"):
                     continue
@@ -438,6 +457,12 @@ def parse(desc, title=""):
                     continue
                 item = {"key": k, "label": lab, "strength": _strength(c, section), "escape": bool(LIC_ESCAPE.search(c)),
                         "text": c[:220]}
+                others = [x for x in keys_here if x != k]
+                if others and (consider or LIC_ALT.search(c)):
+                    item["alts"] = others       # "RN or LPN license": holding either one meets it
+                if consider:
+                    item["consider"] = True     # "will consider ... like LPN": an alternative the employer accepts
+                    item["escape"] = True
                 if k == "BAR":
                     jm = JURIS.search(c)
                     item["jurisdiction"] = (jm.group(1) or jm.group(2) or "").strip() if jm else ""
@@ -563,7 +588,15 @@ def check(req, hl):
     res = {"status": "ok", "reasons": [], "chips": [], "soft": []}
     if not hl or not req:
         return res
-    degrees = hl.get("degrees") or []
+    degrees = list(hl.get("degrees") or [])
+    have_lic = _canon(hl.get("licenses") or [], LIC_RX)
+    for k in sorted(have_lic):     # a license implies the degree it takes to hold it
+        imp = LIC_IMPLIES_DEGREE.get(k)
+        if imp and not any(d.get("completed") is not False and LEVEL_RANK.get(d.get("level"), 0) >= LEVEL_RANK[imp[0]]
+                           and d.get("field_group") == imp[1] for d in degrees):
+            degrees.append({"level": imp[0], "field": "", "field_group": imp[1], "completed": True, "_implied": True})
+    for k in list(have_lic):       # a higher license covers the lower ones (RN >= LPN)
+        have_lic |= LIC_COVERS.get(k, set())
     status = "ok"
     def bump(s):
         nonlocal status
@@ -589,7 +622,7 @@ def check(req, hl):
             esc0 = s0["equiv"] or req.get("global_equiv")
             chip = _deg_chip(s0, esc0)
             res["chips"].append(chip)
-            have = "; ".join(f'{LEVEL_SHORT[d["level"]]} {d.get("field") or ""}'.strip() for d in degrees) or "no degree on file"
+            have = "; ".join(f'{LEVEL_SHORT[d["level"]]} {d.get("field") or ""}'.strip() for d in degrees if not d.get("_implied")) or "no degree on file"
             why = "no equivalent-experience option" if worst == "unmet" else (
                 "equivalent experience accepted" if esc0 else "not clearly required" if s0["strength"] == "unclear" else "field/level unclear")
             res["reasons"].append(f'Degree: posting says "{s0["text"][:160]}" - you have {have} ({why}).')
@@ -601,12 +634,16 @@ def check(req, hl):
                 res["soft"].append(c)
 
     # ---- licenses
-    have_lic = _canon(hl.get("licenses") or [], LIC_RX)
     lic_names = " ".join((x.get("name") or "") for x in hl.get("licenses") or [])
     groups = {d.get("field_group") for d in degrees}
     levels = {d.get("level") for d in degrees}
+    # licenses the posting says it will consider instead ("will consider other designations like LPN")
+    considered = {L["key"] for L in req.get("licenses") or [] if L.get("consider")} & have_lic
     for L in req.get("licenses") or []:
         k = L["key"]
+        if k not in have_lic and (set(L.get("alts") or []) & have_lic
+                                  or any(k in fam and considered & fam for fam in LIC_FAMILY)):
+            continue    # an alternative the posting names is held: "RN or LPN", or the considered license
         if k in have_lic:
             if k == "BAR" and L.get("jurisdiction") and L["jurisdiction"].lower().replace(".", "") not in lic_names.lower().replace(".", ""):
                 if L["strength"] == "required":
