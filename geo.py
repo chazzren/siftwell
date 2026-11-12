@@ -14,6 +14,8 @@ https://download.geonames.org/export/zip/US.zip, CC BY 4.0 - keep the attributio
                county's rough radius), never to a same-named town.
   aliases.json hand-curated aliases (Fort Meade, NYC...), metro phrases (Bay Area, Twin Cities...),
                foreign markers
+  foreign.json hand-curated places outside the US (about 14 KB): country names incl. short and modern forms, regions
+               and provinces, well-known cities, names shared with US towns, ISO-2 / ISO-3 country codes. See where().
 
 API
   geocode_home("10001") / geocode_home("Austin, TX") -> (lat, lon, label)
