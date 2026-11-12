@@ -499,7 +499,7 @@ def apply(pid, weekly=False):
         cos = catalog.companies()
         by_key = {catalog.ats_key(c): c for c in cos}
         by_name = {c["name"].lower(): c for c in cos}
-        added, linked, starters, renames = [], [], 0, []
+        added, linked, starters, renames, packs = [], [], 0, [], 0
         with catalog.db() as con:
             for e in emps:
                 k = _key(e["cfg"])
@@ -553,6 +553,7 @@ def apply(pid, weekly=False):
                 if starter:
                     pending.add(co["name"])
                     starters += 1
+                    packs += not e.get("maybe")
                 near_n[co["name"]] = e.get("near") or 0
             # job snapshots: one catalog entry per source, shared by everyone near its postings
             jobs = near_jobs(pid, man)
@@ -596,7 +597,8 @@ def apply(pid, weekly=False):
         _save_record(pid, rec)
         return {"added": added, "linked": linked, "near": sum(1 for e in emps if not e.get("starter")), "available": True,
                 "reason": None, "jobs": jobs, "built": man.get("built"), "starters": starters, "offline": offline,
-                "missing": info.get("missing") or [], "maybe": info.get("maybe", 0), "renamed": renamed}
+                "missing": info.get("missing") or [], "maybe": info.get("maybe", 0), "renamed": renamed,
+                "pack_starters": packs}
 
 
 def near_order(pid):

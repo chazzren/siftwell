@@ -766,6 +766,7 @@ def main():
     ap.add_argument("--only", help="comma-separated company names")
     ap.add_argument("--no-rate", action="store_true", help="fetch only: rebuild the boards without Claude rating (the staged first check rates once, at the end)")
     ap.add_argument("--no-boards", action="store_true", help="fetch only: don't rebuild the boards after this fetch (a later one will)")
+    ap.add_argument("--boards-every", type=int, default=0, metavar="SECS", help="fetch only: also rebuild the boards (no Claude) while the fetch runs, the first time after about a minute and then every SECS, so jobs show up before slow boards finish")
     ap.add_argument("--rescore", action="store_true", help="re-parse every open listing from its saved text, then rebuild boards (no fetching)")
     ap.add_argument("--recompute", nargs="*", metavar="PID", help="rebuild these people's boards (everyone if none given) from the catalog; no fetching, no Claude")
     ap.add_argument("--rerate", metavar="PID", help="have Claude rate this person's unrated listings and redo ones rated with older info (no fetching)")
@@ -806,6 +807,22 @@ def fetch(args):
     rid = catalog.start_run("fetch", details={"only": args.only})
     totals = {"new": 0, "changed": 0, "reopened": 0, "closed": 0, "unchanged": 0}
     errors, flagged, n_ok, futs, boards, status, facts = [], [], 0, {}, None, "error", None
+    # --boards-every: boards from what is in the catalog so far, about a minute in and then every SECS, in a child
+    # process (this one's filters are the fetch's, shared by its threads; the job lock is inherited). The fetch
+    # threads keep going meanwhile, so jobs show up while slow boards are still being read.
+    mid_stop, mid_thread, every = threading.Event(), None, int(getattr(args, "boards_every", 0) or 0)
+    def mid_boards():
+        wait = min(every, 60)
+        while not mid_stop.wait(wait):
+            wait = every
+            try:
+                import frozen
+                osdeps.run_hidden(frozen.command("jobfinder", "--recompute"), cwd=HERE, capture_output=True, timeout=900)
+            except Exception as e:
+                print(f"(couldn't rebuild the boards mid-fetch: {type(e).__name__})", flush=True)
+    if every and len(companies) > 1:
+        mid_thread = threading.Thread(target=mid_boards, daemon=True)
+        mid_thread.start()
     try:
         # Workday tenants share one per-IP rate limit, so they get their own small lane; everything else runs wide.
         with cf.ThreadPoolExecutor(12) as fast, cf.ThreadPoolExecutor(4) as slow:
@@ -833,6 +850,9 @@ def fetch(args):
                     note = f' [{counts["status"]}: missing postings kept open{"; " + s["truncated"] if s.get("truncated") else ""}]'
                 print(f'{s["company"]:<24} {s["ats"]:<15} raw={s["raw_jobs"]:<5} kept={s["matched"]:<4} new={counts["new"]:<4} closed={counts["closed"]:<4} {s["status"]}{note} ({s["secs"]}s)', flush=True)
                 print(f"PROGRESS fetch {n}/{len(futs)}", flush=True)
+        mid_stop.set()
+        if mid_thread:
+            mid_thread.join(900)
         if not args.only:
             catalog.set_meta("last_full_fetch", dt.date.today().isoformat())
         pool = catalog.open_listings()
@@ -850,6 +870,7 @@ def fetch(args):
                 boards[p] = fboards[p]
         status = "ok" if not (errors or _failed(boards)) else "partial"
     finally:
+        mid_stop.set()
         catalog.finish_run(rid, status=status, companies=len(futs), fetched=n_ok,
                            new=totals["new"], closed=totals["closed"], changed=totals["changed"], reopened=totals["reopened"],
                            errors=(errors + flagged + [{"person": p, "error": boards[p]["error"]} for p in _failed(boards)])[:200],

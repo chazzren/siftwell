@@ -1,8 +1,5 @@
 """Free, keyless lists of employers by place, and how they are tied to readable job boards without Claude.
 
-  bmf(state)   IRS Exempt Organizations Business Master File (https://www.irs.gov/charities-non-profits/exempt-
-               organizations-business-master-file-extract-eo-bmf): every tax-exempt organisation with its city, state and
-               revenue. Kept: name, city, state, revenue (no officers, no people).
   lca(path)    DOL OFLC LCA disclosure data (employer + worksite city/state). dol.gov refuses automated downloads
                (HTTP 403 from its CDN), so this only runs on a file given with --lca-file / env DOL_LCA_FILE or a URL in
                env DOL_LCA_URL; otherwise it is skipped.
@@ -22,7 +19,6 @@ import xml.etree.ElementTree as ET
 
 from . import net
 
-BMF_URL = "https://www.irs.gov/pub/irs-soi/eo_{st}.csv"
 WDC_STATS = "https://data.dws.informatik.uni-mannheim.de/structureddata/2024-12/quads/classspecific/JobPosting/JobPosting_domain_stats.csv"
 SUFFIX = re.compile(r"\b(inc|incorporated|llc|ltd|corp|corporation|company|co|the|plc|lp|llp|pllc|pc|na|of america)\b")
 
@@ -35,34 +31,6 @@ def slugs(name):
     short = re.sub(r"\s+", "", SUFFIX.sub(" ", n))
     out = [short, full, re.sub(r"\s+", "-", SUFFIX.sub(" ", n).strip())]
     return [s for s in dict.fromkeys(out) if 3 <= len(s) <= 60]
-
-
-def bmf(state, min_revenue=20_000_000, log=print):
-    """[{name, city, state, revenue}] for exempt organisations in state with at least min_revenue a year."""
-    try:
-        raw = net.get(BMF_URL.format(st=state.lower()), timeout=120)
-    except Exception as e:
-        log(f"  IRS BMF {state}: skipped ({type(e).__name__})")
-        return []
-    out = []
-    for r in csv.DictReader(io.StringIO(raw.decode("latin-1"))):
-        try:
-            rev = int(r.get("REVENUE_AMT") or 0)
-        except ValueError:
-            continue
-        if rev >= min_revenue and r.get("STATUS", "01") == "01":
-            out.append({"name": _title(r.get("NAME", "")), "city": (r.get("CITY") or "").title(), "state": state, "revenue": rev})
-    out.sort(key=lambda x: -x["revenue"])
-    log(f"  IRS BMF {state}: {len(out)} organisations with revenue >= ${min_revenue // 1_000_000}M")
-    return out
-
-
-def _title(s):
-    small = {"of", "and", "the", "for", "in", "at", "on"}
-    words = [w.lower() if w.lower() in small else w if (len(w) <= 4 and not re.search(r"[AEIOU]", w)) else w.capitalize()
-             for w in s.split()]
-    t = " ".join(words)
-    return t[:1].upper() + t[1:]
 
 
 def lca(source, states, log=print):
@@ -152,7 +120,7 @@ def resolve_domain(dom, log=print):
     import jsonld_fetcher
     for url in (f"https://{dom}/careers", f"https://careers.{dom}/", f"https://jobs.{dom}/", f"https://www.{dom}/careers"):
         try:
-            page = net.get_text(url, timeout=25, tries=1, cap=3_000_000)
+            page = net.get_text(url, timeout=15, tries=1, cap=3_000_000)
         except Exception:
             continue
         for m in re.finditer(r"https?://[^\s\"'<>]+", page):

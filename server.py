@@ -832,6 +832,20 @@ def scheduler():
                 run_scheduled_update()
             time.sleep(90)
 
+UPDATE_PROC = {"p": None}   # the running fetch's process (only so the staged first check can be paused)
+
+def stop_update():
+    """End the running fetch now (Pause on the staged first check). Every company it already finished is in the
+    catalog; the ones it was in the middle of are simply checked again later. True when there was one to stop."""
+    p = UPDATE_PROC["p"]
+    if p is None or p.poll() is not None:
+        return False
+    try:
+        p.terminate()
+    except Exception:
+        return False
+    return True
+
 def run_update(only=None, defer_running=False, flags=(), quiet=False):
     """defer_running: the caller didn't mark the update as running; it counts as running only once it holds the job
     lock (Catalog's Fetch now / Add, so a fetch queued behind Find employers doesn't block Remove or Import).
@@ -858,6 +872,7 @@ def run_update(only=None, defer_running=False, flags=(), quiet=False):
             with open(LOG, "w") as log:
                 p = osdeps.popen_hidden(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                                      env=joblock.child_env(token))
+                UPDATE_PROC["p"] = p
                 for line in p.stdout:
                     log.write(line); log.flush()
                     line = line.rstrip()
@@ -873,6 +888,7 @@ def run_update(only=None, defer_running=False, flags=(), quiet=False):
         with lock:
             state["lines"] = (state["lines"] + [f"The update couldn't start: {type(e).__name__}: {e}"])[-12:]
     finally:
+        UPDATE_PROC["p"] = None
         with lock:
             state.update(running=False, exit=rc if rc is not None else -1, finished=dt.datetime.now().isoformat(timespec="seconds"))
         if not quiet or rc not in (0, 3):
@@ -1061,7 +1077,8 @@ class H(BaseHTTPRequestHandler):
             s["recomputing"] = _RECOMPUTE["running"]
             s["job"] = joblock.info()  # whoever holds the job lock, even a job this server didn't start
             try:  # the staged first check of the employers on this person's lists (first_search._check)
-                cp = self._page_person(_qarg(self.path, "person"))
+                import first_search
+                cp =self._page_person(_qarg(self.path, "person"))
                 s["check"] = first_search.check_status(cp)
                 try:
                     s["check"]["board_at"] = os.stat(people.pdir("report.html", pid=cp)).st_mtime_ns

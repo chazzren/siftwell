@@ -13,8 +13,9 @@ What it runs, in order, in one background thread:
   3. The first check of the employers, staged so the board fills in as it goes (_check): the companies this person
      watches that haven't been checked yet (on a first search also the ones not checked today) are fetched in chunks,
      the ones with the most jobs near the person first (directory.near_order). Each chunk is one ordinary update for
-     those companies (server.run_update --only ...); the boards are rebuilt after the first chunk (minutes) and every
-     few minutes after, and Claude rates once, with the last chunk. One progress line: "Checking employers: 184 of
+     those companies (server.run_update --only ...); the boards are rebuilt about a minute in (while the first chunk's
+     slow boards are still being read: jobfinder --boards-every), then every few minutes, and Claude rates once, with
+     the last chunk. One progress line: "Checking employers: 184 of
      1,043". Nothing is kept in memory that matters: what is left is simply "watched companies never fetched"
      (pending), so after Pause, a crash or a restart the board offers Continue checking (start_checking), and a
      regular update in between just shortens the list.
@@ -279,12 +280,14 @@ def start_checking(pid, rate=True):
 
 
 def pause(pid):
-    """Stop the staged check after the chunk that is running (minutes). True when there was one to pause."""
+    """Pause the staged check now: the fetch that is running is ended (what it finished is kept; the employers it was
+    in the middle of are checked again on Continue). True when there was one to pause."""
     with _LOCK:
         if not (JOB["running"] and JOB["phase"] == "check"):
             return False
         JOB["pausing"] = True
     _PAUSE.set()
+    S.stop_update()
     return True
 
 
@@ -310,21 +313,30 @@ def _check(pid, stale, rate=True):
         if not queue:
             break
         chunk = queue[:CHUNK_FIRST if first else CHUNK]
-        while not S.claim_update():
-            if _PAUSE.is_set():
-                break
-            time.sleep(3)
-        if _PAUSE.is_set() and not S.state.get("running"):
+        claimed = False
+        while not _PAUSE.is_set() and not claimed:
+            claimed = S.claim_update()
+            if not claimed:
+                time.sleep(3)
+        if not claimed:
+            continue
+        if _PAUSE.is_set():
+            with S.lock:
+                S.state["running"] = False
             continue
         last = len(queue) <= len(chunk)
         build = first or last or time.time() - last_build >= REBUILD_SECS
-        flags = [] if (last and rate) else ["--no-rate"] + ([] if build else ["--no-boards"])
+        flags = ["--boards-every", str(REBUILD_SECS)] + ([] if (last and rate) else ["--no-rate"] + ([] if build else ["--no-boards"]))
         _set(check_chunk=len(chunk))
         if first:
             S._actlog("update started", pid, f"Checking employers: {len(queue)} to check, most jobs nearby first")
         S.run_update(",".join(chunk), flags=flags, quiet=True)
         tried.update(chunk)
         _CACHE.pop(pid, None)
+        if _PAUSE.is_set():
+            last_build = 0.0     # (the fetch was ended: the boards are rebuilt below)
+            done += 1
+            continue
         if S.state.get("exit") not in (0, 3):
             fails += 1
             if fails >= 2:
@@ -340,8 +352,8 @@ def _check(pid, stale, rate=True):
     S._actlog("update finished" if not _PAUSE.is_set() else "update stopped", pid, f"Checking employers: {done} checked this time")
     if done:
         _prune(pid)
-        if last_build and time.time() - last_build > 5 and (S.state.get("exit") in (0, 3)):
-            S.request_recompute([pid])   # (the last chunk before a pause may not have rebuilt the boards)
+        if _PAUSE.is_set():
+            S.request_recompute([pid])   # (the fetch that was ended didn't get to rebuild the boards)
     return done
 
 
@@ -399,10 +411,10 @@ def _run_directory(pid):
     if not r["available"]:
         return []
     names = r["added"] + r["linked"]
-    if r.get("starters") and r.get("offline"):
+    if r.get("pack_starters") and r.get("offline"):
         _set(note="Siftwell couldn't download its employer directory this time, so it started with the large US employers it comes with; "
                   "after this first check it keeps the ones hiring near you. Nearby employers from the directory are added once it can be reached.")
-    elif r.get("starters"):
+    elif r.get("pack_starters"):
         _set(note="The employer directory doesn't cover your area yet, so Siftwell also started with the large US employers it comes with; "
                   "after this first check it keeps the ones hiring near you.")
     _set(dir_added=len(names), dir_near=r["near"])

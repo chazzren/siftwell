@@ -1363,7 +1363,7 @@ if (SERVED && !jobs.length) (function(){
       let line = "Getting started…", frac = .03, staged = false;
       if (job.running && job.phase === "directory") { const d = p.directory || {}; line = d.remote_only ? "Adding remote-friendly employers from the Siftwell directory…" : `Adding employers near ${esc(d.label || "you")} from the Siftwell directory…`; frac = .05; }
       else if (job.running && job.phase === "find") { const c = s.find || {}; line = `Finding ${findName(f, c.label)}: ${n(c.found)} found so far, ${n(c.readable)} Siftwell can read.`; frac = c.kinds ? .3 * c.kinds_done / c.kinds : .03; }
-      else if (ck.running && ck.mine && !(up.running && up.phase !== "fetch")) { staged = true; line = `Checking employers: ${n(ck.done)} of ${n(ck.total)} · your board fills in as we go` + (ck.pausing ? " (pausing after this round…)" : ""); frac = .1 + (ck.total ? .85 * ck.done / ck.total : 0); }
+      else if (ck.running && ck.mine && !(up.running && up.phase !== "fetch")) { staged = true; line = `Checking employers: ${n(ck.done)} of ${n(ck.total)} · your board fills in as we go` + (ck.pausing ? " (pausing…)" : ""); frac = .1 + (ck.total ? .85 * ck.done / ck.total : 0); }
       else if (up.running && up.phase === "fetch") { line = `Checking career pages for openings: ${up.total ? `${n(up.done)} of ${n(up.total)} companies` : "starting"}.`; frac = .3 + (up.total ? .5 * up.done / up.total : 0); }
       else if (up.running && (up.phase === "ai" || up.phase === "pivot")) { line = "Claude is reading the best matches against your resume."; frac = .85; }
       else if (up.running) { line = "Almost done: building your board."; frac = .95; }
@@ -1845,13 +1845,15 @@ if (SERVED) {
     } else if (c.running) {
       chkWas = true;
       const rating = s.running && (s.phase === "ai" || s.phase === "pivot");
-      html = `<span>${rating ? "Almost done: Claude is reading the best matches against your resume." : `Checking employers: ${n(c.done)} of ${n(c.total)} · your board fills in as we go`}${c.pausing ? " (pausing after this round…)" : ""}</span>`
+      html = `<span>${rating ? "Almost done: Claude is reading the best matches against your resume." : `Checking employers: ${n(c.done)} of ${n(c.total)} · your board fills in as we go`}${c.pausing ? " (pausing…)" : ""}</span>`
            + (fresh ? `<button class="btn sm primary" type="button" id="chkShow">Show new jobs</button>` : "")
            + (c.mine && !c.pausing && !rating ? `<button class="btn sm ghost" type="button" id="chkPause">Pause</button>` : "");
+    } else if (c.pending > 0 && !chkOff && !s.running) {
+      html = `<span>${c.paused ? "Paused. " : ""}Siftwell has checked ${n(c.done)} of the ${n(c.total)} employers on your lists. ${n(c.pending)} still to check.</span>`
+           + (fresh ? `<button class="btn sm" type="button" id="chkShow">Show new jobs</button>` : "")
+           + `<button class="btn sm primary" type="button" id="chkCont">Continue checking</button><button class="btn sm ghost" type="button" id="chkHide">Not now</button>`;
     } else if (chkWas && fresh) {
       html = `<span>Siftwell finished checking employers.</span><button class="btn sm primary" type="button" id="chkShow">Show new jobs</button>`;
-    } else if (c.pending > 0 && !chkOff && !s.running) {
-      html = `<span>Siftwell has checked ${n(c.done)} of the ${n(c.total)} employers on your lists. ${n(c.pending)} still to check.</span><button class="btn sm primary" type="button" id="chkCont">Continue checking</button><button class="btn sm ghost" type="button" id="chkHide">Not now</button>`;
     }
     if (html !== chkSig) {
       chkSig = html; b.innerHTML = html; b.hidden = !html;

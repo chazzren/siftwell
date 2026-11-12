@@ -6,16 +6,26 @@ name: Employer directory
 #
 # The builder (scripts/build_index.py) is stdlib Python. It reads public sources only; the optional keyed sources run
 # only when their secrets exist (Settings -> Secrets and variables -> Actions):
-#   USAJOBS_API_KEY, USAJOBS_EMAIL           federal job postings (free key: https://developer.usajobs.gov/)
-#   CAREERONESTOP_TOKEN, CAREERONESTOP_USERID  CareerOneStop job postings (free: https://www.careeronestop.org/Developers/WebAPI/registration.aspx)
+#   USAJOBS_API_KEY, USAJOBS_EMAIL           federal job postings (free key: https://developer.usajobs.gov/). Nothing
+#                                            else to switch on: the next run pulls every state's public postings.
+#   CAREERONESTOP_TOKEN, CAREERONESTOP_USERID  CareerOneStop job postings. OFF BY DEFAULT even with these set: its terms
+#                                            need CareerOneStop's logo next to the data and that isn't built or cleared
+#                                            yet (scripts/index_build/postings.py). Only then: also set the repository
+#                                            variable CAREERONESTOP_ENABLE to 1.
 # Keys are only passed to the builder as environment variables; nothing it publishes contains them.
 #
-# Time: discovery takes about 15-25 minutes; reading boards is time-boxed (--minutes) so the job stays well inside the
-# 6-hour limit. Boards not reached this week are read first next week (the builder's state lives in _state/ on the
-# index branch).
+# Two runs a week:
+#   Monday    the full build: discovery (about 30-60 minutes, including 45 minutes of Web Data Commons domains), then
+#             reading boards, time-boxed (--minutes) so the job stays well inside the 6-hour limit. Boards not reached
+#             this week are read first next week (the builder's state lives in _state/ on the index branch).
+#   Thursday  discovery only: nothing but Web Data Commons employer domains (their own careers sites) for up to 4.5
+#             hours, about 24 domains at a time, each on its own host with robots.txt and pacing respected. Together the
+#             two runs go round the whole domain list every week or two (it used to take most of a year). The boards it
+#             finds are read by Monday's run.
 on:
   schedule:
-    - cron: "17 6 * * 1"        # Mondays 06:17 UTC
+    - cron: "17 6 * * 1"        # Mondays 06:17 UTC: the full build
+    - cron: "17 6 * * 4"        # Thursdays 06:17 UTC: discovery of employers' own careers sites only
   workflow_dispatch:
     inputs:
       states:
@@ -31,6 +41,11 @@ on:
         description: "Read at most this many boards (empty = no limit)"
         required: false
         type: string
+      discover_only:
+        description: "Discovery only (Web Data Commons domains; no reading, no postings)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -68,13 +83,20 @@ jobs:
           USAJOBS_EMAIL: ${{ secrets.USAJOBS_EMAIL }}
           CAREERONESTOP_TOKEN: ${{ secrets.CAREERONESTOP_TOKEN }}
           CAREERONESTOP_USERID: ${{ secrets.CAREERONESTOP_USERID }}
+          CAREERONESTOP_ENABLE: ${{ vars.CAREERONESTOP_ENABLE }}
+          DISCOVER_ONLY: ${{ (github.event.schedule == '17 6 * * 4' || inputs.discover_only) && '1' || '' }}
           STATES: ${{ inputs.states }}
           MINUTES: ${{ inputs.minutes || '270' }}
           LIMIT: ${{ inputs.limit }}
         run: |
-          args=(--out "$RUNNER_TEMP/out" --work "$RUNNER_TEMP/work" --minutes "$MINUTES")
+          args=(--out "$RUNNER_TEMP/out" --work "$RUNNER_TEMP/work")
+          if [ -n "$DISCOVER_ONLY" ]; then
+            args+=(--no-cc --no-ct --no-read --no-postings --wd-sites 0 --wdc 100000 --wdc-minutes 270)
+          else
+            args+=(--minutes "$MINUTES")
+            if [ -n "$LIMIT" ]; then args+=(--limit "$LIMIT"); fi
+          fi
           if [ -n "$STATES" ]; then args+=(--states "$STATES"); fi
-          if [ -n "$LIMIT" ]; then args+=(--limit "$LIMIT"); fi
           python -X utf8 scripts/build_index.py "${args[@]}"
           du -sh "$RUNNER_TEMP/out"
           cat "$RUNNER_TEMP/out/manifest.json" | head -c 3000

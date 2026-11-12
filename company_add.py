@@ -35,6 +35,8 @@ PATTERNS = [
     ("dayforce", re.compile(r"jobs\.dayforcehcm\.com/(?:[a-z]{2}-[A-Z]{2}/)?([a-zA-Z0-9]+)/([A-Za-z0-9]+)")),
     ("taleo", re.compile(r"https?://((?:[a-z0-9-]+\.)?[a-z0-9-]+\.taleo\.net)/careersection/(?!rest/|theme/|sitemap|jobdetail|jobsearch)([A-Za-z0-9_.-]+)/", re.I)),
 ]
+# What follows a Workday host in a link is not always a career site: /robots.txt, /en-US (a bare language), /wday/...
+WD_NOT_A_SITE = re.compile(r"robots(?:\.txt)?|sitemap\w*|[a-z]{2}(?:[-_][A-Za-z]{2,4})?|login|job|jobs|details|search|assets|favicon\w*", re.I)
 BAD_TOKENS = {"www", "app", "api", "apply", "assets", "static", "cdn", "help", "support", "jobs", "careers", "widget", "embed", "j"}
 
 def _get(url, data=None, timeout=45, cap=40_000_000):
@@ -47,7 +49,7 @@ def _match(text):
         m = rx.search(text)
         if m:
             if ats == "workday":
-                if m.group(3).lower() in ("wday", "cxs"):
+                if m.group(3).lower() in ("wday", "cxs") or WD_NOT_A_SITE.fullmatch(m.group(3)):
                     continue
                 return {"ats": "workday", "tenant": m.group(1), "wd": m.group(2), "site": m.group(3)}
             if ats == "icims":
@@ -216,6 +218,8 @@ _SHARED_HOSTS = ("icims.com", "taleo.net", "ultipro.com", "ukg.net", "saashr.com
                  "ashbyhq.com", "workable.com", "bamboohr.com", "applytojob.com", "breezy.hr", "recruitee.com",
                  "rippling.com", "smartrecruiters.com", "applitrack.com", "schoolspring.com", "jobvite.com",
                  "successfactors.com", "avature.net", "eightfold.ai", "phenompeople.com", "clearcompany.com")
+_TENANT_HOSTS = ("icims.com", "taleo.net", "bamboohr.com", "applytojob.com", "breezy.hr", "recruitee.com", "schoolspring.com",
+                 "avature.net", "clearcompany.com")     # shared hosts whose first label is the employer's
 SYSTEM_LABEL = {"paylocity": "Paylocity", "adp": "ADP", "ukg": "UKG", "dayforce": "Dayforce", "paycom": "Paycom",
                 "saashr": "UKG Ready", "oracle": "Oracle", "icims": "iCIMS", "taleo": "Taleo", "workday": "Workday",
                 "greenhouse": "Greenhouse", "lever": "Lever", "ashby": "Ashby", "bamboohr": "BambooHR", "jsonld": "careers site"}
@@ -252,8 +256,8 @@ def host_label(c, url=""):
             continue
         h = urllib.parse.urlsplit(v if "//" in v else "https://" + v).netloc.lower().split(":")[0]
         shared = next((s for s in _SHARED_HOSTS if h == s or h.endswith("." + s)), None)
-        if shared in ("oraclecloud.com", "saashr.com", "myworkdayjobs.com"):
-            continue            # (their host names are pod codes, not employers)
+        if shared and shared not in _TENANT_HOSTS:
+            continue            # (a host every employer shares, or one named by a pod code)
         labs = (h[:-len(shared) - 1] if shared and h != shared else "" if shared else h.rsplit(".", 1)[0]).split(".")
         if not shared and len(labs) > 1 and labs[-1] in ("co", "com", "org", "net", "ac", "gov", "edu"):
             labs = labs[:-1]

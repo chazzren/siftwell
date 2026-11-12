@@ -76,7 +76,7 @@ def parse(url):
         return None
     if c.get("ats") == "greenhouse":
         c["token"] = c["token"].lower()
-    if c.get("ats") == "workday" and c.get("site", "").lower() in ("wday", "cxs", "job", "details", "login"):
+    if c.get("ats") == "workday" and bad_workday_site(c.get("site", "")):
         return None
     try:
         import netsafe
@@ -84,6 +84,22 @@ def parse(url):
     except Exception:
         return None
     return c
+
+
+def bad_workday_site(site):
+    """"robots", "en-US", "es", "wday" ...: what a crawler saw after the host, not a career site."""
+    import company_add
+    return not site or site.lower() in ("wday", "cxs") or bool(company_add.WD_NOT_A_SITE.fullmatch(site))
+
+
+WD_HOST = re.compile(r"(?:^|[/@.\s\"'=])([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com", re.I)
+
+
+def workday_host(url):
+    """(tenant, wd) for any link on a Workday host, even one that names no career site (the builder then reads the
+    tenant's robots.txt, which lists every site: readers.workday_sites)."""
+    m = WD_HOST.search(url or "")
+    return (m.group(1).lower(), m.group(2).lower()) if m else None
 
 
 def key(c):
