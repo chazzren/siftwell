@@ -224,6 +224,13 @@ def _jf():
 def wanted(c, title):
     """Same title test the pipeline applies; used to skip detail fetches for jobs that would be dropped anyway."""
     jf = _jf()
+    if "_detail_budget" in c:
+        # the directory builder (index_build/readers.generic) only wants to know WHERE a board hires: the list is
+        # enough, so no per-posting page is asked for (a couple at most, when the employer's name must be learned)
+        if c["_detail_budget"] > 0:
+            c["_detail_budget"] -= 1
+            return True
+        return False
     if over_budget(c):
         budget_stop(c, listed=True)
         return False   # (this employer's time is used up: the posting is stored from its list row, the text comes next time)
@@ -299,6 +306,11 @@ def f_icims(c):
         if over_budget(c):
             budget_stop(c, f"listing postings (page {m.group(1)} of {m.group(2)})")
             break
+        if c.get("_max_pages") and pr + 1 >= c["_max_pages"]:
+            # the directory builder: the first pages show where the board hires; the rest is scaled from them
+            c["_pages"] = (pr + 1, int(m.group(2)))
+            budget_stop(c, f"the first {pr + 1} of {m.group(2)} pages")
+            break
         pr += 1
 
     def detail(r):
@@ -345,6 +357,10 @@ def f_ukg(c):
             break
         if over_budget(c):
             budget_stop(c, f"listing postings ({skip} of {d.get('totalCount') or '?'})")
+            break
+        if c.get("_max_pages") and skip >= 100 * c["_max_pages"]:      # (the directory builder: see f_icims)
+            c["_pages"] = (skip // 100, max(skip // 100, -(-int(d.get("totalCount") or skip) // 100)))
+            budget_stop(c, f"the first {skip} of {d.get('totalCount') or '?'} postings")
             break
 
     def loc_of(l):

@@ -246,12 +246,12 @@ check("host_of: one shared host per system where the address says so", local.hos
 
 # estimates: the slowest lane decides, from measured seconds
 check("lane_minutes: boards x seconds / lanes read at once, the slowest lane decides",
-      abs(local.lane_minutes({"greenhouse": 600, "lever": 60}, lambda a: 3.0) - 600 * 3.0 / build.LANES["greenhouse"] / 60) < 1e-6)
+      abs(local.lane_minutes({"greenhouse": 600, "lever": 60}, lambda a: local.board_secs(a, 3.0)) - 600 * 3.0 / build.LANES["greenhouse"] / 60) < 1e-6)
 LE = local.Local(ROOT_A)
 LE.meta["secs"] = {"greenhouse": [100.0, 10]}
 LE.meta["seed_secs"] = {"greenhouse": 2.5, "lever": 4.0}
 check("avg_secs: measured here once there are enough reads, else the seed's, else a default",
-      LE.avg_secs("greenhouse") == 10.0 and LE.avg_secs("lever") == 4.0 and LE.avg_secs("ashby") == local.DEFAULT_SECS)
+      LE.avg_secs("greenhouse") == 10.0 / build.LANES["greenhouse"] and LE.avg_secs("lever") == 4.0 and LE.avg_secs("ashby") == local.DEFAULT_SECS / 3)
 
 # the weekly upkeep: nearby boards not tried for a week first, then the longest untried
 LW = local.Local(ROOT_A)
@@ -420,6 +420,189 @@ check("upkeep: not due right after a pass; due a week later; never with the shar
       and (local.write_json(os.path.join(directory.LOCAL, "build.json"), dict(LF.meta, **{"pass": dict(LF.meta["pass"], finished=time.time() - 8 * 86400)})) and localdir.upkeep_due())
       and (directory.save_prefs(source="shared") and not localdir.upkeep_due()))
 directory.save_prefs(source="local")
+
+
+# ---------------------------------------------------------------- polite by design: pacing per provider (index_build/net.py)
+from index_build import net, readers
+import email.message, io as _io, urllib.error, urllib.request
+check("providers: every Workday tenant host is one provider; Paylocity, UKG's hosts, an employer's own site",
+      net.provider_of("acme.wd5.myworkdayjobs.com")[0] == net.provider_of("other.wd1.myworkdayjobs.com")[0] == "workday"
+      and net.provider_of("recruiting.paylocity.com") == ("paylocity", 1.0, 1)
+      and net.provider_of("recruiting2.ultipro.com")[0] == net.provider_of("acme.rec.pro.ukg.net")[0] == "ukg"
+      and net.provider_of("boards-api.greenhouse.io")[0] == net.provider_of("job-boards.greenhouse.io")[0]
+      and net.provider_of("careers.acme.com") == ("acme.com",) + net.DEFAULT_PACE and net.DEFAULT_PACE[0] <= 1.0)
+check("providers: shared multi-tenant systems are asked about once a second on one or two connections",
+      all(net.PROVIDERS[d][1] <= 1.0 and net.PROVIDERS[d][2] <= 2 for d in ("paylocity.com", "ultipro.com", "adp.com", "workable.com", "taleo.net"))
+      and all(v[1] <= 3.0 and v[2] <= 4 for v in net.PROVIDERS.values()))
+net.PROVIDERS["pacetest.example"] = ("pacetest", 10.0, 2)
+net.PROVIDERS["slowtest.example"] = ("slowtest", 1.0, 1)
+state_p = {"live": 0, "peak": 0, "times": [], "fail": None, "enc": []}
+class FakeResp:
+    def __init__(self, body, headers):
+        self._b, self.headers, self.status = _io.BytesIO(body), headers, 200
+    def read(self, n=-1):
+        return self._b.read(n)
+    def geturl(self):
+        return "https://x"
+    def close(self):
+        pass
+def fake_open(req, data=None, timeout=30):
+    state_p["live"] += 1
+    state_p["peak"] = max(state_p["peak"], state_p["live"])
+    state_p["times"].append(time.time())
+    state_p["enc"].append(req.get_header("Accept-encoding"))
+    try:
+        time.sleep(0.05)
+        if state_p["fail"]:
+            h = email.message.Message()
+            if state_p["fail"][1] is not None:
+                h["Retry-After"] = str(state_p["fail"][1])
+            raise urllib.error.HTTPError(req.full_url, state_p["fail"][0], "slow down", h, None)
+        h = email.message.Message()
+        h["Content-Encoding"] = "gzip"
+        return FakeResp(gzip.compress(b'{"jobs": [' + b'"x",' * 2000 + b'"y"]}'), h)
+    finally:
+        state_p["live"] -= 1
+w0, p0 = net.STATS["wire"], net.STATS["plain"]
+ths = [threading.Thread(target=lambda i=i: net._paced_open(fake_open, f"https://t{i}.pacetest.example/a")) for i in range(8)]
+[t.start() for t in ths]; [t.join() for t in ths]
+gaps = [b - a for a, b in zip(sorted(state_p["times"]), sorted(state_p["times"])[1:])]
+check("pacing: requests to one provider are spaced (10 a second here) whatever the host name", min(gaps) >= 0.08, str([round(g, 3) for g in gaps]))
+check("pacing: never more connections at once than the provider's cap", state_p["peak"] <= 2, str(state_p["peak"]))
+r = net._paced_open(fake_open, urllib.request.Request("https://a.pacetest.example/b"))
+check("gzip is asked for on every request and unpacked for the caller", state_p["enc"][-1] == "gzip" and json.loads(r.read())["jobs"][-1] == "y" and not r.headers.get("Content-Encoding"))
+check("... and what crossed the wire is counted, next to what it would have been", 0 < net.STATS["wire"] - w0 < (net.STATS["plain"] - p0) / 5)
+own = urllib.request.Request("https://a.pacetest.example/c", headers={"Accept-Encoding": "gzip"})
+r2 = net._paced_open(fake_open, own)
+check("a caller that asked for gzip itself still gets the packed bytes and the header", r2.headers.get("Content-Encoding") == "gzip" and r2.read()[:2] == b"\x1f\x8b")
+state_p["fail"] = (429, 2)
+t0 = time.time()
+try:
+    net._paced_open(fake_open, "https://a.slowtest.example/x")
+    raised = False
+except urllib.error.HTTPError:
+    raised = True
+state_p["fail"] = None
+check("429: the error reaches the caller and the provider is left alone", raised and "slowtest" in net.resting())
+net._paced_open(fake_open, "https://b.slowtest.example/y")
+check("... for at least as long as Retry-After and the first rest say, for every host of that provider", time.time() - t0 >= min(net.REST_FIRST, 2) and time.time() - t0 >= 2, f"{time.time() - t0:.1f}s")
+check("... and a good answer afterwards clears it", net.pace_for("a.slowtest.example").strikes == 0)
+check("a different provider is not held up by it", (lambda t: (net._paced_open(fake_open, "https://z.pacetest.example/q"), time.time() - t)[1] < 1.0)(time.time()))
+
+net.OWN_SITE_MAX, keep_max = 3, net.OWN_SITE_MAX
+try:
+    got_n = 0
+    for i in range(5):
+        try:
+            net._paced_open(fake_open, f"https://careers.one-employer-test.com/p{i}")
+            got_n += 1
+        except net.OverBudget:
+            pass
+finally:
+    net.OWN_SITE_MAX = keep_max
+check("an employer's own site is asked for only so many pages in one build; a job system is not limited that way",
+      got_n == 3 and net.pace_for("recruiting.paylocity.com").budget is None and net.OWN_SITE_MAX <= 60, str(got_n))
+
+# list only: no per-posting pages in a directory build
+import extra_fetchers
+cdet = {"name": "directory", "_detail_budget": 2}
+check("the app's detail gate: a directory read opens no posting pages (two at most, to learn a name)",
+      [extra_fetchers.wanted(cdet, "Nurse") for _ in range(4)] == [True, True, False, False]
+      and extra_fetchers.wanted({"name": "directory", "_detail_budget": 0}, "Nurse") is False)
+seen_details = []
+orig_generic = readers.generic
+readers.generic = lambda c, details=0: seen_details.append(details) or {"name": None, "jobs": 0, "remote": 0, "locs": {}, "sample": False}
+try:
+    build.read_tenant({"c": {"ats": "paylocity", "id": "12345"}, "src": ["seed"], "seed_name": "Acme"})
+    build.read_tenant({"c": {"ats": "paylocity", "id": "12346"}, "src": ["seed"]})
+finally:
+    readers.generic = orig_generic
+check("... a board that already has a name opens none; one known only by a code opens a couple", seen_details == [0, build.NAME_DETAILS], str(seen_details))
+
+# heavy list pages: the first few are enough, the counts are scaled up
+asked = []
+def fake_icims_page(url, timeout=30):
+    asked.append(url)
+    n = int(url.rsplit("pr=", 1)[1])
+    cards = "".join(f'<li class="iCIMS_JobCardItem"><a href="https://careers-x.icims.com/jobs/{n * 10 + i}/nurse/job"><h3>Nurse {n}-{i}</h3></a>'
+                    f'<dt><span class="field-label">Job Locations</span></dt><dd><span>US-OH-Columbus</span></dd></li>' for i in range(10))
+    return f"<html>{cards}<p>Page {n + 1} of 12</p></html>"
+keep_ht = extra_fetchers.http_text
+extra_fetchers.http_text = fake_icims_page
+try:
+    ci = {"ats": "icims", "base": "https://careers-x.icims.com", "name": "directory", "_detail_budget": 0, "_max_pages": readers.LIST_PAGES}
+    got_rows = list(extra_fetchers.f_icims(ci))
+    asked_dir = len(asked)
+    asked.clear()
+    cfull = {"ats": "icims", "base": "https://careers-x.icims.com", "name": "directory", "_detail_budget": 0}
+    full_rows = list(extra_fetchers.f_icims(cfull))
+finally:
+    extra_fetchers.http_text = keep_ht
+check("iCIMS in a directory read: only the first list pages are asked for, and the reader says how many there were",
+      asked_dir == readers.LIST_PAGES and len(got_rows) == 10 * readers.LIST_PAGES and ci.get("_pages") == (readers.LIST_PAGES, 12) and ci.get("_truncated"), f"{asked_dir} {len(got_rows)} {ci.get('_pages')}")
+check("... while the app's own fetch still reads every page", len(asked) == 12 and len(full_rows) == 120 and "_pages" not in cfull)
+import jobfinder
+jobfinder.load_extra()
+keep_fx, keep_rob = jobfinder.FETCHERS["icims"], net.robots_ok
+jobfinder.FETCHERS["icims"] = lambda c: (c.__setitem__("_pages", (3, 12)), c.__setitem__("_truncated", "x"),
+                                         iter([{"locations": ["Columbus, OH"], "workplace": "", "desc": "", "title": "t"}] * 30))[2]
+net.robots_ok = lambda *a, **k: True
+try:
+    sm = readers.generic({"ats": "icims", "base": "https://careers-x.icims.com"})
+finally:
+    jobfinder.FETCHERS["icims"], net.robots_ok = keep_fx, keep_rob
+check("... and the directory scales the sample up to the whole board and marks it as sampled", sm["jobs"] == 120 and sm["locs"] == {"Columbus, OH": 120} and sm["sample"] is True, str(sm)[:200])
+
+# very large boards go after the rest of the near-you group
+big = {"c": gh("giant"), "src": ["seed"], "seed": [9000, 0, {"OH": 5000}, True]}
+small = {"c": gh("small"), "src": ["seed"], "seed": [12, 0, {"OH": 12}, True]}
+mid = {"c": gh("mid"), "src": ["seed"], "seed": [300, 0, {"OH": 300}, True]}
+far = {"c": gh("far"), "src": ["seed"], "seed": [50, 0, {"TX": 50}, True]}
+check("order: most known jobs first, but a giant board waits behind the ordinary nearby ones (and still before the rest)",
+      local.order({"giant": big, "small": small, "mid": mid, "far": far}, ["giant", "small", "mid", "far"], ["OH"]) == ["mid", "small", "giant", "far"])
+check("estimates never assume a provider is asked faster than its pace", local.board_secs("paylocity", 0.2) >= local.REQS_PER_BOARD / 1.0 and local.board_secs("greenhouse", 9.0) == 3.0)
+check("times for people: a range for the near-you group, plain words for everything",
+      localdir._range(15) == "about 15–25 minutes" and localdir._range(70).endswith("hours") and "–" in localdir._range(70)
+      and localdir._words(240) == "a few hours" and localdir._words(801) == "several hours" and not any(ch.isdigit() for ch in localdir._words(801)))
+du = localdir.data_use()
+check("data use: MB for a first build, from a measured MB per 1,000 job sites", du["first_mb"] > 0 and du["mb_per_1000"] > 0 and du["measured"] in (True, False))
+check("metered connections: asked of the OS on Windows, unknown elsewhere", localdir.metered() in ((True, False) if sys.platform == "win32" else (None,)))
+
+# what a build adds is always checked (and rated, within the usual limits) by the ordinary staged check
+import first_search, types
+started = []
+keep = (first_search.pending, first_search.start_checking, localdir.S, directory.apply, dict(first_search.JOB))
+pend = {"n": 5}
+first_search.pending = lambda pid_: ["x"] * pend["n"]
+first_search.start_checking = lambda pid_, rate=True: (started.append(rate), (True, None))[1]
+localdir.S = types.SimpleNamespace(state={"running": False}, _actlog=lambda *a, **k: None)
+directory.apply = lambda *a, **k: {"available": False, "added": [], "linked": []}
+c0 = localdir.control(); c0["add"] = {pid: "all"}; localdir.save_control(c0)
+localdir._LAST_CHECK.clear()
+try:
+    localdir._add_found(pid, rate=False)
+    n1 = len(started)
+    localdir._add_found(pid, rate=False)
+    n2 = len(started)
+    pend["n"] = localdir.CHECK_BATCH
+    localdir._add_found(pid, rate=False)
+    n3 = len(started)
+    pend["n"] = 1
+    localdir._LAST_CHECK[pid] = time.time()
+    localdir._add_found(pid, rate=False)
+    n4 = len(started)
+    localdir._add_found(pid, rate=True)         # the near-you group is through (or the build ended): every leftover
+    n5 = len(started)
+    first_search.JOB["running"] = True
+    localdir._add_found(pid, rate=True)
+    n6 = len(started)
+finally:
+    first_search.pending, first_search.start_checking, localdir.S, directory.apply = keep[:4]
+    first_search.JOB.update(keep[4])
+    c0 = localdir.control(); c0["add"] = {}; localdir.save_control(c0)
+check("employers a build adds get their check: at once the first time, then in batches or after a quiet spell",
+      (n1, n2, n3, n4) == (1, 1, 2, 2), str((n1, n2, n3, n4)))
+check("... every leftover once the near-you group is through, never on top of a running check, and always with rating", (n5, n6) == (3, 3) and all(started))
 
 # ---------------------------------------------------------------- the older built-in area: the directory's own ZIP
 pid_l = people.add("Legacy")

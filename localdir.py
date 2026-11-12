@@ -42,6 +42,9 @@ ROOT = directory.LOCAL
 SEED_ASSET = os.path.join(paths.ASSETS, "directory", "seed.json.gz")
 SEED_DATA = os.path.join(directory.DIR, "seed.json.gz")
 WEEKLY_DAYS = 7
+CHECK_BATCH = 25        # employers a build has added before their check starts while the near-you group is still read
+CHECK_QUIET = 600       # ... or this many seconds since the last check it started
+_LAST_CHECK = {}
 STOP_GRACE = 45         # seconds a paused build gets to save before it is ended
 NO_PLACE = "Add your home ZIP (Filters, then My search) so Siftwell knows which employers to read first."
 S = None                # the server module (configure)
@@ -97,6 +100,7 @@ def seed_summary():
                 for r in g["t"] if isinstance(r, list) and r]
         _SEED.clear()
         _SEED.update(sig=sig, v={"boards": len(rows), "built": str(s.get("built") or ""), "rows": rows,
+                                 "lanes": s.get("lanes") if isinstance(s.get("lanes"), dict) else {},
                                  "secs": s.get("secs") if isinstance(s.get("secs"), dict) else {}})
     return _SEED["v"]
 
@@ -325,9 +329,17 @@ def _add_found(pid, rate):
         first_search._CACHE.pop(pid, None)
         first_search._EST.clear()
         first_search.note_added(pid)
+    # Their openings get checked (and the best matches rated, within the usual limits) by the ordinary staged check.
+    # While the near-you group is still being read it starts for a good batch or after a quiet spell, not for every
+    # handful, and whatever is added while it runs joins it; once that group is through (rate=True here) every
+    # leftover is checked at once. So nothing the build adds is left unchecked or unrated.
     try:
-        if not first_search.JOB["running"] and not S.state.get("running") and first_search.pending(pid):
-            first_search.start_checking(pid, rate=rate)
+        if not first_search.JOB["running"] and not S.state.get("running"):
+            left = len(first_search.pending(pid))
+            if left and (rate or left >= CHECK_BATCH or time.time() - _LAST_CHECK.get(pid, 0) >= CHECK_QUIET):
+                ok, _ = first_search.start_checking(pid, rate=True)
+                if ok:
+                    _LAST_CHECK[pid] = time.time()
     except Exception as e:
         print("directory build: check not started:", type(e).__name__, e, flush=True)
     return n
@@ -370,13 +382,78 @@ def _monitor(p, mode, token):
 
 
 # ---------------------------------------------------------------- honest estimates and the words for the pages
-def _text(m):
-    import first_search
-    return first_search.minutes_text(max(1, round(m)))
+def _range(m):
+    """A time for the near-you group as an honest range: "about 15–25 minutes", "about 1–1½ hours". The low end is
+    the estimate; the high end allows for the largest employers and for job systems that ask Siftwell to slow down."""
+    lo, hi = max(1.0, m), max(1.0, m) * 1.6 + 3
+    if hi < 100:
+        r = lambda x: max(5, 5 * round(x / 5))
+        a, b = (r(lo), r(hi)) if lo >= 8 else (max(1, round(lo)), r(hi))
+        return f"about {a}–{b} minutes" if a != b else f"about {a} minutes"
+    h = lambda x: (lambda v: f"{int(v)}" if v == int(v) else (f"{int(v)}½" if int(v) else "½"))(max(0.5, round(x / 30) / 2))
+    a, b = h(lo), h(hi)
+    return f"about {a}–{b} hours" if a != b else f"about {a} hour{'' if a == '1' else 's'}"
+
+
+def _words(m):
+    """The whole build's time in plain words, never a falsely exact number: it depends on other people's servers."""
+    if m < 45:
+        return "under an hour"
+    if m < 100:
+        return "about an hour"
+    if m < 200:
+        return "a couple of hours"
+    if m < 480:
+        return "a few hours"
+    if m < 900:
+        return "several hours"
+    return "most of a day"
+
+
+DEFAULT_MB_PER_1000 = 55.0      # measured over a 20-minute real build and projected per job system over a whole pass
+MEASURED_SITES = 10000          # this computer's own figure is used once it has read this many (the first ones are the heaviest)
+
+
+def data_use():
+    """{mb_per_1000, first_mb, measured}: internet data a first full build uses, from what really crossed the wire
+    (index_build/net.py counts it). Before anything was measured here: the figure measured when this was built."""
+    u = _meta().get("use") or {}
+    sites, wire = int(u.get("sites") or 0), int(u.get("wire") or 0)
+    measured = sites >= MEASURED_SITES
+    per = (wire / 1e6) / (sites / 1000.0) if measured else DEFAULT_MB_PER_1000
+    total = seed_summary()["boards"] or 0
+    first = per * total / 1000.0
+    return {"mb_per_1000": round(per, 1), "first_mb": int(round(first, -2) if first >= 150 else round(first, -1)), "measured": measured}
+
+
+_METERED = {"at": 0.0, "v": None}
+
+
+def metered():
+    """True when the operating system says this internet connection is metered (Windows only: its own "metered
+    connection" setting, asked through PowerShell, cached ten minutes). None when it can't be told (macOS, Linux)."""
+    if sys.platform != "win32":
+        return None
+    if time.time() - _METERED["at"] < 600:
+        return _METERED["v"]
+    v = None
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                            "[void][Windows.Networking.Connectivity.NetworkInformation,Windows,ContentType=WindowsRuntime];"
+                            "[Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile().GetConnectionCost().NetworkCostType"],
+                           capture_output=True, text=True, timeout=15, creationflags=subprocess.CREATE_NO_WINDOW)
+        out = (r.stdout or "").strip().lower()
+        if out:
+            v = out in ("fixed", "variable")
+    except Exception:
+        v = None
+    _METERED.update(at=time.time(), v=v)
+    return v
 
 
 def estimate(pid):
-    """How long a build takes for this person: {sites, near_sites, all_min, near_min, all_text, near_text, measured}.
+    """How long a build takes for this person: {sites, near_sites, all_min, near_min, all_text (plain words: "a few
+    hours"), near_text (a range: "about 15–25 minutes"), measured}.
     Before anything was read here it comes from the seed (boards per job system x the seconds the weekly builder
     measured for that system, spread over the lanes read at once); afterwards from what was measured on this computer;
     while a pass is under way, from what is still left."""
@@ -384,13 +461,14 @@ def estimate(pid):
     meta = _meta()
     mine = {a: v[0] / v[1] for a, v in (meta.get("secs") or {}).items() if isinstance(v, list) and len(v) == 2 and v[1] >= L.MEASURED_MIN}
     seed = seed_summary()
-    secs = lambda a: mine.get(a) or float((seed["secs"] or {}).get(a) or L.DEFAULT_SECS)
+    secs = lambda a: (L.board_secs(a, mine[a]) if a in mine else
+                      L.board_secs(a, float((seed["secs"] or {}).get(a) or L.DEFAULT_SECS), L.seed_width(a, seed.get("lanes"))))
     pr = _read("progress.json")
     if unfinished() and pr.get("total") and pr.get("mode") == "pass":
         return {"sites": int(pr["total"]), "left": max(0, int(pr["total"]) - int(pr.get("done") or 0)),
                 "near_sites": int(pr.get("near_total") or 0), "all_min": float(pr.get("eta_min") or 0),
-                "near_min": float(pr.get("near_eta_min") or 0), "all_text": _text(float(pr.get("eta_min") or 0)),
-                "near_text": _text(float(pr.get("near_eta_min") or 0)), "measured": bool(mine)}
+                "near_min": float(pr.get("near_eta_min") or 0), "all_text": _words(float(pr.get("eta_min") or 0)),
+                "near_text": _range(float(pr.get("near_eta_min") or 0)), "measured": bool(mine)}
     a = _area(pid) if pid else None
     states = set((a or {}).get("states") or [])
     alln, near = {}, {}
@@ -400,7 +478,7 @@ def estimate(pid):
             near[ats] = near.get(ats, 0) + 1
     am, nm = L.lane_minutes(alln, secs), L.lane_minutes(near, secs)
     return {"sites": seed["boards"], "left": seed["boards"], "near_sites": sum(near.values()), "all_min": am, "near_min": nm,
-            "all_text": _text(am), "near_text": _text(nm), "measured": bool(mine)}
+            "all_text": _words(am), "near_text": _range(nm), "measured": bool(mine)}
 
 
 def offer(pid, est=None):
@@ -411,12 +489,14 @@ def offer(pid, est=None):
         return ""
     first = ""
     if a and not a["remote_only"] and e["near_sites"]:
-        first = f", the {e['near_sites']:,} last seen hiring near you first (most of them within {e['near_text']}; the largest employers take longer)"
+        first = f", the {e['near_sites']:,} last seen hiring near you first ({e['near_text']})"
     elif a and a["remote_only"]:
         first = ", the ones last seen with remote jobs first"
     return (f"Siftwell can build the directory on this computer: it reads the public job pages of {e['sites']:,} job sites "
             f"itself{first}, then the rest in the background ({e['all_text']} in all; you can pause it and keep using "
-            "Siftwell meanwhile). The employers it finds near you are added to your list as it goes. It uses no Claude.")
+            "Siftwell meanwhile). It asks each job system slowly, about one page a second, so it is no burden on them. "
+            f"The employers it finds near you are added to your list as it goes. It uses about {data_use()['first_mb']:,} MB "
+            "of internet data the first time, and no Claude.")
 
 
 def _line(pr, pid):
@@ -497,10 +577,11 @@ def status(pid):
            "pass_minutes": ps.get("minutes"), "adding": c["add"].get(pid), "added": int(c["added"].get(pid, 0)),
            "weekly_at": _iso((meta.get("weekly") or {}).get("at")), "seed": {"boards": seed_summary()["boards"], "built": seed_summary()["built"]},
            "discovery": {"at": (meta.get("discovery") or {}).get("at"), "found": int((meta.get("discovery") or {}).get("found") or 0)},
-           "remote_only": bool(a and a["remote_only"])}
+           "remote_only": bool(a and a["remote_only"]), "data": data_use(), "metered": bool(metered()) if not run else False}
     if run and pr.get("total"):
-        out["eta_text"] = _text(float(pr.get("eta_min") or 0))
-        out["near_eta_text"] = _text(float(pr.get("near_eta_min") or 0)) if out["near_done"] < out["near_total"] else ""
+        out["eta_text"] = _words(float(pr.get("eta_min") or 0))
+        out["near_eta_text"] = _range(float(pr.get("near_eta_min") or 0)) if out["near_done"] < out["near_total"] else ""
+        out["resting"] = [str(x) for x in (pr.get("resting") or [])][:4]
     return out
 
 
@@ -534,7 +615,7 @@ def start_background(log=lambda m: print(m, flush=True)):
         first = True
         while True:
             try:
-                if directory.uses_local() and not running():
+                if directory.uses_local() and not running() and not metered():
                     if first and unfinished() and not control().get("paused"):
                         ok, err = start()
                         log("directory build: carrying on where it stopped" if ok else f"directory build not continued: {err}")
@@ -571,6 +652,11 @@ def handle_post(h, path, body, pid):
                 add = max(1, min(100000, int(add)))
             except (TypeError, ValueError):
                 add = "all"
+        if metered() and not body.get("metered_ok"):
+            dm = data_use()["first_mb"]
+            h._send(409, {"metered": True, "error": f"Windows says this internet connection is metered (data may be limited or cost money). "
+                                                    f"A first build uses about {dm:,} MB."})
+            return True
         try:
             ok, err = start(pid, add=add, fresh=bool(body.get("fresh")))
         except Exception as e:

@@ -1179,7 +1179,8 @@ SCREENS.board = {
     if ($("ldBuild")) $("ldBuild").addEventListener("click", async () => {
       $("ldBuild").disabled = true; $("ldBuildMsg").textContent = "Starting…";
       try {
-        await api("POST", "/api/localdir/start", {add: "all"});
+        try { await api("POST", "/api/localdir/start", {add: "all"}); }
+        catch(e) { if (!/metered/i.test(e.message || "") || !confirm(e.message + "\n\nBuild anyway?")) throw e; await api("POST", "/api/localdir/start", {add: "all", metered_ok: true}); }
         const s = await api("GET", "/api/search");
         if (cur === "board" && this.view === "summary") { this.plan = s.plan; this.pv = null; this.summary(); say("Siftwell is building your directory."); }
       } catch(e) { $("ldBuild").disabled = false; $("ldBuildMsg").textContent = e.message || "That didn’t work."; }

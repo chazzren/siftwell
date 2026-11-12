@@ -92,7 +92,9 @@ def _workable_json(url):
         time.sleep(10 * (i + 1))
 
 def f_workable(c):
-    d = _workable_json(f'https://apply.workable.com/api/v1/widget/accounts/{c["token"]}?details=true')
+    # (the directory builder only needs places: without details the feed is the same minus every job's text, a fraction of the size)
+    det = "false" if c.get("_detail_budget", 1) <= 0 else "true"
+    d = _workable_json(f'https://apply.workable.com/api/v1/widget/accounts/{c["token"]}?details={det}')
     for j in d.get("jobs") or []:
         locs = [", ".join(x for x in (l.get("city"), l.get("region")) if x) or l.get("country", "")
                 for l in j.get("locations") or [] if not l.get("hidden")]
