@@ -167,7 +167,7 @@ def _segments(part):
             out.append((raw, weak, comma))
     return out
 
-COUNTY_RX = re.compile(r"((?:[A-Za-z'\u2019.\-]+\s+){0,2}[A-Za-z'\u2019.\-]+)\s+(?:County|Parish|Borough|Census Area)(?![A-Za-z])", re.I)
+COUNTY_RX = re.compile(r"((?:[A-Za-z'\u2019.\-]+\s+){0,2}[A-Za-z'\u2019.\-]+)\s+(County|Parish|Borough|Census Area)(?![A-Za-z])", re.I)
 _STATE_WORDS_LONGEST = sorted(STATE_WORDS, key=len, reverse=True)
 
 def _state_in(text):
@@ -201,8 +201,8 @@ def _county_hits(part, d):
             pick = [c for c in cands if c[0] == st] if st else (cands if len(cands) == 1 else [])
             if pick:
                 c = pick[0]
-                nm = " ".join(w if w[:1].isupper() else w.capitalize() for w in words[-k:])
-                hits.append(Hit(c[1], c[2], 0.75, "county", f"{nm} County, {c[0]}", c[3]))
+                nm = " ".join(w.capitalize() if (w.islower() or (w.isupper() and len(w) > 3)) else w for w in words[-k:])
+                hits.append(Hit(c[1], c[2], 0.75, "county", f"{nm} {m.group(2).title()}, {c[0]}", c[3]))
             start = m.start(1) + (len(m.group(1)) - len(" ".join(words[-k:])))
             out.append(part[last:start]); last = m.end(); cut = True
             break
@@ -394,11 +394,6 @@ def area_phrase(st):
         area = "their area"
     remote = bool((st or {}).get("remote_us", True)) and "remote" in ((st or {}).get("workplaces") or ["remote"])
     return area + (", or remote" if remote and place else " or remote" if remote else ", no remote" if place else " only")
-
-def is_foreign(s):
-    """Does this location string name somewhere outside the US (and no US city + state pair)?"""
-    d = _load()
-    return bool(d["foreign_rx"].search(re.sub(r"new mexico|new jersey|new england|new south", "", _key(s))) or FOREIGN_CODES.search(s or ""))
 
 def _home(home):
     if isinstance(home, (tuple, list)) and len(home) >= 2 and isinstance(home[0], (int, float)):

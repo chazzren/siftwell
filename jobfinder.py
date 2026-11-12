@@ -179,6 +179,13 @@ def looks_local_unnamed(loc):
     l = (loc or "").strip().lower()
     return bool(l) and not ELSEWHERE.search(l) and not any(c in l for c in NON_US) and "remote" not in l
 
+def _names_foreign(l):
+    import geo
+    fn = getattr(geo, "looks_foreign", None)
+    if fn:
+        return bool(fn(l))
+    return bool(geo.FOREIGN_CODES.search(l or "")) or any(c in " " + (l or "").lower() + " " for c in NON_US)
+
 def vague_location(l, emp_states=()):
     """A posting location that names no place Siftwell can put on a map: empty, "Main Office", "Headquarters",
     "Statewide", "Multiple Locations - OH". A state only counts when it is one the employer is known to hire in
@@ -187,24 +194,21 @@ def vague_location(l, emp_states=()):
     if not l:
         return True
     low = " " + l.lower() + " "
-    if any(w in low for w in REMOTE_WORDS) or any(c in low for c in NON_US):
+    if any(w in low for w in REMOTE_WORDS) or _names_foreign(l):
         return False
     import geo
-    if geo.is_foreign(l):
-        return False
     hits = geo.locate_all(l)
     if any(h.kind != "state" for h in hits):
         return False
     if hits:   # state only: fine when the employer hires in that state
-        names = {h.label for h in hits}
-        return all(geo.STATE_WORDS.get(n.lower()) in emp_states for n in names)
+        return all(geo.STATE_WORDS.get(h.label.lower(), h.label) in emp_states for h in hits)
     return True
 
 def employer_all_near(info, homes):
     """True when every place the directory knows the employer hires is within some home's radius (then a posting that
-    names no place is almost surely local). info: catalog.places_map() entry."""
+    names no place is almost surely local). info: a catalog.places_map() entry."""
     import geo
-    if not info or not homes or not info.get("places") or not info.get("all", True):
+    if not info or not homes or not info.get("places") or not info.get("all"):
         return False
     return all(any(geo.miles(h[0], h[1], p[0], p[1]) <= r for h, r in homes) for p in info["places"])
 
@@ -564,8 +568,13 @@ def f_smartrecruiters(c):
         if off >= d.get("totalFound", 0):
             break
 
-def _wd_location_facets(facets):
-    """Walk Workday facet tree; return {facetParameter: [ids]} for local/remote location values."""
+WD_UNNAMED_VALUES = 25   # unnamed location-facet values ("Main Campus", "Building 5") also queried for a local employer
+WD_UNNAMED_JOBS = 600    # ... while their postings add up to no more than this
+
+def _wd_location_facets(facets, unnamed=False):
+    """Walk Workday facet tree; return {facetParameter: [ids]} for local/remote location values. unnamed=True (an
+    employer known to hire only near someone here): values that name no place at all ("Main Campus", "Building 5")
+    are included too, biggest first within the caps above; select_for_person() then decides per person."""
     out = {}
     def walk(fs):
         for f in fs or []:
@@ -579,6 +588,15 @@ def _wd_location_facets(facets):
                     out[param] = ids
             elif "location" in param.lower() and "country" not in param.lower():
                 ids = [v["id"] for v in vals if near(v.get("descriptor", "")) or is_remote_us(v.get("descriptor", ""))]
+                if unnamed:
+                    have, n = set(ids), 0
+                    extra = [v for v in vals if v.get("id") not in have and v.get("descriptor") and vague_location(v["descriptor"])]
+                    extra.sort(key=lambda v: -int(v.get("count") or 0))
+                    for v in extra[:WD_UNNAMED_VALUES]:
+                        n += int(v.get("count") or 0)
+                        if n > WD_UNNAMED_JOBS:
+                            break
+                        ids.append(v["id"])
                 if ids:
                     out[param] = ids
     walk(facets)
@@ -598,13 +616,17 @@ def f_workday(c):
     base = f'https://{c["host"]}' if c.get("host") else f'https://{c["tenant"]}.{c["wd"]}.myworkdayjobs.com'
     api = f'{base}/wday/cxs/{c["tenant"]}/{c["site"]}'
     first = http_json(api + "/jobs", {"limit": 20, "offset": 0, "searchText": c.get("search", ""), "appliedFacets": {}})
-    facets = _wd_location_facets(first.get("facets"))
+    # An employer that hires only near someone here (a DC-headquartered one in the original list, or one whose every
+    # directory place is inside a home radius): its unnamed location labels are worth reading too.
+    d_ = c.get("dir") or {}
+    local_emp = c.get("tier") == "dmv_hq" or employer_all_near({"places": d_.get("p"), "all": d_.get("all")}, CFG.get("homes") or [])
+    facets = _wd_location_facets(first.get("facets"), unnamed=local_emp)
     postings, seen = [], set()
     # Workday ORs values within a facet; query each location facet separately and merge.
     queries = [{k: v} for k, v in facets.items()] or [{}]
     # A DC-headquartered employer whose location labels we can't read ("Main Campus") gets its full list;
     # select_for_person() then keeps anything that doesn't name another state or country.
-    if c.get("tier") == "dmv_hq" and (not any("location" in k.lower() for k in facets) or first.get("total", 0) <= 600):
+    if local_emp and (not any("location" in k.lower() for k in facets) or first.get("total", 0) <= 600):
         queries = [{}]
     # Known limitation: the location facets above are still chosen from everyone's search areas (near() over the
     # union of homes + remote), because big tenants post tens of thousands of jobs and Workday stops paging at 2000,
@@ -742,6 +764,8 @@ def process(c):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="comma-separated company names")
+    ap.add_argument("--no-rate", action="store_true", help="fetch only: rebuild the boards without Claude rating (the staged first check rates once, at the end)")
+    ap.add_argument("--no-boards", action="store_true", help="fetch only: don't rebuild the boards after this fetch (a later one will)")
     ap.add_argument("--rescore", action="store_true", help="re-parse every open listing from its saved text, then rebuild boards (no fetching)")
     ap.add_argument("--recompute", nargs="*", metavar="PID", help="rebuild these people's boards (everyone if none given) from the catalog; no fetching, no Claude")
     ap.add_argument("--rerate", metavar="PID", help="have Claude rate this person's unrated listings and redo ones rated with older info (no fetching)")
@@ -818,8 +842,9 @@ def fetch(args):
         print(f"\nCatalog: {len(pool)} open listings; this run {totals['new']} new, {totals['closed']} closed, "
               f"{totals['changed']} changed, {totals['reopened']} back again, {len(errors)} companies failed, "
               f"{len(flagged)} kept open (suspect or incomplete fetch)", flush=True)
-        boards = recompute(None, rate=True, pool=pool)
-        if not args.only:  # last: Claude looks up facts for companies that need them (capped in Settings, Claude usage)
+        quiet = bool(getattr(args, "no_rate", False) or getattr(args, "no_boards", False))
+        boards = {} if getattr(args, "no_boards", False) else recompute(None, rate=not quiet, pool=pool)
+        if not args.only and not quiet:  # last: Claude looks up facts for companies that need them (capped in Settings, Claude usage)
             facts, fboards = research_company_facts()
             for p in _failed(fboards):
                 boards[p] = fboards[p]
@@ -895,7 +920,8 @@ def select_for_person(pool, sets=None):
             if j0["company"] not in emp_near:
                 emp_near[j0["company"]] = employer_all_near(info, homes)
             if emp_near[j0["company"]] and all(vague_location(l, info["states"]) for l in (locs or [""])):
-                vague_near = (info.get("labels") or [""])[:1]
+                lab = info.get("label") or ""
+                vague_near = [(f"{l} (near {lab})" if lab else l) if l else (f"Near {lab}" if lab else "") for l in (locs or [""])][:3]
         if not (mine or dc_fallback or vague_near is not None or (remote and CFG.get("remote_ok", True))):
             continue
         wp = "remote" if remote else (j0.get("workplace") or "")

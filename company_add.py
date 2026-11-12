@@ -204,8 +204,92 @@ def verify(c):
         raise ValueError(f"Found a {a} board, but its job feed didn't respond ({type(e).__name__}).")
     raise ValueError("Unsupported job board.")
 
+# ---- names people can read. Some job systems address a board by a code (Paylocity, ADP: a UUID; UKG: "LIC1000LMHS"),
+# and a name made from that code must never reach a board, a filter or a list.
+_UUID = re.compile(r"[0-9a-f]{8}[ _-]?[0-9a-f]{4}[ _-]?[0-9a-f]{4}[ _-]?[0-9a-f]{4}[ _-]?[0-9a-f]{12}", re.I)
+_CODE_TOKEN = re.compile(r"(?:[A-Za-z]{0,6}\d{3,}[A-Za-z0-9]*|\d+|(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{10,})", re.I)
+_HOST_NOISE = {"www", "www2", "careers", "career", "jobs", "job", "apply", "recruiting", "recruiting2", "secure", "secure2",
+               "secure3", "secure4", "secure5", "secure6", "hr", "talent", "employment", "workforcenow", "ats", "app", "my",
+               "portal", "external", "internal", "tbe", "chk", "aa", "fa", "ta"}
+_SHARED_HOSTS = ("icims.com", "taleo.net", "ultipro.com", "ukg.net", "saashr.com", "oraclecloud.com", "myworkdayjobs.com",
+                 "paylocity.com", "adp.com", "dayforcehcm.com", "paycomonline.net", "greenhouse.io", "lever.co",
+                 "ashbyhq.com", "workable.com", "bamboohr.com", "applytojob.com", "breezy.hr", "recruitee.com",
+                 "rippling.com", "smartrecruiters.com", "applitrack.com", "schoolspring.com", "jobvite.com",
+                 "successfactors.com", "avature.net", "eightfold.ai", "phenompeople.com", "clearcompany.com")
+SYSTEM_LABEL = {"paylocity": "Paylocity", "adp": "ADP", "ukg": "UKG", "dayforce": "Dayforce", "paycom": "Paycom",
+                "saashr": "UKG Ready", "oracle": "Oracle", "icims": "iCIMS", "taleo": "Taleo", "workday": "Workday",
+                "greenhouse": "Greenhouse", "lever": "Lever", "ashby": "Ashby", "bamboohr": "BambooHR", "jsonld": "careers site"}
+
+
+def looks_like_code(name):
+    """Is this "name" really a board code? ("0330Dee1 D933 49D0 ...", "Lic1000Lmhs", "Car1038", "12345")"""
+    n = (name or "").strip()
+    if not n:
+        return True
+    if _UUID.fullmatch(n) or _UUID.match(n):
+        return True
+    toks = n.split()
+    return len(toks) <= 2 and all(_CODE_TOKEN.fullmatch(t) for t in toks)
+
+
+def strip_code_prefix(name):
+    """"US10791-ALACUS Air Liquide USA" -> "Air Liquide USA": a leading code is dropped when a real name follows."""
+    toks = (name or "").split()
+    k = 0
+    while k < len(toks) - 1 and re.fullmatch(r"[A-Z]{0,3}\d{3,}[-_][A-Z0-9]+|0\d{2,}|\d{5,}|[A-Za-z]{1,3}\d{4,}\w*", toks[k].strip(":#()")):
+        k += 1
+    rest = " ".join(toks[k:])
+    return rest if k and len(re.sub(r"[^A-Za-z]", "", rest)) >= 4 else (name or "").strip()
+
+
+def host_label(c, url=""):
+    """A name from the employer's own part of a careers address ("careers-acme.icims.com" -> "Acme",
+    "jobs.ohiohealth.com" -> "Ohiohealth"); "" when the address is a job system's shared host or is itself a code."""
+    import urllib.parse
+    for v in (c.get("host"), c.get("base"), c.get("list_url"), c.get("sitemap"), c.get("url"), url):
+        v = str(v or "")
+        if not v:
+            continue
+        h = urllib.parse.urlsplit(v if "//" in v else "https://" + v).netloc.lower().split(":")[0]
+        shared = next((s for s in _SHARED_HOSTS if h == s or h.endswith("." + s)), None)
+        if shared in ("oraclecloud.com", "saashr.com", "myworkdayjobs.com"):
+            continue            # (their host names are pod codes, not employers)
+        labs = (h[:-len(shared) - 1] if shared and h != shared else "" if shared else h.rsplit(".", 1)[0]).split(".")
+        if not shared and len(labs) > 1 and labs[-1] in ("co", "com", "org", "net", "ac", "gov", "edu"):
+            labs = labs[:-1]
+        labs = [x for x in labs if x and x not in _HOST_NOISE and not re.fullmatch(r"wd\d+|[a-z]{2}\d+|\d+", x)]
+        if not labs:
+            continue
+        lab = re.sub(r"^(careers?|jobs?|external|internal)-|-(careers?|jobs?|external|internal)$", "", labs[0 if shared else -1])
+        lab = lab.replace("-", " ").replace("_", " ").strip()
+        if len(lab) >= 2 and not looks_like_code(lab):
+            return lab.title()[:60]
+    return ""
+
+
+def readable_name(name, c, url=""):
+    """The name to show for a board: the given one unless it is a code, then one from the careers address; "" when
+    neither is readable (the caller then describes the employer some other way)."""
+    n = strip_code_prefix(str(name or "").replace(",", " "))
+    n = re.sub(r"\s+", " ", n).strip()[:60]
+    if n and not looks_like_code(n):
+        return n
+    return host_label(c, url)
+
+
+def placeholder_name(c, where=""):
+    """Last resort for a board known only by a code: "Employer in Columbus OH (Paylocity 38ce6e)"."""
+    ident = str(c.get("token") or c.get("slug") or c.get("sub") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key")
+                or c.get("id") or c.get("board") or "")
+    short = re.sub(r"[^A-Za-z0-9]", "", ident).lower()[:6]
+    where = re.sub(r"\s+", " ", (where or "").replace(",", " ")).strip()
+    sysn = SYSTEM_LABEL.get(c.get("ats"), str(c.get("ats") or "").title())
+    return (f"Employer in {where}" if where else "Employer") + f" ({sysn}{' ' + short if short else ''})"
+
+
 def default_name(c, suggested=None, name=""):
-    """The name a new company gets: the one typed, else the board's own name, else one made from its config."""
+    """The name a new company gets: the one typed, else the board's own name, else one made from its config (never a
+    bare board code: then a name from the careers address, or "Employer (Paylocity 38ce6e)")."""
     if c["ats"] == "jsonld" and not suggested:
         import urllib.parse
         h = urllib.parse.urlsplit(c.get("list_url") or c.get("sitemap") or "").netloc.lower().removeprefix("www.").split(":")[0]
@@ -216,7 +300,10 @@ def default_name(c, suggested=None, name=""):
         suggested = (lab[-1] if lab else h).replace("-", " ").title()
     ident = c.get("token") or c.get("slug") or c.get("sub") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key") or c.get("id") or re.sub(r"^https://|\..*$", "", c.get("base", "")).replace("careers-", "")
     # (no commas: an update for named companies takes a comma-separated list)
-    return (name or suggested or str(ident).replace("-", " ").replace("_", " ").title()).replace(",", "").strip()[:60]
+    out = (name or suggested or str(ident).replace("-", " ").replace("_", " ").title()).replace(",", "").strip()[:60]
+    if not name and looks_like_code(out):
+        out = readable_name(suggested or "", c) or placeholder_name(c)
+    return out
 
 def save_found(c, nm, set_id, pid, sector="Added by you"):
     """Save a detected board as a company in list set_id, or add that list to the company already using this board.

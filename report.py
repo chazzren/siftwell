@@ -508,6 +508,7 @@ BODY = """<div class="wrap">
 <div class="banner" id="aiBanner" hidden></div>
 <div class="banner gsbn" id="gsBanner" hidden></div>
 <div class="banner gsbn updbn" id="updBanner" hidden></div>
+<div class="banner gsbn" id="chkBanner" role="status" aria-live="polite" hidden></div>
 <div class="panel" id="progress" hidden>
   <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span><button class="btn sm" type="button" id="progStop" hidden title="Stop rating: batches already sent finish and their ratings are kept. Queued runs are cancelled.">Stop</button><button class="btn sm primary" type="button" id="progReload" hidden>Show new ratings</button></div>
   <div class="prog"><i id="progBar"></i></div>
@@ -1350,28 +1351,36 @@ $("cos").innerHTML = D.companies.slice().sort((a,b)=>b.matched-a.matched || a.co
 // ---- Empty Jobs tab (this board has no jobs): "Start your job search" (never searched), its progress while it runs,
 // or "No jobs passed your filters" with the usual fixes. State and plan come from /api/search (first_search.py).
 if (SERVED && !jobs.length) (function(){
-  const box = $("startCard"); let sawRun = false;
+  const box = $("startCard"); let sawRun = false, lastSig = "";
   const n = x => (x || 0).toLocaleString();
   const show = html => { box.innerHTML = html; box.hidden = false; $("view-jobs").classList.add("nojobs"); };
   const findName = (f, lbl) => f.remote_only ? "remote-friendly employers in your field" : "employers near " + esc(lbl || f.label);
   function load(){ fetch("/api/search").then(r => r.json()).then(draw).catch(() => setTimeout(load, 5000)); }
   function draw(s){
-    const p = s.plan, f = p.find, job = s.mine ? s.job : {}, up = s.update || {};
+    const p = s.plan, f = p.find, job = s.mine ? s.job : {}, up = s.update || {}, ck = p.check || {};
     if (s.running) {
       sawRun = true;
-      let line = "Getting started…", frac = .03;
+      let line = "Getting started…", frac = .03, staged = false;
       if (job.running && job.phase === "directory") { const d = p.directory || {}; line = d.remote_only ? "Adding remote-friendly employers from the Siftwell directory…" : `Adding employers near ${esc(d.label || "you")} from the Siftwell directory…`; frac = .05; }
       else if (job.running && job.phase === "find") { const c = s.find || {}; line = `Finding ${findName(f, c.label)}: ${n(c.found)} found so far, ${n(c.readable)} Siftwell can read.`; frac = c.kinds ? .3 * c.kinds_done / c.kinds : .03; }
+      else if (ck.running && ck.mine && !(up.running && up.phase !== "fetch")) { staged = true; line = `Checking employers: ${n(ck.done)} of ${n(ck.total)} · your board fills in as we go` + (ck.pausing ? " (pausing after this round…)" : ""); frac = .1 + (ck.total ? .85 * ck.done / ck.total : 0); }
       else if (up.running && up.phase === "fetch") { line = `Checking career pages for openings: ${up.total ? `${n(up.done)} of ${n(up.total)} companies` : "starting"}.`; frac = .3 + (up.total ? .5 * up.done / up.total : 0); }
       else if (up.running && (up.phase === "ai" || up.phase === "pivot")) { line = "Claude is reading the best matches against your resume."; frac = .85; }
       else if (up.running) { line = "Almost done: building your board."; frac = .95; }
       else if (job.running && job.phase === "build") { line = "Every company was checked today already, so Siftwell is building your board from what it found."; frac = .9; }
       else if (s.find_live) line = "Finding employers (a search started from the Catalog). Jobs are checked when it’s done.";
       else if (job.running) line = "Waiting for another job to finish…";
-      show(`<h2 id="scTitle">Your job search is running</h2><p>${line}</p><div class="prog" role="progressbar" aria-label="Job search progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(frac * 100)}"><i style="width:${Math.round(frac * 100)}%"></i></div><p>Your jobs show up here when it’s done. You can leave this page; the search keeps going as long as Siftwell is running.</p>`);
+      const sig = [line, Math.round(frac * 100), staged, !!ck.pausing].join("|");
+      if (sig !== lastSig) {   // (only redraw when something changed, so the Pause button keeps its focus)
+        lastSig = sig;
+        show(`<h2 id="scTitle">Your job search is running</h2><p>${line}</p><div class="prog" role="progressbar" aria-label="Job search progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(frac * 100)}"><i style="width:${Math.round(frac * 100)}%"></i></div><p>${staged ? "Siftwell checks the employers with the most openings near you first, and jobs that fit show up here every few minutes." : "Your jobs show up here when it’s done."} You can leave this page; the search keeps going as long as Siftwell is running${staged ? ", and if it stops you can continue where it left off" : ""}.</p>${staged && !ck.pausing ? `<div class="sacts"><button class="btn sm" type="button" id="scPause">Pause</button></div>` : ""}`);
+        if ($("scPause")) $("scPause").addEventListener("click", () => { $("scPause").disabled = true; fetch("/api/search/pause", {method: "POST", headers: H, body: "{}"}).then(load).catch(() => {}); });
+      }
+      if (staged) fetch("/api/profile/board" + pq()).then(r => r.json()).then(b => { if (b.jobs > 0 && !b.rebuilding) { saveFilters(); location.reload(); } }).catch(() => {});
       setTimeout(load, 3000);
       return;
     }
+    lastSig = "";
     if (sawRun) { saveFilters(); location.reload(); return; }  // it finished: show the new board
     const err = job.error ? `<p class="smsg">${esc(job.error)}</p>` : "";
     if (!p.started_before) {
@@ -1394,8 +1403,23 @@ if (SERVED && !jobs.length) (function(){
       });
       return;
     }
+    if (ck.pending > 0) {   // the first check didn't get through every employer (paused, stopped or restarted)
+      show(`<h2 id="scTitle">${ck.done ? "No jobs that fit yet" : "Your employers haven’t been checked yet"}</h2>
+        <p>Siftwell has checked ${n(ck.done)} of the ${n(ck.total)} employers on your lists so far${ck.done ? ", and none of their openings fit your search" : ""}. ${n(ck.pending)} ${ck.pending === 1 ? "is" : "are"} still to check.</p>
+        <div class="sacts"><button class="btn primary" type="button" id="scCont">Continue checking</button></div>
+        <div class="smsg" id="scMsg" role="status"></div>${err}`);
+      $("scCont").addEventListener("click", () => {
+        $("scCont").disabled = true; $("scMsg").textContent = "";
+        fetch("/api/search/continue", {method: "POST", headers: H, body: "{}"})
+          .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+            if (!ok && !/already/i.test(d.error || "")) { $("scCont").disabled = false; $("scMsg").textContent = d.error || "That didn’t work."; return; }
+            load();
+          }).catch(() => { $("scCont").disabled = false; $("scMsg").textContent = "Couldn’t reach Siftwell. Try again."; });
+      });
+      return;
+    }
     show(`<h2 id="scTitle">No jobs passed your filters</h2>
-      <p>${p.companies ? `Siftwell checked the ${n(p.companies)} companies in your lists, but none of their openings fit your search right now.` : "Your company lists don’t have any companies in them yet, so there was nothing to check."} Things that usually help:</p>
+      <p>${p.companies ? `Siftwell checked ${ck.done >= ck.total ? `all ${n(ck.total)}` : `${n(ck.done)} of the ${n(ck.total)}`} companies in your lists, but none of their openings fit your search right now.` : "Your company lists don’t have any companies in them yet, so there was nothing to check."} Things that usually help:</p>
       <ul>
         <li><a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (Filters, then My search).</li>
         ${(p.directory || {}).possible ? `<li><button type="button" class="linkbtn" id="scDir">Add employers near me from the Siftwell directory</button>: free, no Claude; Siftwell then checks their openings.<span class="dmsg" id="scDirMsg" role="status"></span></li>` : ""}
@@ -1407,7 +1431,7 @@ if (SERVED && !jobs.length) (function(){
       fetch("/api/directory/apply", {method: "POST", headers: H, body: JSON.stringify({fetch: true})})
         .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
           if (!ok) { $("scDir").disabled = false; $("scDirMsg").textContent = " " + (d.error || "That didn’t work."); return; }
-          const k = (d.added || []).length + (d.linked || []).length;
+          const k = (d.added || 0) + (d.linked || 0);
           $("scDirMsg").textContent = k ? ` Added ${n(k)} to your Near me list${d.fetching ? "; checking their openings now" : ""}.` : " No new employers near you in the directory right now.";
           if (d.fetching) setTimeout(load, 1500);
         }).catch(() => { $("scDir").disabled = false; $("scDirMsg").textContent = " Couldn’t reach Siftwell. Try again."; });
@@ -1804,8 +1828,47 @@ if (SERVED) {
 
   let wasRunning = false, bgShown = false;
   const PH = {fetch: "Checking company job boards", ai: "Claude is scoring new jobs", pivot: "Claude is rating AI-pivot jobs", facts: "Claude is looking up company facts"};
+  // The staged first check of the employers on this person's lists (first_search.py): one line while it runs (the
+  // board is usable meanwhile and offers the new jobs instead of reloading under the reader), and Continue checking
+  // when it stopped part-way (paused, Siftwell closed or restarted).
+  let chkWas = false, chkOff = false, chkSig = "";
+  function drawCheck(s){
+    const c = s.check, b = $("chkBanner");
+    if (!c || !jobs.length) { b.hidden = true; return false; }
+    const n = x => (x || 0).toLocaleString();
+    const fresh = c.board_at && String(c.board_at) !== String(BOARD_AT || c.board_at);
+    if (BOARD_AT == null) BOARD_AT = c.board_at;
+    const act = (id, label, url) => { const e = $(id); if (e) e.addEventListener("click", () => { e.disabled = true; fetch(url, {method: "POST", headers: H, body: "{}"}).then(() => { chkSig = ""; poll(); }).catch(() => { e.disabled = false; }); }); };
+    let html = "";
+    if (c.running && !c.mine) {
+      html = `<span>Siftwell is checking employers for another profile. Find new jobs waits until it’s done.</span>`;
+    } else if (c.running) {
+      chkWas = true;
+      const rating = s.running && (s.phase === "ai" || s.phase === "pivot");
+      html = `<span>${rating ? "Almost done: Claude is reading the best matches against your resume." : `Checking employers: ${n(c.done)} of ${n(c.total)} · your board fills in as we go`}${c.pausing ? " (pausing after this round…)" : ""}</span>`
+           + (fresh ? `<button class="btn sm primary" type="button" id="chkShow">Show new jobs</button>` : "")
+           + (c.mine && !c.pausing && !rating ? `<button class="btn sm ghost" type="button" id="chkPause">Pause</button>` : "");
+    } else if (chkWas && fresh) {
+      html = `<span>Siftwell finished checking employers.</span><button class="btn sm primary" type="button" id="chkShow">Show new jobs</button>`;
+    } else if (c.pending > 0 && !chkOff && !s.running) {
+      html = `<span>Siftwell has checked ${n(c.done)} of the ${n(c.total)} employers on your lists. ${n(c.pending)} still to check.</span><button class="btn sm primary" type="button" id="chkCont">Continue checking</button><button class="btn sm ghost" type="button" id="chkHide">Not now</button>`;
+    }
+    if (html !== chkSig) {
+      chkSig = html; b.innerHTML = html; b.hidden = !html;
+      if ($("chkShow")) $("chkShow").addEventListener("click", () => { saveFilters(); location.reload(); });
+      if ($("chkHide")) $("chkHide").addEventListener("click", () => { chkOff = true; chkSig = ""; b.hidden = true; });
+      act("chkPause", "", "/api/search/pause"); act("chkCont", "", "/api/search/continue");
+    }
+    return !!c.running;
+  }
+  let BOARD_AT = null;
   function poll(){
-    fetch("/api/status").then(r => r.json()).then(s => {
+    fetch("/api/status" + pq()).then(r => r.json()).then(s => {
+      if (drawCheck(s)) {   // a staged check: no big progress box, no automatic reload
+        $("updateBtn").disabled = true; $("updateBtn").classList.add("busy"); $("updSmall").textContent = "checking employers…";
+        $("progress").hidden = true; wasRunning = false;
+        return void setTimeout(poll, 3000);
+      }
       $("updateBtn").disabled = s.running; $("updateBtn").classList.toggle("busy", !!s.running);
       $("updSmall").textContent = s.running ? "running now…" : "every company, ~40 min";
       $("updateBtn").title = s.running ? "Finding new jobs now…" : "Find new jobs: check every company for new openings (about 40 min)";
