@@ -179,6 +179,35 @@ def looks_local_unnamed(loc):
     l = (loc or "").strip().lower()
     return bool(l) and not ELSEWHERE.search(l) and not any(c in l for c in NON_US) and "remote" not in l
 
+def vague_location(l, emp_states=()):
+    """A posting location that names no place Siftwell can put on a map: empty, "Main Office", "Headquarters",
+    "Statewide", "Multiple Locations - OH". A state only counts when it is one the employer is known to hire in
+    (emp_states); remote and foreign labels are never vague."""
+    l = (l or "").strip()
+    if not l:
+        return True
+    low = " " + l.lower() + " "
+    if any(w in low for w in REMOTE_WORDS) or any(c in low for c in NON_US):
+        return False
+    import geo
+    if geo.is_foreign(l):
+        return False
+    hits = geo.locate_all(l)
+    if any(h.kind != "state" for h in hits):
+        return False
+    if hits:   # state only: fine when the employer hires in that state
+        names = {h.label for h in hits}
+        return all(geo.STATE_WORDS.get(n.lower()) in emp_states for n in names)
+    return True
+
+def employer_all_near(info, homes):
+    """True when every place the directory knows the employer hires is within some home's radius (then a posting that
+    names no place is almost surely local). info: catalog.places_map() entry."""
+    import geo
+    if not info or not homes or not info.get("places") or not info.get("all", True):
+        return False
+    return all(any(geo.miles(h[0], h[1], p[0], p[1]) <= r for h, r in homes) for p in info["places"])
+
 def title_ok(title):
     t = " " + title.lower() + " "
     if any(x in t for x in CFG["title_exclude"]):
@@ -837,6 +866,13 @@ def select_for_person(pool, sets=None):
     homes = CFG.get("homes", [])
     dc_ok = CFG.get("legacy_area", True) or (bool(homes) and any(__import__("geo").within(["Washington, DC"], h, r + 10)[0] for h, r in homes))
     targets = CFG.get("targets", [])
+    places = {}
+    try:
+        import catalog
+        places = catalog.places_map()
+    except Exception:
+        pass
+    emp_near = {}
     for j0 in pool:
         if not (sets.get(j0["company"], {"tech"}) & watch):
             continue
@@ -853,14 +889,21 @@ def select_for_person(pool, sets=None):
         mine = [l for l in locs if near(l)]
         remote = bool(j0.get("remote_strict") or (j0.get("remote_bare") and not mine))
         dc_fallback = not remote and not mine and bool(j0.get("local_unnamed")) and dc_ok
-        if not (mine or dc_fallback or (remote and CFG.get("remote_ok", True))):
+        vague_near = None   # employer-places rule: no readable place on the posting, and everywhere the employer hires is nearby
+        if not (mine or remote or dc_fallback) and j0["company"] in places:
+            info = places[j0["company"]]
+            if j0["company"] not in emp_near:
+                emp_near[j0["company"]] = employer_all_near(info, homes)
+            if emp_near[j0["company"]] and all(vague_location(l, info["states"]) for l in (locs or [""])):
+                vague_near = (info.get("labels") or [""])[:1]
+        if not (mine or dc_fallback or vague_near is not None or (remote and CFG.get("remote_ok", True))):
             continue
         wp = "remote" if remote else (j0.get("workplace") or "")
         if wp and wp not in wps and not (wp == "remote" and mine):
             continue
         j = dict(j0)
         j["workplace"] = wp
-        j["dmv_locations"] = [f"{l} (DC area)" for l in locs if l][:3] if dc_fallback else mine
+        j["dmv_locations"] = [f"{l} (DC area)" for l in locs if l][:3] if dc_fallback else [x for x in (vague_near or []) if x] if vague_near is not None else mine
         j["tracks"] = (["current"] if cur_ok else []) + (["ai"] if ai_ok else [])
         out.append(j)
     return out

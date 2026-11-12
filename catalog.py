@@ -147,6 +147,48 @@ def save_company(entry, con=None):
                  cfg.get("sector", ""), cfg.get("ai_track", ""), cfg.get("added_by"), now()))
 
 
+def places_map():
+    """{company name: {"places": [[lat, lon, jobs], ...], "states": [...], "labels": [...]}} for the companies that carry
+    the places the employer directory knows (where they hire; stored on the catalog entry by directory.apply)."""
+    out = {}
+    with db() as con:
+        for r in con.execute("SELECT name, cfg FROM companies WHERE cfg LIKE '%\"places\"%'"):
+            try:
+                c = json.loads(r["cfg"])
+            except ValueError:
+                continue
+            if c.get("places"):
+                out[r["name"]] = {"places": c["places"], "states": c.get("pstates") or [], "labels": c.get("plabels") or [],
+                                  "all": bool(c.get("pall", True))}
+    return out
+
+
+def rename_company(old, new):
+    """Rename a company (its listings follow). False when the new name is taken or the old one isn't there."""
+    with db() as con:
+        if not con.execute("SELECT 1 FROM companies WHERE name=?", (old,)).fetchone() or \
+                con.execute("SELECT 1 FROM companies WHERE name=? COLLATE NOCASE AND name<>?", (new, old)).fetchone():
+            return False
+        row = con.execute("SELECT cfg FROM companies WHERE name=?", (old,)).fetchone()
+        try:
+            cfg = json.loads(row["cfg"])
+            cfg["name"] = new
+            cfg = json.dumps(cfg)
+        except ValueError:
+            cfg = row["cfg"]
+        con.execute("UPDATE companies SET name=?, cfg=? WHERE name=?", (new, cfg, old))
+        con.execute("UPDATE listings SET company=? WHERE company=?", (new, old))
+        for r in con.execute("SELECT id, data FROM listings WHERE company=?", (new,)).fetchall():
+            try:
+                d = json.loads(r["data"])
+            except ValueError:
+                continue
+            if d.get("company") == old:
+                d["company"] = new
+                con.execute("UPDATE listings SET data=? WHERE id=?", (json.dumps(d), r["id"]))
+    return True
+
+
 def set_paused(name, paused):
     with db() as con:
         con.execute("UPDATE companies SET paused=? WHERE name=?", (1 if paused else 0, name))
@@ -189,9 +231,10 @@ STALE_DAYS = 14           # when a fetch can't be trusted to close, still close 
 def record_fetch(company, summary, listings, con):
     """Store one company's fetch. listings: parsed dicts (jobfinder.prepare_listing) or {"id":..., "_unchanged": True}
     for postings whose text didn't change. On a trustworthy success, open postings not returned this time are closed.
-    Not trustworthy (company marked last_status "suspect", nothing closed): the fetch returned under SUSPECT_RATIO of
-    the open listings, or 0 of them, when there were >= SUSPECT_MIN_PREV open before (a smaller company dropping to 0
-    is a normal closure). If the fetch returned something, listings not seen for STALE_DAYS are still closed.
+    Not trustworthy (company marked last_status "suspect"): the fetch returned under SUSPECT_RATIO of the open
+    listings, or 0 of them, when there were >= SUSPECT_MIN_PREV open before (a smaller company dropping to 0 is a
+    normal closure). A fetch that errored (last_status "error") is the same. Either way nothing is closed outright,
+    but listings not seen for STALE_DAYS are still closed, so the postings of a dead board age out.
     Truncated fetches (summary["truncated"]: Workday's 2000 / Amazon's 3000 cap, stopped early) close nothing at all
     (last_status "capped"): postings past the cap are never returned but may be live.
     Returns counts {new, changed, reopened, closed, unchanged}."""
@@ -222,6 +265,7 @@ def record_fetch(company, summary, listings, con):
         else:
             counts["changed"] += 1
     status, note = ("ok", None) if ok else ("error", summary.get("status"))
+    gone = open_before - returned
     if ok:
         n_prev, n_got = len(open_before), len(returned)
         if summary.get("truncated"):
@@ -230,20 +274,20 @@ def record_fetch(company, summary, listings, con):
             status, note = "suspect", f"suspect: the fetch returned no postings but {n_prev} were open; kept them open"
         elif n_prev >= SUSPECT_MIN_PREV and n_got < SUSPECT_RATIO * n_prev:
             status, note = "suspect", f"suspect: the fetch returned {n_got} postings but {n_prev} were open; kept them open"
-        gone = open_before - returned
         if status == "capped":
             gone = set()  # never close on a capped fetch: what lies past the cap is never returned
-        elif status == "suspect" and n_got:
-            cutoff = (dt.date.today() - dt.timedelta(days=STALE_DAYS)).isoformat()
-            gone = {g for g in gone if (con.execute("SELECT last_seen FROM listings WHERE id=?", (g,)).fetchone()[0] or "") < cutoff}
-        elif status != "ok":
-            gone = set()  # (suspect with nothing returned)
-        gone = sorted(gone)
-        for k in range(0, len(gone), 500):
-            chunk = gone[k:k + 500]
-            cur = con.execute("UPDATE listings SET closed_at=? WHERE closed_at IS NULL AND id IN (%s)" % ",".join("?" * len(chunk)),
-                              (t, *chunk))
-            counts["closed"] += cur.rowcount
+    if status in ("suspect", "error"):
+        # An untrustworthy fetch closes nothing outright, but a board that keeps failing (or keeps coming back empty)
+        # must not keep its postings open forever: close those not seen for STALE_DAYS (last_seen only moves on a fetch
+        # that returned the posting, so the postings of a dead board age out).
+        cutoff = (dt.date.today() - dt.timedelta(days=STALE_DAYS)).isoformat()
+        gone = {g for g in gone if (con.execute("SELECT last_seen FROM listings WHERE id=?", (g,)).fetchone()[0] or "") < cutoff}
+    gone = sorted(gone)
+    for k in range(0, len(gone), 500):
+        chunk = gone[k:k + 500]
+        cur = con.execute("UPDATE listings SET closed_at=? WHERE closed_at IS NULL AND id IN (%s)" % ",".join("?" * len(chunk)),
+                          (t, *chunk))
+        counts["closed"] += cur.rowcount
     open_n = con.execute("SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL AND partial=0", (company,)).fetchone()[0]
     con.execute("""UPDATE companies SET last_fetch_at=?, last_status=?, last_error=?, raw_count=?, open_count=?, fetch_secs=?
                    WHERE name=?""", (now(), status, note, summary.get("raw_jobs"), open_n, summary.get("secs"), company))

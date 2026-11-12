@@ -730,8 +730,9 @@ $("stats").innerHTML = [
 const LISTS = D.lists || {options: [], by_company: {}};
 $("cList").insertAdjacentHTML("beforeend", LISTS.options.map(o => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join(""));
 $("cListField").hidden = LISTS.options.length < 2;
-const cos = [...new Set(jobs.map(j=>j.company))].sort();
-$("co").insertAdjacentHTML("beforeend", cos.map(c => `<option>${esc(c)}</option>`).join(""));
+const coCount = {}; jobs.forEach(j => { coCount[j.company] = (coCount[j.company] || 0) + 1; });
+const cos = Object.keys(coCount).sort((a, b) => coCount[b] - coCount[a] || a.localeCompare(b));  // most matching jobs first
+$("co").insertAdjacentHTML("beforeend", cos.map(c => `<option value="${esc(c)}">${esc(c)} (${coCount[c].toLocaleString()})</option>`).join(""));
 
 let shown = 100, wp = "all", mode = "current", gapSel = "";  // wp: the "Remote" quick filter ("all" or "remote")
 let NL = null, NL_PREV_SORT = "score", nlSeq = 0;  // natural-language search result from /api/search

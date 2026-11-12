@@ -8,10 +8,14 @@ that publish postings rather than employer feeds, e.g. USAJOBS). Files are cache
 folder), checked against the manifest's SHA-256, refreshed at most once a week, and used from the cache when offline.
 
 What it does with them:
-  apply(pid)        puts the employers within the person's radius (or the top remote-friendly ones for remote-only
+  apply(pid)        puts EVERY employer within the person's radius (or the top remote-friendly ones for remote-only
                     searches) on their "Near me" list (near-<pid>), plus one catalog entry per job-snapshot source with
                     postings near them ("Federal jobs (USAJOBS)" ...). An employer is offered to a person once: if they
-                    take it off their list later it stays off (DATA/directory/people/<pid>.json remembers).
+                    take it off their list later it stays off (DATA/directory/people/<pid>.json remembers). Each
+                    catalog entry also carries the places the directory knows the employer hires (places, pstates, plabels,
+                    pall), so a posting without a readable location can still count as local when everywhere the
+                    employer hires is near the person (jobfinder.select_for_person). Names that look like codes are
+                    replaced by readable ones (readable_name).
   start_background  once a week: refresh the cached files and add newly indexed employers for everyone who used it.
   FETCHERS          the "directory_jobs" reader: a snapshot source's postings from the cached files, so they go
                     through the normal catalog, per-person filters and rating funnel.
@@ -27,7 +31,7 @@ DIR = os.path.join(paths.DATA, "directory")
 REFRESH_DAYS = 7
 MAX_FILE = 40_000_000           # bytes per downloaded file (compressed)
 MAX_JSON = 250_000_000          # bytes after unpacking
-MAX_ADD = 400                   # employers added per apply (the ones with the most jobs nearby first)
+MAX_PLACES = 80                 # places kept on a catalog entry (an employer with more is never "all nearby")
 REMOTE_ADD = 150                # remote-only searches: the employers with the most US-remote jobs
 SOURCE_SECTOR = "Siftwell directory"
 ATS = "directory_jobs"
@@ -265,6 +269,9 @@ def _clean_entry(e):
     name = netsafe.clean_text(e.get("n") or "", 60).replace(",", "").strip()
     if not name:
         return None
+    rn = readable_name(name, cfg, e.get("u") or "")
+    code = not rn
+    name = rn or name
     places = []
     for p in e.get("p") or []:
         try:
@@ -272,7 +279,8 @@ def _clean_entry(e):
         except (TypeError, ValueError, IndexError):
             continue
     return {"name": name, "cfg": cfg, "url": netsafe.clean_link(e.get("u") or "") if e.get("u") else "",
-            "jobs": int(e.get("j") or 0), "remote": int(e.get("r") or 0), "places": places, "seen": str(e.get("s") or "")[:10]}
+            "jobs": int(e.get("j") or 0), "remote": int(e.get("r") or 0), "places": places, "seen": str(e.get("s") or "")[:10],
+            "ps": [str(x)[:2] for x in (e.get("ps") or []) if isinstance(x, str)][:60], "maybe": bool(e.get("mb")), "name_code": code}
 
 
 def near_employers(pid, man=None):
@@ -301,7 +309,7 @@ def near_employers(pid, man=None):
         out.sort(key=lambda c: -c["near"])
         return out[:REMOTE_ADD], {"states": [], "label": label, "radius": 0, "remote_only": True}
     sts = states_near(la, lo, radius)
-    missing = []
+    missing, by_k = [], {}
     for st in sts:
         d = _shard("states", st, man)
         if d is None:
@@ -322,11 +330,19 @@ def near_employers(pid, man=None):
                 continue
             k = _key(c["cfg"])
             if k in seen:
-                prev = next(x for x in out if _key(x["cfg"]) == k)
+                prev = by_k[k]
                 prev["near"] += n
+                prev["places"] = prev["places"] + c["places"]
+                prev["ps"] = sorted(set(prev["ps"]) | set(c["ps"]))
                 continue
             seen.add(k)
-            out.append(dict(c, near=n, where=best[1]))
+            by_k[k] = dict(c, near=n, where=best[1])
+            out.append(by_k[k])
+    loaded = set(sts) - set(missing)
+    for c in out:
+        c["pall"] = bool(c["ps"]) and set(c["ps"]) <= loaded and len(c["places"]) <= MAX_PLACES
+        if c.get("name_code"):
+            c["name"] = fallback_name(c, c["where"])
     out.sort(key=lambda c: (-c["near"], c["name"].lower()))
     return out, {"states": sts, "label": label, "radius": radius, "remote_only": False, "missing": missing}
 
