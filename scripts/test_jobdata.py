@@ -66,8 +66,8 @@ MORE = [("For this role the base salary range is $110,000 - 225,000. Compensatio
         ("Pay Range: $150k-160k USD.", (150000, 160000, "year")), ("$18-22/hr", (18, 22, "hour")),
         ("Target Pay Range: $141,000.00 – 184,000.00 a year", (141000, 184000, "year")),
         ("Compensation will be paid in the range of up to $285,000-$335,000 + Bonus. Restricted Stock Units", (285000, 335000, "year")),
-        ("The estimated base salary range for new hires into this role is $119,000- $155,000 annually + bonus depending on skills", (119000, 155000, "year")),
-        ("This includes a base salary range of $120,000-$155,000 plus target commission.", (120000, 155000, "year")),
+        ("The estimated base salary range for new hires into this role is $119,000- $154,000 annually + bonus depending on skills", (119000, 154000, "year")),
+        ("This includes a base salary range of $120,000-$154,000 plus target commission.", (120000, 154000, "year")),
         ("Minimum Rate $85,000 Annually Maximum Rate $165,000 Annually", (85000, 165000, "year")),
         ("Pay Band Min USD $87,320.00/Yr. Pay Band Max USD $135,160.00/Yr.", (87320, 135160, "year")),
         ("Salary minimum: $115,000; Salary maximum: $150,000 This position", (115000, 150000, "year")),
@@ -98,7 +98,7 @@ bad = [(s, pay(s)) for s in NOT_PAY2 if pay(s) is not None]
 check(f"{len(NOT_PAY2)} more amounts that are not base pay (hours, head counts, fundraising goals, contract values)", not bad, str(bad))
 check("on-target earnings are shown when the posting gives nothing else, and lose to a base range when it does",
       pay("The standard OTE range for this position is $140,000-$200,000 annually.") == (140000, 200000, "year")
-      and pay("On-target earnings for this role are $200,000-$258,000. This includes a base salary range of $120,000-$155,000 plus target commission.") == (120000, 155000, "year"))
+      and pay("On-target earnings for this role are $200,000-$258,000. This includes a base salary range of $120,000-$154,000 plus target commission.") == (120000, 154000, "year"))
 WORDS = [("Pay range: Global Relocation Program Manager: $110,000.00 - $145,000.00/per year Your actual level", (110000, 145000, "year")),
          ("The hourly salary range for this contract position in San Francisco, CA is $60 to $85/hr.", (60, 85, "hour")),
          ("Basic Compensation: Jobs on this contract range from $133,900 - $200,800. The offered rate", (133900, 200800, "year")),

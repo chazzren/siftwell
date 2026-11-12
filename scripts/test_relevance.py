@@ -145,21 +145,21 @@ check("looser relatives sit in between (4th Grade Teacher for a teacher, Backend
 # legacy title words: single catch-all words are not titles; reframing titles become related roles
 leg = people.add("legacy"); people.set_current(leg)
 json.dump({"name": "L", "summary": "s", "location": "", "years_experience": 5, "clearances": [], "education": [], "certifications": ["Certified Scrum Master"],
-           "skills": ["Low-code workflow implementation (Pega)", "Agile/Scrum"], "languages": [],
+           "skills": ["Low-code workflow implementation (Mendix)", "Agile/Scrum"], "languages": [],
            "experience": [{"employer": "A", "title": "Management Consultant", "dates": "2023 - Present", "highlights": []},
                           {"employer": "B", "title": "Operations Manager", "dates": "2019 - 2023", "highlights": []},
                           {"employer": "C", "title": "Front Desk Supervisor", "dates": "2017 - 2019", "highlights": []}],
            "reframings": [{"angle": "x", "target_titles": ["Solutions Consultant"], "evidence": []}], "hard_limits": [],
            "target_roles": ["Technical Program Manager", "Engineer", "Architect", "Manager", "Project"],
-           "title_keywords": ["program manager", "security", "pega", "manager"], "fit_keywords": ["case management"], "notes": ""},
+           "title_keywords": ["program manager", "security", "mendix", "manager"], "fit_keywords": ["case management"], "notes": ""},
           open(people.pdir("profile.json", pid=leg), "w"))
 ls = lookfor.build(leg)
 lt = {x["t"]: x["tier"] for x in ls["titles"]}
 check("single catch-all words carried over from old title words are dropped (Engineer, Architect, Manager, Project, security)",
-      not {"Engineer", "Architect", "Manager", "Project", "security", "manager"} & set(lt) and lt.get("Technical Program Manager") == "wanted" and lt.get("pega") == "keyword", str(lt))
+      not {"Engineer", "Architect", "Manager", "Project", "security", "manager"} & set(lt) and lt.get("Technical Program Manager") == "wanted" and lt.get("mendix") == "keyword", str(lt))
 check("roles the resume reader's reframings open are related roles", lt.get("Solutions Consultant") == "related", str(lt))
-check("skills are the person's own, written the way postings write them ('(Pega)' -> Pega, 'Agile/Scrum' -> Agile, Scrum, certifications)",
-      {"pega", "agile", "scrum", "certified scrum master", "case management"} <= {x["t"].lower() for x in ls["skills"]}, str([x["t"] for x in ls["skills"]]))
+check("skills are the person's own, written the way postings write them ('(Mendix)' -> Mendix, 'Agile/Scrum' -> Agile, Scrum, certifications)",
+      {"mendix", "agile", "scrum", "certified scrum master", "case management"} <= {x["t"].lower() for x in ls["skills"]}, str([x["t"] for x in ls["skills"]]))
 lsc = lookfor.Scorer(ls, {})
 check("own titles in order: most recent 100, a title they search for 90, the job before 82, the one before that 66; a bare 'Architect' is nothing",
       [T(lsc, t) for t in ("Management Consultant", "Technical Program Manager", "Operations Manager", "Front Desk Supervisor")] == [100, 90, 82, 66]

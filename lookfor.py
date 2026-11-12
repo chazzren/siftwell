@@ -520,7 +520,7 @@ def _skill_ok(s):
 
 def _skill_forms(s):
     """A skill as postings write it: the whole phrase, what is in brackets and each side of a slash
-    ("Low-code workflow implementation (Pega)" -> also "Pega"; "Agile/Scrum" -> "Agile", "Scrum")."""
+    ("Low-code workflow implementation (Mendix)" -> also "Mendix"; "Agile/Scrum" -> "Agile", "Scrum")."""
     s = clean_title(s)
     out = [s]
     for m in re.findall(r"\(([^()]{2,30})\)", s):
@@ -661,7 +661,7 @@ def build(pid=None, prof=None):
     heads = _lex()["heads"]
     for t in p.get("title_keywords") or []:
         ph = phrase(t)
-        # whole phrases, or one telling word ("pega", "salesforce"); never a loose single word ("security", "manager")
+        # whole phrases, or one telling word ("mendix", "salesforce"); never a loose single word ("security", "manager")
         if len(ph) >= 2 or (len(ph) == 1 and len(ph[0]) >= 3 and ph[0] not in heads and weight(ph[0]) >= 2 * GENERIC_W):
             add(t, "keyword", "profile")
     home = str(p.get("location") or "")

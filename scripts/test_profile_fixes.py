@@ -161,7 +161,7 @@ check("the role line 'Staff RN, Medical-Surgical' is on the sheet as the title '
 check("...and its specialty is a skill", "Medical-Surgical" in skills, str(skills))
 S = highlights.split_items
 check("split: commas, semicolons and new lines", S("BLS, ACLS; PALS\nNRP") == ["BLS", "ACLS", "PALS", "NRP"])
-check("split: nothing inside brackets", S("Low-code tools (Pega, Appian), SQL") == ["Low-code tools (Pega, Appian)", "SQL"])
+check("split: nothing inside brackets", S("Low-code tools (Mendix, Appian), SQL") == ["Low-code tools (Mendix, Appian)", "SQL"])
 check("places are dropped: a state, City, ST, the person's own town", S("Ohio; Columbus, OH; Epic", "Columbus, OH") == ["Epic"] and S("Dayton", "Dayton, OH") == [])
 check("a skill that only contains a place word stays", S("Ohio RN license; Phoenix; Oracle; Reading; New York Life underwriting")
       == ["Ohio RN license", "Phoenix", "Oracle", "Reading", "New York Life underwriting"], str(S("Ohio RN license; Phoenix; Oracle; Reading; New York Life underwriting")))
