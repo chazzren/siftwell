@@ -565,6 +565,126 @@ facets = [{"facetParameter": "remoteType", "values": [{"id": "r1", "descriptor":
                                                       {"id": "r3", "descriptor": "Remote work only", "count": 1}]}]
 check("Workday's remote facet: only the value that means remote is fetched as remote", jobfinder._wd_location_facets(facets) == {"remoteType": ["r3"]})
 
+# ------------------------------------------------------------------ 11. foreign postings on US boards (re-test of main)
+FOREIGN = ["Athens, Attica", "Czechia", "Málaga", "Utrecht, UT", "Amsterdam, NH", "Barcelona, CT", "Remote, Canada", "India",
+           "Remote - Argentina", "Gauteng", "Belize", "Merida, Yucatan", "CAN-Remote", "IND-Remote", "CAN > QC > Remote",
+           "Mexico City", "Bogotá", "Toronto, Ontario, CA", "Hyderabad, IN", "Hyderabad, TG, IN", "Krakow, PL", "Rome, IT",
+           "GB-London", "Remote - International", "Cambridge, UK", "Birmingham, England", "Ontario, Canada", "Sydney, NSW",
+           "Amsterdam, Noord-Holland", "Mississauga, ON", "Dublin", "London", "Toronto"]
+bad = [l for l in FOREIGN if not jobfinder.is_foreign(l)]
+check(f"{len(FOREIGN)} foreign labels are recognised (short country names, regions, ISO prefixes, 'CAN > QC', a foreign city filed "
+      "under a US state code)", not bad, str(bad))
+US_LOOKALIKES = ["Dublin, OH", "Paris, TX", "Athens, GA", "Athens, OH", "Rome, GA", "Moscow, ID", "Naples, FL", "Vienna, VA",
+                 "Cambridge, MA", "Birmingham, AL", "Melbourne, FL", "St. Petersburg, FL", "Ontario, CA", "Lima, OH", "Toledo, OH",
+                 "Manchester, NH", "Amsterdam, NY", "Brazil, IN", "London, KY", "Berlin, MD", "Peru, IN", "Mexico, MO", "Holland, MI",
+                 "Panama City Beach, FL", "New London, CT", "Jersey City, NJ", "Lebanon, OH", "Delaware, OH", "Vancouver, WA",
+                 "Indianapolis, Indiana", "Athens, Georgia", "Dublin, Ohio", "US-OH-Columbus", "OH - Work from home", "Remote - Texas",
+                 "Remote, Minnesota, USA", "Remote", "Columbus", "Norfolk", "Kent", "Birmingham", "Cambridge", "Athens", "Ontario",
+                 "Panama City", "Smalltown, OH", "IT - Columbus", "International Falls, MN",
+                 "Tysons Corner, Virginia; Fredericton, Canada", "London (GB80); New York, NY", "Toronto, Canada | Columbus, OH"]
+bad = [l for l in US_LOOKALIKES if jobfinder.is_foreign(l)]
+check(f"{len(US_LOOKALIKES)} US places that look foreign, and labels with both a US and a foreign part, are never foreign", not bad, str(bad))
+import geo as _geo
+check("'City, XX' is US only when the state has that town: 'Amsterdam, NY' us, 'Smalltown, OH' unresolved, 'Utrecht, UT' foreign",
+      _geo.where("Amsterdam, NY") == "us" and _geo.where("Smalltown, OH") == "" and _geo.where("Utrecht, UT") == "foreign"
+      and _geo.where("Ontario, CA") == "us" and _geo.where("Toronto, Ontario, CA") == "foreign")
+check("a foreign city written alone is settled by the employer's states: 'Dublin' at an Ohio employer is not foreign",
+      not jobfinder.is_foreign("Dublin", {"OH"}) and jobfinder.is_foreign("Dublin", {"HI"}) and jobfinder.is_foreign("Toronto", {"OH"}))
+P = lambda t, locs, wp="", desc="", c=None: jobfinder.prepare_listing(listing(t, locs, wp, desc), c or {"name": "X"})
+check("a posting with a foreign place and a plain 'Remote' is not kept ('Athens, Attica' + 'Remote')",
+      P("Consultant", ["Athens, Attica", "Remote"], "remote") is None and P("Consultant", ["Remote", "Czechia"], "remote") is None)
+check("...a US place next to a foreign one still is", P("Consultant", ["Remote, Canada", "Columbus, OH"], "remote") is not None)
+check("Dutch home care at 'Utrecht, UT' and Tether at 'Amsterdam, NH' / 'Barcelona, CT' are out",
+      P("Verpleegkundige", ["Utrecht, UT"]) is None and P("Engineer", ["Amsterdam, NH"], "remote") is None and P("Engineer", ["Barcelona, CT"]) is None)
+check("French-titled postings with no US place are out; a Spanish posting in Texas stays",
+      P("Pharmacien(ne) - temps partiel", ["Remote"], "remote") is None and P("Technicien en pharmacie", ["Laval"]) is None
+      and P("Gerente de tienda", ["Houston, TX"]) is not None)
+check("a remote posting whose text puts it abroad, with nothing saying US, is out",
+      P("Support Engineer", ["Remote"], "remote", "This role is based in Toronto. Salary CAD 80,000.") is None
+      and P("Support Engineer", ["Remote"], "remote", "You must have the right to work in the UK.") is None)
+check("...one that says United States stays, and so does one that merely mentions offices abroad",
+      P("Support Engineer", ["Remote"], "remote", "Remote within the United States. Some work with our team located in Toronto.") is not None
+      and P("Support Engineer", ["Remote"], "remote", "We have offices in London and Austin. 401(k) match.") is not None)
+j = P("Nurse", ["Columbus, OH"], "", "Care for patients.")
+check("a kept posting records whether it names a US place", j["geo"] == "us" and P("Engineer", ["Remote"], "remote", "Build things.")["geo"] == "")
+
+# the employer level: one that hires almost only abroad
+company("Mercier Consultancy")
+company("Globex US")
+def fetch_as(co, jobs):
+    c = next(x for x in catalog.companies() if x["name"] == co)
+    c["token"] = co
+    jobfinder.FETCHERS["test_abroad"] = lambda c_: (jobfinder.J(c_, t, "https://example.com/" + jid, locs, wp, None, desc, "", "", jid) for jid, t, locs, wp, desc in jobs)
+    import netsafe as _ns
+    keep, _ns.check_config = _ns.check_config, lambda c: None
+    try:
+        s, js = jobfinder.process(dict(c, ats="test_abroad"), budget=0)
+    finally:
+        _ns.check_config = keep
+    with catalog.db() as con:
+        catalog.record_fetch(co, s, js, con)
+    return s, js
+s, js = fetch_as("Mercier Consultancy", [("m1", "Analyst", ["Athens"], "", "x"), ("m2", "Analyst", ["Czechia"], "", "x"), ("m3", "Analyst", ["Málaga"], "", "x"),
+                                         ("m4", "Analyst", ["Athens, Attica"], "", "x"), ("m5", "Analyst", ["Remote"], "remote", "Join us."),
+                                         ("m6", "Analyst", ["Prague"], "", "x")])
+check("Mercier Consultancy: its foreign postings are not stored and are counted", s["foreign"] == 4 and {j["id"].split("::")[1] for j in js} == {"m1", "m5"}, str((s["foreign"], [j["id"] for j in js])))
+check("...it is marked as hiring mostly outside the US", "Mercier Consultancy" in catalog.foreign_employers())
+s, js = fetch_as("Globex US", [("x1", "Analyst", ["Dublin"], "", "x"), ("x2", "Analyst", ["Columbus, OH"], "", "x"), ("x3", "Analyst", ["Remote"], "remote", "Join us."),
+                               ("x4", "Analyst", ["London, UK"], "", "x"), ("x5", "Analyst", ["Westerville, OH"], "", "x")])
+check("a US employer: 'Dublin' alone is kept once its other postings show it hires in Ohio (asked again after the whole list)",
+      {j["id"].split("::")[1] for j in js} == {"x1", "x2", "x3", "x5"} and s["foreign"] == 1, str([j["id"] for j in js]))
+check("...and it is not marked", "Globex US" not in catalog.foreign_employers())
+jobfinder.use_cfg(jobfinder.person_cfg(PID)[0])
+people.set_current(PID)
+board = {j["id"].split("::")[1] for j in jobfinder.select_for_person(catalog.open_listings(lazy=True))}
+check("a plain 'Remote' from an employer that hires mostly abroad is not on the board; the US employer's is",
+      "m5" not in board and "m1" not in board and "x3" in board and "x1" in board, str(sorted(board & {"m1", "m5", "x1", "x3"})))
+check("the Employers page data says so", next(c for c in catalog.companies() if c["name"] == "Mercier Consultancy")["_fetch"]["abroad"] is True
+      and next(c for c in catalog.companies() if c["name"] == "Globex US")["_fetch"]["abroad"] is False)
+
+# ------------------------------------------------------------------ 12. on-site and field jobs marked remote; state-bound remote
+check("a numbered facility whose name ends in 'Remote' is not remote; '1234 - Remote' and '0001 - Remote - OH' are",
+      not jobtext.remote_label("09536 - Mainplace Nocturnal-CA Remote") and jobtext.remote_label("1234 - Remote")
+      and jobtext.remote_label("0001 - Remote - OH") and not jobfinder.is_remote_us("09536 - Mainplace Nocturnal-CA Remote"))
+RS = {"OH - Work from home": "OH", "Remote - Texas": "TX", "Remote, Minnesota, USA": "MN", "US-VA-REMOTE": "VA", "Remote - WI": "WI",
+      "Home, TX": "TX", "IL Home Based": "IL", "Remote": None, "Remote - US": None, "Remote - Houston, TX": None, "Columbus, OH": None,
+      "Remote - OH or TX": None, "Remote_United States": None}
+bad = {k: jobtext.remote_state(k) for k, v in RS.items() if jobtext.remote_state(k) != v}
+check(f"{len(RS)} labels: the one state a remote label is tied to", not bad, str(bad))
+j = P("Dialysis Registered Nurse", ["09536 - Mainplace Nocturnal-CA Remote"], "", "Provide patient care in an outpatient setting.")
+check("DaVita '09536 - Mainplace Nocturnal-CA Remote' is not a remote job", j is not None and not j["remote_strict"] and j["workplace"] != "remote")
+j = P("In-Home Health Evaluation Nurse Practitioner", ["OH - Work from home"], "remote", "Perform in-home assessments for members.")
+check("CVS 'In-Home ... Nurse Practitioner' at 'OH - Work from home' is not remote", not j["remote_strict"] and j["workplace"] != "remote" and j["remote_veto"], str((j["workplace"], j["remote_veto"])))
+j = P("Home Hemodialysis Registered Nurse", ["Eastport, ME"], "remote", "You will travel to patients' homes to train them.")
+check("a home-visit dialysis RN is not remote", not j["remote_strict"] and j["workplace"] == "onsite", j["workplace"])
+VETO = [("Field Service Technician", ""), ("Nurse", "This position is on-site at our clinic."), ("RN", "Provides patient care in a clinic setting."),
+        ("Case Manager", "You will visit members in their homes."), ("Therapist", "Home visits are required weekly.")]
+bad = [t for t, d in VETO if not jobtext.remote_veto(t, d)]
+check("in-home visits, home health, field, travel to patients, a clinic setting, on-site and in-person veto a remote label", not bad, str(bad))
+NOVETO = [("Customer Support Specialist (Remote)", "Work from home. Occasional travel to our office for team events."),
+          ("Account Executive", "Remote role. You will meet clients over video."), ("Telehealth Nurse", "Provide virtual care from your home office."),
+          ("Remote or On-site Recruiter", "x")]
+bad = [t for t, d in NOVETO if jobtext.remote_veto(t, d)]
+check("...ordinary remote jobs are not vetoed", not bad, str(bad))
+company("Statewide Health")
+store("Statewide Health", [("r1", "Telehealth Nurse", ["OH - Work from home"], "remote", "Virtual care."),
+                           ("r2", "Telehealth Nurse", ["Remote - Texas"], "remote", "Virtual care."),
+                           ("r3", "Telehealth Nurse", ["Remote"], "remote", "Virtual care."),
+                           ("r4", "In-Home Nurse Practitioner", ["OH - Work from home"], "remote", "In-home assessments.")])
+jobfinder.use_cfg(jobfinder.person_cfg(PID)[0])
+got = {j["id"].split("::")[1]: j for j in jobfinder.select_for_person(catalog.open_listings(lazy=True)) if j["company"] == "Statewide Health"}
+check("state-bound remote: an Ohio person sees 'OH - Work from home' and plain 'Remote', not 'Remote - Texas' or the in-home job",
+      set(got) == {"r1", "r3"}, str(sorted(got)))
+check("...shown as 'Remote (Ohio)', and still remote for Appeal's place score",
+      got["r1"]["remote_in"] == "Ohio" and got["r1"]["workplace"] == "remote" and got["r3"]["remote_in"] == "", str(got["r1"].get("remote_in")))
+jobfinder.score(got["r1"]); jobfinder.score(got["r3"])
+check("...Appeal's place part is the same as any remote job's", got["r1"]["appeal_parts"]["place"] == got["r3"]["appeal_parts"]["place"] == 100)
+people.save_settings({"home_zip": "", "radius_miles": 35}, PID)
+jobfinder.use_cfg(jobfinder.person_cfg(PID)[0])
+got2 = {j["id"].split("::")[1] for j in jobfinder.select_for_person(catalog.open_listings(lazy=True)) if j["company"] == "Statewide Health"}
+check("...with no home set, every state's remote jobs are shown as before", {"r1", "r2", "r3"} <= got2 and "r4" not in got2, str(sorted(got2)))
+people.save_settings({"home_zip": "43215", "radius_miles": 35}, PID)
+
 blocked = os.path.join(DATA, claude_cli.FORBID_LOG)
 check("no Claude call was attempted", not os.path.exists(blocked))
 

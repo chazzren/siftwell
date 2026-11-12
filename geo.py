@@ -64,26 +64,73 @@ INSTITUTION = set("university college hospital mutual insurance bank health scho
 FOREIGN_CODES = re.compile(r"(?<![A-Za-z])(BC|ON|QC|AB|NS|NB|MB|SK|NL|PE|PEI|NT|YT|GB|GBR|CAN|CRI|POL|MEX|BRA|DEU|FRA|ESP|AUS|JPN)(?![A-Za-z])")
 
 # ------------------------------------------------------------------ "is this place outside the US?"
-# Used by the fetch pipeline (jobfinder.is_foreign) and the directory builder. Whole words only, and a label that ends in
-# a US state or "United States" is never foreign: "Dublin, OH", "Paris, TX", "Indianapolis, Indiana", "New Mexico".
-# Two-letter state codes that are also country codes ("Hyderabad, TG, IN", "Toronto, ON, CA") are trusted only when the
-# place before them is a known town in that state ("Brazil, IN", "London, KY", "Berlin, MD").
+# Used by the fetch pipeline (jobfinder.is_foreign / prepare_listing) and the directory builder.
+#   where(label)            "us" | "foreign" | "maybe" | ""
+#   looks_foreign(label, states=None)
+# Data: assets/geo/foreign.json (countries incl. short and modern names, regions and provinces, well-known cities,
+# ISO codes; about 14 KB) plus the older "foreign" words in aliases.json. Whole words only.
+#   - "United States" / "USA" / a spelled-out state / "City, ST" where that city is a town of that state in the
+#     gazetteer: US. "Dublin, OH", "Paris, TX", "Athens, GA", "Amsterdam, NY", "Ontario, CA", "Brazil, IN".
+#   - "City, ST" where the state has no such town says nothing by itself ("Smalltown, OH": unresolved), and is foreign
+#     when the city is a known foreign one: "Utrecht, UT", "Amsterdam, NH", "Barcelona, CT", "Hyderabad, IN" (job
+#     systems file a foreign region under the US state with the same letters).
+#   - a country, a foreign region or a country code ("Czechia", "Athens, Attica", "Gauteng", "CAN-Remote",
+#     "CAN > QC > Remote", "Krakow, PL"): foreign.
+#   - a well-known foreign city written alone ("Dublin", "Paris", "Toronto"): "maybe". It is foreign unless the caller
+#     knows the employer hires in a US state that has a town of that name (states=...).
+#   - a name that is as likely a US town when written alone ("Birmingham", "Cambridge", "Athens", "Ontario", and any
+#     foreign region that is also a US town of 5,000+ people: "Norfolk", "Kent", "Durango"): nothing by itself.
+#   - several places in one label ("Tysons Corner, Virginia; Fredericton, Canada"): US when any one is.
 _CODE_CLASH = {"IN", "CA", "AL", "AR", "AZ", "CO", "DE", "GA", "ID", "IL", "KY", "LA", "MA", "MD", "ME", "MN", "MO", "MS",
                "MT", "NC", "NE", "PA", "SC", "SD", "TN", "VA"}
-_US_TAIL = re.compile(r"(?:^|[\s,;(\-/|])(?:u\s?s\s?a?|united states(?: of america)?)\s*\)?\s*$")
-_US_HEAD = re.compile(r"^\s*(?:us|usa|united states(?: of america)?)\s*[-/,:]")
-_SEG = re.compile(r"\s*[,;/|()]\s*|\s+-\s+")
+_US_TAIL = re.compile(r"(?:^|[\s,;(\-/|>])(?:u\s?s\s?a?|united states(?: of america)?)\s*\)?\s*$")
+_US_HEAD = re.compile(r"^\s*(?:us|usa|united states(?: of america)?)\s*[-/,:>]")
+_SEG = re.compile(r"\s*[,;/|()>]\s*|\s+-\s+")
+_TOK = re.compile(r"\s*[,;/|()>:]\s*|\s*-\s*")
 _FOREIGN_EXTRA = ("vancouver", "emea", "apac", "europe", "latam", "korea", "taiwan", "united kingdom", "uk",
                   "latin america", "south america", "asia pacific")
+_ISO2_RISKY = {"IT", "NO", "BE", "AT", "HR", "IS", "QA", "SA", "JO", "EU"}      # also departments / English words
+_NOT_CITY = set("remote virtual home office work from wfh telework hybrid onsite site field based main campus hq headquarters "
+                "corporate various multiple locations location statewide state area region metro greater the of and or in at "
+                "north south east west central northern southern eastern western anywhere nationwide us usa only store "
+                "branch plant center centre building suite floor unit dept department".split())
+_SHARED_POP = 5000
+
+
+def _rx(words):
+    words = sorted({_key(x) for x in words} - {""}, key=len, reverse=True)
+    return re.compile(r"(?<![a-z0-9])(" + "|".join(re.escape(x) for x in words) + r")(?![a-z0-9])") if words else re.compile(r"(?!x)x")
+
 
 @functools.lru_cache(maxsize=1)
-def _foreign_rx():
+def _foreign():
+    """The foreign-place tables: strong words (a country or region), city names, shared names, ISO codes."""
     try:
-        words = json.load(open(os.path.join(GEO, "aliases.json"))).get("foreign", [])
+        f = json.load(open(os.path.join(GEO, "foreign.json"), encoding="utf-8"))
     except Exception:
-        words = []
-    words = sorted({_key(x) for x in list(words) + list(_FOREIGN_EXTRA)} - {""}, key=len, reverse=True)
-    return re.compile(r"(?<![a-z0-9])(" + "|".join(re.escape(x) for x in words) + r")(?![a-z0-9])")
+        f = {}
+    try:
+        old = json.load(open(os.path.join(GEO, "aliases.json"))).get("foreign", [])
+    except Exception:
+        old = []
+    names = _load()["names"]
+    pop = lambda k: max((r[3] for r in names.get(k, ()) if r[4] != "a"), default=0)
+    shared = {_key(x) for x in f.get("shared", [])}
+    cities = {_key(x) for x in f.get("cities", [])} - shared
+    strong = {_key(x) for x in list(f.get("countries", [])) + list(old) + list(_FOREIGN_EXTRA)} - shared - cities
+    for r in (_key(x) for x in f.get("regions", [])):      # a region that is also a US town says nothing alone
+        (shared if pop(r) >= _SHARED_POP else strong).add(r)
+    strong -= shared | {""}
+    # US towns whose name holds a country's ("Panama City", "New London", "West Jordan", "Mexico Beach"): read as towns
+    srx = _rx(strong | cities)
+    mask = [k for k, v in names.items() if " " in k and max(r[3] for r in v) >= 2000 and srx.search(k) and k not in strong and k not in cities]
+    return {"strong": _rx(strong), "city": _rx(cities), "shared": _rx(shared), "cities": cities, "shared_set": shared, "mask": _rx(mask),
+            "iso3": set(f.get("iso3", [])), "iso2": set(f.get("iso2", [])) - set(STATES)}
+
+
+def _foreign_rx():
+    return _foreign()["strong"]
+
 
 def _known_in_state(place, st):
     try:
@@ -91,48 +138,175 @@ def _known_in_state(place, st):
     except Exception:
         return False
 
-def _us_tail(label):
-    """True when the label ends in a US state, a US ZIP or "United States" (or starts with "US-")."""
-    raw = re.sub(r"[\s.]*$", "", norm(label, keep_case=True))
-    raw = re.sub(r"\s*\(?\b\d{5}(?:-\d{4})?\)?$", "", raw).strip(" ,;-")
-    low = raw.lower().replace(".", "")
-    if _US_TAIL.search(low) or _US_HEAD.match(low):
-        return True
-    segs = [s for s in _SEG.split(raw) if s and s.strip()]
+
+def _town_in_state(place, st):
+    """Is some run of words in this text a town of that state? ("Downtown Columbus", "Columbus Easton" in OH)"""
+    w = _key(place).split()
+    for n in range(min(4, len(w)), 0, -1):
+        for i in range(len(w) - n + 1):
+            ph = " ".join(w[i:i + n])
+            if (n > 1 or len(ph) >= 3) and ph not in _NOT_CITY and _known_in_state(ph, st):
+                return True
+    return False
+
+
+_BY_STATE = {}
+
+
+def _near_town(place, st):
+    """Is this name one letter away from a town of that state (a misspelling: "Sydney, OH", "Pittsburg, PA")?"""
+    if not _BY_STATE:
+        for k, v in _load()["names"].items():
+            for r in v:
+                _BY_STATE.setdefault(r[0], set()).add(k)
+    towns = _BY_STATE.get(st, ())
+    w = place.split()
+    for n in range(min(3, len(w)), 0, -1):
+        for i in range(len(w) - n + 1):
+            ph = " ".join(w[i:i + n])
+            if len(ph) < 5 or ph in _NOT_CITY:
+                continue
+            for k in range(len(ph)):          # one letter changed or dropped
+                if ph[:k] + ph[k + 1:] in towns:
+                    return True
+                for ch in "abcdefghijklmnopqrstuvwxyz":
+                    if ch != ph[k] and (ph[:k] + ch + ph[k + 1:] in towns or ph[:k] + ch + ph[k:] in towns):
+                        return True
+    return False
+
+
+def _city_words(place):
+    return [w for w in _key(place).split() if w not in _NOT_CITY and not w.isdigit()]
+
+
+def _state_tail(raw):
+    """(state, place text before it, spelled_out) for a label part that ends in a US state, else None."""
+    segs = [s.strip() for s in _SEG.split(raw) if s and s.strip()]
     if not segs:
-        return False
-    last = segs[-1].strip()
+        return None
+    last = segs[-1]
     words = _key(last).split()
     for n in range(min(4, len(words)), 0, -1):          # "Indianapolis, Indiana", "Santa Fe New Mexico"
         name = " ".join(words[-n:])
-        if name in STATE_WORDS and name != "georgia":
-            return True
-        if name == "georgia":                           # the US state, unless it's Tbilisi
-            return "tbilisi" not in low
+        if name in STATE_WORDS and len(name) > 2:
+            before = " ".join(segs[:-1] + [" ".join(words[:-n])])
+            return STATE_WORDS[name], before, True
     code = last.split()[-1] if last.split() else ""
     if len(code) == 2 and code.upper() in STATES and (code.isupper() or len(segs) > 1):
-        code = code.upper()
-        if code not in _CODE_CLASH:
-            return True
-        place = segs[-2] if len(segs) > 1 else " ".join(last.split()[:-1])
-        return _known_in_state(place, code)
-    return False
+        return code.upper(), " , ".join(segs[:-1] + [" ".join(last.split()[:-1])]), False
+    # "OH - Work from home", "US-OH-Columbus", "TX-Remote": the state comes first
+    m = re.match(r"^\s*(?:US\s*[-,/ ]\s*)?([A-Z]{2})\s*[-,/:]\s*(.+)$", raw)
+    if m and m.group(1) in STATES:
+        return m.group(1), m.group(2), False
+    return None
 
-def looks_foreign(label):
-    """Does this location label name a place outside the US? ("Dublin, Ireland" yes, "Dublin, OH" no, "Remote" no)"""
-    if not label or not str(label).strip():
-        return False
-    label = str(label)
-    flat = re.sub(r"\bnew (?:mexico|jersey|england)\b", " ", _key(label))
-    hit = bool(_foreign_rx().search(flat))
-    if not hit:
-        hit = any(FOREIGN_CODES.fullmatch(s.strip()) for s in _SEG.split(label) if s and s.strip())
-    if not hit or _us_tail(label):
-        return False
-    # several places in one label ("Tysons Corner, Virginia; Fredericton, Canada"): foreign only when none is in the US
-    # (a part that is just "Georgia" settles nothing: "Tbilisi, Ponichala; Georgia" is the country)
+
+def _where_part(part):
+    F = _foreign()
+    raw = re.sub(r"[\s.]*$", "", norm(part, keep_case=True))
+    raw = re.sub(r"\s*\(?\b\d{5}(?:-\d{4})?\)?$", "", raw).strip(" ,;-")
+    if not raw:
+        return ""
+    low = raw.lower().replace(".", "")
+    flat = F["mask"].sub(" ", re.sub(r"\bnew (?:mexico|jersey|england)\b", " ", _key(raw)))
+    if _US_TAIL.search(low) or _US_HEAD.match(low):
+        return "us"
+    if re.fullmatch(r"(?:(?:remote|virtual|global|anywhere)\W*)?international(?:\W*(?:remote|virtual|only))?", low):
+        return "foreign"
+    toks = [t for t in _TOK.split(raw) if t]
+    code_hit = any(FOREIGN_CODES.fullmatch(s.strip()) for s in _SEG.split(raw) if s and s.strip())
+    if len(toks) > 1:
+        ends = (toks[0].strip(), toks[-1].strip())
+        code_hit = code_hit or any(t in F["iso3"] for t in ends) or any(t in F["iso2"] and t not in _ISO2_RISKY for t in ends)
+        if not code_hit and ends[1] in F["iso2"]:       # "Rome, IT", "Oslo, NO": only after a known foreign place
+            prev = _key(toks[-2])
+            code_hit = bool(F["city"].search(prev) or F["shared"].search(prev) or F["strong"].search(prev))
+    strong = bool(F["strong"].search(flat)) or code_hit
+    city = bool(F["city"].search(flat))
+    st = _state_tail(raw)
+    if st:
+        state, before, spelled = st
+        if state == "GA" and spelled:                    # the US state, unless it's Tbilisi
+            return "foreign" if "tbilisi" in low else "us"
+        if spelled and not (strong and not _town_in_state(before, state) and F["strong"].search(_key(before))):
+            return "us"                                  # ("Indianapolis, Indiana"; not "Ontario, Canada"-style mixes)
+        cw = _city_words(before)
+        if not cw:                                       # "Remote - OH", "Main Campus, TX": nothing that could be a town
+            return "" if (state in _CODE_CLASH and not spelled) else "us"
+        if _town_in_state(before, state):
+            # "Toronto, Ontario, CA": the town next to the code is in the state, but the place in front is abroad
+            segs = [s.strip() for s in _SEG.split(before) if s and s.strip()]
+            lead = _key(" ".join(segs[:-1])) if len(segs) > 1 else ""
+            if lead and state in _CODE_CLASH and (F["city"].search(lead) or F["strong"].search(lead)) and not _town_in_state(lead, state):
+                return "foreign"
+            return "us"
+        kb = _key(before)
+        if not strong and _near_town(kb, state):
+            return "us"                                  # "Sydney, OH" is Sidney, Ohio misspelt
+        if strong or city or F["shared"].search(kb):
+            return "foreign"                             # "Utrecht, UT", "Barcelona, CT", "Hyderabad, IN"
+        return ""                                        # a place the gazetteer doesn't have in that state: unresolved
+    if strong:
+        return "foreign"
+    return "maybe" if city else ""
+
+
+@functools.lru_cache(maxsize=65536)
+def _where(label):
     parts = [x for x in re.split(r"\s*[;|\n]\s*", label) if x.strip()]
-    return not (len(parts) > 1 and any(_us_tail(x) and _key(x) != "georgia" for x in parts))
+    got = [_where_part(x) for x in parts]
+    # (a part that is just "Georgia" settles nothing: "Tbilisi, Ponichala; Georgia" is the country)
+    if any(g == "us" and not (_key(x) == "georgia" and len(parts) > 1 and ("foreign" in got or "maybe" in got)) for g, x in zip(got, parts)):
+        return "us"
+    return "foreign" if "foreign" in got else "maybe" if "maybe" in got else ""
+
+
+def where(label):
+    """Where a location label puts a job: "us", "foreign", "maybe" (a well-known foreign city written alone, which is
+    also a town somewhere in the US: the employer's other places decide) or "" (no place it can tell)."""
+    if not label or not str(label).strip():
+        return ""
+    return _where(str(label))
+
+
+def maybe_towns(label):
+    """The well-known foreign city names a "maybe" label is made of ("Dublin" -> ["dublin"])."""
+    F = _foreign()
+    return [m.group(1) for m in F["city"].finditer(_key(str(label or "")))]
+
+
+def looks_foreign(label, states=None):
+    """Does this location label name a place outside the US? ("Dublin, Ireland" yes, "Dublin, OH" no, "Remote" no,
+    "Utrecht, UT" yes.) A foreign city written alone ("Dublin") is foreign unless `states` (the US states the
+    employer is known to hire in) has a town of that name."""
+    w = where(label)
+    if w != "maybe":
+        return w == "foreign"
+    if states:
+        names = _load()["names"]
+        # (a town of some size: nearly every state has a hamlet called Toronto, Paris or Berlin)
+        if any(r[0] in states and r[4] != "a" and r[3] >= MAYBE_MIN_POP for t in maybe_towns(label) for r in names.get(t, ())):
+            return False
+    return True
+
+
+MAYBE_MIN_POP = 8000
+
+
+def names_foreign(text):
+    """Does a short piece of text (a title, a sentence) name a country or a foreign region as a whole word?"""
+    F = _foreign()
+    flat = F["mask"].sub(" ", re.sub(r"\bnew (?:mexico|jersey|england)\b", " ", _key(str(text or ""))))
+    return bool(F["strong"].search(flat))
+
+
+def home_state(home):
+    """The US state of a home point (lat, lon[, label]) or None."""
+    try:
+        return state_at(home[0], home[1])
+    except Exception:
+        return None
+
 
 def norm(s, keep_case=False):
     s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode()
@@ -385,6 +559,11 @@ def _parse_part(part, d):
         if top[4] == "a":
             if not blocked(t, top[0]):
                 hits.append(Hit(top[1], top[2], 0.85, "alias", _label(t["phrase"], top[0]), 0))
+            continue
+        if foreign and not t["weak"] and not blocked(t, None) and where(part) == "maybe" and top[3] >= MAYBE_MIN_POP:
+            # "Dublin" alone: a foreign city, and a town in Ohio. Never a guess by itself; a caller that knows the
+            # employer hires in that state can place it (within(states=...)).
+            hits.append(Hit(top[1], top[2], BARE_WEAK, "bare", _label(t["phrase"], top[0]), 0))
             continue
         if foreign or t["weak"] or blocked(t, None):
             continue

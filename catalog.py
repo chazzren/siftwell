@@ -54,7 +54,10 @@ CREATE INDEX IF NOT EXISTS candidates_run ON candidates(run_id);
 # "Custom careers site", ...), so Find employers can group them; candidates.pass: the Exhaustive-search pass that found it.
 # companies.fail_since: the day a company's fetches stopped being trustworthy (error, or suspiciously empty); NULL
 # while they are fine. record_fetch uses it to age out the postings of a dead board.
-ADDED_COLUMNS = (("candidates", "system", "TEXT"), ("candidates", "pass", "INTEGER"), ("companies", "fail_since", "TEXT"))
+# companies.foreign_n / us_n: how many of its postings the last fetch found to be outside the US, and how many open
+# ones name a US place (see mostly_foreign).
+ADDED_COLUMNS = (("candidates", "system", "TEXT"), ("candidates", "pass", "INTEGER"), ("companies", "fail_since", "TEXT"),
+                 ("companies", "foreign_n", "INTEGER"), ("companies", "us_n", "INTEGER"))
 _columns_ok = set()
 
 # Board fields that depend on the person looking (never stored on a listing).
@@ -124,7 +127,63 @@ def _company_row(r):
     c["_paused"] = bool(r["paused"])
     c["_fetch"] = {"at": r["last_fetch_at"], "status": r["last_status"], "error": r["last_error"],
                    "raw": r["raw_count"], "open": r["open_count"], "secs": r["fetch_secs"]}
+    keys = r.keys()
+    f_n, u_n = (r["foreign_n"] if "foreign_n" in keys else None), (r["us_n"] if "us_n" in keys else None)
+    c["_fetch"].update(foreign=f_n, us=u_n, abroad=mostly_foreign(f_n, u_n, r["open_count"]))
     return c
+
+
+# An employer "hires mostly outside the US" when at least FOREIGN_MIN of its postings were read as foreign, they are
+# at least FOREIGN_RATIO times the postings that name a US place, and they are no small part of everything it posts
+# (a US company with three jobs in London and forty plain "Remote" ones is not one). From such an employer only the
+# postings that name a US place go on a board: its bare "Remote" is not US-remote.
+FOREIGN_MIN, FOREIGN_RATIO = 3, 4
+
+
+def mostly_foreign(foreign_n, us_n, open_n):
+    f, u, o = int(foreign_n or 0), int(us_n or 0), int(open_n or 0)
+    return f >= FOREIGN_MIN and f >= FOREIGN_RATIO * u and 2 * f >= max(0, o - u)
+
+
+def foreign_employers():
+    """Names of the companies that hire mostly outside the US (mostly_foreign)."""
+    with db() as con:
+        return {r["name"] for r in con.execute("SELECT name, foreign_n, us_n, open_count FROM companies WHERE foreign_n >= ?", (FOREIGN_MIN,))
+                if mostly_foreign(r["foreign_n"], r["us_n"], r["open_count"])}
+
+
+def _us_count(con, company):
+    return con.execute("SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL AND data LIKE '%\"geo\": \"us\"%'", (company,)).fetchone()[0]
+
+
+def note_foreign(gone):
+    """After stored listings were read again: {company: postings closed as outside the US}. Adds them to the
+    company's count (the next fetch replaces it with what it finds) and recounts its open and US postings."""
+    with db() as con:
+        for name, n in (gone or {}).items():
+            r = con.execute("SELECT foreign_n FROM companies WHERE name=?", (name,)).fetchone()
+            if not r:
+                continue
+            open_n = con.execute("SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL", (name,)).fetchone()[0]
+            con.execute("UPDATE companies SET foreign_n=?, us_n=?, open_count=? WHERE name=?",
+                        (int(r["foreign_n"] or 0) + int(n), _us_count(con, name), open_n, name))
+
+
+def company_states(company):
+    """The US states one company's open stored postings name (with a town, or alone)."""
+    import geo
+    out = set()
+    with db() as con:
+        rows = [r[0] for r in con.execute("SELECT DISTINCT locations FROM listings WHERE company=? AND closed_at IS NULL", (company,))]
+    for raw in rows:
+        try:
+            locs = json.loads(raw or "[]")
+        except ValueError:
+            continue
+        for l in locs:
+            if l:
+                out.update(st for _, st in geo.place_states(l))
+    return out
 
 
 def companies(include_paused=True):
@@ -335,9 +394,13 @@ def record_fetch(company, summary, listings, con):
         cur = con.execute("UPDATE listings SET closed_at=? WHERE closed_at IS NULL AND id IN (%s)" % ",".join("?" * len(chunk)),
                           (t, *chunk))
         counts["closed"] += cur.rowcount
-    open_n = con.execute("SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL AND partial=0", (company,)).fetchone()[0]
+    # every open posting, also the ones stored without their text yet (the staged first check stores most that way):
+    # the number the Employers page shows
+    open_n = con.execute("SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL", (company,)).fetchone()[0]
     con.execute("""UPDATE companies SET last_fetch_at=?, last_status=?, last_error=?, raw_count=?, open_count=?, fetch_secs=?,
                    fail_since=? WHERE name=?""", (now(), status, note, summary.get("raw_jobs"), open_n, summary.get("secs"), since, company))
+    if ok and summary.get("foreign") is not None:
+        con.execute("UPDATE companies SET foreign_n=?, us_n=? WHERE name=?", (int(summary["foreign"]), _us_count(con, company), company))
     counts["status"] = status
     return counts
 

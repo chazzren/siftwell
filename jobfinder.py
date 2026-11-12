@@ -209,12 +209,13 @@ NON_US = ["canada", "toronto", "vancouver", "montreal", "united kingdom", " uk",
           "italy", "czech", "serbia", "ukraine", "new zealand", "south africa", "uae", "dubai", "saudi", "qatar"]
 REMOTE_WORDS = ["remote", "anywhere", "virtual", "telework", "work from home", "wfh"]
 
-def is_foreign(loc):
-    """Does this location label name a place outside the US? Whole words, and labels ending in a US state are US:
-    "Dublin, Ireland" yes; "Dublin, OH", "Indianapolis, IN", "Paris, TX", "New Mexico" no. (NON_US above is kept for
-    readers that import it; geo.looks_foreign holds the full list.)"""
+def is_foreign(loc, states=None):
+    """Does this location label name a place outside the US? Whole words, and a town with its own US state is US:
+    "Dublin, Ireland" yes; "Dublin, OH", "Indianapolis, IN", "Paris, TX", "New Mexico" no; "Utrecht, UT" (no such town
+    in Utah) yes. states: the US states the employer is known to hire in, which settle a foreign city written alone
+    ("Dublin" at an Ohio employer). (NON_US above is kept for readers that import it; geo holds the full list.)"""
     import geo
-    return geo.looks_foreign(loc)
+    return geo.looks_foreign(loc, states)
 
 def near(loc, states=None):
     """Is this location inside anyone's search area (the current CFG): a home radius, or the DC-area list.
@@ -992,10 +993,10 @@ _NO_PLACE = re.compile(r"(?:[\s,;/|-]*(?:unavailable|n/?a|tbd|none))*[\s,;/|-]*"
 _HOME_LABEL = re.compile(r"\s*(?:home|home office)\s*(?:,\s*[A-Za-z]{2})?\s*", re.I)   # iCIMS "Home, TX": works from home in Texas
 
 
-def names_us(l):
+def names_us(l, states=None):
     """Does a location label name the US, a US state or a US place ("United States", "Remote - US", "US-VA-REMOTE",
     "Remote, Minnesota, USA", "Remote - WI", "Reston, VA")? Plain "Remote" and foreign labels don't."""
-    if not l or is_foreign(l) or jobtext.foreign_remote(l):
+    if not l or is_foreign(l, states) or jobtext.foreign_remote(l):
         return False
     if BARE_US.fullmatch(l.lower()) or re.search(r"(?<![A-Za-z])(?:US|USA|U\.S\.A?\.?)(?![A-Za-z])", l.replace("_", " ")) \
             or re.search(r"united states", l, re.I):
@@ -1023,12 +1024,22 @@ def prepare_listing(j, c):
     """Parse one fetched posting for the catalog. Nothing here depends on who is looking: whether it is near someone,
     pays enough or has a fitting title is decided per person in select_for_person(). Returns None for postings
     outside the US (and not remote-US), which no one can use."""
+    import geo
     locs = j["locations"]
     base = j.get("workplace") or ""
-    nonus = lambda l: is_foreign(l) or jobtext.foreign_remote(l)
-    strict = base == "remote" and not any(nonus(l) for l in locs if l) or any(is_remote_us(l) for l in locs)
-    if base == "remote" and locs and all(nonus(l) for l in locs):
-        strict = False
+    base0 = base
+    states = employer_us_states(c)      # settles a foreign city written alone ("Dublin" at an Ohio employer)
+    nonus = lambda l: is_foreign(l, states) or jobtext.foreign_remote(l)
+    j.pop("_maybe", None)
+    foreign_loc = [l for l in locs if l and nonus(l)]
+    us_loc = [l for l in locs if l and names_us(l, states)]
+    # A posting with a foreign place and no US one is not a US job, whatever else its labels say ("Athens, Attica" +
+    # "Remote"). One that names both ("Tysons Corner, Virginia; Fredericton, Canada") is kept.
+    if foreign_loc and not us_loc:
+        # (only a foreign city written alone stood in the way: process() asks again once it knows the employer's states)
+        j["_maybe"] = all(geo.where(l) == "maybe" for l in foreign_loc)
+        return None
+    strict = base == "remote" and not foreign_loc or any(is_remote_us(l) for l in locs)
     # "Customer Success Manager - Belfast, UK" listed at "Remote": the title says where the job really is. Not when a
     # location label names the US ("Area Director of Sales - Asia" at "United States", "(Canada Territory)" at "Remote,
     # Minnesota, USA", "... - Americas, EMEA" at "Remote-US"): then the title names the market, not the workplace.
@@ -1036,12 +1047,30 @@ def prepare_listing(j, c):
     if tp and nonus(tp) and not any(l and not nonus(l) and (names_us(l) or not jobtext.remote_label(l)) for l in locs):
         return None
     text = j.get("desc") or ""
-    bare = any(BARE_US.fullmatch(l.lower()) for l in locs) and (c.get("tier") == "remote_first" or bool(REMOTE_DESC.search(text.lower())))
+    title = j.get("title") or ""
+    # No US place on the posting: its own words decide. Written in another language, or its title or text puts the
+    # job in another country ("based in Toronto", "remote within Canada", pay in euros) with nothing saying US: out.
+    said_us = jobtext.text_us(text)
+    if not us_loc:
+        abroad = lambda s: is_foreign(s) and not re.search(r"united states|\bU\.?S\.?A?\b", s)
+        if jobtext.non_english(title, text):
+            return None
+        if not said_us and (geo.names_foreign(title) or jobtext.text_abroad(text, abroad)):
+            return None
+    # Remote for real? A label can say remote while the work is done in person (in-home visits, a clinic).
+    veto = jobtext.remote_veto(title, text) if (strict or base == "remote") else ""
+    if veto:
+        strict, base = False, ("" if base == "remote" else base)
+        j["workplace"] = base
+    # "OH - Work from home", "Remote - Texas": remote, for people who live in that state
+    rem = [l for l in locs if l and jobtext.remote_label(l)]
+    bound = [jobtext.remote_state(l) for l in rem]
+    remote_st = sorted(set(bound)) if strict and rem and all(bound) else []
+    bare = not veto and any(BARE_US.fullmatch(l.lower()) for l in locs) and (c.get("tier") == "remote_first" or bool(REMOTE_DESC.search(text.lower())))
     unnamed = c.get("tier") == "dmv_hq" and bool(locs) and all(looks_local_unnamed(l) for l in locs if l)
-    if not (strict or bare or unnamed or not locs or any(not nonus(l) for l in locs if l)):
-        return None
-    j.update(ai_track=c.get("ai_track", ""), base_wp=base, remote_strict=bool(strict), remote_bare=bool(bare), local_unnamed=unnamed,
-             pv=jobtext.PARSE_VERSION)
+    j.update(ai_track=c.get("ai_track", ""), base_wp=base0, remote_strict=bool(strict), remote_bare=bool(bare),
+             local_unnamed=unnamed, pv=jobtext.PARSE_VERSION, remote_st=remote_st, remote_veto=veto,
+             geo="us" if (us_loc or (said_us and not foreign_loc)) else "")
     # pay: what the board itself listed, else the posting's text, else its title ("Line Cook - $17/hour")
     set_pay(j, j.pop("salary", None) or parse_salary(text) or parse_salary(j.get("title") or ""))
     # the states the posting names, for placing a bare city name ("Columbus" + "a current Georgia license")
@@ -1052,8 +1081,24 @@ def prepare_listing(j, c):
         named = re.sub(re.escape(co), " ", named, flags=re.I)
     j["loc_st"] = jobtext.text_states(named)
     enrich(j, text)  # also fills workplace from the text when the board didn't say
+    if veto and not j.get("workplace"):
+        j["workplace"] = "onsite"
     j["snippet"] = text[:600]
     return j
+
+def employer_us_states(c):
+    """The US states an employer is known to hire in: the directory's, and the ones its postings name with a town
+    (c["_us_st"], filled by process() and reparse_stored())."""
+    st = set(c.get("_us_st") or ())
+    st.update((c.get("dir") or {}).get("st") or [])
+    return st
+
+def note_states(c, locs):
+    """Remember the states a kept posting names with a town or alone (for employer_us_states)."""
+    import geo
+    for l in locs or []:
+        if l:
+            c.setdefault("_us_st", set()).update(st for _, st in geo.place_states(l))
 
 # ---------------------------------------------------------------- one slow employer must not hold a whole fetch
 # Each employer gets a time budget and a posting budget per fetch. A reader that pages (Workday, Oracle, UKG, iCIMS,
@@ -1094,6 +1139,7 @@ def process(c, budget=None):
     t0 = time.time()
     raw = 0
     out = []
+    n_foreign, maybe = 0, []
     c.pop("_truncated", None)
     c.pop("_budget_hit", None)
     budget = fetch_budget() if budget is None else budget
@@ -1103,6 +1149,10 @@ def process(c, budget=None):
         import netsafe
         netsafe.check_config(c)  # (a malformed or unsafe board config is never fetched)
         known = catalog.known(c["name"])
+        try:        # the states its stored postings name: they settle a foreign city written alone ("Dublin")
+            c["_us_st"] = catalog.company_states(c["name"])
+        except Exception:
+            c["_us_st"] = set()
         gen = FETCHERS[c["ats"]](c)
         try:
             for j in gen:
@@ -1119,6 +1169,11 @@ def process(c, budget=None):
                     p = prepare_listing(j, c)
                     if p:
                         out.append(p)
+                        note_states(c, p.get("locations"))
+                    elif j.get("_maybe"):
+                        maybe.append(j)     # "Dublin" alone: decided below, once every posting's states are known
+                    else:
+                        n_foreign += 1
                 if raw >= FETCH_MAX_POSTINGS:
                     c["_truncated"] = c.get("_truncated") or f"stopped at {FETCH_MAX_POSTINGS} postings; the rest is read next time"
                     c["_budget_hit"] = True
@@ -1130,13 +1185,20 @@ def process(c, budget=None):
             close = getattr(gen, "close", None)
             if close:
                 close()
+        for j in maybe:
+            p = prepare_listing(j, c)
+            if p:
+                out.append(p)
+            else:
+                n_foreign += 1
         status = "ok"
     except Exception as e:
         status = f"error: {type(e).__name__}: {e}"[:200]
     c.pop("_deadline", None)
     c.pop("_budget", None)
+    c.pop("_us_st", None)
     return {"company": c["name"], "ats": c["ats"], "tier": c.get("tier"), "sector": c.get("sector"),
-            "raw_jobs": raw, "matched": len(out), "status": status, "secs": round(time.time() - t0, 1),
+            "raw_jobs": raw, "matched": len(out), "status": status, "secs": round(time.time() - t0, 1), "foreign": n_foreign,
             "truncated": c.pop("_truncated", None), "budget_hit": bool(c.pop("_budget_hit", False)),
             "board_title": c.pop("_board_title", None)}, out
 
@@ -1308,8 +1370,16 @@ def select_for_person(pool, sets=None):
         pass
     emp_near = {}
     emp_places = EmployerPlaces(pool, places)
+    try:        # employers that hire almost only abroad: only their postings with a US place are shown
+        abroad = catalog.foreign_employers()
+    except Exception:
+        abroad = set()
+    import geo
+    home_states = {geo.home_state(h) for h, _ in homes} - {None}
     for j0 in pool:
         if not (sets.get(j0["company"], set()) & watch):
+            continue
+        if j0["company"] in abroad and j0.get("geo") != "us":
             continue
         cur_ok = title_ok(j0["title"])
         ai_ok = any(target_ok(st, j0.get("ai_track"), j0["title"]) for st in targets)
@@ -1324,6 +1394,12 @@ def select_for_person(pool, sets=None):
         # a bare city name ("Columbus", "Columbus Healthcare Center") counts only in a state there is support for
         mine = [l for l in locs if near(l, bare_support(l, j0, emp_places) if homes else None)]
         remote = bool(j0.get("remote_strict") or (j0.get("remote_bare") and not mine))
+        # "OH - Work from home", "Remote - Texas": remote for people whose home is in that state (with no home set,
+        # as before: shown)
+        rst = j0.get("remote_st") or []
+        elsewhere = bool(remote and rst and home_states and not (set(rst) & home_states))
+        if elsewhere:
+            remote = False
         dc_fallback = not remote and not mine and bool(j0.get("local_unnamed")) and dc_ok
         vague_near = None   # employer-places rule: no readable place on the posting, and everywhere the employer hires is nearby
         if not (mine or remote or dc_fallback) and j0["company"] in places:
@@ -1336,10 +1412,13 @@ def select_for_person(pool, sets=None):
         if not (mine or dc_fallback or vague_near is not None or (remote and CFG.get("remote_ok", True))):
             continue
         wp = "remote" if remote else (j0.get("workplace") or "")
+        if elsewhere and wp == "remote":
+            wp = ""     # (remote, but only for another state's residents: for this person it is a job at its place)
         if wp and wp not in wps and not (wp == "remote" and mine):
             continue
         j = dict(j0)
         j["workplace"] = wp
+        j["remote_in"] = ", ".join(geo.STATES[s].title() for s in rst if s in geo.STATES) if (remote and rst) else ""
         j["dmv_locations"] = [f"{l} (DC area)" for l in locs if l][:3] if dc_fallback else [x for x in (vague_near or []) if x] if vague_near is not None else mine
         j["tracks"] = (["current"] if cur_ok else []) + (["ai"] if ai_ok else [])
         out.append(j)
@@ -1845,16 +1924,22 @@ def reparse_stored(force=False, log=lambda m: print(m, flush=True)):
     log(f"Reading {len(ids):,} saved postings again with the improved pay, level and location rules (one time; nothing is fetched and no ratings change)...")
     cos = {c["name"]: c for c in catalog.companies()}
     n = closed = 0
+    gone = {}       # company -> postings closed as outside the US (for the employer-level "hires mostly abroad" mark)
     for k in range(0, len(ids), 500):
         chunk = ids[k:k + 500]
         with catalog.db() as con:
-            rows = con.execute("SELECT id, data, desc, first_seen, last_seen, partial FROM listings WHERE id IN (%s)"
+            rows = con.execute("SELECT id, company, data, desc, first_seen, last_seen, partial FROM listings WHERE id IN (%s)"
                                % ",".join("?" * len(chunk)), chunk).fetchall()
         parsed = []
         for r in rows:
             try:
                 old = json.loads(r["data"])
                 c = cos.get(old.get("company")) or {"name": old.get("company") or "", "ats": ""}
+                if "_us_st" not in c:       # the states this employer's stored postings name (settles "Dublin" alone)
+                    try:
+                        c["_us_st"] = catalog.company_states(c["name"])
+                    except Exception:
+                        c["_us_st"] = set()
                 new, recheck = reparse_one(old, r["desc"] or old.get("snippet", ""), c)
             except Exception as e:   # (one odd row never stops the rest; it is left as it was)
                 log(f"  couldn't re-read {r['id'][:80]}: {type(e).__name__}: {e}")
@@ -1865,12 +1950,17 @@ def reparse_stored(force=False, log=lambda m: print(m, flush=True)):
                 if new is None:
                     con.execute("UPDATE listings SET closed_at=? WHERE id=?", (catalog.today(), r["id"]))
                     closed += 1
+                    gone[r["company"]] = gone.get(r["company"], 0) + 1
                     continue
                 new["id"] = r["id"]
                 catalog.put_listing(con, new, first_seen=r["first_seen"], last_seen=r["last_seen"], partial=bool(r["partial"]))
                 if recheck:
                     con.execute("UPDATE listings SET desc_hash='' WHERE id=?", (r["id"],))
         n += len(parsed)
+    try:
+        catalog.note_foreign(gone)
+    except Exception as e:
+        log(f"  (couldn't note which employers hire mostly abroad: {type(e).__name__}: {e})")
     catalog.set_meta("parse_version", jobtext.PARSE_VERSION)
     log(f"Done: {n:,} postings read again" + (f", {closed:,} closed (outside the US)" if closed else "") + ".")
     return n

@@ -14,7 +14,7 @@ title. No network, no Claude, nothing about who is looking: jobfinder.prepare_li
 """
 import re
 
-PARSE_VERSION = 3   # bump when stored listings must be parsed again from their saved text (jobfinder.reparse_stored)
+PARSE_VERSION = 4   # bump when stored listings must be parsed again from their saved text (jobfinder.reparse_stored)
 
 # ---------------------------------------------------------------- text and titles
 _BLANKS = re.compile(r"\n(?:[ \t\xa0​]*\n){2,}")
@@ -438,7 +438,134 @@ def remote_label(loc):
     s = str(loc or "").replace("_", " ")      # "Remote_United States"
     if not _REMOTE_LOC.search(s):
         return False
-    return not _NOT_REMOTE.search(s) and not _REMOTE_LOC_NOT.search(s)
+    if _NOT_REMOTE.search(s) or _REMOTE_LOC_NOT.search(s):
+        return False
+    return not facility_label(s)
+
+
+# A site code in front of a facility's name: "09536 - Mainplace Nocturnal-CA Remote" is a dialysis clinic (its name
+# ends in "Remote"), "01088 - Columbus Victorian Village Selec" a store. "1234 - Remote" and "0001 - Remote - OH" are
+# still remote: nothing but the code, remote words and a state.
+_SITE_CODE = re.compile(r"^\s*#?\d{3,}\s*[-–—:]\s*(?=\S)")
+_PLACE_FILL = re.compile(r"\b(?:remote|virtual|anywhere|telework\w*|telecommut\w*|work|from|at|home|based|wfh|us|usa|united states|only|in|"
+                         r"position|office)\b", re.I)
+
+
+def facility_label(loc):
+    """Is this label a numbered site with a name of its own ("09536 - Mainplace Nocturnal-CA Remote")?"""
+    s = str(loc or "")
+    m = _SITE_CODE.match(s)
+    if not m:
+        return False
+    rest = _STATE_NAME_RX.sub(" ", _PLACE_FILL.sub(" ", s[m.end():]))
+    rest = re.sub(r"(?<![A-Za-z])[A-Z]{2}(?![A-Za-z])", " ", rest)
+    return bool(re.search(r"[A-Za-z]{3,}", rest))
+
+
+def remote_state(loc):
+    """The one US state a remote label is tied to: "OH - Work from home" -> "OH", "Remote - Texas" -> "TX", "Remote,
+    Minnesota, USA" -> "MN", "US-VA-REMOTE" -> "VA", "Home, TX" -> "TX". None for "Remote", "Remote - US", a label
+    that names a town ("Remote - Houston, TX": remote, and near Houston) or more than one state."""
+    s = str(loc or "").replace("_", " ")
+    if not remote_label(s) and not re.fullmatch(r"\s*(?:home|home office)\s*,\s*[A-Za-z]{2}\s*", s, re.I):
+        return None
+    found = {_STATE_NAMES[m.group(1).lower()] for m in _STATE_NAME_RX.finditer(s)}
+    rest = _STATE_NAME_RX.sub(" ", s)
+    for m in re.finditer(r"(?<![A-Za-z])([A-Z]{2})(?![A-Za-z])", rest):
+        if m.group(1) in _CODES:
+            found.add(m.group(1))
+    if len(found) != 1:
+        return None
+    rest = re.sub(r"(?<![A-Za-z])[A-Z]{2}(?![A-Za-z])", " ", _PLACE_FILL.sub(" ", rest))
+    if re.search(r"[A-Za-z]{3,}", rest):        # something else is named: a town, a site
+        return None
+    return next(iter(found))
+
+
+# Work that is done in person whatever the label says: visiting people at home, a clinic, the field.
+_VETO_TITLE = re.compile(r"\bin[- ]home\b|\bhome[- ]health\b|\bhome[- ]visit\w*|\bhouse[- ]calls?\b|\bhome[- ]care\b|\bhome[- ]infusion\b|"
+                         r"\bhome (?:hemo)?dialysis\b|\bhome therap\w+|\bfield (?:nurse|rn|service|technician|tech|engineer|sales|rep\w*|based|clinical|"
+                         r"case manager|care)\b|\bfield[- ]based\b|\bmobile (?:nurse|rn|phlebotom\w+|examiner|clinician)\b|\btravel(?:ing)? "
+                         r"(?:nurse|rn|cna|lpn|technician|tech|therapist)\b|\bon[- ]?site\b|\bin[- ]person\b|\bin[- ]cent(?:er|re)\b", re.I)
+_VETO_TEXT = re.compile(r"\bin[- ]home (?:visits?|assessments?|health (?:evaluations?|assessments?|risk)|evaluations?|care (?:visits?|to)|"
+                        r"patient|nursing|exams?|appointments?)|\bhome visits?\b|"
+                        r"\bvisit(?:s|ing)? (?:patients?|members?|clients?)(?: and families)? in (?:their|the|his or her) (?:own )?homes?\b|"
+                        r"\b(?:in|at) (?:the )?(?:patients?|members?|clients?)['’]?s?['’]? (?:own )?homes?\b|"
+                        r"\btravel(?:s|ing)? to (?:patients?|members?|clients?|participants?)['’]?s?['’]? ?(?:homes?|residences?|bedsides?)\b|"
+                        r"\btravel(?:s|ing)? to (?:patients|members|participants)\b|"
+                        r"\bpatient care in an? (?:outpatient|clinic|clinical|in-?cent(?:er|re)|inpatient|hospital|dialysis)\b[^.\n]{0,20}setting|"
+                        r"\b(?:outpatient|in-?cent(?:er|re)) (?:dialysis )?(?:clinic|facility|setting)\b[^.\n]{0,60}\bpatient care\b|"
+                        r"\bthis (?:is an?|position is|role is|job is)(?: a| an)? (?:100% |fully |full[- ]time )?(?:on[- ]?site|in[- ]person|field[- ]based)\b|"
+                        r"\b(?:100%|fully) (?:on[- ]?site|in[- ]person)\b|\bmust (?:work|be) on[- ]?site\b|\bnot (?:a )?remote (?:position|role|job)\b", re.I)
+
+
+def remote_veto(title, text):
+    """The words that say a job is done in person although its label says remote or work from home ("In-Home Health
+    Evaluation Nurse Practitioner" at "OH - Work from home", "provides patient care in an outpatient setting"), or ""."""
+    m = _VETO_TITLE.search(title or "")
+    if m and not re.search(r"\b(?:or|and|/)\s*remote\b|\bremote\s*(?:or|and|/)", title or "", re.I):
+        return m.group(0)
+    m = _VETO_TEXT.search((text or "")[:6000])
+    return m.group(0) if m else ""
+
+
+# ---------------------------------------------------------------- language and country evidence in a posting's words
+_LANG = {
+    "fr": set("le la les des et pour vous nous dans avec une est sur au aux du votre notre nos vos ou qui que en de un être sont".split()),
+    "es": set("el los las para con una por del que en y su sus nuestro nuestra como más es un de la se al tu".split()),
+    "de": set("der die das und mit für wir sie ein eine zu von im den dem des ist sind auf bei als oder ihre unser".split()),
+    "nl": set("de het een en van voor met je wij zijn bij op te dat die als ook naar jij jouw onze ons aan".split()),
+    "pt": set("o os as para com uma em do da que e você não de um na no dos das por se ao nossa nosso".split()),
+    "it": set("il lo gli le per con una che di e in del della dei un è sono nel alla al come più".split()),
+}
+_ENGLISH = set("the and of to in for with you our is a are as on be will or this that we your an at by from have".split())
+_TITLE_FOREIGN = re.compile(r"\b(?:pharmacien(?:ne)?s?|technicien(?:ne)?s?|commis|g[ée]rant(?:e)?|conseill(?:er|[èe]re)s?|infirmi(?:er|[èe]re)s?|"
+                            r"vendeu(?:r|se)s?|responsable|gestionnaire|directeur|directrice|adjoint(?:e)?|pr[ée]pos[ée](?:e)?s?|caissi(?:er|[èe]re)s?|"
+                            r"stagiaire|ing[ée]nieur(?:e)?|d[ée]veloppeu(?:r|se)|assistant(?:e)? technique|chef d['’ ]?[ée]quipe|livreur|cuisini(?:er|[èe]re)|"
+                            r"verpleegkundige|medewerker|verzorgende|begeleider|wijkverpleegkundige|helpende|huishoudelijke|"
+                            r"mitarbeiter(?:in)?|sachbearbeiter(?:in)?|kaufmann|kauffrau|pflegefachkraft|werkstudent(?:in)?|leiter(?:in)?|"
+                            r"gerente|ingenier[oa]|analista|vendedor(?:a)?|enfermer[oa]|coordinador(?:a)?|asistente|ejecutiv[oa]|auxiliar|"
+                            r"desarrollador(?:a)?|contador(?:a)?|jefe de|practicante|becari[oa]|estagi[áa]ri[oa]|engenheir[oa]|vendedor)\b|"
+                            r"\((?:m/w/d|w/m/d|m/f/d|f/m/d|h/f|f/h|m/v|m/v/x|m/f/x)\)|\bh/f\b", re.I)
+
+
+def non_english(title, text=""):
+    """Is this posting written in another language (French, Spanish, German, Dutch, Portuguese, Italian)? Judged by
+    its text when there is some (everyday words of that language far outnumber English ones), else by its title."""
+    words = re.findall(r"[a-zà-ÿ]+", (text or "")[:1500].lower())
+    if len(words) >= 40:
+        en = sum(1 for w in words if w in _ENGLISH)
+        best = max(sum(1 for w in words if w in s and w not in _ENGLISH) for s in _LANG.values())
+        return best >= 8 and best > 2 * en
+    return bool(_TITLE_FOREIGN.search(title or ""))
+
+
+_TEXT_US = re.compile(r"\bUnited States\b|\bU\.S\.A?\b\.?|\bUSA\b|\bUS[- ](?:based|only|citizens?|residents?|work authorization|time zones?)\b|"
+                      r"\b(?:authorized|eligible|eligibility|authorization) to work in the U|\bwithin the US\b|\banywhere in the US\b|"
+                      r"\b(?:EST|CST|MST|PST|EDT|CDT|PDT|Eastern Time|Central Time|Pacific Time|Mountain Time)\b|\b401\s?\(?k\)?", re.I)
+_TEXT_ABROAD = re.compile(r"(?:\bbased in|\blocated in|\bresid(?:e|es|ing|ent) (?:in|of)|\blive in|\bliving in|\bremote(?:ly)? (?:in|from|within|across)|"
+                          r"\bright to work in|\beligible to work in|\bauthori[sz]ed to work in|\bwork permit for|"
+                          r"\blocation\s*:|\bwork location\s*:|\bcountry\s*:)\s*(?:the |our )?([A-Z][^.\n;:(]{1,60})")
+_TEXT_MONEY = re.compile(r"[€£₹]\s?\d|\b\d[\d,.]*\s?(?:EUR|GBP|CAD|AUD|INR|MXN|PLN|CHF|SEK|ZAR)\b|\b(?:EUR|GBP|CAD|AUD|INR|MXN|PLN|CHF|ZAR)\s?\$?\d|\bCA\$\s?\d|\bC\$\s?\d")
+
+
+def text_us(text):
+    """Does the posting's text say the job is in the US ("United States", "authorized to work in the U.S.", a US
+    time zone, a 401(k))?"""
+    return bool(_TEXT_US.search((text or "")[:8000]))
+
+
+def text_abroad(text, is_foreign):
+    """Does the posting's text place the job in another country: "based in Toronto", "remote within Canada", "right to
+    work in the UK", "Location: Athens, Greece", pay in euros or pounds? is_foreign(place words) decides what is
+    abroad (geo). Offices merely mentioned ("we have teams in London and Austin") don't count."""
+    t = (text or "")[:8000]
+    if _TEXT_MONEY.search(t):
+        return True
+    for m in _TEXT_ABROAD.finditer(t):
+        if is_foreign(m.group(1)[:60]):
+            return True
+    return False
 
 
 def telecommute(d):
