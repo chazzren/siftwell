@@ -128,14 +128,19 @@ def _kill(proc):
         except Exception:
             pass
 
-def run_json(system, prompt, schema, model="claude-opus-5-5", effort="low", read_dir=None, timeout=600, tools=None, cancel=None):
+def run_json(system, prompt, schema, model="claude-opus-5-5", effort="low", read_dir=None, timeout=600, tools=None, cancel=None,
+             feature=None, jobs=None):
     """Run one headless Claude turn that must return JSON matching `schema`.
     read_dir: if set, Claude may use the Read tool inside that directory (for PDFs / images).
     tools: built-in tools Claude may use without asking (e.g. ["WebSearch", "WebFetch"]).
-    cancel: a threading.Event; when set, the claude process is ended and CLICancelled is raised."""
+    cancel: a threading.Event; when set, the claude process is ended and CLICancelled is raised.
+    feature / jobs: for the usage log (claude_usage.py); feature defaults to the calling module's plain name."""
+    import claude_usage
+    feature = feature or claude_usage.feature_from_caller(2)
     if os.environ.get(STUB_ENV):
         canned = _stub(prompt, cancel)
         if canned is not None:
+            claude_usage.record(feature, model, {}, jobs, stub=True)
             return canned
     forbid_check(f"claude_cli.run_json model={model}")
     p = path()
@@ -177,6 +182,8 @@ def run_json(system, prompt, schema, model="claude-opus-5-5", effort="low", read
         out = json.loads(stdout)
     except Exception:
         raise CLIError((stderr or stdout or "no output")[:300])
+    if isinstance(out, dict) and isinstance(out.get("usage"), dict):
+        claude_usage.record(feature, model, out["usage"], jobs)   # real tokens, so Settings can show what was used
     if out.get("is_error"):
         txt = str(out.get("result", ""))
         if any(w in txt.lower() for w in ("log in", "login", "authenticat", "/login")):

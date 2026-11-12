@@ -62,12 +62,11 @@ def _raw(pid):
         return {}
 
 def _settings(pid):
-    s = {**people.DEFAULT_SETTINGS, **SETUP_DEFAULTS}
     try:
-        s.update(json.load(open(_path(pid))))
+        raw = json.load(open(_path(pid)))
     except Exception:
-        pass
-    return s
+        raw = {}
+    return {**SETUP_DEFAULTS, **people._with_defaults(raw if isinstance(raw, dict) else {})}
 
 def _write(pid, updates):
     try:
@@ -99,10 +98,11 @@ def _levels():
         import jobfinder
         return jobfinder.LEVEL_NAMES
     except Exception:
-        return {2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"}
+        return {1: "Entry level", 2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"}
 
 def infer_level(prof):
-    """Best guess at the person's level (2-7) from their most recent title and years of experience."""
+    """A guess at the person's level (1-7) from their most recent title and years of experience. The Level screen
+    shows it as a hint only: nothing is pre-selected from it."""
     if not prof:
         return None
     try:
@@ -115,13 +115,15 @@ def infer_level(prof):
     years = prof.get("years_experience")
     by_title = tl(title) if title else None
     by_years = yl(years) if isinstance(years, int) and years > 0 else None
+    if by_years and years <= 1 and not by_title:
+        by_years = 1  # a first job: entry level
     if by_title and by_years:
         level = round((2 * by_title + by_years) / 3)   # the title says more than the years
     else:
         level = by_title or by_years
     if not level:
         return None
-    level = max(2, min(7, level))
+    level = max(1, min(7, level))
     why = []
     if title:
         why.append(f"your most recent title, “{title}”")
@@ -190,23 +192,10 @@ def market_hint(prof, level=None, market_path=None):
     return {"median": rnd(statistics.median(mids)), "p25": rnd(_pct(mids, .25)), "p75": rnd(_pct(mids, .75)),
             "n": len(pool), "basis": f"{len(pool)} openings with pay listed, roles like yours {basis}"}
 
-SET_WORDS = {
-    "tech": r"\b(ai|a\.i\.|tech|software|saas|engineer\w*|data|cloud|cyber\w*|startup|machine learning|ml|llm|product)\b",
-    "ops": r"\b(financ\w*|bank\w*|consult\w*|corporate|health ?care|hospital|insurance|operations|accounting|real estate|hotel|hospitality|retail)\b",
-    "nonprofit": r"\b(non-?profit|mission|association|foundation|think tank|universit\w*|aging|charit\w*|ngo|development|philanthrop\w*|public health|education)\b",
-}
-
-def suggest_sets(direction, text, prof=None, current=None):
-    """Company lists to pre-check on the Companies screen."""
-    if direction == "keep" and current:
-        return [x for x in current if x in people.COMPANY_SETS] or ["tech"]
-    blob = (text or "") if direction == "specific" else ""
-    if not blob.strip() and prof:
-        exp = prof.get("experience") or []
-        blob = " ".join([prof.get("summary", "")] + [f"{e.get('title', '')} {e.get('employer', '')}" for e in exp[:3]])
-    blob = blob.lower()
-    out = [k for k, rx in SET_WORDS.items() if re.search(rx, blob)]
-    return out or ["tech"]
+def watched_sets(s):
+    """Earlier shared company lists this profile already watches (older households only). Nobody is offered a list
+    they don't have: a new profile's employers come from the directory near them, their own additions and Claude."""
+    return [x for x in (s.get("company_sets") or []) if x in people.COMPANY_SETS]
 
 
 # ------------------------------------------------------------------ state
@@ -239,7 +228,7 @@ def get_state(pid, ingest=None):
     else:
         rstatus = "none"
     guess = infer_level(prof)
-    mine = int(s.get("seniority_mine") or (guess or {}).get("level") or 4)
+    mine = int(s["seniority_mine"]) if s.get("seniority_mine") else None   # None: not chosen (every level shows)
     step = s.get("setup_step") if s.get("setup_step") in STEPS else "welcome"
     emp = current_employer(prof)
     direction = s.get("direction") or ("specific" if (s.get("target_text") or "").strip() else "")
@@ -248,8 +237,7 @@ def get_state(pid, ingest=None):
         counts = {k: sum(1 for c in cos if k in (c.get("sets") or ["tech"])) for k in people.COMPANY_SETS}
     except Exception:
         counts = {}
-    sugg = suggest_sets(direction or "keep", s.get("target_text"), prof,
-                        s.get("company_sets") if s.get("setup_done") else None)
+    watched = watched_sets(s)
     return {
         "pid": pid,
         "name": people.name(pid),
@@ -263,10 +251,10 @@ def get_state(pid, ingest=None):
         "claude": {"ready": _claude_ready()},
         "highlights": highlights(prof),
         "inferred": {"level": guess, "current_employer": emp},
-        "market": market_hint(prof, mine),
+        "market": market_hint(prof, mine or (guess or {}).get("level")),
         "levels": {str(k): v for k, v in _levels().items()},
-        "company_sets": [{"id": k, "label": v, "count": counts.get(k)} for k, v in people.COMPANY_SETS.items()],
-        "suggested_sets": sugg,
+        "company_sets": [{"id": k, "label": v, "count": counts.get(k)} for k, v in people.COMPANY_SETS.items() if k in watched],
+        "suggested_sets": [],
         "industry_ideas": INDUSTRY_IDEAS,
         "values": {
             "name": people.name(pid),
@@ -275,10 +263,10 @@ def get_state(pid, ingest=None):
             "workplaces": s.get("workplaces") or list(WORKPLACES),
             "remote_us": bool(s.get("remote_us")),
             "current_base": s.get("current_base"),
-            "salary_floor": s.get("salary_floor"),
+            "salary_floor": s.get("salary_floor") or None,
             "salary_target": s.get("salary_target"),
             "seniority_mine": mine,
-            "band": _band_offsets(mine, s.get("seniority_band")),
+            "band": _band_offsets(mine, s.get("seniority_band")) if mine else [-1, 0, 1],
             "direction": direction,
             "target_text": s.get("target_text") or "",
             "target_scope": s.get("target_scope") or "all",
@@ -286,8 +274,9 @@ def get_state(pid, ingest=None):
             "travel_max": s.get("travel_max") or "any",
             "skip_employers": raw["skip_employers"] if "skip_employers" in raw else ([emp] if emp else []),
             "skip_industries": s.get("skip_industries") or [],
-            "company_sets": s.get("company_sets") if s.get("setup_done") or STEPS.index(step) > STEPS.index("companies") else sugg,
+            "company_sets": watched,
             "company_sets_saved": STEPS.index(step) > STEPS.index("companies") or bool(s.get("setup_done")),
+            "level_saved": STEPS.index(step) > STEPS.index("level") or bool(s.get("setup_done")),
         },
     }
 
@@ -370,21 +359,23 @@ def validate(step, data):
               "remote_us": _bool(d.get("remote_us")) and "remote" in wp}
     elif step == "pay":
         cur = _money(d.get("current_base"), "current_base", "your current base", optional=True)
-        floor = _money(d.get("salary_floor"), "salary_floor", "the lowest base you'd take")
-        floor = max(30000, min(1_000_000, floor))
+        floor = _money(d.get("salary_floor"), "salary_floor", "the lowest base you'd take", optional=True)
+        floor = max(30000, min(1_000_000, floor)) if floor else 0   # blank: no floor, every job shows
         tgt = _money(d.get("salary_target"), "salary_target", "your target", optional=True)
         if tgt is not None and tgt < floor:
             raise SetupError("Your target should be at or above your floor.", "salary_target")
         up = {"current_base": cur, "salary_floor": floor, "salary_target": tgt}
     elif step == "level":
+        if d.get("seniority_mine") in ("any", None, "", 0, "0"):   # "Show me every level"
+            return {"seniority_mine": None, "seniority_band": [1, 7]}, extra
         try:
-            m = max(2, min(7, int(d.get("seniority_mine"))))
+            m = max(1, min(7, int(d.get("seniority_mine"))))
         except (TypeError, ValueError):
-            raise SetupError("Pick your level.", "seniority_mine")
+            raise SetupError("Pick your level, or choose to see every level.", "seniority_mine")
         offs = sorted({int(o) for o in (d.get("band") or []) if str(o).lstrip("-").isdigit() and int(o) in (-1, 0, 1)})
         if not offs:
             raise SetupError("Pick at least one band of jobs to see.", "band")
-        lo, hi = max(2, m + min(offs)), min(7, m + max(offs))
+        lo, hi = max(1, m + min(offs)), min(7, m + max(offs))
         if lo > hi:
             lo = hi = m
         up = {"seniority_mine": m, "seniority_band": [lo, hi]}
@@ -410,10 +401,12 @@ def validate(step, data):
               "skip_industries": _strlist(d.get("skip_industries") or [], "skip_industries")}
         extra["prefs"] = {"display.clearance": clr}
     elif step == "companies":
-        sets = [x for x in (d.get("company_sets") or []) if x in people.COMPANY_SETS]
-        if not sets:
-            raise SetupError("Pick at least one list of companies.", "company_sets")
-        up = {"company_sets": sets}
+        # earlier shared lists can be kept or dropped here, never newly picked (see watched_sets)
+        try:
+            had = set(watched_sets(_settings(people.current())))
+        except Exception:
+            had = set()
+        up = {"company_sets": [x for x in (d.get("company_sets") or []) if x in had]}
     elif step in ("questions", "board"):
         pass  # answers go through /api/answers
     return up, extra
@@ -425,8 +418,8 @@ def next_step(step):
 def save_step(pid, step, data):
     """Validate and save one step; moves the resume point to the following step. Returns the fresh state.
     Raises SetupError (a ValueError) with a friendly message and .field."""
-    up, extra = validate(step, data)
     people.set_current(pid)
+    up, extra = validate(step, data)
     if "name" in extra:
         people.rename(pid, extra["name"])
     if extra.get("prefs"):
@@ -458,8 +451,10 @@ def goals_text(s):
         where = "/".join({"onsite": "on-site", "hybrid": "hybrid", "remote": "remote"}[w] for w in wp)
         commute = f" within {s.get('radius_miles')} miles of ZIP {s['home_zip']}" if s.get("home_zip") and wp != ["remote"] else ""
         bits.append(f"Open to {where} work{commute}" + (", remote anywhere in the US" if s.get("remote_us") else "") + ".")
-    if s.get("salary_target"):
+    if s.get("salary_target") and s.get("salary_floor"):
         bits.append(f"Target base ${s['salary_target']:,}; floor ${s['salary_floor']:,}.")
+    elif s.get("salary_target"):
+        bits.append(f"Target base ${s['salary_target']:,}.")
     if s.get("travel_max") and s["travel_max"] != "any":
         bits.append({"none": "Wants no travel.", "light": "Light travel at most (under ~10%).",
                      "moderate": "Travel up to ~25% at most."}[s["travel_max"]])
@@ -474,8 +469,6 @@ def finish(pid):
     {"ok", "kick": {"interpret_target": bool, "update": bool}, "settings": {...}}."""
     people.set_current(pid)
     s = _settings(pid)
-    if not s.get("salary_floor"):
-        raise SetupError("Add the lowest base pay you'd take first.", "salary_floor")
     _, draft = _profiles(pid)
     if draft:
         import resume
@@ -491,7 +484,7 @@ def finish(pid):
                        "pivot_ai": bool((s.get("target_text") or "").strip())})
     return {"ok": True, "has_profile": bool(active),
             "kick": {"interpret_target": bool((s.get("target_text") or "").strip()), "update": True},
-            "settings": {**people.DEFAULT_SETTINGS, **SETUP_DEFAULTS, **raw}}
+            "settings": {**SETUP_DEFAULTS, **people._with_defaults(raw)}}
 
 def start(pid):
     """Call right after people.add(): marks the new profile as needing setup."""

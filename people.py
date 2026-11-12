@@ -18,11 +18,11 @@ DEFAULT_SETTINGS = {
     # and a written setup_done=False would send existing profiles back through setup).
     "home_zip": "", "radius_miles": 35, "workplaces": ["onsite", "hybrid", "remote"], "remote_us": True,
     "salary_target": None, "travel_max": "any", "skip_employers": [], "skip_industries": [], "direction": "",
-    "salary_floor": 150000,
+    "salary_floor": 0,          # lowest base pay to show; 0 = no floor (the default for new profiles)
     "current_base": None,
     "current_label": "",
-    "seniority_mine": 4,
-    "seniority_band": [3, 5],
+    "seniority_mine": None,     # 1 (entry level) to 7; None = not chosen yet, so every level shows
+    "seniority_band": [1, 7],
     "goals": "",
     "pivot_ai": False,          # legacy; a non-empty target_text turns the target tab on
     "target_text": "",          # the person's own words
@@ -32,17 +32,33 @@ DEFAULT_SETTINGS = {
     "target_any_title": False,  # derived: target open to any role
     "target_keywords": [],      # derived: title filter
     "target_summary": "",       # derived: one-line restatement
-    "company_sets": ["tech"],   # which company lists this profile watches; own additions use "own-<id>"
+    "company_sets": [],         # earlier shared company lists this profile still watches (see COMPANY_SETS)
+    "title_rule": "own",        # which job titles pass: "own" = only the person's own job titles (none given: every
+                                # title); "builtin" = profiles from before that rule keep the old built-in word list
 }
 
-COMPANY_SETS = {"tech": "Tech & AI", "ops": "Business & corporate (finance, consulting, health, large companies and HQs)",
-                "nonprofit": "Nonprofit, associations & mission-driven (aging, health, development, think tanks, foundations, universities)"}
+# Profiles made before these defaults changed keep what they had. A settings file always held every default of its
+# day, so a key that is missing from the file (or a file that is missing) means "the old default", never the new one.
+# New profiles get today's defaults written out by add().
+LEGACY_MISSING = {"salary_floor": 150000, "seniority_mine": 4, "seniority_band": [3, 5], "company_sets": ["tech"],
+                  "title_rule": "builtin"}
+
+def _with_defaults(saved):
+    s = dict(DEFAULT_SETTINGS)
+    s.update({k: (list(v) if isinstance(v, list) else v) for k, v in LEGACY_MISSING.items() if k not in saved})
+    s.update(saved)
+    return s
+
+# Shared company lists from earlier versions. Nobody is offered these any more: a new profile's employers come from the
+# employer directory near them ("Near me"), their own additions and what Claude finds. Profiles and catalogs that
+# already use a list keep it (and its companies) under a plain name.
+COMPANY_SETS = {"tech": "Earlier list 1", "ops": "Earlier list 2", "nonprofit": "Earlier list 3"}
 
 def company_sets(pid=None):
-    """Lists this profile watches, always including its own additions, its "Near me" list (Catalog page) and anything
-    added for everyone."""
+    """Lists this profile watches: its own additions, its "Near me" list (Catalog page), anything added for everyone,
+    and any earlier shared list it already watched."""
     pid = pid or current()
-    return set(settings(pid).get("company_sets") or ["tech"]) | {f"own-{pid}", f"near-{pid}", "all"}
+    return set(settings(pid).get("company_sets") or []) | {f"own-{pid}", f"near-{pid}", "all"}
 
 # ---- app preferences (per profile). Each entry: default value and the allowed values (or a (min, max) range).
 PREF_SCHEMA = {
@@ -68,10 +84,12 @@ PREF_SCHEMA = {
     "review.threshold": (80, (60, 95)),
     "review.max_rounds": (2, (1, 4)),
     "review.ask_facts": (True, [True, False]),
-    "claude.per_update": (300, (0, 1000)),
-    "claude.opus_top": (300, (0, 1000)),
-    "claude.sonnet_pct": (15, (0, 50)),
-    "claude.haiku_per_night": (4000, (0, 20000)),
+    # Rating limits (Settings, Claude usage). Every one is per run, and ai_score.RUN_LIMITS caps them whatever is saved
+    # here: an older, larger saved value simply means "as many as allowed". The key names are historical.
+    "claude.per_update": (50, (0, 50)),          # Target-tab ratings per run
+    "claude.opus_top": (50, (0, 1000)),          # how many of the best jobs get the most careful rating (50 new per run)
+    "claude.sonnet_pct": (15, (0, 50)),          # share of quick-checked jobs that get a second look (100 per run)
+    "claude.haiku_per_night": (500, (0, 500)),   # quick checks per run
     "claude.auto_rerate": (True, [True, False]),
     "claude.auto_rate": (True, [True, False]),
     "claude.facts_per_update": (40, (0, 200)),   # shared facts: an update uses the highest value any profile sets
@@ -85,7 +103,16 @@ PREF_SCHEMA = {
 def prefs(pid=None):
     """Current preferences, defaults filled in."""
     saved = settings(pid).get("prefs") or {}
-    return {k: saved.get(k, d) for k, (d, _) in PREF_SCHEMA.items()}
+    out = {}
+    for k, (d, allowed) in PREF_SCHEMA.items():
+        v = saved.get(k, d)
+        if isinstance(allowed, tuple):  # a number saved under an older, wider range now means the most that's allowed
+            try:
+                v = max(allowed[0], min(allowed[1], int(v)))
+            except (TypeError, ValueError):
+                v = d
+        out[k] = v
+    return out
 
 def clean_prefs(new):
     """Keep only known keys with allowed values (numbers clamped to their range)."""
@@ -151,12 +178,11 @@ def pdir(*parts, pid=None):
     return os.path.join(d, *parts)
 
 def settings(pid=None):
-    s = dict(DEFAULT_SETTINGS)
     try:
-        s.update(json.load(open(pdir("settings.json", pid=pid))))
+        saved = json.load(open(pdir("settings.json", pid=pid)))
     except Exception:
-        pass
-    return s
+        saved = {}
+    return _with_defaults(saved if isinstance(saved, dict) else {})
 
 def read_saved_strict(pid=None):
     """The person's saved settings.json exactly as stored (no defaults). A missing file -> None; one that can't be read
@@ -175,7 +201,7 @@ def settings_strict(pid=None, missing_ok=False):
         if not missing_ok:
             raise paths.CacheUnreadable("settings.json is missing; left it alone.")
         d = {}
-    return {**DEFAULT_SETTINGS, **d}
+    return _with_defaults(d)
 
 def _write_settings(s, pid=None):
     paths.dump_json_atomic(pdir("settings.json", pid=pid), s, indent=1)
@@ -199,6 +225,13 @@ def add(name):
     people = load_index() + [{"id": pid, "name": name}]
     save_index(people)
     pdir(pid=pid)
+    # A new profile starts from today's defaults, written out in full: no pay floor, no level chosen, no shared
+    # company lists, titles filtered only by the person's own job titles (see LEGACY_MISSING).
+    try:
+        if not os.path.exists(pdir("settings.json", pid=pid)):
+            _write_settings(json.loads(json.dumps(DEFAULT_SETTINGS)), pid)
+    except Exception:
+        pass
     # New profiles start with no clearance filter (the "secret" default in PREF_SCHEMA is kept only so existing
     # profiles that never saved this preference don't change behaviour).
     try:
@@ -249,6 +282,6 @@ def ensure_migrated(base_cfg=None):
             shutil.move(src, pdir(f, pid=pid))
     cfg = base_cfg or paths.load_config()
     sen = cfg.get("seniority", {})
-    save_settings({"salary_floor": cfg.get("salary_floor") or DEFAULT_SETTINGS["salary_floor"],
+    save_settings({"salary_floor": cfg.get("salary_floor") or LEGACY_MISSING["salary_floor"],
                    "seniority_mine": sen.get("mine", 4), "seniority_band": sen.get("band", [3, 5]),
-                   "goals": cfg.get("goals", "")}, pid=pid)
+                   "goals": cfg.get("goals", ""), "company_sets": ["tech"], "title_rule": "builtin"}, pid=pid)

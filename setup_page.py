@@ -448,8 +448,9 @@ function render(){
 }
 
 function footer(o){
-  $("back").hidden = o.back === false;
-  $("skip").hidden = !o.skip; $("skip").textContent = o.skipLabel || "Skip";
+  // busy(true) disables all three buttons; every redraw re-enables Back and Skip (Next follows o.disabled).
+  $("back").hidden = o.back === false; $("back").disabled = false;
+  $("skip").hidden = !o.skip; $("skip").textContent = o.skipLabel || "Skip"; $("skip").disabled = false;
   $("next").hidden = o.next === false;
   $("next").innerHTML = esc(o.nextLabel || "Continue");
   $("next").disabled = !!o.disabled;
@@ -691,10 +692,15 @@ SCREENS.highlights = {
       return `<section class="hcard${wide ? " wide" : ""}" style="animation-delay:${i * 70}ms" aria-label="${esc(c.label)}">
         <div class="hhead"><i>${I[c.icon] || I.dot}</i>${esc(c.label)}</div>${body}</section>`;
     };
+    const manual = !!(S.resume && S.resume.manual);  // filled in by hand: there is no file to have "read"
+    const first = h.name ? `, ${esc(h.name.split(" ")[0])}` : "";
+    const lede = manual
+      ? (h.cards.length ? "Here’s the profile you filled in. This is what we’ll match jobs against." : "You filled in your profile yourself. You can carry on and add more later on My profile.")
+      : (h.cards.length ? "A quick look at what stood out. This is what we’ll match jobs against." : "We couldn’t pull much from that file. You can carry on and fix it later on My profile.");
     return `
-      <p class="eyebrow">Your resume</p>
-      <h1 class="q" tabindex="-1">Here’s what we read${h.name ? `, ${esc(h.name.split(" ")[0])}` : ""}.</h1>
-      <p class="lede">${h.cards.length ? "A quick look at what stood out. This is what we’ll match jobs against." : "We couldn’t pull much from that file. You can carry on and fix it later on My profile."}</p>
+      <p class="eyebrow">${manual ? "Your profile" : "Your resume"}</p>
+      <h1 class="q" tabindex="-1">${manual ? `Here’s your profile${first}.` : `Here’s what we read${first}.`}</h1>
+      <p class="lede">${lede}</p>
       <div class="hgrid">${h.cards.map(card).join("")}</div>
       <p class="fine">Something off? You can edit your profile any time on My profile (the person icon at the top of the board). ${errBox("_")}</p>`;
   },
@@ -761,15 +767,15 @@ SCREENS.pay = {
     return `
       <p class="eyebrow">Pay</p>
       <h1 class="q" tabindex="-1">What are you looking to make?</h1>
-      <p class="lede">Base salary per year, in thousands. Type 150 for $150,000.</p>
+      <p class="lede">Base pay per year, in thousands: type 60 for $60,000. Every box here is optional; leave them blank to see jobs at any pay.</p>
       ${m ? `<div class="hint">${I.info}<div>Similar roles list a median base of <b>${fmtK(m.median)}</b>, with most between <b>${fmtK(m.p25)}</b> and <b>${fmtK(m.p75)}</b>.<small>From ${esc(m.basis)}.</small></div></div>` : ""}
-      <label class="field"><span class="flabel">Lowest base you’d accept</span>
-        <span class="fhelp">Jobs that clearly pay less are hidden.</span>
-        <span class="affix" data-field="salary_floor"><span>$</span><input id="floor" inputmode="numeric" value="${toK(V.salary_floor)}" placeholder="${m ? toK(m.p25) : "120"}" aria-describedby="err-salary_floor" data-autofocus><span>k</span></span>
+      <label class="field"><span class="flabel">Lowest base you’d accept<span class="opt">Optional</span></span>
+        <span class="fhelp">Jobs that clearly pay less are hidden. Blank means no floor.</span>
+        <span class="affix" data-field="salary_floor"><span>$</span><input id="floor" inputmode="numeric" value="${toK(V.salary_floor)}" placeholder="${m ? toK(m.p25) : "—"}" aria-describedby="err-salary_floor" data-autofocus><span>k</span></span>
         ${errBox("salary_floor")}</label>
       <label class="field"><span class="flabel">Target base<span class="opt">Optional</span></span>
         <span class="fhelp">What a great offer looks like.</span>
-        <span class="affix" data-field="salary_target"><span>$</span><input id="target" inputmode="numeric" value="${toK(V.salary_target)}" placeholder="${m ? toK(m.p75) : "160"}" aria-describedby="err-salary_target"><span>k</span></span>
+        <span class="affix" data-field="salary_target"><span>$</span><input id="target" inputmode="numeric" value="${toK(V.salary_target)}" placeholder="${m ? toK(m.p75) : "—"}" aria-describedby="err-salary_target"><span>k</span></span>
         ${errBox("salary_target")}</label>
       <label class="field"><span class="flabel">Current base<span class="opt">Optional</span></span>
         <span class="fhelp">Only used to show raises on your board. Never shared.</span>
@@ -784,38 +790,38 @@ SCREENS.pay = {
 SCREENS.level = {
   title: "Your level",
   html: () => {
-    const g = S.inferred.level, L = S.levels, m = V.seniority_mine;
+    // Nothing is picked for the person: the level they choose is theirs. A saved choice (coming Back, or re-running
+    // setup) shows as chosen; "Every level" is what a profile has until then.
+    const g = S.inferred.level, L = S.levels, m = V.seniority_mine || null, any = local.anyLevel === true || (!m && S.values.level_saved);
     const band = V.band;
     const nm = n => L[String(n)] || "";
     return `
       <p class="eyebrow">Level</p>
-      <h1 class="q" tabindex="-1">${g ? "Here’s our guess at your level." : "What level are you at?"}</h1>
-      <p class="lede">We use it to skip jobs that are far too junior or too senior for you.</p>
-      <div class="guess" aria-live="polite"><span class="lv" id="lvNum">${m}</span><div><b id="lvName">${esc(nm(m))}</b>
-        <small>${g ? (g.level === m ? `Based on ${esc(g.why)}.` : `Your pick. Our guess was ${esc(g.name)}.`) : "Pick the level that fits you best."}</small></div></div>
-      <details class="pick"${g ? "" : " open"}><summary>${g ? "Not quite? Choose your level" : "Choose your level"}</summary>
-        <div class="levels" role="radiogroup" aria-label="Your level" data-field="seniority_mine">
-          ${[2, 3, 4, 5, 6, 7].map(n => radioCard("lv", n, n === m, esc(nm(n)), g && g.level === n ? "Our guess" : `Level ${n}`)).join("")}
-        </div>${errBox("seniority_mine")}</details>
-      <div class="sect" style="margin-top:28px">Show me jobs that are</div>
-      <div class="choices cols3" role="group" aria-label="Which levels to show" data-field="band" id="band">${this_band(m, band)}</div>
+      <h1 class="q" tabindex="-1">What level are you at?</h1>
+      <p class="lede">We use it to skip jobs that are far too junior or too senior for you. Not sure, or open to anything? Choose every level.</p>
+      ${g ? `<div class="hint">${I.info}<div>Going by ${esc(g.why)}, <b>${esc(g.name)}</b> might be closest. Pick whichever fits you.</div></div>` : ""}
+      <div class="levels" role="radiogroup" aria-label="Your level" data-field="seniority_mine">
+        ${[1, 2, 3, 4, 5, 6, 7].map(n => radioCard("lv", n, n === m && !any, esc(nm(n)), "")).join("")}
+        ${radioCard("lv", "any", any, "Show me every level", "No level filter.")}
+      </div>${errBox("seniority_mine")}
+      <div id="bandWrap"${m && !any ? "" : " hidden"}><div class="sect" style="margin-top:28px">Show me jobs that are</div>
+      <div class="choices cols3" role="group" aria-label="Which levels to show" data-field="band" id="band">${m ? this_band(m, band) : ""}</div></div>
       ${errBox("band")}`;
   },
   mount(){
     document.querySelectorAll('input[name="lv"]').forEach(i => i.addEventListener("change", () => {
-      const m = +radio("lv"), band = checked("band").map(Number);
-      $("lvNum").textContent = m; $("lvName").textContent = S.levels[String(m)];
-      const g = S.inferred.level;
-      $("lvName").nextElementSibling.textContent = g ? (g.level === m ? `Based on ${g.why}.` : `Your pick. Our guess was ${g.name}.`) : "";
-      $("band").innerHTML = this_band(m, band.length ? band : [-1, 0, 1]);
+      const v = radio("lv"), band = checked("band").map(Number);
+      local.anyLevel = v === "any";
+      $("bandWrap").hidden = v === "any";
+      if (v !== "any") $("band").innerHTML = this_band(+v, band.length ? band : [-1, 0, 1]);
     }));
   },
-  collect: () => ({seniority_mine: +radio("lv") || V.seniority_mine, band: checked("band").map(Number)}),
+  collect: () => { const v = radio("lv"); return v === "any" ? {seniority_mine: "any", band: []} : {seniority_mine: v ? +v : null, band: checked("band").map(Number)}; },
 };
 function this_band(m, band){
   const L = S.levels, nm = n => L[String(n)] || "";
   return [[-1, "A little below", m - 1], [0, "At my level", m], [1, "A little above", m + 1]].map(([o, t, n]) => {
-    const ok = n >= 2 && n <= 7;
+    const ok = n >= 1 && n <= 7;
     return radioCard("band", o, ok && band.includes(o), t, ok ? esc(nm(n)) : "Not available", {type: "checkbox", compact: true, disabled: !ok});
   }).join("");
 }
@@ -846,11 +852,12 @@ SCREENS.direction = {
     const d = radio("dir"), box = $("dirMore");
     if (d === "specific") {
       box.innerHTML = `<label class="field"><span class="flabel">In your own words, what are you aiming for?</span>
-        <span class="fhelp">For example: “Product management in health tech” or “Any role at an AI company that pays the most.”</span>
+        <span class="fhelp">For example: “Office manager at a school or hospital” or “Move from retail into human resources.”</span>
         <textarea class="big" id="ttext" data-field="target_text" rows="3" maxlength="2000" aria-describedby="err-target_text">${esc(V.target_text)}</textarea>${errBox("target_text")}</label>
-        ${radioCard("scope", "ai", V.target_scope === "ai", "Only AI companies", "Limit this direction to AI labs and AI-first companies.", {type: "checkbox"})}`;
+        ${S.values.target_scope === "ai" ? radioCard("scope", "ai", V.target_scope === "ai", "Only the companies marked as AI companies", "A choice saved by an earlier version. Untick it to use every employer you watch.", {type: "checkbox"}) : ""}`;
       $("ttext").addEventListener("input", e => { V.target_text = e.target.value; });
-      box.querySelector('input[name="scope"]').addEventListener("change", e => { V.target_scope = e.target.checked ? "ai" : "all"; });
+      const sc = box.querySelector('input[name="scope"]');
+      if (sc) sc.addEventListener("change", e => { V.target_scope = e.target.checked ? "ai" : "all"; });
     } else if (d === "unsure") {
       this.suggest();
     } else box.innerHTML = "";
@@ -925,21 +932,25 @@ SCREENS.dealbreakers = {
 };
 
 SCREENS.companies = {
-  title: "Companies",
+  title: "Employers",
   html: () => {
-    const sug = S.suggested_sets || [];
+    // No ready-made industry lists: employers come from where the person lives, what they add and what Claude finds.
+    // S.company_sets only holds shared lists from an earlier version that this profile already watches (keep or drop).
+    const sets = S.company_sets || [];
     return `
-      <p class="eyebrow">Companies</p>
-      <h1 class="q" tabindex="-1">Which companies should we watch?</h1>
-      <p class="lede">We check these employers’ career pages directly, every day. ${sug.length ? "We’ve picked the lists that fit where you’re headed." : ""}</p>
-      <div class="choices" role="group" aria-label="Company lists" data-field="company_sets">
-        ${S.company_sets.map(c => {
-          const [t, sub] = c.label.split(/ \((.*)\)$/);
-          const extra = [sub ? sub.charAt(0).toUpperCase() + sub.slice(1) : "", c.count ? `${c.count} companies` : ""].filter(Boolean).join(" · ");
-          return radioCard("sets", c.id, V.company_sets.includes(c.id), esc(t) + (sug.includes(c.id) ? '<span class="pill">Suggested</span>' : ""), esc(extra), {type: "checkbox"});
-        }).join("")}
-      </div>${errBox("company_sets")}
-      <p class="fine">You can add any other company from the board later.</p>`;
+      <p class="eyebrow">Employers</p>
+      <h1 class="q" tabindex="-1">Where your employers come from</h1>
+      <p class="lede">Siftwell reads the job pages on employers’ own career sites. It checks them when you press Find new jobs, or on a schedule if you turn on automatic updates in Settings (they are off to begin with).</p>
+      <ol class="plan">
+        <li><b>Employers near you</b><small>On the last screen, Siftwell adds employers that hire near you (or remotely) from its free employer directory. They go on your Near me list.</small></li>
+        <li><b>Employers you add</b><small>Paste any employer’s careers link on the Catalog page, any time, and Siftwell watches it too.</small></li>
+        <li><b>Employers Claude finds</b><small>Optional. With Claude connected, it can search the web for more employers near you.</small></li>
+      </ol>
+      ${sets.length ? `<div class="sect" style="margin-top:24px">Lists you already watch</div>
+      <div class="choices" role="group" aria-label="Company lists you already watch" data-field="company_sets">
+        ${sets.map(c => radioCard("sets", c.id, V.company_sets.includes(c.id), esc(c.label), c.count ? `${c.count} companies` : "", {type: "checkbox"})).join("")}
+      </div><p class="fine">These shared lists come from an earlier version of Siftwell. Untick one to stop watching its companies.</p>` : ""}
+      ${errBox("company_sets")}`;
   },
   collect: () => ({company_sets: checked("sets")}),
 };
@@ -1078,8 +1089,8 @@ SCREENS.board = {
     if (f.possible && this.findOn) steps.push([findTitle, findText]);
     const found = d.possible || (f.possible && this.findOn);
     steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just added" : "") : found ? "the employers it just added" : lists}, the ones with the most openings near you first. The first jobs reach your board within a few minutes and it keeps filling in; checking every employer near a big city can take a few hours.`]);
-    steps.push(["Keep the jobs that fit", `Jobs ${where}, paying at least ${fmtK(v.salary_floor)}, at your level, minus your dealbreakers.`]);
-    if (cl) steps.push(["Rate the best matches", "Claude reads the top jobs against your resume and gives each a Match rating, using your Claude plan."]);
+    steps.push(["Keep the jobs that fit", `Jobs ${where}${v.salary_floor ? `, paying at least ${fmtK(v.salary_floor)}` : ""}${v.seniority_mine ? ", around your level" : ""}, minus your dealbreakers.`]);
+    if (cl) steps.push(["Rate the best matches", "Claude reads the most appealing jobs against your resume and gives each a Match rating, using your Claude plan: up to 500 jobs in one go. The rest show — until you press Rate more on your board."]);
     const none = !this.canStart();
     $("bBody").innerHTML = `
       <p class="eyebrow">Last step</p>
@@ -1087,8 +1098,8 @@ SCREENS.board = {
       <p class="lede">Siftwell doesn’t search until you say so. Here’s what happens when you press <b>Start my job search</b>:</p>
       <ol class="plan">${steps.map(([t, d]) => `<li><b>${t}</b><small>${d}</small></li>`).join("")}</ol>
       ${findBox}
-      ${none ? `<div class="hint" style="margin-top:20px">${I.info}<div><b>There are no companies to check yet.</b><small>The lists you picked don’t have any companies in this Siftwell. Add your home ZIP on the Where step so Siftwell can add employers near you, or add a company by its careers link.</small>
-        <div class="alt" style="justify-content:flex-start;margin-top:8px"><button type="button" class="linkbtn" id="toCos">Back to Companies</button><a class="linkbtn" href="/catalog#companies" style="text-decoration:none">Add a company by link</a></div></div></div>` : ""}
+      ${none ? `<div class="hint" style="margin-top:20px">${I.info}<div><b>There are no companies to check yet.</b><small>Your employer list is empty. Add your home ZIP on the Where step so Siftwell can add employers near you, or add a company by its careers link.</small>
+        <div class="alt" style="justify-content:flex-start;margin-top:8px"><button type="button" class="linkbtn" id="toCos">Back to Employers</button><a class="linkbtn" href="/catalog#companies" style="text-decoration:none">Add a company by link</a></div></div></div>` : ""}
       ${errBox("_")}
       <p class="fine">You can leave this page while it runs; the search keeps going as long as Siftwell is running. Or press Skip for now and start it later from your board.</p>`;
     footer(this.foot());
@@ -1232,11 +1243,10 @@ const Mock = {
       inferred: {level: null, current_employer: ""},
       market: null,
       levels: BOOT.levels,
-      company_sets: BOOT.sets.map((s, i) => ({...s, count: [214, 168, 131][i] || null})),
-      suggested_sets: ["tech"], industry_ideas: BOOT.industries,
+      company_sets: [], suggested_sets: [], industry_ideas: BOOT.industries,
       values: {name: "", home_zip: "", radius_miles: 35, workplaces: ["onsite", "hybrid", "remote"], remote_us: true, current_base: null,
-               salary_floor: 150000, salary_target: null, seniority_mine: 4, band: [-1, 0, 1], direction: "", target_text: "", target_scope: "all",
-               clearance: "secret", travel_max: "any", skip_employers: [], skip_industries: [], company_sets: ["tech"], company_sets_saved: false},
+               salary_floor: null, salary_target: null, seniority_mine: null, band: [-1, 0, 1], direction: "", target_text: "", target_scope: "all",
+               clearance: "all", travel_max: "any", skip_employers: [], skip_industries: [], company_sets: [], company_sets_saved: false},
       _t: {},
     };
   },
@@ -1254,9 +1264,7 @@ const Mock = {
     ]};
     s.inferred = {level: {level: 4, name: BOOT.levels["4"], why: "your most recent title, “Senior Program Manager” and about 9 years of experience"}, current_employer: "Northwind Health"};
     s.market = {median: 146000, p25: 128000, p75: 171000, n: 212, basis: "212 openings with pay listed, roles like yours near your level"};
-    s.suggested_sets = ["ops", "nonprofit"];
     if (!s._saved_emp) s.values.skip_employers = ["Northwind Health"];
-    if (!s.values.company_sets_saved) s.values.company_sets = ["ops", "nonprofit"];
   },
   err(msg, field){ const e = new Error(msg); e.field = field; throw e; },
   money(v, field, label, optional){
@@ -1277,19 +1285,22 @@ const Mock = {
       Object.assign(v, d, {remote_us: d.remote_us && d.workplaces.includes("remote")});
     }
     if (step === "pay") {
-      const c = this.money(d.current_base, "current_base", "your current base", true), f = this.money(d.salary_floor, "salary_floor", "the lowest base you’d take"), t = this.money(d.salary_target, "salary_target", "your target", true);
-      if (t != null && t < f) this.err("Your target should be at or above your floor.", "salary_target");
+      const c = this.money(d.current_base, "current_base", "your current base", true), f = this.money(d.salary_floor, "salary_floor", "the lowest base you’d take", true), t = this.money(d.salary_target, "salary_target", "your target", true);
+      if (t != null && f != null && t < f) this.err("Your target should be at or above your floor.", "salary_target");
       Object.assign(v, {current_base: c, salary_floor: f, salary_target: t});
     }
-    if (step === "level") { if (!d.band.length) this.err("Pick at least one band of jobs to see.", "band"); Object.assign(v, d); }
+    if (step === "level") {
+      if (d.seniority_mine === "any") Object.assign(v, {seniority_mine: null, band: [-1, 0, 1]});
+      else { if (!d.seniority_mine) this.err("Pick your level, or choose to see every level.", "seniority_mine"); if (!d.band.length) this.err("Pick at least one band of jobs to see.", "band"); Object.assign(v, d); }
+      v.level_saved = true;
+    }
     if (step === "direction") {
       if (!d.direction) this.err("Choose one of the options.", "direction");
       if (d.direction !== "keep" && !String(d.target_text || "").trim()) this.err(d.direction === "specific" ? "Describe what you’re aiming for." : "Pick one of the suggestions, or describe your own.", "target_text");
       Object.assign(v, d);
-      if (!v.company_sets_saved) { const t = (d.target_text || "").toLowerCase(); s.suggested_sets = d.direction === "keep" ? ["ops", "nonprofit"] : /\b(ai|tech|software|data)\b/.test(t) ? ["tech"] : /nonprofit|mission|health/.test(t) ? ["nonprofit", "ops"] : ["ops"]; v.company_sets = s.suggested_sets.slice(); }
     }
     if (step === "dealbreakers") { Object.assign(v, d); s._saved_emp = true; }
-    if (step === "companies") { if (!d.company_sets.length) this.err("Pick at least one list of companies.", "company_sets"); v.company_sets = d.company_sets; v.company_sets_saved = true; }
+    if (step === "companies") { v.company_sets = d.company_sets; v.company_sets_saved = true; }
     if (step === "highlights" && s.resume.status === "draft") s.resume.status = "active";
     const i = STEPS.indexOf(step) + 1;
     if (i > STEPS.indexOf(s.step)) s.step = STEPS[i];

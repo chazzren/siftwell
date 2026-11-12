@@ -110,7 +110,8 @@ def _pane_search():
     ]
     return ('<p class="sfoot pmoved" id="psMoved">Location, ways of working, travel, pay floor and level are set in the board\'s Filters. '
             '<a href="/#filters">Open Filters on the board</a></p>' +
-            _group("Job titles to search for", "", [_pad('<p class="note" id="ttNote">One per line. Claude searches for these and roles like them.</p>'
+            _group("Job titles to search for", "", [_pad('<p class="note" id="ttNote">One per line. Your board shows jobs whose titles match these (or the title words taken '
+                                                          'from your resume). With none at all, every job title is shown.</p>'
                                                           '<textarea id="ps-titles" rows="6" aria-label="Job titles to search for, one per line"></textarea>')]) +
             _group("Goals for Claude to weigh", "Pay, commute, what to avoid. Claude reads this when it rates a job.",
                    [_textarea("ps-goals", "goals", "Goals for Claude to weigh", 4)]) +
@@ -121,9 +122,12 @@ def _pane_search():
 def _pane_target():
     return (_group("What you're aiming for", "In your own words. It gets its own tab where Claude rates each job as a step toward it. "
                    "Leave it blank to skip, or tap Not sure? for suggestions.",
-                   [_textarea("ps-target_text", "target_text", "Target", 4, "e.g. Highest-paying role I can land at an AI company, any function")]) +
+                   [_textarea("ps-target_text", "target_text", "Target", 4, "e.g. Office manager at a school or hospital, or a move from retail into human resources")]) +
+            # (shown only to a profile that already limited its target this way in an earlier version: see fillSettings)
+            '<div id="tgScopeWrap" hidden>' +
             _group("Which companies", "", [_row_ps("Companies", "", "ps-target_scope",
-                                                   _select("ps-target_scope", "target_scope", [("all", "All tracked companies"), ("ai", "AI companies only")]))]) +
+                                                   _select("ps-target_scope", "target_scope", [("all", "Every employer I watch"), ("ai", "Only the ones marked as AI companies")]))]) +
+            '</div>' +
             _group("What you'd do to get there", "Time, courses, certifications, projects.",
                    [_textarea("ps-prep_text", "prep_text", "What you'd do to get there", 3, "e.g. 5 hours a week for 3 months; one certification; no degree")]) +
             _group("Claude's reading", "", [_pad('<div class="note" id="tgState" role="status" aria-live="polite"></div>'
@@ -134,8 +138,13 @@ def _pane_target():
 def _pane_companies():
     catalog = (f'<a href="{e(CATALOG_HREF)}">Browse every company Siftwell tracks</a>' if CATALOG_HREF
                else '<span class="note" id="catalogSlot">The Catalog, a page for browsing every company Siftwell tracks, is coming.</span>')
-    return (_group("Lists I watch", "Which employers this profile's board watches. Changes apply right away to listings already fetched; "
-                   "new listings arrive with the next update.", [_pad('<div class="checks" id="coSets"></div>')]) +
+    return ('<p class="sfoot" style="margin-top:14px">Your employers come from the Siftwell employer directory near you (your Near me list, on the '
+            'Catalog page), the companies you add here, and what Claude finds for you.</p>'
+            # (shared lists from an earlier version: shown only when this profile already watches one, to keep or drop)
+            '<div id="coSetsWrap" hidden>' +
+            _group("Lists I already watch", "Shared company lists from an earlier version of Siftwell. Untick one to stop watching its companies; "
+                   "changes apply right away to listings already fetched.", [_pad('<div class="checks" id="coSets"></div>')]) +
+            '</div>' +
             _group("Add a company", "", [
                 '<form class="srow stack" id="coAddForm"><input type="url" id="coUrl" placeholder="Paste a company\'s careers or job-list link" aria-label="Careers page link">'
                 '<input type="text" id="coName" placeholder="Name (optional)" aria-label="Company name">'
@@ -426,7 +435,10 @@ function fillOne(el){
     el.value = v == null ? "" : String(v);
   }
 }
-const fillSettings = () => document.querySelectorAll("[data-ps],[data-wp]").forEach(fillOne);
+const fillSettings = () => {
+  document.querySelectorAll("[data-ps],[data-wp]").forEach(fillOne);
+  const w = $("tgScopeWrap"); if (w && $("ps-target_scope").value === "ai") w.hidden = false;
+};
 function savePS(el, settings){
   saveState(el, "Saving…");
   return saved(el, jpost("/api/person/settings", {settings})).then(d => {
@@ -445,7 +457,7 @@ function drawTitles(){
   if (document.activeElement !== t) t.value = p ? lines(p.target_roles) : "";
   $("ttNote").textContent = !p ? "Upload your resume first: Claude drafts these from it."
     : DRAFT ? "From your new draft. They are saved when you approve it under About you."
-    : "One per line. Claude searches for these and roles like them.";
+    : "One per line. Your board shows jobs whose titles match these (or the title words taken from your resume). With none at all, every job title is shown.";
 }
 $("ps-titles").addEventListener("change", e => {
   if (DRAFT) return;
@@ -627,13 +639,13 @@ $("qGo").addEventListener("click", () => {
 // ---- Companies: lists watched, companies added, adding by link
 function loadCompanies(){
   return fetch("/api/companies/mine").then(r => r.json()).then(d => {
+    $("coSetsWrap").hidden = !d.sets.length;
     $("coSets").innerHTML = d.sets.map(x => `<label class="chk"><input type="checkbox" data-set="${esc(x.id)}" ${d.watching.includes(x.id) ? "checked" : ""}> ${esc(x.label)} <span class="note">(${x.count})</span></label>`).join("");
     $("coOwn").innerHTML = d.own.length ? d.own.map(c => `<div class="fact"><div><b>${esc(c.name)}</b><div class="fl">${esc(c.ats)}${c.everyone ? " · everyone" : " · this profile"}</div></div></div>`).join("") : `<div class="note">None yet. Paste a careers link above.</div>`;
   }).catch(() => { $("coOwn").innerHTML = `<div class="note">Couldn't load. Check the connection.</div>`; });
 }
 $("coSets").addEventListener("change", e => {
   const sets = [...$("coSets").querySelectorAll("input:checked")].map(i => i.dataset.set);
-  if (!sets.length) { e.target.checked = true; saveState(e.target, "Keep at least one list.", true); return; }
   savePS(e.target, {company_sets: sets});
 });
 $("coAddForm").addEventListener("submit", e => {

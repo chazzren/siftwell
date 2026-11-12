@@ -90,12 +90,29 @@ def cli_logged_in(path):
     except Exception:
         return False
 
+def _usage(cfg, usage, batch, stub=False):
+    """One line in DATA/claude_usage.jsonl for this batch (never lets a rating fail)."""
+    try:
+        import claude_usage
+        claude_usage.record("Match ratings", cfg.get("model"), usage, len(batch), stub=stub)
+    except Exception:
+        pass
+
 def _score_batch_cli(path, cfg, profile, batch):
     import claude_cli as _cc
+    msg = "Score these postings. Return one result per job id.\n\n" + "\n\n".join(_job_text(j) for j in batch)
+    if os.environ.get(_cc.STUB_ENV):
+        # tests: a canned answer instead of Claude. {"_rate_all": {...one result without "id"...}} rates every job in
+        # the batch the same way; otherwise the answer is used as is ({"results": [...]}).
+        canned = _cc._stub(msg)
+        if canned is not None:
+            if isinstance(canned, dict) and "_rate_all" in canned:
+                canned = {"results": [{**canned["_rate_all"], "id": j["id"]} for j in batch]}
+            _usage(cfg, {}, batch, stub=True)
+            return {x["id"]: _parse(x) for x in canned.get("results", [])}
     _cc.forbid_check(f"ai_score CLI {cfg['model']} x{len(batch)}")
     work = paths.data("claude_work")  # empty dir so no project files/CLAUDE.md are picked up
     os.makedirs(work, exist_ok=True)
-    msg = "Score these postings. Return one result per job id.\n\n" + "\n\n".join(_job_text(j) for j in batch)
     cmd = [*osdeps.cmd(path), "-p", "--model", cfg["model"], "--effort", cfg.get("effort", "low"), "--tools", "",
            "--system-prompt", SYSTEM + "\n\n" + profile, "--json-schema", json.dumps(SCHEMA),
            "--output-format", "json", "--no-session-persistence"]
@@ -104,6 +121,8 @@ def _score_batch_cli(path, cfg, profile, batch):
         out = json.loads(r.stdout)
     except Exception:
         raise RuntimeError((r.stderr or r.stdout)[:200])
+    if isinstance(out, dict) and isinstance(out.get("usage"), dict):
+        _usage(cfg, out["usage"], batch)   # what this batch really used, for Settings
     if out.get("is_error"):
         txt = str(out.get("result", ""))
         if "login" in txt.lower() or "auth" in txt.lower():
@@ -149,6 +168,10 @@ def _score_batch(client, cfg, profile, batch):
         output_config={"effort": cfg.get("effort", "low"), "format": {"type": "json_schema", "schema": SCHEMA}},
         messages=[{"role": "user", "content": msg}],
     )
+    u = getattr(resp, "usage", None)
+    if u is not None:
+        _usage(cfg, {k: getattr(u, k, 0) for k in ("input_tokens", "output_tokens", "cache_read_input_tokens",
+                                                   "cache_creation_input_tokens")}, batch)
     if resp.stop_reason == "refusal":
         return {}
     text = next((b.text for b in resp.content if b.type == "text"), "")
@@ -162,6 +185,13 @@ MODELS = {"haiku": "claude-haiku-5-5", "sonnet": "claude-sonnet-5-5", "opus": "c
 TIER_RUN = {"haiku": {"batch_size": 25, "cli_concurrency": 6, "concurrency": 8},
             "sonnet": {"batch_size": 15, "cli_concurrency": 4, "concurrency": 6},
             "opus": {"batch_size": 15, "cli_concurrency": 3, "concurrency": 5}}
+# The most one rating run may do, whoever asked (automatic runs, the nightly re-rate, the Re-rate panel, "Rate more").
+# They are fixed numbers on purpose: what a run costs follows what a person can look at, not how many jobs their area
+# has. Settings can lower them, never raise them. haiku: quick checks, best Appeal first. sonnet: second looks, only
+# for jobs that already have a rating. opus: new most-careful ratings (jobs the person saved come on top, up to
+# "saved"). target: Target-tab ratings. quick: the automatic quick check after a settings change or board rebuild.
+RUN_LIMITS = {"haiku": 500, "sonnet": 100, "opus": 50, "saved": 100, "target": 50, "quick": 200}
+
 STOP = set("""a an and are as at be by for from has have in into is it of on or that the their this to was with will you your
 experience years year skills ability knowledge working work strong including able using use etc""".split())
 
@@ -572,7 +602,11 @@ def mark_state(jobs, pool, cache, inf):
 
 def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print, tiers=None, force=False, pick="funnel",
                only_ids=None):
-    """Haiku on every eligible job, Sonnet on the best ~15%, Opus on the top ~300 (+ saved jobs).
+    """One rating run, within RUN_LIMITS: Haiku on up to 500 eligible jobs (best Appeal first), Sonnet on up to 100
+    of the best jobs that already have a rating, Opus on up to 50 of the top ones (+ saved jobs).
+    budgets: {"haiku": n, "sonnet_pct": share of the rated jobs Sonnet may look at, "sonnet_max": n, "opus_top": how far
+    down the ranking Opus may look, "opus_max": n}; anything above RUN_LIMITS is cut to it. A job nobody has rated yet
+    (the board shows it with no Match) is never sent to Sonnet or Opus on a guessed score: it waits for its Haiku check.
     Normal runs (refresh=False) only fill missing ratings; the re-rate step (refresh=True) also redoes ratings made
     with older info: 'maybe' ones get a cheap Haiku check first and only climb to Sonnet/Opus if the score moved.
     Re-rate panel options: tiers (which models run), force (rate the picked jobs again even if current; only when the
@@ -580,10 +614,15 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
     ranking), only_ids (Haiku only looks at these jobs: the automatic check of new listings).
     Every finished batch is saved right away, so a stopped run keeps what it got."""
     import claude_cli as _cc
+    import math
     tiers = list(tiers or TIERS)
     inf, allc, cache, pool = _prepare(jobs, eligible)
     status = "ok"
     saved = set(saved)
+    cap = lambda key, limit: max(0, min(RUN_LIMITS[limit], int(budgets.get(key, RUN_LIMITS[limit]) or 0)))
+    n_haiku = max(0, min(RUN_LIMITS["quick" if only_ids is not None else "haiku"], int(budgets.get("haiku", 0) or 0)))
+    n_sonnet = cap("sonnet_max", "sonnet") if budgets.get("sonnet_pct", 15) else 0
+    n_opus = cap("opus_max", "opus") if budgets.get("opus_top", 50) else 0
     if not api_key() and not _cc.claude_ready():
         # Siftwell works without Claude: skip quietly (one line, only when a rating run was really asked for)
         if any(budgets.get(k) for k in ("haiku", "sonnet_pct", "opus_top")):
@@ -609,13 +648,15 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
         return put
     def rank(tiers_):
         # rank on the named tiers only, so a later, sharper rating doesn't reshuffle who gets picked
-        # (ties broken by job id, the same way the Re-rate panel counts them)
-        return sorted(pool, key=lambda j: (-bestbets(j.get("appeal", 0), rank_match(cache.get(j["id"]), tiers_)), j["id"]))
+        # (ties broken by job id, the same way the Re-rate panel counts them). Only jobs that have one of those
+        # ratings: an unrated job has no Match to rank by.
+        rated = [j for j in pool if rank_match(cache.get(j["id"]), tiers_) is not None]
+        return sorted(rated, key=lambda j: (-bestbets(j.get("appeal", 0), rank_match(cache.get(j["id"]), tiers_)), j["id"]))
     try:
-        # 1. Haiku: everyone, best Appeal first
+        # 1. Haiku: best Appeal first, up to this run's limit (the rest wait for the next run or "Rate more")
         if "haiku" in tiers:
             hpool = pool if only_ids is None else [j for j in pool if j["id"] in only_ids]
-            todo = sorted((j for j in hpool if need(j, "haiku")), key=lambda j: -j.get("appeal", 0))[: budgets.get("haiku", 0)]
+            todo = sorted((j for j in hpool if need(j, "haiku")), key=lambda j: (-j.get("appeal", 0), j["id"]))[:n_haiku]
             old = {j["id"]: dict((cache.get(j["id"]) or {}).get("haiku") or {}) for j in todo}
             was = {j["id"]: freshness((cache.get(j["id"]) or {}).get("haiku"), j, inf) for j in todo}
             def put_haiku(res):
@@ -638,20 +679,19 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
             for t, r in (cache.get(j["id"]) or {}).items():
                 if fp_ok(r, inf) and not r.get("dirty") and freshness(r, j, inf) == "fresh":
                     _restamp(r, inf)
-        # 2. Sonnet: best ~15% by Appeal x Haiku's Match
-        if "sonnet" in tiers and not _cc.stop_requested():
+        # 2. Sonnet: the best ~15% of the Haiku-rated jobs by Appeal x Haiku's Match, up to this run's limit
+        if "sonnet" in tiers and n_sonnet and not _cc.stop_requested():
             ranked = rank(["haiku"] if pick == "funnel" else BEST_AVAILABLE)
-            top_s = ranked[: max(0, int(len(ranked) * budgets.get("sonnet_pct", 15) / 100))]
-            todo = [j for j in top_s if need(j, "sonnet")][: budgets.get("sonnet_max", 2000)]
+            top_s = ranked[: max(0, math.ceil(len(ranked) * max(0, min(100, budgets.get("sonnet_pct", 15))) / 100))]
+            todo = [j for j in top_s if need(j, "sonnet")][:n_sonnet]
             _rate(todo, "sonnet", inf, log, on_batch=keep("sonnet"))
-        # 3. Opus: top N by Appeal x Sonnet's Match (Haiku's where Sonnet hasn't looked), plus anything saved
-        if "opus" in tiers and not _cc.stop_requested():
+        # 3. Opus: the top N by Appeal x Sonnet's Match (Haiku's where Sonnet hasn't looked), up to this run's limit
+        #    of new ratings, plus the jobs the person saved
+        if "opus" in tiers and n_opus and not _cc.stop_requested():
             ranked = rank(["sonnet", "haiku"] if pick == "funnel" else BEST_AVAILABLE)
-            top_o = ranked[: budgets.get("opus_top", 300)] + [j for j in pool if j["id"] in saved]
-            seen, todo = set(), []
-            for j in top_o:
-                if j["id"] not in seen and need(j, "opus"):
-                    seen.add(j["id"]); todo.append(j)
+            todo = [j for j in ranked[: max(0, int(budgets.get("opus_top", 50)))] if need(j, "opus")][:n_opus]
+            seen = {j["id"] for j in todo}
+            todo += [j for j in pool if j["id"] in saved and j["id"] not in seen and need(j, "opus")][: RUN_LIMITS["saved"]]
             _rate(todo, "opus", inf, log, on_batch=keep("opus"))
     except CLIAuthError:
         status = "cli_logged_out"

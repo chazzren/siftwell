@@ -35,7 +35,12 @@ def find_live():
 # ---------------------------------------------------------------- lists and boards
 def lists():
     """Every company list: the shared ones, Everyone, and each person's own additions and Near me list."""
-    out = [{"id": k, "label": v.split(" (")[0]} for k, v in people.COMPANY_SETS.items()]
+    # shared lists from earlier versions appear only while a company is still on them (never in a new household)
+    try:
+        used = {s for c in catalog.companies() for s in (c.get("sets") or [])}
+    except Exception:
+        used = set(people.COMPANY_SETS)
+    out = [{"id": k, "label": v} for k, v in people.COMPANY_SETS.items() if k in used]
     out.append({"id": "all", "label": "Everyone (added for the whole household)"})
     for p in people.load_index():
         out.append({"id": f"own-{p['id']}", "label": f"Added by {p['name']}"})

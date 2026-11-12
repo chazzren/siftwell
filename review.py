@@ -14,6 +14,8 @@ MODEL = "gpt-6-astra"
 WEIGHTS = {"appearance": 20, "grammar": 20, "density": 15, "ats": 30, "claims": 15}
 
 def codex_path():
+    if os.environ.get("SIFTWELL_PRETEND_NO_CODEX") == "1":   # tests: act as if Codex isn't installed (no Astra review)
+        return None
     # The Codex desktop app on Windows keeps its CLI here, and it isn't always on the PATH Siftwell starts with.
     local = os.environ.get("LOCALAPPDATA", "")
     extra = [os.path.join(local, "Programs", "OpenAI", "Codex", "bin", "codex.exe")] if osdeps.WINDOWS and local else []

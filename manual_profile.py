@@ -69,13 +69,13 @@ window.ManualProfile = (function(){
           <div class="mp-btns" style="margin-top:6px"><button type="button" class="mp-b" data-act="usepaste">Fill the form from this text</button></div></details>
         <span class="mp-msg" data-pre role="status"></span></div>
       <div class="mp-grid">${f("name", "Your name", inp("name"))}${f("location", "Location", inp("location", "City, ST"))}
-        ${f("current_title", "Current job title", inp("current_title", "e.g. Program Manager"), "This is what Siftwell searches for first.")}
+        ${f("current_title", "Current job title", inp("current_title", "e.g. Office Manager"), "This is what Siftwell searches for first.")}
         ${f("years_experience", "Years of experience", inp("years_experience", "", "number"), "Optional. Worked out from your roles if blank.")}</div>
       ${f("summary", "Summary", ta("summary", 4, "Two or three sentences about what you do best."))}
       <h3>Experience</h3><div id="mpRoles">${D.experience.map(role).join("")}</div>
       <div><button type="button" class="mp-b" data-act="addrole">+ Add a role</button></div>
       <div class="mp-grid">${f("skills", "Skills", ta("skills", 4), "One per line, or separated by commas.")}
-        ${f("education", "Education", ta("education", 4, "e.g. B.S. in Computer Science, George Mason University"), "One per line.")}</div>
+        ${f("education", "Education", ta("education", 4, "e.g. Associate degree in Business, Lakeside Community College"), "One per line.")}</div>
       <div class="mp-grid">${f("certifications", "Certifications and licenses", ta("certifications", 3, "e.g. PMP; RN license"), "One per line.")}
         ${f("clearance", "Security clearance", `<select data-mp="clearance">${CLR.map(([v, t]) => `<option value="${esc(v)}"${D.clearance === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>`, "Only what you hold today.")}</div>
       ${opts.button ? `<div class="mp-btns"><button type="button" class="mp-b primary" data-act="save">Save my profile</button></div>` : ""}

@@ -78,7 +78,7 @@ def cache_keys(f, st, saved=None):
     import people
     tk = target_key(st)
     key = f"{VERSION}:{f['phash']}:{tk}"
-    tks = [target_key(saved or {}), target_key({}), target_key(people.DEFAULT_SETTINGS), target_key_legacy(st)]
+    tks = [target_key(saved or {}), target_key({}), target_key({**people.DEFAULT_SETTINGS, **people.LEGACY_MISSING}), target_key_legacy(st)]
     old = []
     for ph in [f["phash"], *f["phash_old"]]:
         for t in tks:
@@ -135,7 +135,7 @@ def load_cache():
 def _batch(cfg, system, profile, batch):
     msg = "Assess these postings. Return one result per job id.\n\n" + "\n\n".join(_job_text(j) for j in batch)
     out = claude_cli.run_json(system + "\n\nCANDIDATE\n" + profile, msg, SCHEMA,
-                              model=cfg["model"], effort=cfg.get("effort", "low"), timeout=600)
+                              model=cfg["model"], effort=cfg.get("effort", "low"), timeout=600, jobs=len(batch))
     res = {}
     for r in out.get("results", []):
         later = max(r["later_fit"], r["now_fit"])
@@ -172,7 +172,7 @@ def priority(j, st):
     if CODER.search(t) and not any(k in t for k in kws):
         p -= 10
     p -= 15 if j.get("clearance") in ("TS/SCI + poly", "TS/SCI", "Top Secret") else 0
-    band, lv = st.get("seniority_band") or [3, 5], j.get("level")
+    band, lv = st.get("seniority_band") or [1, 7], j.get("level")
     p -= 20 if lv is not None and not (band[0] <= lv <= band[1]) else 0
     return p + 0.2 * j.get("score", 0)
 
@@ -201,7 +201,7 @@ def score_jobs(jobs, cfg, log=print):
             allc.pop(k)  # v1-era scores (an old prompt layout, long gone); v2 keys are never dropped by code
     fp = f["pfp"]
     need = (lambda j: not fresh(cache.get(j["id"]), f)) if cfg.get("refresh_stale") else (lambda j: j["id"] not in cache)
-    todo = sorted((j for j in jobs if need(j)), key=lambda j: -priority(j, st))[: max(0, cfg.get("max_new_per_run", 300))]
+    todo = sorted((j for j in jobs if need(j)), key=lambda j: -priority(j, st))[: max(0, min(ai_score.RUN_LIMITS["target"], int(cfg.get("max_new_per_run", 0) or 0)))]
     status = "ok"
     if todo and not claude_cli.claude_ready():
         status, todo = "no_claude", []
@@ -209,7 +209,7 @@ def score_jobs(jobs, cfg, log=print):
     if todo:
         bs = cfg.get("batch_size", 12)
         batches = [todo[i:i + bs] for i in range(0, len(todo), bs)]
-        log(f"Pivot scoring {len(todo)} AI-company jobs in {len(batches)} batches...")
+        log(f"Target rating {len(todo)} jobs in {len(batches)} batches...")
         done, failed, t0 = 0, 0, time.time()
         with cf.ThreadPoolExecutor(cfg.get("cli_concurrency", 3)) as ex:
             def one(b):  # after Stop, batches not yet sent are skipped; ones already sent finish and are kept
@@ -232,7 +232,7 @@ def score_jobs(jobs, cfg, log=print):
                     break
                 except Exception as e:
                     status = "partial"; failed += 1
-                    log(f"Pivot batch failed: {type(e).__name__}: {str(e)[:150]}")
+                    log(f"Target batch failed: {type(e).__name__}: {str(e)[:150]}")
                 done += 1
                 log(f"PROGRESS pivot {done}/{len(batches)}")
         ai_score.TIMINGS.append({"tier": "target", "jobs": len(todo), "batches": len(batches), "failed": failed,

@@ -28,8 +28,7 @@ class Skip(Exception):
 
 def _nonus(label):
     import jobfinder
-    l = " " + label.lower() + " "
-    return any(c in l for c in jobfinder.NON_US)
+    return jobfinder.is_foreign(label)   # whole words; "Dublin, OH" and "Indianapolis, IN" stay in the US
 
 
 def _remote(label, wp=""):

@@ -520,7 +520,7 @@ BODY = """<div class="wrap">
   <div class="rrno" id="rrNo" hidden><p><b>Re-rating needs Claude.</b> Claude reads each posting against your resume to give the Match rating. Without it, Siftwell still finds, filters and ranks jobs by Appeal.</p><a class="btn primary sm" href="/settings#get-started">Settings, then Get started</a></div>
   <div class="rrrow rec">
     <div class="rrtxt"><span><b>Full re-rate</b><span class="rrtag">recommended</span></span>
-      <small>Quick check of jobs that need it, then Sonnet on your best <span class="rrPctTxt"></span>%, then Opus on your top <span class="rrTopTxt"></span>. Only ratings made with older info are redone.</small>
+      <small>Quick check of jobs that need it, then Sonnet on the best <span class="rrPctTxt"></span>% of your rated jobs, then Opus on your top <span class="rrTopTxt"></span>. Only missing ratings and ones made with older info are done.</small>
       <small id="rrEstFull"></small>
       <label class="chk rrTgt"><input type="checkbox" id="rrTgtFull" checked><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs)</small></span></label></div>
     <button class="btn primary sm" type="button" data-rr="full">Run</button>
@@ -534,7 +534,7 @@ BODY = """<div class="wrap">
   </div>
   <div class="rrrow">
     <div class="rrtxt"><b>Careful look · Sonnet</b>
-      <span>Top <input type="number" id="rrPct" min="1" max="100" step="1" aria-label="Percent of board jobs for Sonnet"> % of board jobs <span class="note" id="rrSN"></span></span>
+      <span>Top <input type="number" id="rrPct" min="1" max="100" step="1" aria-label="Percent of rated jobs for Sonnet"> % of rated jobs <span class="note" id="rrSN"></span></span>
       <label class="chk"><input type="checkbox" id="rrSNeed" checked><span>Only ones that need it (<span id="rrSNn">0</span>)</span></label>
       <label class="chk rrTgt"><input type="checkbox" id="rrTgtSonnet"><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs; off unless you tick it)</small></span></label>
       <small class="rrhint" hidden>Run the quick check first for better picks.</small></div>
@@ -542,7 +542,7 @@ BODY = """<div class="wrap">
   </div>
   <div class="rrrow">
     <div class="rrtxt"><b>Best judgment · Opus</b>
-      <span>Top <input type="number" id="rrTop" min="1" max="2000" step="1" aria-label="Number of top jobs for Opus"> jobs <span class="note" id="rrON"></span></span>
+      <span>Top <input type="number" id="rrTop" min="1" max="2000" step="1" aria-label="Number of top rated jobs for Opus"> rated jobs <span class="note" id="rrON"></span></span>
       <label class="chk"><input type="checkbox" id="rrONeed" checked><span>Only ones that need it (<span id="rrONn">0</span>)</span></label>
       <label class="chk rrTgt"><input type="checkbox" id="rrTgtOpus"><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs; off unless you tick it)</small></span></label>
       <small class="rrhint" hidden>Run the quick check first for better picks.</small></div>
@@ -550,7 +550,8 @@ BODY = """<div class="wrap">
   </div>
   <div class="rrfoot">
     <small id="rrEst"></small>
-    <small>"Top" follows your Best bets order. These numbers apply to this run only; your defaults stay in Settings. Target-tab ratings are a separate cost: the Full re-rate includes them, single-model runs only if you tick the box.</small>
+    <small id="rrLim"></small>
+    <small>"Top" follows your Best bets order among jobs that already have a rating. These numbers apply to this run only; your defaults stay in Settings. Target-tab ratings are a separate cost: the Full re-rate includes them, single-model runs only if you tick the box.</small>
     <small class="rrmsg" id="rrMsg" role="status"></small>
   </div>
 </div>
@@ -601,9 +602,9 @@ BODY = """<div class="wrap">
           <div class="checks"><label class="chk"><input type="checkbox" id="msRemoteUs" data-ms="remote_us"> Remote jobs anywhere in the US</label></div></div>
         <label class="field"><span class="flabel">Travel limit</span><select id="msTravel" data-ms="travel_max">
           <option value="none">None</option><option value="light">Light (under 10%)</option><option value="moderate">Some (up to 25%)</option><option value="any">Any</option></select></label>
-        <label class="field"><span class="flabel">Lowest base ($)</span><input type="number" inputmode="numeric" step="5000" min="30000" id="msFloor" data-ms="salary_floor"></label>
+        <label class="field"><span class="flabel">Lowest base ($)</span><input type="number" inputmode="numeric" step="5000" min="0" id="msFloor" data-ms="salary_floor" placeholder="No floor"></label>
         <label class="field wide"><span class="flabel">Your level</span><select id="msLevel" data-ms="seniority_mine">
-          <option value="2">Mid-level</option><option value="3">Senior</option><option value="4">Lead / Manager</option><option value="5">Principal / Sr. Manager</option><option value="6">Director</option><option value="7">VP / Executive</option></select></label>
+          <option value="">Any level</option><option value="1">Entry level</option><option value="2">Mid-level</option><option value="3">Senior</option><option value="4">Lead / Manager</option><option value="5">Principal / Sr. Manager</option><option value="6">Director</option><option value="7">VP / Executive</option></select></label>
       </div>
       <p class="fhint" id="msState" role="status" aria-live="polite"></p>
       <div class="fgroup">Narrow the list</div>
@@ -713,18 +714,19 @@ const jobs = D.jobs;
 // Claude is optional: when it isn't connected the board says so once (banner) and shows "-" where Match would be.
 let NOAI = D.claude_ready === false;
 const NOAI_MSG = "Connect Claude to get Match ratings and tailoring";
+const RLIM = Object.assign({haiku: 500, sonnet: 100, opus: 50, saved: 100, target: 50, quick: 200}, D.rate_limits || {});  // per-run rating limits (ai_score.RUN_LIMITS)
 const NOAI_LINK = `<a href="/settings#get-started">Settings → Get started</a>`;
 const hasMatch = jobs.some(j => j.ai_fit != null || j.pv_now != null);  // ratings made earlier still show and sort
 const noClaude = what => `<span class="nocl">${what} needs Claude. ${NOAI_LINK}</span>`;
 const nNew = jobs.filter(j => j.new).length;
 const updatedAt = (() => { try { return new Date(D.generated).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"}); } catch(e) { return D.generated.replace("T", " "); } })();
 $("sub").textContent = "Updated " + updatedAt;
-document.querySelectorAll(".floorTxt").forEach(e => e.textContent = fmt(D.salary_floor));
+document.querySelectorAll(".floorTxt").forEach(e => e.textContent = D.salary_floor ? fmt(D.salary_floor) : "");  // (no floor set: "your floor", "salary filters")
 $("tab-pivot").textContent = D.target_name || "Target";
 if (!D.pivot_enabled) { $("tab-pivot").hidden = true; if (location.hash === "#pivot") location.hash = "#jobs"; }
 $("stats").innerHTML = [
   [jobs.length, "matches"], [jobs.filter(j=>j.workplace==="remote").length, "remote"],
-  [jobs.filter(j=>j.salary_min!=null && j.salary_min>=D.salary_floor).length, "min ≥ " + fmt(D.salary_floor)],
+  [jobs.filter(j=>j.salary_min!=null && j.salary_min>=D.salary_floor).length, D.salary_floor ? "min ≥ " + fmt(D.salary_floor) : "pay listed"],
   [nNew, "new this run"], [D.companies.length, "companies"]
 ].map(([n,l]) => `<div class="stat"><b>${n.toLocaleString()}</b><span>${l}</span></div>`).join("");
 
@@ -743,6 +745,11 @@ const LBL_OPTS = {
   current: [["all","Any fit"],["apply_now","Strong match"],["tailor","Worth tailoring"],["good","Strong + worth tailoring"],["stretch","Stretch"],["noskip","Hide not-a-fit"]],
   pivot: [["noskip","Hide skips"],["all","Everything"],["apply_now","Apply now"],["good","Apply now + After prep"],["after_prep","After prep"],["long_shot","Long shots"],["labs","Frontier AI labs only"]],
 };
+const HAS_AI_TRACK = jobs.some(j => j.ai_track);  // companies marked as AI companies exist only in catalogs from earlier versions
+if (!HAS_AI_TRACK) {
+  LBL_OPTS.pivot = LBL_OPTS.pivot.filter(([v]) => v !== "labs");
+  document.querySelectorAll('#cType option[value="lab"], #cType option[value="ai"]').forEach(o => o.remove());
+}
 function setLabelOptions(){ $("lbl").innerHTML = LBL_OPTS[mode].map(([v,l]) => `<option value="${v}">${l}</option>`).join(""); }
 const pvJobs = () => jobs.filter(j => (j.tracks || []).includes("ai"));
 function drawPivotPanel(){
@@ -773,9 +780,9 @@ $("count").addEventListener("click", e => { if (e.target.id === "reqShow") { $("
 // queues the automatic quick check of new jobs), and the page reloads itself once the rebuilt board is ready.
 // None of these reset Claude's ratings (the pay floor only matters to the Target tab's ratings).
 let MYS = null, msBase, msTimer = null;
-const msNow = () => MYS || {seniority_band: (D.seniority && D.seniority.band) || [3, 5], travel_max: D.travel_max || "any"};
+const msNow = () => MYS || {seniority_band: (D.seniority && D.seniority.band) || [1, 7], travel_max: D.travel_max || "any"};
 function mySearchOk(j){
-  const s = msNow(), SB = s.seniority_band || [3, 5], L = j.level, t = j.travel || "", tm = s.travel_max || "any";
+  const s = msNow(), SB = s.seniority_band || [1, 7], L = j.level, t = j.travel || "", tm = s.travel_max || "any";
   if (L != null && (L < SB[0] || L > SB[1])) return false;
   if (tm === "moderate" && t === "heavy") return false;
   if (tm === "light" && !["", "none", "light"].includes(t)) return false;
@@ -788,7 +795,7 @@ function msFill(){
     const k = el.dataset.ms, v = MYS[k];
     if (el.type === "checkbox") { el.checked = !!v; return; }
     if (el.tagName === "SELECT" && v != null && ![...el.options].some(o => o.value === String(v))) el.add(new Option(k === "radius_miles" ? `${v} miles` : String(v), String(v)));
-    if (document.activeElement !== el) el.value = v == null ? "" : String(v);
+    if (document.activeElement !== el) el.value = v == null || (k === "salary_floor" && !v) ? "" : String(v);  // (no floor shows as blank)
   });
   document.querySelectorAll("[data-mswp]").forEach(el => el.checked = (MYS.workplaces || []).includes(el.dataset.mswp));
 }
@@ -816,7 +823,7 @@ function msSave(settings){
     .then(({ok, d}) => {
       if (!ok) { msFill(); msSay(d.error || "Couldn't save that.", true); return; }
       MYS = Object.assign({}, MYS, d.settings); msFill();
-      if (MYS.salary_floor) D.salary_floor = MYS.salary_floor;
+      D.salary_floor = MYS.salary_floor || 0;
       shown = 100; render();
       msSay("Saved. Re-checking your board…"); msAwaitBoard();
     }).catch(() => { msFill(); msSay("Couldn't reach Siftwell, so that wasn't saved.", true); });
@@ -842,13 +849,13 @@ function payBar(j){
     <div class="bar${j.wide_band ? " wide" : ""}" title="Range ${fmt(j.salary_min)}–${fmt(j.salary_max)}, midpoint ${fmt(mid)}">
       <i style="left:${p(j.salary_min)}%;width:${Math.max(1.5,p(j.salary_max)-p(j.salary_min))}%"></i>
       ${CUR.base ? `<span class="mk cur" style="left:${p(CUR.base)}%" title="Your current base ${fmt(CUR.base)}"></span>` : ""}
-      <span class="mk" style="left:${p(D.salary_floor)}%" title="Your floor ${fmt(D.salary_floor)}"></span>
+      ${D.salary_floor ? `<span class="mk" style="left:${p(D.salary_floor)}%" title="Your floor ${fmt(D.salary_floor)}"></span>` : ""}
       <span class="mid" style="left:${p(mid)}%" title="Midpoint ${fmt(mid)}"></span>
     </div><div class="axis"><span>$100k</span><span>$250k</span><span>$400k</span></div>
     ${note}</div>`;
 }
 
-const LVN = {2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"};
+const LVN = {1: "Entry level", 2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"};
 function levelChip(j){
   if (j.level == null) return "";
   return `<span class="chip" title="${j.level_src === "years" ? "Level estimated from years of experience required" : "Level from job title"}">${LVN[j.level]}${j.level_src === "years" ? " (by years)" : ""}</span>`;
@@ -904,11 +911,25 @@ const TL_STEP = {start: "Starting…", rescore: "Re-scoring with your answers…
 function reviewBadge(r){
   if (!r || !r.status) return "";
   if (r.status === "needs_answers") return `<span class="gd lo">Astra ${r.final ?? "?"} · ${r.pending} question${r.pending === 1 ? "" : "s"} waiting</span>`;
+  if (r.status === "not_reviewed") return r.reason === "off" ? "" : `<span class="gd">Not reviewed (${r.reason === "codex_signed_out" ? "Codex isn’t signed in" : "Codex isn’t installed"})</span>`;
   if (r.status === "error") return `<span class="gd lo">Astra review failed</span>`;
   if (r.status === "running") return `<span class="gd">Astra review in progress…</span>`;
   if (r.status === "interrupted") return `<span class="gd lo">Astra review interrupted at ${r.final ?? "?"}</span>`;
   const pass = r.status === "passed";
   return `<span class="gd ${pass ? "hi" : "lo"}">Astra ${r.final} · ${pass ? "passed" : `below ${r.threshold}`} · ${r.rounds} round${r.rounds === 1 ? "" : "s"}</span>`;
+}
+// Under a tailored resume's card: why Astra didn't review it (or why its review failed), and Siftwell's own free checks.
+function reviewNotes(r){
+  if (!r) return "";
+  const c = r.checks, bits = [];
+  if (c) {
+    if (c.pages) bits.push(`${c.pages} page${c.pages === 1 ? "" : "s"}`);
+    if (c.keyword_coverage != null) bits.push(`covers ${c.keyword_coverage}% of the posting’s key phrases`);
+    bits.push((c.issues || []).length ? c.issues.map(esc).join(" ") : "no pronoun, date-format or length problems found");
+  }
+  return (r.status === "error" ? `<div class="tlfail">Astra’s review didn’t finish: ${esc(r.why || "no reason given")}</div>` : "") +
+    (r.status === "not_reviewed" && r.reason !== "off" && r.why ? `<div class="tl2">${esc(r.why)}</div>` : "") +
+    (c ? `<div class="tl2"><b>Siftwell’s own checks:</b> ${bits.join(" · ")}</div>` : "");
 }
 function drawTailored(){
   const byId = Object.fromEntries(jobs.map(j => [j.id, j]));
@@ -935,6 +956,7 @@ function drawTailored(){
         ${safeUrl(x.job.url) ? `<a class="title" href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">${esc(x.job.title || "")}</a>` : `<span class="title">${esc(x.job.title || "")}</span>`}
         <div class="meta"><span class="coname">${esc(x.job.company || "")}</span><span>Tailored ${esc(when)}</span><span>${j ? "Still open" : "No longer on your board"}</span>${x.gaps ? `<span>${x.gaps} gaps flagged</span>` : ""}${w.running ? `<span class="tlwork" role="status"><span class="spin"></span>Re-tailoring: ${esc(TL_STEP[w.step] || "working…")}</span>` : reviewBadge(x.review)}</div>
         ${x.headline ? `<div class="tl2">${esc(x.headline)}</div>` : ""}
+        ${w.running ? "" : reviewNotes(x.review)}
         ${w.error && !w.running ? `<div class="tlfail">Re-tailoring failed: ${esc(w.error)} <button class="btn ghost sm" type="button" data-dismiss="${esc(x.slug)}">Dismiss</button></div>` : ""}
         <div class="acts">${x.review && x.review.status === "interrupted" ? `<button class="pri" data-resume="${esc(x.job.id)}" data-slug="${x.slug}">Resume review</button>` : ""}${x.review && x.review.status === "needs_answers" ? `<button class="pri" data-astra="${esc(x.job.id)}" data-slug="${x.slug}">Answer Astra's questions</button>` : ""}<a class="pri" href="/tailored/${x.slug}.pdf">Download PDF</a><a href="/tailored/${x.slug}" target="_blank" rel="noopener">Review</a><a href="/tailored/${x.slug}.docx">Word</a>${safeUrl(x.job.url) ? `<a href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">Posting</a>` : ""}<button class="danger" data-del="${x.slug}">Remove</button></div>
       </div></li>`;
@@ -1003,7 +1025,7 @@ function card(j){
   const sc = pvm ? (j.pv_score ?? j.score) : j.score, m = pvm ? j.pv_now : j.ai_fit, v = verdict(j);
   return `<li class="jrow ${s==="hidden"?"hidden-by-user":""}" role="option" tabindex="0" data-id="${esc(j.id)}" aria-selected="${SEL === j.id}">
     <div class="rtitle">${j.new ? '<span class="ndot" title="New this week"></span>' : ""}${esc(j.title)}</div>
-    <div class="rsc"><div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}${m == null && NOAI ? " na" : ""}" title="${m == null && NOAI ? "Match ratings need Claude" : pvm ? "" : tierName(j)}">${m ?? (NOAI ? "—" : "–")}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
+    <div class="rsc"><div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}${m == null && NOAI ? " na" : ""}" title="${m == null ? (NOAI ? "Match ratings need Claude" : "Not rated yet") : pvm ? "" : tierName(j)}">${m ?? "—"}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
     <div class="rco">${esc(j.company)} · ${esc(whereTxt(j))}</div>
     <div class="rmeta">${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : NOAI ? "" : `<span class="vpill">Not rated yet</span>`}<span class="amt">${payTxt(j)}</span>${j.posted ? `<span>${ago(j.posted)}</span>` : ""}${(pvm ? j.pv_stale : j.ai_stale) ? '<span class="old" title="Rated before your latest info">Older info</span>' : ""}${j.req_status === "unmet" ? '<span class="rq un">Requirement not met</span>' : j.req_status === "flag" ? '<span class="rq">Check requirements</span>' : ""}${TAILORED[j.id] ? "<span>Resume ready</span>" : WORK[j.id] && WORK[j.id].state === "running" ? "<span>Tailoring…</span>" : ""}${s === "applied" ? "<span>Applied</span>" : s === "saved" ? "<span>★ Saved</span>" : ""}</div>
     <div class="racts"><button type="button" data-k="saved" aria-pressed="${s==="saved"}" title="Save" aria-label="Save">★</button><button type="button" data-k="hidden" aria-pressed="${s==="hidden"}" title="Not for me" aria-label="Hide">✕</button></div>
@@ -1035,6 +1057,7 @@ function detail(j){
       <button class="btn" type="button" data-k="applied" aria-pressed="${s==="applied"}">${s==="applied" ? "✓ Applied" : "Mark applied"}</button>
       ${safeUrl(j.url) ? `<a class="btn" href="${esc(safeUrl(j.url))}" target="_blank" rel="noopener">View posting ↗</a>` : ""}
       <button class="btn ghost" type="button" data-k="hidden" aria-pressed="${s==="hidden"}">${s==="hidden" ? "Unhide" : "Not for me"}</button></div>
+    ${wk && !tlBusy(wk) && (wk.state === "failed" || (wk.work || {}).error) ? `<div class="tlfail" role="alert">Tailoring failed: ${esc((wk.work || {}).error || "Something went wrong.")}</div>` : ""}
     <section class="dsec"><h3>How you stack up</h3><div class="dscores">
       ${pvm ? `<div class="dsc"><div class="ring" style="--p:${sc}"><b>${sc}</b></div><p><strong>Overall</strong>Odds, pay and quality of life combined.</p></div>`
         : `<div class="dsc"><div class="ring" style="--p:${j.appeal ?? 0}"><b>${j.appeal ?? "–"}</b></div><p><strong>Appeal</strong>How well this job gives you what you want.${j.appeal_parts ? `<br>Pay ${j.appeal_parts.pay} · Place ${j.appeal_parts.place} · Level ${j.appeal_parts.level} · Company ${j.appeal_parts.company} · Travel ${j.appeal_parts.burden}` : ""}</p></div>`}
@@ -1169,14 +1192,17 @@ function render(){
     odds_later: j => -(((mode === "pivot" ? j.pv_later : j.ai_asis) ?? -1) * 1e6 + ((mode === "pivot" ? j.pv_now : j.ai_fit) ?? 0) * 1e3 + (j.salary_mid || 0) / 1e3), new: j => -(Date.parse(j.first_seen + "T00:00") || 0) - (Date.parse(j.posted) || 0)/1e6};
   r.sort((a,b) => by[key](a) - by[key](b));
   const base = mode === "pivot" ? pvJobs().length : jobs.length;
+  // jobs Claude would rate that have no rating yet (whole board, not just this filtered list)
+  const notRated = !D.profile ? 0 : mode === "pivot" ? pvJobs().filter(j => j.pv_label == null && j.req_status !== "unmet").length : jobs.filter(j => j.ai_rs && j.ai_fit == null).length;
   $("count").innerHTML = `${r.length.toLocaleString()} of ${base.toLocaleString()} jobs` + (r.length > shown ? ` · showing ${shown}` : "") +
-    (!NOAI && D.ratings && (D.ratings.stale + D.ratings.unrated) ? ` · <span title="Rated with older info or not rated yet. Use the Re-rate (sparkle) icon at the top.">${D.ratings.stale + D.ratings.unrated} of your top ${D.ratings.top} need a fresh rating</span>` : "") +
+    (notRated ? ` · <span title="Claude rates a limited number of jobs in one go, the most appealing first. The rest show a dash for Match until they are rated.">${notRated.toLocaleString()} job${notRated === 1 ? "" : "s"} not rated yet</span>` : "") +
+    (!NOAI && D.ratings && D.ratings.stale_all ? ` · <span title="Rated before your latest resume, answers or goals. Rate more (or the Re-rate icon at the top) brings them up to date.">${D.ratings.stale_all.toLocaleString()} rated with older info</span>` : "") +
     (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "");
   drawChips();
-  const unrated = r.filter(j => mode === "pivot" ? j.pv_label == null : j.ai_fit == null);
-  window.__unrated = unrated.slice(0, 45).map(j => j.id);
-  $("rateMore").hidden = !SERVED || !D.profile || !unrated.length;
-  $("rateMore").textContent = `Get Claude's take on the next ${Math.min(45, unrated.length)} unrated here` + (NOAI ? " (needs Claude)" : "");
+  const moreN = notRated + (NOAI || !D.ratings ? 0 : D.ratings.stale_all || 0);
+  $("rateMore").hidden = !SERVED || !D.profile || !moreN;
+  if (!$("rateMore").disabled) $("rateMore").textContent = "Rate more" + (NOAI ? " (needs Claude)" : "");
+  $("rateMore").title = "Claude rates the next batch: up to " + RLIM.haiku + " jobs get a quick check (most appealing first), then a closer look at the best of them. Uses your Claude plan.";
   const page = r.slice(0, shown);
   window.__shownIds = page.map(j => j.id);
   if (!page.some(j => j.id === SEL)) { SEL = !window.matchMedia("(max-width:900px)").matches && page[0] ? page[0].id : null; if (!SEL) OPENED = false; }
@@ -1643,9 +1669,17 @@ if (SERVED) {
       check();
     });
   }
+  // "Rate more": the next batch of unrated jobs, with the same per-run limits as the automatic rating
   $("rateMore").addEventListener("click", () => {
     if (NOAI) { $("rateMsg").innerHTML = `Match ratings need Claude. ${NOAI_LINK}`; return; }
-    rateJobs(window.__unrated || [], $("rateMore"));
+    const b = $("rateMore");
+    b.disabled = true; $("rateMsg").textContent = "";
+    fetch("/api/rerate", {method: "POST", headers: H, body: JSON.stringify({more: true})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+      b.disabled = false;
+      if (!ok) { $("rateMsg").textContent = d.error || "Couldn't start"; return; }
+      if (d.queued) { $("rateMsg").textContent = "Queued behind the rating that is running."; pollRerate(); return; }
+      pollRerate.mine = true; scrollTo(0, 0); pollRerate();
+    }).catch(() => { b.disabled = false; $("rateMsg").textContent = "Couldn't reach Siftwell."; });
   });
 
   // ---- profiles
@@ -1764,7 +1798,13 @@ if (SERVED) {
     const check = () => fetch("/api/tailor/" + slug + pq()).then(r => r.json()).then(s => {
       if (s.running) { btn.textContent = STEP(s) || btn.textContent; return setTimeout(check, 3000); }
       btn.disabled = false;
-      if (s.error) { btn.textContent = "Tailoring failed"; btn.title = s.error; refreshTailored(); return; }
+      if (s.error) {  // say why right here, in plain sight (the redraw below keeps it under the buttons)
+        btn.textContent = "Tailoring failed · Try again"; btn.title = "";
+        let n = btn.parentNode && btn.parentNode.parentNode ? btn.parentNode.parentNode.querySelector(".tlfail") : null;
+        if (!n && btn.parentNode) { n = document.createElement("div"); n.className = "tlfail"; n.setAttribute("role", "alert"); btn.parentNode.insertAdjacentElement("afterend", n); }
+        if (n) n.textContent = "Tailoring failed: " + s.error;
+        refreshTailored(); return;
+      }
       if (s.review_status === "needs_answers" && (s.pending || []).length) { refreshTailored(); openAstraQuestions(id, slug, btn, s); return; }
       refreshTailored();
     }).catch(() => setTimeout(check, 5000));
@@ -1900,8 +1940,8 @@ if (SERVED) {
   }
   const RR = D.ratings || {};
   const need = NOAI ? 0 : (RR.stale || 0) + (RR.unrated || 0);
-  $("rrSmall").textContent = NOAI ? "needs Claude" : need ? `${need} of your top ${RR.top} need a fresh rating` : "all top jobs current";
-  $("rerateBtn").title = "Re-rate: choose how Claude re-rates your jobs, no new listings" + (need ? ` (${need} of your top ${RR.top} need a fresh rating)` : " (all top jobs current)");
+  $("rrSmall").textContent = NOAI ? "needs Claude" : need ? `${need} of your top ${RR.top} not rated or out of date` : "all top jobs current";
+  $("rerateBtn").title = "Re-rate: choose how Claude re-rates your jobs, no new listings" + (need ? ` (${need} of your top ${RR.top} not rated or out of date)` : " (all top jobs current)");
   if (need) { $("rrBadge").hidden = false; $("rrBadge").textContent = need > 99 ? "99+" : need; }
   // ---- Re-rate panel. Counts come from the board: ai_rs (per tier: "-" none, "s" older info, "f" current) and ai_bb
   // (Best bets with the best available Match) on every job Claude would rate. The server picks again when it runs.
@@ -1927,7 +1967,9 @@ if (SERVED) {
   const intIn = (id, lo, hi) => { const v = Number($(id).value); const ok = $(id).value.trim() !== "" && Number.isInteger(v) && v >= lo && v <= hi; $(id).setAttribute("aria-invalid", ok ? "false" : "true"); return ok ? v : null; };
   function rrCalc(){
     const pct = intIn("rrPct", 1, 100), top = intIn("rrTop", 1, 2000);
-    document.querySelectorAll(".rrTgtN").forEach(e => e.textContent = nf(+(PREFS["claude.per_update"] ?? 300)));
+    const tgtN = Math.min(RLIM.target, +(PREFS["claude.per_update"] || RLIM.target));
+    document.querySelectorAll(".rrTgtN").forEach(e => e.textContent = nf(tgtN));
+    $("rrLim").textContent = `One run rates at most ${nf(RLIM.haiku)} jobs with a quick check, ${nf(RLIM.sonnet)} with a careful look and ${nf(RLIM.opus)} new ones with best judgment (plus jobs you saved). Run it again, or press Rate more on the board, for the next batch.`;
     if (COUNTING) {
       ["rrHN", "rrSNn", "rrONn"].forEach(id => $(id).textContent = "Counting…");
       $("rrHAll").textContent = "Counting… your board is being refreshed for this panel (a minute or so). This page reloads when it's done.";
@@ -1939,23 +1981,28 @@ if (SERVED) {
     }
     const stale = (j, i) => j.ai_rs[i] !== "f";
     const hNeed = ratePool.filter(j => stale(j, 0)).length;
-    const sTop = pct ? byBB.slice(0, Math.floor(ratePool.length * pct / 100)) : [];
+    // Careful look and best judgment only pick among jobs that already have a rating (an unrated job has no Match to rank by)
+    const rated = byBB.filter(j => /[sf]/.test(j.ai_rs));
+    const sTop = pct ? rated.slice(0, Math.ceil(rated.length * pct / 100)) : [];
     const saved = ratePool.filter(j => status[j.id] === "saved" || status[j.id] === "applied");
-    const oPick = top ? [...new Map(byBB.slice(0, top).concat(saved).map(j => [j.id, j])).values()] : [];
+    const oTop = top ? rated.slice(0, top) : [], oTopIds = new Set(oTop.map(j => j.id));
+    const oSaved = top ? saved.filter(j => !oTopIds.has(j.id)) : [];
+    const oPick = oTop.concat(oSaved);
     const sNeed = sTop.filter(j => stale(j, 1)).length, oNeed = oPick.filter(j => stale(j, 2)).length;
-    $("rrHAll").textContent = `All ${plural(ratePool.length, "job")} on your board that Claude would rate.`;
+    const oRun = need => Math.min(RLIM.opus, oTop.filter(j => !need || stale(j, 2)).length) + Math.min(RLIM.saved, oSaved.filter(j => !need || stale(j, 2)).length);
+    $("rrHAll").textContent = `${plural(ratePool.length, "job")} on your board that Claude would rate. One run checks up to ${nf(RLIM.haiku)}, most appealing first.`;
     $("rrHN").textContent = nf(hNeed);
     $("rrSN").textContent = pct ? `= ${plural(sTop.length, "job")}` : "(1 to 100)";
     $("rrSNn").textContent = nf(sNeed);
-    const savedIn = oPick.length - Math.min(top || 0, byBB.length);
-    $("rrON").textContent = top ? `${savedIn > 0 ? `+ ${nf(savedIn)} saved ` : ""}= ${plural(oPick.length, "job")}` : "(1 to 2,000)";
+    $("rrON").textContent = top ? `${oSaved.length ? `+ ${nf(oSaved.length)} saved ` : ""}= ${plural(oPick.length, "job")}` : "(1 to 2,000)";
     $("rrONn").textContent = nf(oNeed);
     document.querySelectorAll(".rrPctTxt").forEach(e => e.textContent = pct || "?");
     document.querySelectorAll(".rrTopTxt").forEach(e => e.textContent = top ? nf(top) : "?");
     document.querySelectorAll(".rrhint").forEach(e => e.hidden = !(hNeed >= Math.max(10, ratePool.length * 0.2)));
-    const h = $("rrHNeed").checked ? hNeed : ratePool.length, s = $("rrSNeed").checked ? sNeed : sTop.length, o = $("rrONeed").checked ? oNeed : oPick.length;
-    const hb = Math.min(hNeed, +(PREFS["claude.haiku_per_night"] ?? 4000));
-    const full = reqs(hb, "haiku") + reqs(sNeed, "sonnet") + reqs(oNeed, "opus");
+    // what one run would really do: never more than the per-run limits
+    const h = Math.min(RLIM.haiku, $("rrHNeed").checked ? hNeed : ratePool.length), s = Math.min(RLIM.sonnet, $("rrSNeed").checked ? sNeed : sTop.length), o = oRun($("rrONeed").checked);
+    const hb = Math.min(hNeed, RLIM.haiku, +(PREFS["claude.haiku_per_night"] || RLIM.haiku));
+    const full = reqs(hb, "haiku") + reqs(Math.min(sNeed, RLIM.sonnet), "sonnet") + reqs(oRun(true), "opus");
     $("rrEstFull").textContent = full ? `About ${plural(full, "Claude request")} (fewer if the quick check finds little has changed).` : "Everything is current: nothing to do.";
     $("rrEst").textContent = `Claude requests: Quick check ${nf(reqs(h, "haiku"))} · Careful look ${pct ? nf(reqs(s, "sonnet")) : "?"} · Best judgment ${top ? nf(reqs(o, "opus")) : "?"} (${RB.haiku} Haiku or ${RB.sonnet} Sonnet/Opus jobs per request). Uses your Claude plan.`;
     document.querySelectorAll("#rrPanel [data-rr]").forEach(b => b.disabled = (b.dataset.rr !== "haiku" && !(pct && top)));
@@ -1970,7 +2017,7 @@ if (SERVED) {
     if (!$("rrPanel").hidden) return rrClose();
     $("rrTitle").textContent = `Re-rate ${D.person && D.person.name ? D.person.name + "'s" : "your"} jobs`;
     if ($("rrPct").value === "") $("rrPct").value = PREFS["claude.sonnet_pct"] || 15;
-    if ($("rrTop").value === "") $("rrTop").value = PREFS["claude.opus_top"] || 300;
+    if ($("rrTop").value === "") $("rrTop").value = PREFS["claude.opus_top"] || 50;
     document.querySelectorAll(".rrTgt").forEach(e => e.hidden = !D.pivot_enabled);
     $("rrMsg").textContent = ""; $("rrMsg").classList.remove("bad");
     rrCalc(); rrPlace(); $("rrPanel").hidden = false; $("rerateBtn").setAttribute("aria-expanded", "true");
@@ -1985,14 +2032,14 @@ if (SERVED) {
   $("rrPanel").addEventListener("click", e => {
     const b = e.target.closest("button[data-rr]"); if (!b) return;
     const kind = b.dataset.rr, c = rrCalc();
-    if (kind === "haiku") { c.pct = c.pct || +(PREFS["claude.sonnet_pct"] || 15); c.top = c.top || +(PREFS["claude.opus_top"] || 300); }  // not used by the quick check
-    if (!(c.pct && c.top)) { $("rrMsg").textContent = "Sonnet looks at 1 to 100% of your jobs; Opus at 1 to 2,000 jobs."; $("rrMsg").classList.add("bad"); return; }
+    if (kind === "haiku") { c.pct = c.pct || +(PREFS["claude.sonnet_pct"] || 15); c.top = c.top || +(PREFS["claude.opus_top"] || 50); }  // not used by the quick check
+    if (!(c.pct && c.top)) { $("rrMsg").textContent = "Sonnet looks at 1 to 100% of your rated jobs; Opus at 1 to 2,000 jobs."; $("rrMsg").classList.add("bad"); return; }
     const only = kind === "full" ? true : $({haiku: "rrHNeed", sonnet: "rrSNeed", opus: "rrONeed"}[kind]).checked;
     const tgt = !!D.pivot_enabled && $({full: "rrTgtFull", haiku: "rrTgtHaiku", sonnet: "rrTgtSonnet", opus: "rrTgtOpus"}[kind]).checked;
     if (kind !== "full" && !only) {  // a forced run re-rates jobs whose ratings are current: say how many first
       const n = c.n[kind], name = {haiku: "quick check", sonnet: "careful look", opus: "best-judgment look"}[kind];
       if (!confirm(`Give ${plural(n, "job")} a fresh ${name}?\n\nThis also re-rates jobs whose ratings are current: about ${plural(reqs(n, kind), "Claude request")} on your Claude plan.` +
-                   (tgt ? `\n\nIt also rates up to ${plural(+(PREFS["claude.per_update"] ?? 300), "job")} for your Target tab.` : ""))) return;
+                   (tgt ? `\n\nIt also rates up to ${plural(Math.min(RLIM.target, +(PREFS["claude.per_update"] || RLIM.target)), "job")} for your Target tab.` : ""))) return;
     }
     const body = {tiers: kind === "full" ? ["haiku", "sonnet", "opus"] : [kind], only_needed: only, sonnet_pct: c.pct, opus_top: c.top, target: tgt};
     b.disabled = true;
