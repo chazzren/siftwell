@@ -787,10 +787,15 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
                     items.append([k, "l", co["name"]])
                 else:
                     name = e["name"].replace(",", "").strip()[:60]
-                    if name.lower() in by_name:
-                        name = f"{name[:44]} ({company_add.SYSTEM_LABEL.get(e['cfg']['ats'], e['cfg']['ats'])})"
-                    if name.lower() in by_name:
-                        name = f"{name[:52]} {_short(k)[:6]}"
+                    try:        # a readable name, told apart from a namesake by a place or brand, never by a job system or a code
+                        import names as _names
+                        name = (_names.display(e["name"], e["cfg"], list(by_name.keys()), e.get("where") or "") or name)[:60]
+                    except Exception:
+                        pass
+                    base_nm, n_try = re.sub(r" \(\d+\)$", "", name)[:54], 2
+                    while name.lower() in by_name:      # (last resort: a plain number)
+                        name = f"{base_nm} ({n_try})"
+                        n_try += 1
                     sector = (e.get("sector") or "Large US employer") if starter and not e.get("maybe") else \
                         "Staffing agency" if e.get("kind") == "staffing" else SOURCE_SECTOR
                     entry = {"name": name, "tier": "dmv_office", "sector": sector, **e["cfg"], "sets": [want], "added_by": pid}
