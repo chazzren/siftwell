@@ -434,7 +434,7 @@ $("rvApprove").addEventListener("click", () => {
   $("rvApprove").disabled = true; $("abNote").textContent = "Approving…";
   jpost("/api/profile/approve", {edits, rescore: true}).then(({ok, d}) => {
     if (!ok) { $("abNote").textContent = d.error || "Couldn't approve."; return; }
-    $("abNote").innerHTML = `Approved. Your board is updating with it (about 15 minutes); <a href="/">follow it on the board</a>.`;
+    $("abNote").innerHTML = `Approved. Your board is being re-scored with it (a minute or two; no new jobs are fetched). <a href="/">Go to your board</a>.`;
     loadProfile(); soonBoard();
   }).catch(() => { $("abNote").textContent = "Couldn't reach Siftwell."; }).finally(() => { $("rvApprove").disabled = false; });
 });

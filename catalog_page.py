@@ -69,7 +69,7 @@ BODIES = {
 __AUTOUPDATE__
 <section class="sgsec"><h3 class="sgtitle">Find new jobs now</h3><div class="sgroup">
   <div class="srow"><div class="slab"><span>Check every employer for new and removed jobs</span><small id="allEst">For everyone in the household. Claude then rates the new listings for each person (uses your Claude plan).</small></div><div class="sctl"><button class="btn primary sm" type="button" id="fetchAll">Find new jobs now</button></div></div>
-  <div class="srow stack" id="allBar" role="status" aria-live="polite" hidden><div class="lbtop"><b id="allTitle"></b></div><div class="pbar"><i id="allFill"></i></div>
+  <div class="srow stack" id="allBar" role="status" aria-live="polite" hidden><div class="lbtop"><b id="allTitle"></b><button class="btn sm" type="button" id="allStop" hidden title="Stop finding new jobs now. Everything found so far is kept and the boards are rebuilt with it; the employers not reached are checked next time.">Stop</button></div><div class="pbar"><i id="allFill"></i></div>
     <details class="rundet" id="allDet"><summary>Details</summary><div class="note mono" id="allLine"></div></details></div>
 </div></section>
 <section class="sgsec"><h3 class="sgtitle">History</h3><div class="clist" id="runRows"><p class="note">Loading…</p></div></section>""",
@@ -328,6 +328,8 @@ function pollStatus(){
       $(k + "Title").textContent = pg.line || "Working…";
       $(k + "Fill").style.width = pct + "%";
     });
+    $("allStop").hidden = !(s.running && pg.can_stop) || !!s.stopping;
+    if (s.stopping) $("allTitle").textContent = "Stopping… what was found so far is kept";
     $("allDet").hidden = !s.running; if (!run) $("allDet").open = false;
     $("allLine").textContent = s.running ? (s.lines || []).filter(Boolean).slice(-8).join("\n") : "";
     const e = s.estimate && s.estimate.all;
@@ -516,6 +518,10 @@ function loadRuns(){
     if (d.status.running) { wasRunning = true; pollStatus(); }
   }).catch(err => { $("runRows").innerHTML = `<p class="note" style="padding:10px 14px">${esc(errText(err))}</p>`; });
 }
+$("allStop").addEventListener("click", () => {
+  $("allStop").disabled = true;
+  fetch("/api/update/stop", {method: "POST", headers: H, body: "{}"}).then(() => { $("allStop").disabled = false; pollStatus(); }).catch(() => { $("allStop").disabled = false; });
+});
 $("fetchAll").addEventListener("click", () => {
   const e = window.__EST;
   if (!confirm("Find new jobs now?\n\n" + (e ? `Checks all ${n(e.companies)} employers for new and removed jobs, for everyone in the household. That takes ${e.text}.` : "Checks every employer for new and removed jobs, for everyone in the household.") + " Claude then rates the new listings for each person, which uses your Claude plan.")) return;

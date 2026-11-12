@@ -1108,6 +1108,11 @@ def note_states(c, locs):
 # read is kept, the company is marked "capped" (nothing is closed) and the fetch moves on.
 # The budget: --budget SECS on the command line, else env SIFTWELL_FETCH_BUDGET, else FETCH_BUDGET_SECS; 0 = none.
 FETCH_BUDGET_SECS = 240
+# A regular Find new jobs (no --budget, no SIFTWELL_FETCH_BUDGET) gives every employer QUICK_BUDGET_SECS first, so one
+# slow job site never holds the count at "269 of 271" for minutes; the few that ran out are then read again together
+# with the full FETCH_BUDGET_SECS (the run says which ones, and Stop keeps everything found so far). The staged first
+# check does the same with its own numbers (first_search CHUNK_BUDGET / SLOW_BUDGET).
+QUICK_BUDGET_SECS = 60
 FETCH_BUDGET_GRACE = 45      # after the budget, a reader that doesn't ask over_budget() is cut off this much later (at most budget / 4)
 FETCH_MAX_POSTINGS = 8000    # postings read from one employer in one fetch
 _BUDGET = {"secs": None}
@@ -1243,6 +1248,7 @@ def fetch(args):
     load_extra()
     if getattr(args, "budget", None) is not None:
         _BUDGET["secs"] = max(0, int(args.budget))
+    two_pass = getattr(args, "budget", None) is None and not os.environ.get("SIFTWELL_FETCH_BUDGET")
     reparse_stored()   # (one time after an update that reads postings better: stored listings are read again first)
     companies = catalog.companies(include_paused=False)
     if getattr(args, "only_file", None):
@@ -1276,12 +1282,16 @@ def fetch(args):
     if every and len(companies) > 1:
         mid_thread = threading.Thread(target=mid_boards, daemon=True)
         mid_thread.start()
-    try:
+    def one_pass(cos, budget, phase, last):
+        """Read these companies (budget: seconds each, None = the default). Returns the ones that ran out of time.
+        last: this is the final word on them; otherwise a company that ran out is left for the next pass (it is not
+        counted or flagged yet)."""
+        nonlocal n_ok
+        again = []
         # Workday tenants share one per-IP rate limit, so they get their own small lane; everything else runs wide.
         with cf.ThreadPoolExecutor(12) as fast, cf.ThreadPoolExecutor(4) as slow:
-            futs = {(slow if c["ats"] == "workday" else fast).submit(process, c): c
-                    for c in companies if c["ats"] in FETCHERS}
-            for n, f in enumerate(cf.as_completed(futs), 1):
+            fs = {(slow if c["ats"] == "workday" else fast).submit(process, c, budget): c for c in cos}
+            for n, f in enumerate(cf.as_completed(fs), 1):
                 try:
                     s, js = f.result()
                     with catalog.db() as con:
@@ -1289,24 +1299,42 @@ def fetch(args):
                     if s["status"] == "ok":   # (a code or placeholder name -> the employer's real one, from its postings)
                         s["company"] = learn_company_name(s["company"], s.get("board_title"))
                 except Exception as e:
-                    s = {"company": futs[f]["name"], "ats": futs[f]["ats"], "raw_jobs": 0, "matched": 0, "secs": 0,
+                    s = {"company": fs[f]["name"], "ats": fs[f]["ats"], "raw_jobs": 0, "matched": 0, "secs": 0,
                          "status": f"error: saving failed: {type(e).__name__}: {e}"[:200]}
                     counts = {k: 0 for k in totals}
                 for k in totals:
                     totals[k] += counts[k]
-                if s["status"] == "ok":
+                retry = bool(s.get("budget_hit")) and not last and s["status"] == "ok"
+                if retry:
+                    again.append(s["company"])
+                elif s["status"] == "ok":
                     n_ok += 1
                     if counts.get("status") not in (None, "ok"):
                         flagged.append({"company": s["company"], "status": counts["status"]})
                 else:
                     errors.append({"company": s["company"], "error": s["status"]})
                 note = ""
-                if s.get("budget_hit"):
+                if s.get("budget_hit") and last:
                     over.append(s["company"])
-                if counts.get("status") not in (None, "ok", "error"):
+                if retry:
+                    note = " [ran out of time: read again at the end of this run]"
+                elif counts.get("status") not in (None, "ok", "error"):
                     note = f' [{counts["status"]}: missing postings kept open{"; " + s["truncated"] if s.get("truncated") else ""}]'
                 print(f'{s["company"]:<24} {s["ats"]:<15} raw={s["raw_jobs"]:<5} kept={s["matched"]:<4} new={counts["new"]:<4} closed={counts["closed"]:<4} {s["status"]}{note} ({s["secs"]}s)', flush=True)
-                print(f"PROGRESS fetch {n}/{len(futs)}", flush=True)
+                print(f"PROGRESS {phase} {n}/{len(fs)}", flush=True)
+        return again
+
+    try:
+        todo = [c for c in companies if c["ats"] in FETCHERS]
+        futs = {c["name"]: c for c in todo}
+        slow_names = one_pass(todo, QUICK_BUDGET_SECS if two_pass else None, "fetch", last=not two_pass)
+        if slow_names:
+            # the few that ran out of time: together, with the full budget. What the first pass read is in the catalog.
+            print("SLOW " + json.dumps(sorted(slow_names)), flush=True)
+            print(f"PROGRESS slow 0/{len(slow_names)}", flush=True)
+            want_slow = set(slow_names)
+            one_pass([c for c in catalog.companies(include_paused=False) if c["name"] in want_slow and c["ats"] in FETCHERS],
+                     FETCH_BUDGET_SECS, "slow", last=True)
         mid_stop.set()
         if mid_thread:
             mid_thread.join(900)

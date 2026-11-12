@@ -57,7 +57,14 @@ CHUNK_BUDGET = 55
 BUILD_WAIT = 150        # a first search with "Built on this computer" waits this long for the build's first results
 SLOW_BUDGET = 600
 FAST_LANES, WD_LANES = 12, 4          # jobfinder.fetch reads this many employers at once (Workday has its own lane)
-DEFAULT_SECS = {"fast": 25.0, "workday": 90.0}   # one employer's check when nothing has been measured yet
+# One employer's check when nothing has been measured on this computer yet, by job system (seconds; averages measured
+# over a household's real list of about 900 employers, each capped at the regular per-employer budget). Once a
+# system has MIN_MEASURED measured employers in the catalog (companies.fetch_secs, stored by every fetch), their
+# average is used instead.
+DEFAULT_SECS = {"workday": 32.0, "oracle": 40.0, "amazon": 35.0, "jibe": 14.0, "icims": 9.0, "ukg": 5.0, "dayforce": 5.0}
+DEFAULT_OTHER = 3.5
+MIN_MEASURED = 5
+REGULAR_CAP = 60.0      # (jobfinder.QUICK_BUDGET_SECS: what one employer may take in a regular run's first pass)
 JOB = {"running": False, "pid": None, "phase": "", "find": False, "find_run": None, "added": 0, "note": "",
        "dir": False, "dir_added": 0, "dir_near": 0, "error": None, "started": None, "finished": None,
        "check_left": 0, "check_chunk": 0, "pausing": False, "paused": False, "dir_offline": False, "dir_text": "",
@@ -202,53 +209,77 @@ _AVG = {"at": 0.0, "v": None}
 
 
 def _avg_secs():
-    """{"fast": s, "workday": s}: what one employer's check took on average, measured from the catalog (the default
-    until at least ten have been measured)."""
+    """{job system: seconds}: what one employer's check takes on average, by job system. Measured from the catalog
+    (what each employer's last fetch took, capped at the regular budget) for a system with MIN_MEASURED measured
+    employers, else the shipped default for that system."""
     if _AVG["v"] is not None and time.time() - _AVG["at"] < 120:
         return _AVG["v"]
-    xs = {"fast": [], "workday": []}
+    xs = {}
     try:
         for c in catalog.companies(include_paused=False):
             sec = (c.get("_fetch") or {}).get("secs")
             if sec:
-                xs["workday" if c.get("ats") == "workday" else "fast"].append(float(sec))
+                xs.setdefault(c.get("ats") or "", []).append(min(float(sec), REGULAR_CAP))
     except Exception:
         pass
-    v = {k: (sum(x) / len(x) if len(x) >= 10 else DEFAULT_SECS[k]) for k, x in xs.items()}
+    v = {k: sum(x) / len(x) for k, x in xs.items() if len(x) >= MIN_MEASURED}
     _AVG.update(at=time.time(), v=v)
     return v
 
 
+def employer_secs(c, first=False, avg=None):
+    """Seconds one employer's check is expected to take. A regular run: what it took last time (at most the regular
+    per-employer budget: a slower one is cut there and finished in the run's last pass). A first check (or one never
+    measured): the average for its job system, at most what one employer may take in a chunk of the staged check."""
+    avg = _avg_secs() if avg is None else avg
+    ats = c.get("ats") or ""
+    typical = avg.get(ats, DEFAULT_SECS.get(ats, DEFAULT_OTHER))
+    if first:
+        return min(typical, float(CHUNK_BUDGET))
+    own = (c.get("_fetch") or {}).get("secs")
+    return min(float(own), REGULAR_CAP) if own else typical
+
+
 def fetch_minutes(cos, first=False):
-    """About how many minutes one check of these companies takes: what each took last time (the measured average for
-    the ones never checked), spread over the lanes the fetch runs at once. first=True: none of them has been read
-    before (every posting's text is new), so their own earlier times don't apply."""
+    """THE estimate of how many minutes one check of these companies takes, used by every page (setup, the board,
+    Employers, Settings): each employer's expected seconds (employer_secs) spread over the lanes the fetch runs at
+    once, plus building the boards. first=True: the staged first check of employers never read before (their own
+    earlier times don't apply; it runs in chunks, each with a little start-up time)."""
     if not cos:
         return 0
     avg = _avg_secs()
     tot, longest = {"fast": 0.0, "workday": 0.0}, 0.0
     for c in cos:
-        lane = "workday" if c.get("ats") == "workday" else "fast"
-        sec = None if first else (c.get("_fetch") or {}).get("secs")
-        sec = float(sec) if sec else avg[lane]
-        tot[lane] += sec
+        sec = employer_secs(c, first, avg)
+        tot["workday" if c.get("ats") == "workday" else "fast"] += sec
         longest = max(longest, sec)
     secs = max(tot["fast"] / FAST_LANES, tot["workday"] / WD_LANES, longest) + 45 + 0.04 * len(cos)   # (+ building the boards)
+    if first:
+        secs += 6 * (1 + max(0, len(cos) - CHUNK_FIRST) // CHUNK)       # (each chunk is its own short run)
     return max(1, round(secs / 60))
 
 
+def _hours(h):
+    return "½" if h == 0.5 else f"{int(h) if h == int(h) else str(int(h)) + '½'}"
+
+
 def minutes_text(m):
-    """"about 25 minutes", "about 1 hour", "about 2½ hours" (rounded the way a person would say it)."""
+    """An estimate in words, always as a range, because one slow job site can stretch a run: "about 1–2 minutes",
+    "about 10–15 minutes", "about 25–40 minutes", "about 1–1½ hours". m is the expected minutes (the low end)."""
     m = int(m or 0)
     if m < 1:
         return "under a minute"
-    if m < 50:
-        m = m if m < 10 else 5 * round(m / 5)
-        return f"about {m} minute{'' if m == 1 else 's'}"
-    h = round(m / 30) / 2
-    if h == 1:
-        return "about 1 hour"
-    return f"about {int(h) if h == int(h) else str(int(h)) + '½'} hours"
+    if m < 40:
+        lo = m if m < 10 else 5 * round(m / 5)
+        hi = -(-m * 3 // 2) if m < 10 else 5 * -(-(m * 3) // 10)
+        hi = max(hi, lo + (1 if lo < 10 else 5))
+        return f"about {lo}–{hi} minutes"
+    lo, hi = max(0.5, round(m / 30) / 2), max(1.0, round(m * 1.5 / 30) / 2)
+    if hi <= lo:
+        hi = lo + 0.5
+    if lo < 1:
+        return f"about 45 minutes to {_hours(hi)} hour{'' if hi == 1 else 's'}"
+    return f"about {_hours(lo)}–{_hours(hi)} hours"
 
 
 _EST = {}
@@ -324,8 +355,16 @@ def progress(pid):
     if up["running"]:
         ph, d, t = up["phase"], up["done"] or 0, up["total"] or 0
         if ph == "fetch":
-            return dict(out, kind="update", done=d, total=t, frac=.02 + (.8 * d / t if t else 0),
+            return dict(out, kind="update", done=d, total=t, frac=.02 + (.7 * d / t if t else 0), can_stop=True,
                         line=f"Finding new jobs: {n(d)} of {n(t)} employers" if t else "Finding new jobs: getting ready…")
+        if ph == "slow":    # the last pass: the few employers that ran out of time in the first one
+            with S.lock:
+                names = list(S.state.get("slow") or [])
+            k = max(1, t - d)
+            who = ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
+            return dict(out, kind="update", done=d, total=t, frac=.74 + (.1 * d / t if t else 0), can_stop=True,
+                        line=f"Finding new jobs: finishing the last {n(k)} employer{'' if k == 1 else 's'}, which {'has' if k == 1 else 'have'} a lot of openings"
+                             + (f" ({who})" if who else "") + ". Stop keeps everything found so far.")
         if ph in ("ai", "pivot"):
             return dict(out, kind="rate", frac=.88, line="Finding new jobs: Claude is rating the new ones…")
         if ph == "facts":

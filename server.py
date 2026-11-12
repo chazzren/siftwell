@@ -1016,6 +1016,11 @@ def run_update(only=None, defer_running=False, flags=(), quiet=False, names=None
                     with lock:
                         if m:
                             state.update(phase=m.group(1), done=int(m.group(2)), total=int(m.group(3)))
+                        elif line.startswith("SLOW "):   # the employers the run's last pass is finishing
+                            try:
+                                state["slow"] = [str(x) for x in json.loads(line[5:])][:50]
+                            except ValueError:
+                                pass
                         elif line:
                             state["lines"] = (state["lines"] + [line])[-12:]
                 p.wait()
@@ -1026,7 +1031,11 @@ def run_update(only=None, defer_running=False, flags=(), quiet=False, names=None
     finally:
         UPDATE_PROC["p"] = None
         with lock:
-            state.update(running=False, exit=rc if rc is not None else -1, finished=dt.datetime.now().isoformat(timespec="seconds"))
+            stopped = bool(state.pop("stopping", False))
+            state.update(running=False, exit=rc if rc is not None else -1, finished=dt.datetime.now().isoformat(timespec="seconds"),
+                         stopped=stopped, slow=[])
+        if stopped:     # Stop: what the fetch had finished is in the catalog; the boards are built from it now
+            request_recompute(None)
         if not quiet or rc not in (0, 3):
             _actlog("update finished" if rc in (0, 3) else "update stopped", None, f"exit {rc}")
         osdeps.keep_awake(False)
@@ -1547,6 +1556,18 @@ class H(BaseHTTPRequestHandler):
                 return self._send(409, {"error": err})
             self._act("job search continued", pid, "checking the remaining employers")
             return self._send(202, {"ok": True})
+        if path == "/api/update/stop":      # Stop on a running Find new jobs: keep what was found, rebuild the boards
+            import first_search
+            with lock:
+                ok = state["running"] and not first_search.JOB["running"] and state.get("phase") in ("fetch", "slow")
+                if ok:
+                    state["stopping"] = True
+            if not ok or not stop_update():
+                with lock:
+                    state.pop("stopping", None)
+                return self._send(409, {"error": "Nothing to stop right now."})
+            self._act("update stopped", pid, "by the person; what was found so far is kept")
+            return self._send(200, {"ok": True})
         if path == "/api/search/pause":
             import first_search
             if not first_search.pause(pid):
@@ -1844,14 +1865,10 @@ class H(BaseHTTPRequestHandler):
                 prof = resume.approve(body.get("edits") or {})
             except Exception as e:
                 return self._send(400, {"error": str(e)[:300]})
+            # "Approve and re-score jobs": bg_highlights reads the highlights and then rebuilds this person's board
+            # from the jobs Siftwell already has (Relevance, requirements, Appeal; the automatic quick check rates what
+            # is new to the board). Nothing is fetched: that is what Find new jobs is for.
             threading.Thread(target=bg_highlights, args=(pid,), daemon=True).start()
-            if body.get("rescore"):
-                with lock:
-                    busy = state["running"]
-                    if not busy:
-                        state["running"] = True
-                if not busy:
-                    threading.Thread(target=run_update, daemon=True).start()
             return self._send(200, {"ok": True, "hash": prof.get("_hash")})
         if path == "/api/profile/edit":  # changes to the approved profile (About you, job titles); the board re-checks itself
             import resume

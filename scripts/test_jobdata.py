@@ -691,6 +691,26 @@ check("a title that names a region only decides a remote posting ('Managing Edit
       P("Managing Editor, Asia", []) is not None and P("Sales Associate Liberia FT", []) is not None and P("Managing Editor, Asia", ["Remote"], "remote") is None)
 people.save_settings({"home_zip": "43215", "radius_miles": 35}, PID)
 
+# ------------------------------------------------------------------ 13. a regular Find new jobs: quick pass, then the slow ones
+import argparse, contextlib, io
+netsafe.check_config, keep_cc = (lambda c: None), netsafe.check_config
+keep_q, keep_f = jobfinder.QUICK_BUDGET_SECS, jobfinder.FETCH_BUDGET_SECS
+jobfinder.QUICK_BUDGET_SECS, jobfinder.FETCH_BUDGET_SECS = 1, 2
+os.environ.pop("SIFTWELL_FETCH_BUDGET", None)
+buf = io.StringIO()
+t0 = time.time()
+with contextlib.redirect_stdout(buf):
+    jobfinder.fetch(argparse.Namespace(only="Slow Co,Buckeye Clinics", only_file=None, no_rate=True, no_boards=True, boards_every=0, budget=None))
+out_lines = buf.getvalue().splitlines()
+jobfinder.QUICK_BUDGET_SECS, jobfinder.FETCH_BUDGET_SECS, netsafe.check_config = keep_q, keep_f, keep_cc
+check("a regular run: an employer that runs out of its quick budget is read again at the end, and the run says which one",
+      'SLOW ["Slow Co"]' in out_lines and "PROGRESS slow 1/1" in out_lines and any(l.startswith("PROGRESS fetch 2/2") for l in out_lines),
+      str([l for l in out_lines if l.startswith(("SLOW", "PROGRESS", "OVER"))]))
+check("...one still too slow after that is reported as over budget (finished by a later run), and the run ended in time",
+      any(l.startswith("OVER_BUDGET") and "Slow Co" in l for l in out_lines) and time.time() - t0 < 30, str(round(time.time() - t0, 1)))
+run = catalog.runs(1, "fetch")[0]
+check("...it is counted once in the run", run["companies"] == 2, str(run["companies"]))
+
 blocked = os.path.join(DATA, claude_cli.FORBID_LOG)
 check("no Claude call was attempted", not os.path.exists(blocked))
 

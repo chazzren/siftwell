@@ -521,7 +521,7 @@ BODY = """<div class="wrap">
 <div class="banner gsbn" id="dirBanner" role="status" aria-live="polite" hidden></div>
 <div class="banner gsbn" id="ttlBanner" hidden></div>
 <div class="panel" id="progress" hidden>
-  <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span><button class="btn sm" type="button" id="progStop" hidden title="Stop rating: batches already sent finish and their ratings are kept. Queued runs are cancelled.">Stop</button><button class="btn sm primary" type="button" id="progReload" hidden>Show new ratings</button></div>
+  <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span><button class="btn sm" type="button" id="progStop" hidden title="Stop rating: batches already sent finish and their ratings are kept. Queued runs are cancelled.">Stop</button><button class="btn sm" type="button" id="updStop" hidden title="Stop finding new jobs now. Everything found so far is kept and your board is rebuilt with it; the employers not reached are checked next time.">Stop</button><button class="btn sm primary" type="button" id="progReload" hidden>Show new ratings</button></div>
   <div class="prog"><i id="progBar"></i></div>
   <div class="note" id="progQueue" hidden></div>
   <div class="loglines" id="progLog"></div>
@@ -2102,6 +2102,20 @@ if (SERVED) {
     const e = estMine() ? EST.mine : EST.all;
     return `check ${estMine() ? "your" : "all"} ${e.companies.toLocaleString()} employer${e.companies === 1 ? "" : "s"} for new openings (${e.text})`;
   }
+  // after Stop: the boards are rebuilt from what the fetch had finished; reload when that is done
+  function stopWatch(){
+    let seen = false, tries = 0;
+    const tick = () => fetch("/api/status" + pq()).then(r => r.json()).then(s => {
+      if (s.recomputing) seen = true;
+      if ((seen && !s.recomputing) || ++tries > 100) { saveFilters(); return void location.reload(); }
+      setTimeout(tick, 3000);
+    }).catch(() => setTimeout(tick, 5000));
+    setTimeout(tick, 2500);
+  }
+  $("updStop").addEventListener("click", () => {
+    $("updStop").disabled = true;
+    fetch("/api/update/stop", {method: "POST", headers: H, body: "{}"}).then(() => { $("updStop").disabled = false; poll.now && poll.now(); }).catch(() => { $("updStop").disabled = false; });
+  });
   function serverDown(){
     const b = $("chkBanner"), html = `<span><b>Siftwell isn’t running.</b> This page can’t reach it, so nothing here is being updated and the buttons won’t work. Open Siftwell again, then reload this page.</span><button class="btn sm" type="button" onclick="location.reload()">Reload</button>`;
     if (!jobs.length || chkSig === html) return;
@@ -2131,8 +2145,9 @@ if (SERVED) {
       if (s.running) {
         if (!wasRunning) scrollTo(0, 0);
         wasRunning = true; $("progress").hidden = false;
-        $("progTitle").textContent = pg.line || "Finding new jobs…";
+        $("progTitle").textContent = s.stopping ? "Stopping… what was found so far is kept" : (pg.line || "Finding new jobs…");
         $("progNote").textContent = "";
+        $("updStop").hidden = !pg.can_stop || !!s.stopping;
         $("progBar").style.width = Math.round(100 * (pg.frac == null ? .04 : pg.frac)) + "%";
         $("progLog").textContent = "";
         setTimeout(poll, 2000);
@@ -2145,7 +2160,9 @@ if (SERVED) {
       } else if (bgShown && !wasRunning) {
         bgShown = false; $("progress").hidden = true; setTimeout(poll, 5000);
       } else if (wasRunning) {
+        $("updStop").hidden = true;
         if (s.exit === 0) location.reload();
+        else if (s.stopped) { wasRunning = false; $("progTitle").textContent = "Stopped"; $("progNote").textContent = "Everything found so far is kept. Your board is being rebuilt with it; this page reloads when it is ready."; $("progBar").style.width = "100%"; stopWatch(); }
         else { $("progTitle").textContent = "Finding new jobs didn’t finish"; $("progNote").textContent = "Some employers couldn’t be checked this time. Your board shows what Siftwell has; try Find new jobs again later. (What went wrong is on the Employers page, under Finding new jobs.)"; $("progLog").textContent = ""; $("progBar").style.width = "100%"; }
       } else setTimeout(poll, 20000);   // idle: keep watching, so the page notices a check that starts later, or Siftwell closing
     }).catch(() => { if (++pollFails >= 3) serverDown(); setTimeout(poll, 5000); });

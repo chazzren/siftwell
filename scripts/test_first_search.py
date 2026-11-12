@@ -185,9 +185,23 @@ check("estimate: measured seconds over the lanes", first_search.fetch_minutes(co
 cos_wd = [{"ats": "workday", "_fetch": {"secs": 60}} for _ in range(40)]
 check("estimate: Workday's narrow lane dominates", first_search.fetch_minutes(cos_fast + cos_wd) >= 10)
 check("estimate: more employers never take less", first_search.fetch_minutes(cos_fast * 10) > first_search.fetch_minutes(cos_fast))
-check("estimate wording", [first_search.minutes_text(x) for x in (0, 1, 7, 23, 44, 60, 95, 150, 300)] ==
-      ["under a minute", "about 1 minute", "about 7 minutes", "about 25 minutes", "about 45 minutes", "about 1 hour", "about 1½ hours",
-       "about 2½ hours", "about 5 hours"], str([first_search.minutes_text(x) for x in (0, 1, 7, 23, 44, 60, 95, 150, 300)]))
+check("estimate: a slow employer counts for no more than the regular per-employer budget (it is cut there and finished at the end)",
+      first_search.employer_secs({"ats": "workday", "_fetch": {"secs": 199}}) == first_search.REGULAR_CAP)
+# the re-test's numbers: a first check of 250 employers took about 10 minutes (setup said "about 40"), 10 for a
+# remote-only profile about 4.5 at most
+first_search._AVG["v"] = {}
+mix250 = [{"ats": "workday"}] * 70 + [{"ats": "icims"}] * 30 + [{"ats": "oracle"}] * 8 + [{"ats": "adp"}] * 60 + [{"ats": "greenhouse"}] * 40 + [{"ats": "ukg"}] * 42
+m250 = first_search.fetch_minutes(mix250, first=True)
+check(f"estimate before anything is measured: a first check of 250 employers is about 10 minutes ({m250}), said as a range",
+      8 <= m250 <= 13 and "–" in first_search.minutes_text(m250),
+      str((m250, first_search.minutes_text(m250))))
+m10 = first_search.fetch_minutes([{"ats": "workday"}] * 4 + [{"ats": "greenhouse"}] * 6, first=True)
+check(f"...and of 10 employers a minute or two ({m10})", 1 <= m10 <= 3, str(m10))
+first_search._AVG["v"] = None
+check("estimate wording is always a range", [first_search.minutes_text(x) for x in (0, 1, 4, 7, 10, 23, 44, 60, 95, 150)] ==
+      ["under a minute", "about 1–2 minutes", "about 4–6 minutes", "about 7–11 minutes", "about 10–15 minutes", "about 25–35 minutes",
+       "about 45 minutes to 1 hour", "about 1–1½ hours", "about 1½–2½ hours", "about 2½–4 hours"],
+      str([first_search.minutes_text(x) for x in (0, 1, 4, 7, 10, 23, 44, 60, 95, 150)]))
 first_search._EST.clear()
 e = first_search.estimates(pid)
 check("estimates: mine and all, from the real list", e["all"]["companies"] == len(catalog.companies()) and e["mine"]["companies"] == 0 and e["profiles"] == 2)
