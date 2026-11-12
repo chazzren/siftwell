@@ -5,10 +5,13 @@ from jobfinder import http_json, strip_html, J, over_budget, budget_stop
 import jobtext
 import netsafe
 
-def household_homes():
+def household_homes(whole_if_legacy=False):
     """[((lat, lon, label), radius miles)]: every profile's home area, the same union the Workday location facets use.
     During a fetch that's jobfinder's CFG["homes"]; elsewhere (e.g. checking a new company) it is read from the profiles."""
-    homes = list((getattr(_jf(), "CFG", None) or {}).get("homes") or [])
+    cfg = getattr(_jf(), "CFG", None) or {}
+    if whole_if_legacy and cfg.get("homes") and cfg.get("legacy_area"):
+        return []   # someone in the household still uses the older fixed area: read big boards whole, as before
+    homes = list(cfg.get("homes") or [])
     if not homes:
         try:
             import geo, people
@@ -105,7 +108,7 @@ def oracle_searches(c, total):
     workplace type. Returns [(finder suffix, label)]; [("", "")] = everything."""
     if total <= ORACLE_ALL_MAX or c.get("all"):
         return [("", "")]
-    homes = household_homes()
+    homes = household_homes(True)
     if not homes:
         return [("", "")]
     out = [(f",latitude={h[0]:.4f},longitude={h[1]:.4f},radius={int(r) + 10},radiusUnit=MI", str(h[2])[:40]) for h, r in homes]
@@ -161,7 +164,7 @@ def jibe_searches(c, total):
     if total <= JIBE_ALL_MAX or c.get("all"):
         return [{}]
     out = []
-    for h, r in household_homes():
+    for h, r in household_homes(True):
         place = home_place(h)
         if not place:
             return [{}]
