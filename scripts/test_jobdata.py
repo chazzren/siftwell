@@ -579,7 +579,7 @@ US_LOOKALIKES = ["Dublin, OH", "Paris, TX", "Athens, GA", "Athens, OH", "Rome, G
                  "Manchester, NH", "Amsterdam, NY", "Brazil, IN", "London, KY", "Berlin, MD", "Peru, IN", "Mexico, MO", "Holland, MI",
                  "Panama City Beach, FL", "New London, CT", "Jersey City, NJ", "Lebanon, OH", "Delaware, OH", "Vancouver, WA",
                  "Indianapolis, Indiana", "Athens, Georgia", "Dublin, Ohio", "US-OH-Columbus", "OH - Work from home", "Remote - Texas",
-                 "Remote, Minnesota, USA", "Remote", "Columbus", "Norfolk", "Kent", "Birmingham", "Cambridge", "Athens", "Ontario",
+                 "Remote, Minnesota, USA", "Remote", "Columbus", "Norfolk", "Kent", "Birmingham", "Cambridge", "Athens",
                  "Panama City", "Smalltown, OH", "IT - Columbus", "International Falls, MN",
                  "Tysons Corner, Virginia; Fredericton, Canada", "London (GB80); New York, NY", "Toronto, Canada | Columbus, OH"]
 bad = [l for l in US_LOOKALIKES if jobfinder.is_foreign(l)]
@@ -606,7 +606,10 @@ check("...one that says United States stays, and so does one that merely mention
       P("Support Engineer", ["Remote"], "remote", "Remote within the United States. Some work with our team located in Toronto.") is not None
       and P("Support Engineer", ["Remote"], "remote", "We have offices in London and Austin. 401(k) match.") is not None)
 j = P("Nurse", ["Columbus, OH"], "", "Care for patients.")
-check("a kept posting records whether it names a US place", j["geo"] == "us" and P("Engineer", ["Remote"], "remote", "Build things.")["geo"] == "")
+check("a kept posting records whether it names a US place", j["geo"] == "us" and P("Engineer", ["Remote"], "remote", "Build things.")["geo"] == ""
+      and P("Engineer", ["Arlington"])["geo"] == "us")
+check("'Ontario' written alone is the province unless the employer hires in a state with a town of that name ('Ontario Remote Work')",
+      jobfinder.is_foreign("Ontario Remote Work") and not jobfinder.is_foreign("Ontario", {"CA"}) and not jobfinder.is_foreign("Ontario, CA"))
 
 # the employer level: one that hires almost only abroad
 company("Mercier Consultancy")

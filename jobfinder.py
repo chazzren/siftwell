@@ -1071,7 +1071,7 @@ def prepare_listing(j, c):
     unnamed = c.get("tier") == "dmv_hq" and bool(locs) and all(looks_local_unnamed(l) for l in locs if l)
     j.update(ai_track=c.get("ai_track", ""), base_wp=base0, remote_strict=bool(strict), remote_bare=bool(bare),
              local_unnamed=unnamed, pv=jobtext.PARSE_VERSION, remote_st=remote_st, remote_veto=veto,
-             geo="us" if (us_loc or (said_us and not foreign_loc)) else "")
+             geo="us" if (us_loc or (said_us and not foreign_loc) or (not foreign_loc and any(_us_city(l) for l in locs if l))) else "")
     # pay: what the board itself listed, else the posting's text, else its title ("Line Cook - $17/hour")
     set_pay(j, j.pop("salary", None) or parse_salary(text) or parse_salary(j.get("title") or ""))
     # the states the posting names, for placing a bare city name ("Columbus" + "a current Georgia license")
@@ -1100,6 +1100,14 @@ def nice_place(label):
         return hs[0].label if hs else ""
     except Exception:
         return ""
+
+def _us_city(l):
+    """A label that is a US city written without its state ("Arlington", "St. Louis"): good enough to count the
+    posting as a US one when working out whether an employer hires mostly abroad."""
+    import geo
+    if geo.where(l) != "" or geo._foreign()["shared"].search(geo._key(l)):      # ("Birmingham", "Cambridge": could be either)
+        return False
+    return any(h.kind in ("bare", "place", "alias", "metro", "zip", "county") for h in geo.locate_all(l, weak=True))
 
 def employer_us_states(c):
     """The US states an employer is known to hire in: the directory's, and the ones its postings name with a town

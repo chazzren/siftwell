@@ -227,7 +227,8 @@ near = catalog.sets_map()
 mine = {n for n, s in near.items() if f"near-{pid}" in s}
 check("every nearby employer is added, not 400", len(r["added"]) == 654 and len(mine) == 654)
 check("an employer elsewhere in the state is not", "Employer 0900" not in mine)
-check("a code name never reaches the catalog", "Employer in Columbus OH (Paylocity 38ce6e)" in mine and not any(company_add.looks_like_code(n) for n in mine))
+check("a code name never reaches the catalog, and a placeholder carries no job system or code", "Employer in Columbus OH" in mine
+      and not any(company_add.looks_like_code(n) for n in mine) and not any("Paylocity" in n or "38ce6e" in n.lower() for n in mine))
 check("a big sampled board is added as a starter (maybe near)", "Employer 0902" in mine and r["starters"] == 1
       and "Employer 0902" in directory.record(pid)["starters_pending"])
 cos = {c["name"]: c for c in catalog.companies()}
