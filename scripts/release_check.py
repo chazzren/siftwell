@@ -8,7 +8,8 @@ Checks: (1) every .py compiles, (2) page scripts pass `node --check`,
 (3) leak scan of tracked files, (4) required files exist,
 (5) nothing writes into the app folder (user data and runtime live outside it; see paths.py),
 (6) Claude rating fingerprints/cache keys depend only on the person's data, not on prompt/model/schema text.
-Extra private regexes (one per line) come from the LEAK_PATTERNS environment variable.
+Extra private regexes (one per line) come from the LEAK_PATTERNS environment variable. A release must have them:
+with --require-leak-patterns (the release workflow) an empty LEAK_PATTERNS is an error, not a warning.
 """
 import argparse
 import ast
@@ -169,7 +170,7 @@ def _allowed_spans(line, phrases):
     return spans
 
 
-def check_leaks(files):
+def check_leaks(files, require_private=False):
     rules = list(LEAK_RULES)
     # Public phrases a private pattern may legitimately match: the repo's own owner/name (its address) and the
     # company names in scripts/leak_allow.txt (e.g. an employer that shares a first name with someone).
@@ -218,7 +219,9 @@ def check_leaks(files):
     print(f"[leaks] {scanned} text files scanned with {len(rules)} rules "
           f"({extra} private pattern(s) from LEAK_PATTERNS), {hits} finding(s)")
     if not extra:
-        warnings.append("LEAK_PATTERNS is empty: personal-name checks were NOT run")
+        (errors if require_private else warnings).append(
+            "LEAK_PATTERNS is empty: personal-name checks were NOT run" +
+            (" (a release needs them: set the LEAK_PATTERNS repository secret)" if require_private else ""))
 
 
 def check_required(files, local):
@@ -529,12 +532,14 @@ def check_fingerprints():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--local", action="store_true", help="include untracked files; missing launchers are warnings")
+    ap.add_argument("--require-leak-patterns", action="store_true",
+                    help="fail when LEAK_PATTERNS is empty (the release workflow passes this; local runs only warn)")
     args = ap.parse_args()
     files = list_files(args.local)
     check_required(files, args.local)
     check_compile(files)
     check_js()
-    check_leaks(files)
+    check_leaks(files, args.require_leak_patterns and not args.local)
     check_no_app_writes(files)
     check_fingerprints()
     print()

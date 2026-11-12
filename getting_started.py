@@ -764,7 +764,10 @@ def status(fresh=False):
     keep = keep_available()
     ip = _cached("ip", lan_ip) if lan else None
     url = f"http://{ip}:{port}/?k={CTX['token']}" if lan and ip else None
-    codex = _cached("codex", lambda: osdeps.find_exe("codex"))
+    def _codex():
+        import review
+        return review.codex_path()      # (the same lookup the reviews use; honours SIFTWELL_PRETEND_NO_CODEX)
+    codex = _cached("codex", _codex)
     items = [
         {"id": "claude", "title": "Claude Code installed", "done": bool(cpath), "optional": True, "group": "claude"},
         {"id": "signin", "title": "Signed in to Claude", "done": bool(signed), "optional": True, "group": "claude"},
@@ -1071,13 +1074,13 @@ function rowKeep(){
 }
 function rowAstra(){
   const a = S.astra;
-  if (a.found) return {desc: "Codex is installed. Run `codex login` once with ChatGPT if you haven't, and Astra can grade tailored resumes.", body: ""};
-  return {desc: "Astra is a second opinion on tailored resumes, using ChatGPT through the Codex app. Siftwell works fine without it.",
+  if (a.found) return {desc: "The Codex app is installed, so Astra can grade your tailored resumes. If reviews say you are signed out, open the Codex app and sign in with your ChatGPT account.", body: ""};
+  return {desc: "Optional. Astra is a second opinion on tailored resumes, using ChatGPT through OpenAI’s Codex app. Siftwell works fine without it.",
     body: `<details><summary>How to set up</summary><ol class="steps">
-      <li>Install Node.js (the LTS version) from <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a>.</li>
-      <li>Open a terminal and run <code>npm install -g @openai/codex</code>.</li>
-      <li>Run <code>codex login</code> and sign in with your ChatGPT account.</li>
-      <li>Come back here and re-check.</li></ol></details><button class="btn ghost" type="button" data-act="recheck">Re-check</button>`};
+      <li>Download the Codex app from <a href="https://openai.com/codex/" target="_blank" rel="noopener">openai.com/codex</a> and install it.</li>
+      <li>Open it and sign in with your ChatGPT account.</li>
+      <li>Come back here and press Re-check.</li></ol>
+      <p class="gsmsg">Comfortable with a terminal? <code>npm install -g @openai/codex</code>, then <code>codex login</code>, does the same.</p></details><button class="btn ghost" type="button" data-act="recheck">Re-check</button>`};
 }
 const ROWS = {claude: rowClaude, signin: rowSignin, browser: rowBrowser, startup: rowStartup, phone: rowPhone, keep: rowKeep, astra: rowAstra};
 

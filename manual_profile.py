@@ -68,7 +68,7 @@ window.ManualProfile = (function(){
         <details><summary>Or paste your resume text</summary><textarea data-act="paste" rows="5" aria-label="Resume text"></textarea>
           <div class="mp-btns" style="margin-top:6px"><button type="button" class="mp-b" data-act="usepaste">Fill the form from this text</button></div></details>
         <span class="mp-msg" data-pre role="status"></span></div>
-      <div class="mp-grid">${f("name", "Your name", inp("name"))}${f("location", "Location", inp("location", "City, ST"))}
+      <div class="mp-grid">${f("name", "Full name", inp("name"), "As it should appear on your resume.")}${f("location", "Location", inp("location", "City, ST"))}
         ${f("current_title", "Current job title", inp("current_title", "e.g. Office Manager"), "This is what Siftwell searches for first.")}
         ${f("years_experience", "Years of experience", inp("years_experience", "", "number"), "Optional. Worked out from your roles if blank.")}</div>
       ${f("summary", "Summary", ta("summary", 4, "Two or three sentences about what you do best."))}

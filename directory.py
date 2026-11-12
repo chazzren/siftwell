@@ -8,8 +8,11 @@ that publish postings rather than employer feeds, e.g. USAJOBS). Files are cache
 folder), checked against the manifest's SHA-256, refreshed at most once a week, and used from the cache when offline.
 
 What it does with them:
+  preview(pid)      what apply() would add right now, without adding it: how many employers, about how many jobs
+                    near the person, and honest time estimates (first check, daily update) for "all" and "the top N".
+  undo(pid)         takes back what the last apply() added ("Remove the employers this added").
   apply(pid)        puts EVERY employer within the person's radius (or the top remote-friendly ones for remote-only
-                    searches) on their "Near me" list (near-<pid>), plus one catalog entry per job-snapshot source with
+                    searches; limit=N: only the N with the most openings nearby) on their "Near me" list (near-<pid>), plus one catalog entry per job-snapshot source with
                     postings near them ("Federal jobs (USAJOBS)" ...). An employer is offered to a person once: if they
                     take it off their list later it stays off (DATA/directory/people/<pid>.json remembers). Each
                     catalog entry also carries where the directory knows the employer hires (the "dir" key), so a
@@ -24,7 +27,15 @@ What it does with them:
   FETCHERS          the "directory_jobs" reader: a snapshot source's postings from the cached files, so they go
                     through the normal catalog, per-person filters and rating funnel.
 
-Routes (server.py): GET /api/directory, POST /api/directory/apply {fetch}. Test hook: SIFTWELL_DIRECTORY_URL=<base>
+When the directory can't be reached and nothing is cached, the FIRST search (and only it: starters_ok) falls back to
+the starter list of large US employers shipped in packs/; the person's record says so ("offline") and every page
+tells them plainly, with "Try the directory again". Pruned or removed employers are never added again by that path.
+
+People on the older built-in area (no home ZIP) can give the directory its own area (settings directory_zip /
+directory_radius) without changing which jobs count as near them.
+
+Routes (server.py): GET /api/directory, GET /api/directory/preview, POST /api/directory/apply {fetch, limit, retry},
+POST /api/directory/undo, POST /api/directory/area {zip, radius}. Test hook: SIFTWELL_DIRECTORY_URL=<base>
 (http://127.0.0.1:port/... or file:///...; plain urllib, because netsafe refuses local addresses);
 SIFTWELL_DIRECTORY_DELAY=<s> (first background check, default 120)."""
 import datetime as dt, gzip, hashlib, json, math, os, re, threading, time, urllib.parse, urllib.request
@@ -258,6 +269,13 @@ def area(pid):
             return la, lo, label, int(st.get("radius_miles") or 35), remote_only, remote_ok
         except Exception:
             pass
+    dz = str(st.get("directory_zip") or "").strip()
+    if dz and not remote_only:      # (no home ZIP: the area chosen just for the directory; the job filter is untouched)
+        try:
+            la, lo, label = geo.geocode_home(dz)
+            return la, lo, label, int(st.get("directory_radius") or st.get("radius_miles") or 35), remote_only, remote_ok
+        except Exception:
+            pass
     if remote_only:
         return None, None, "anywhere in the US", 0, True, True
     return None
@@ -466,40 +484,89 @@ def _dir_info(e):
     return d
 
 
-def apply(pid, weekly=False):
-    """Add EVERY directory employer near this person to their Near me list (and the job-snapshot sources with postings
-    near them). Employers offered before are skipped, so taking one off the list sticks; the weekly refresh therefore
-    adds exactly the newly indexed ones. Returns
+def _known_states():
+    """{board key: set of states} from what is already on this computer (cached directory files, catalog entries):
+    used to put the starter employers known to hire in the person's state first when the directory is unreachable."""
+    out = {}
+    try:
+        import catalog
+        for c in catalog.companies():
+            st = (c.get("dir") or {}).get("st") if isinstance(c.get("dir"), dict) else None
+            if st:
+                out.setdefault(catalog.ats_key(c), set()).update(st)
+    except Exception:
+        pass
+    try:
+        names = [f[:-8] for f in os.listdir(_path("states")) if f.endswith(".json.gz") and len(f) == 10]
+    except OSError:
+        names = []
+    for n in names:
+        d = _shard("states", n, {"states": {}}) or {}
+        for e in d.get("employers") or []:
+            c = _clean_entry(e)
+            if c:
+                out.setdefault(_key(c["cfg"]), set()).update(set(c["ps"]) | {n})
+    return out
+
+
+def _order_starters(packs, la, lo):
+    """Shipped starters in a sensible order: the ones known to hire in the person's state first, then the biggest.
+    Sets each one's "rank" (see near_order)."""
+    home = state_of(la, lo) if la is not None else None
+    known = _known_states() if home else {}
+    for p in packs:
+        here = bool(home and home in known.get(_key(p["cfg"]), ()))
+        p["rank"] = (2.0 if here else 0.0) + min(p["jobs"], 99999) / 100000.0
+    packs.sort(key=lambda p: (-p["rank"], p["name"].lower()))
+    return packs
+
+
+def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=False):
+    """Add the directory's employers near this person to their Near me list (and the job-snapshot sources with
+    postings near them). limit=N: only the N with the most openings nearby (None: every one). Employers offered before
+    are skipped, so taking one off the list sticks; the weekly refresh therefore adds exactly the newly indexed ones
+    (nothing, for someone who chose "the top N"). dry=True changes nothing and only reports. Returns
     {added: [names], linked: [names already in the catalog, now on the list], near: n, available: bool, reason,
-     starters: n added to be checked and kept only if they turn out to hire nearby, renamed: n}.
+     starters: n added to be checked and kept only if they turn out to hire nearby, renamed: n, offline: bool,
+     new: [{name, near, ats, starter}] (dry runs: everything that would be added, best first)}.
 
     Entries already on the list get their directory facts refreshed (where the employer hires) and, when their name is
     a board code, the readable name the directory has now.
 
-    When the directory can't be had for this person's area (offline, or that state isn't published yet), the large
-    national employers shipped in packs/ are added as starters; prune_starters() later drops the ones with no jobs near
-    the person. Directory data wins whenever it is there (same board = same employer)."""
+    starters_ok (the first search only): when the directory can't be had for this person's area (offline, or that
+    state isn't published yet), the large national employers shipped in packs/ are added as starters, the ones known
+    to hire in the person's state first; prune_starters() later drops the ones with no jobs near the person. A
+    starter that was pruned is never added again this way. Without starters_ok an unreachable directory is simply
+    reported (available False, reason "offline"). Directory data wins whenever it is there (same board = same employer)."""
     import catalog, company_add
     with _APPLY:
         man = manifest()
         emps, info = near_employers(pid, man)
         if info.get("reason") == "no_place":
-            return {"added": [], "linked": [], "near": 0, "available": False, "reason": "no_place", "starters": 0}
+            return {"added": [], "linked": [], "near": 0, "available": False, "reason": "no_place", "starters": 0, "new": []}
         offline = info.get("reason") == "offline"
-        if offline or info.get("missing"):
-            have = {_key(e["cfg"]) for e in emps}
-            emps = emps + [p for p in pack_employers() if _key(p["cfg"]) not in have]
         rec = record(pid)
+        if offline and not starters_ok:
+            return {"added": [], "linked": [], "near": 0, "available": False, "reason": "offline", "starters": 0, "new": [],
+                    "offline": True}
+        pruned = dict(rec.get("pruned") or {})
+        if starters_ok and (offline or info.get("missing")):
+            have = {_key(e["cfg"]) for e in emps}
+            a = area(pid)
+            packs = [p for p in pack_employers() if _key(p["cfg"]) not in have and _short(_key(p["cfg"])) not in pruned]
+            emps = emps + _order_starters(packs, a[0] if a else None, a[1] if a else None)
+        if weekly and rec.get("top_only"):
+            limit = 0                   # (they chose "the top N": the weekly check only keeps what they have up to date)
         offered = set(rec.get("offered") or [])
         pending = set(rec.get("starters_pending") or [])
-        pruned = dict(rec.get("pruned") or {})
         near_n = dict(rec.get("near_n") or {})
         rest = (dt.date.today() - dt.timedelta(days=MAYBE_REST_DAYS)).isoformat()
         want = f"near-{pid}"
         cos = catalog.companies()
         by_key = {catalog.ats_key(c): c for c in cos}
         by_name = {c["name"].lower(): c for c in cos}
-        added, linked, starters, renames, packs = [], [], 0, [], 0
+        added, linked, starters, renames, packs_n, new, keys, skipped = [], [], 0, [], 0, [], [], 0
+        save = (lambda entry, con: None) if dry else catalog.save_company
         with catalog.db() as con:
             for e in emps:
                 k = _key(e["cfg"])
@@ -511,7 +578,7 @@ def apply(pid, weekly=False):
                     # already on this person's list: keep what the directory knows about it up to date
                     if dirinfo and co.get("dir") != dirinfo:
                         co["dir"] = dirinfo
-                        catalog.save_company({kk: v for kk, v in co.items() if not kk.startswith("_")}, con)
+                        save({kk: v for kk, v in co.items() if not kk.startswith("_")}, con)
                     if company_add.looks_like_code(co["name"]) or co["name"].startswith("Employer in "):
                         if not company_add.looks_like_code(e["name"]) and not e["name"].startswith("Employer") \
                                 and e["name"].lower() not in by_name:
@@ -525,15 +592,21 @@ def apply(pid, weekly=False):
                     continue
                 if e.get("maybe") and pruned.get(_short(k), "") > rest:
                     continue
+                if starter and not e.get("maybe") and _short(k) in pruned:
+                    continue            # (a shipped starter that turned out not to hire nearby never comes back this way)
                 if starter and co is None and not e.get("maybe") and e["name"].lower() in by_name:
                     continue            # (the catalog already has this employer under another board)
+                if limit is not None and len(added) + len(linked) >= limit:
+                    skipped += 1
+                    continue            # (not offered: it can still be added later)
                 offered.add(sk if starter else k)
+                keys.append(sk if starter else k)
                 if co is not None:
                     entry = {kk: v for kk, v in co.items() if not kk.startswith("_")}
                     entry["sets"] = sorted(set(co.get("sets") or []) | {want})
                     if dirinfo:
                         entry["dir"] = dirinfo
-                    catalog.save_company(entry, con)
+                    save(entry, con)
                     co.update(entry)
                     linked.append(co["name"])
                 else:
@@ -547,58 +620,173 @@ def apply(pid, weekly=False):
                     entry = {"name": name, "tier": "dmv_office", "sector": sector, **e["cfg"], "sets": [want], "added_by": pid}
                     if dirinfo:
                         entry["dir"] = dirinfo
-                    catalog.save_company(entry, con)
+                    save(entry, con)
                     co = by_key[k] = by_name[name.lower()] = dict(entry)
                     added.append(name)
                 if starter:
                     pending.add(co["name"])
                     starters += 1
-                    packs += not e.get("maybe")
-                near_n[co["name"]] = e.get("near") or 0
+                    packs_n += not e.get("maybe")
+                # the order of the first check (near_order): openings nearby; starters by what is known about them
+                near_n[co["name"]] = (e.get("near") or 0) if not starter else round(e.get("rank") or min(e.get("jobs") or 0, 99999) / 100000.0, 5)
+                new.append({"name": co["name"], "near": e.get("near") or 0, "ats": e["cfg"].get("ats"), "starter": starter})
             # job snapshots: one catalog entry per source, shared by everyone near its postings
-            jobs = near_jobs(pid, man)
+            jobs = {} if offline else near_jobs(pid, man)
             labels = {s: (man.get("sources") or {}).get(s, {}).get("label") for s in jobs}
             for src, n in sorted(jobs.items()):
                 if not n or not re.fullmatch(r"[a-z]{2,20}", src):
                     continue
                 k = "src:" + src
-                if k in offered:
+                if k in offered or (limit is not None and limit <= 0):
                     continue
                 offered.add(k)
+                keys.append(k)
                 name = _source_name(src, labels.get(src))
                 co = next((c for c in by_key.values() if c.get("ats") == ATS and c.get("source") == src), None)
                 if co:
                     if want not in (co.get("sets") or []):
                         entry = {kk: v for kk, v in co.items() if not kk.startswith("_")}
                         entry["sets"] = sorted(set(co.get("sets") or []) | {want})
-                        catalog.save_company(entry, con)
+                        save(entry, con)
                     linked.append(co["name"])
                     near_n[co["name"]] = n
+                    new.append({"name": co["name"], "near": n, "ats": ATS, "starter": False})
                 else:
                     entry = {"name": name, "ats": ATS, "source": src, "tier": "national", "sector": SOURCE_SECTOR,
                              "sets": [want], "added_by": pid}
-                    catalog.save_company(entry, con)
+                    save(entry, con)
                     by_key[catalog.ats_key(entry)] = entry
                     added.append(name)
                     near_n[name] = n
+                    new.append({"name": name, "near": n, "ats": ATS, "starter": False})
+        out = {"added": added, "linked": linked, "near": sum(1 for e in emps if not e.get("starter")), "available": True,
+               "reason": None, "jobs": jobs, "built": man.get("built"), "starters": starters, "offline": offline,
+               "missing": info.get("missing") or [], "maybe": info.get("maybe", 0), "renamed": 0,
+               "pack_starters": packs_n, "new": new, "skipped": skipped, "label": info.get("label") or "",
+               "radius": info.get("radius") or 0, "remote_only": bool(info.get("remote_only"))}
+        if dry:
+            return out
         renamed = 0
-        for old, new in renames:        # (after the transaction above: rename_company opens its own)
+        for old, new_name in renames:   # (after the transaction above: rename_company opens its own)
             try:
-                if catalog.rename_company(old, new):
+                if catalog.rename_company(old, new_name):
                     renamed += 1
-                    near_n[new] = near_n.pop(old, 0)
+                    near_n[new_name] = near_n.pop(old, 0)
                     if old in pending:
-                        pending.discard(old); pending.add(new)
+                        pending.discard(old); pending.add(new_name)
             except Exception:
                 pass
+        out["renamed"] = renamed
+        batches = list(rec.get("batches") or [])
+        if added or linked:
+            batches.append({"at": _now(), "added": added, "linked": linked, "keys": keys, "weekly": bool(weekly),
+                            "starter": bool(offline)})
         rec.update(offered=sorted(offered), applied=_now(), built=man.get("built"), starters_pending=sorted(pending),
-                   near_n=near_n, pruned=pruned, added=int(rec.get("added", 0)) + len(added) + len(linked))
+                   near_n=near_n, pruned=pruned, added=int(rec.get("added", 0)) + len(added) + len(linked),
+                   batches=batches[-6:])
+        if not weekly:
+            rec["top_only"] = bool(limit is not None and skipped)
+        if offline:
+            rec["offline"] = True       # (the pages say plainly that this is the starter list, not the directory)
+        else:
+            rec.pop("offline", None)
         rec.pop("seen", None)
         _save_record(pid, rec)
-        return {"added": added, "linked": linked, "near": sum(1 for e in emps if not e.get("starter")), "available": True,
-                "reason": None, "jobs": jobs, "built": man.get("built"), "starters": starters, "offline": offline,
-                "missing": info.get("missing") or [], "maybe": info.get("maybe", 0), "renamed": renamed,
-                "pack_starters": packs}
+        _PREVIEW.pop(pid, None)
+        return out
+
+
+# ---------------------------------------------------------------- preview and undo
+_PREVIEW = {}       # pid -> (time, key, result)
+TOP_CHOICES = (100, 250, 500, 1000)
+
+
+def preview(pid, refresh=False):
+    """What "Add employers near me" would add right now, without adding it: {available, reason, new (employers),
+    jobs (their openings near the person), label, radius, remote_only, options: [{limit (None = all), employers,
+    jobs, first_minutes, first_text, daily_minutes, daily_text}], daily_before: {minutes, text}, last: the last batch
+    that can still be taken back}. Cached for a few minutes per search area."""
+    import catalog, first_search
+    st = _settings(pid)
+    rec = record(pid)
+    key = (str(st.get("home_zip")), str(st.get("directory_zip")), st.get("radius_miles"), st.get("directory_radius"),
+           tuple(st.get("workplaces") or ()), bool(st.get("remote_us", True)), len(rec.get("offered") or []), rec.get("applied"))
+    hit = _PREVIEW.get(pid)
+    if hit and not refresh and hit[1] == key and time.time() - hit[0] < 300:
+        return hit[2]
+    if refresh:
+        manifest(refresh=True)
+    r = apply(pid, dry=True)
+    out = {"available": r["available"], "reason": r.get("reason"), "new": 0, "jobs": 0, "options": [], "label": r.get("label", ""),
+           "radius": r.get("radius", 0), "remote_only": bool(r.get("remote_only")), "last": last_batch(pid),
+           "offline_start": bool(rec.get("offline")), "applied": rec.get("applied")}
+    if r["available"]:
+        import netsafe
+        new = r["new"]
+        cos = [c for c in catalog.companies(include_paused=False) if c.get("ats") in netsafe.CONFIG_RULES]
+        have = {c["name"] for c in cos}
+        before = first_search.fetch_minutes(cos)
+        out.update(new=len(new), jobs=sum(x["near"] for x in new if not x["starter"]),
+                   daily_before={"minutes": before, "text": first_search.minutes_text(before)})
+        sizes = [n for n in TOP_CHOICES if n < len(new)] + [None]
+        for n in sizes:
+            part = new if n is None else new[:n]
+            fresh = [x for x in part if x["name"] not in have]
+            fm = first_search.fetch_minutes(part, first=True)
+            dm = first_search.fetch_minutes(cos + fresh)
+            out["options"].append({"limit": n, "employers": len(part), "jobs": sum(x["near"] for x in part if not x["starter"]),
+                                   "first_minutes": fm, "first_text": first_search.minutes_text(fm),
+                                   "daily_minutes": dm, "daily_text": first_search.minutes_text(dm)})
+    _PREVIEW[pid] = (time.time(), key, out)
+    return out
+
+
+def last_batch(pid):
+    """The latest batch apply() added for this person that can be taken back: {at, employers} or None."""
+    b = (record(pid).get("batches") or [])
+    if not b:
+        return None
+    return {"at": b[-1].get("at"), "employers": len(b[-1].get("added") or []) + len(b[-1].get("linked") or []),
+            "starter": bool(b[-1].get("starter"))}
+
+
+def undo(pid):
+    """Take back the last batch apply() added: employers only this person's Near me list had leave the catalog (their
+    postings are closed, not deleted), the others just leave the list. They can be added again later. Returns
+    {removed: n}."""
+    import catalog
+    with _APPLY:
+        rec = record(pid)
+        batches = list(rec.get("batches") or [])
+        if not batches:
+            return {"removed": 0}
+        b = batches.pop()
+        want = f"near-{pid}"
+        cos = {c["name"]: c for c in catalog.companies()}
+        pending = set(rec.get("starters_pending") or [])
+        near_n = dict(rec.get("near_n") or {})
+        removed = 0
+        for name in list(b.get("added") or []) + list(b.get("linked") or []):
+            co = cos.get(name)
+            if co is None or want not in (co.get("sets") or []):
+                continue
+            sets = sorted(set(co.get("sets") or []) - {want})
+            if sets or name in (b.get("linked") or []):
+                entry = {k: v for k, v in co.items() if not k.startswith("_")}
+                entry["sets"] = sets
+                catalog.save_company(entry)
+            else:
+                catalog.remove_company(name)
+            pending.discard(name)
+            near_n.pop(name, None)
+            removed += 1
+        rec.update(offered=sorted(set(rec.get("offered") or []) - set(b.get("keys") or [])), batches=batches,
+                   starters_pending=sorted(pending), near_n=near_n, added=max(0, int(rec.get("added", 0)) - removed))
+        if b.get("starter"):
+            rec.pop("offline", None)
+        _save_record(pid, rec)
+        _PREVIEW.pop(pid, None)
+        return {"removed": removed}
 
 
 def near_order(pid):
@@ -695,6 +883,8 @@ def status(pid):
         man = None
     out = {"possible": bool(a), "reason": None if a else "no_place", "label": a[2] if a else "", "radius": a[3] if a else 0,
            "remote_only": bool(a and a[4]), "applied": rec.get("applied"), "added": rec.get("added", 0),
+           "offline_start": bool(rec.get("offline")), "last": last_batch(pid), "top_only": bool(rec.get("top_only")),
+           "starters_pending": len(rec.get("starters_pending") or []),
            "built": (man or {}).get("built"), "checked": (man or {}).get("_fetched"), "near_list": 0,
            "sources": {k: {"label": v.get("label"), "attribution": v.get("attribution")} for k, v in ((man or {}).get("sources") or {}).items()
                        if isinstance(v, dict)},
@@ -704,6 +894,11 @@ def status(pid):
         out["near_list"] = sum(1 for s in catalog.sets_map().values() if f"near-{pid}" in s)
     except Exception:
         pass
+    st = _settings(pid)
+    # no home ZIP (the older built-in area decides which jobs are near): the directory can have its own area
+    out["own_area"] = not str(st.get("home_zip") or "").strip() and (st.get("workplaces") or []) != ["remote"]
+    out["directory_zip"] = str(st.get("directory_zip") or "")
+    out["directory_radius"] = int(st.get("directory_radius") or st.get("radius_miles") or 35)
     return out
 
 
@@ -725,7 +920,7 @@ def start_background(log=lambda m: print(m, flush=True)):
                             import people
                             if people.exists(pid):
                                 r = apply(pid, weekly=True)
-                                if r["added"] or r["linked"]:
+                                if r["available"] and (r["added"] or r["linked"]):
                                     log(f"directory: {len(r['added']) + len(r['linked'])} newly indexed employers for {pid}")
             except Exception as e:
                 log(f"directory refresh failed: {type(e).__name__}: {e}")
@@ -781,37 +976,99 @@ _register()
 
 
 # ---------------------------------------------------------------- routes
+OFFLINE_MSG = ("Siftwell couldn’t reach its employer directory, so nothing was added. Check your internet connection and "
+               "press Try the directory again.")
+NO_PLACE_MSG = "Add your home ZIP (Filters, then My search) so Siftwell knows where to look."
+
+
 def handle_get(h, path, pid):
     if path == "/api/directory":
         h._send(200, status(pid))
+        return True
+    if path == "/api/directory/preview":
+        try:
+            h._send(200, preview(pid, refresh="refresh=1" in (h.path.split("?", 1) + [""])[1]))
+        except Exception as e:
+            print("directory preview failed:", type(e).__name__, e, flush=True)
+            h._send(200, {"available": False, "reason": "error", "new": 0, "jobs": 0, "options": []})
         return True
     return False
 
 
 def handle_post(h, path, body, pid, server):
+    if path == "/api/directory/undo":
+        import first_search
+        if first_search.JOB["running"]:
+            h._send(409, {"error": "Siftwell is checking employers right now. Pause that first, then remove them."})
+            return True
+        try:
+            r = undo(pid)
+        except Exception as e:
+            print("directory undo failed:", type(e).__name__, e, flush=True)
+            h._send(500, {"error": "That didn’t work. Nothing was removed."})
+            return True
+        if r["removed"]:
+            server._actlog("companies removed", pid, f"{r['removed']} employers the directory had added (taken back)")
+            server.request_recompute([pid])
+            first_search._CACHE.pop(pid, None); first_search._EST.clear()
+        h._send(200, r)
+        return True
+    if path == "/api/directory/area":
+        # an area just for the directory, for people without a home ZIP (their job filter stays as it is)
+        import geo, people
+        z = str(body.get("zip") or "").strip()[:60]
+        if z:
+            try:
+                ok = geo.geocode_home(z)
+            except ValueError:
+                ok = None
+            if not ok:
+                h._send(400, {"error": f"Couldn’t find “{z}”. Use a 5-digit ZIP or City, ST."})
+                return True
+        try:
+            rad = max(5, min(150, int(body.get("radius") or 35)))
+        except (TypeError, ValueError):
+            rad = 35
+        people.save_settings({"directory_zip": z, "directory_radius": rad}, pid)
+        _PREVIEW.pop(pid, None)
+        h._send(200, {"ok": True, **status(pid)})
+        return True
     if path != "/api/directory/apply":
         return False
+    limit = body.get("limit")
     try:
-        r = apply(pid)
+        limit = None if limit in (None, "", "all") else max(1, min(100000, int(limit)))
+    except (TypeError, ValueError):
+        limit = None
+    try:
+        if body.get("retry") or record(pid).get("offline"):
+            manifest(refresh=True)       # "Try the directory again"
+        r = apply(pid, limit=limit)
     except Exception as e:
-        h._send(500, {"error": f"The directory couldn't be read ({type(e).__name__})."})
+        print("directory apply failed:", type(e).__name__, e, flush=True)
+        h._send(500, {"error": "Siftwell couldn’t read its employer directory. Nothing was added."})
         return True
     if not r["available"]:
-        msg = {"no_place": "Add your home ZIP (Filters, then My search) so Siftwell knows where to look.",
-               "offline": "Siftwell couldn't download the employer directory. Check your internet connection and try again."}.get(r["reason"], "The directory isn't available right now.")
+        msg = {"no_place": NO_PLACE_MSG, "offline": OFFLINE_MSG}.get(r["reason"], "The directory isn’t available right now.")
+        r.pop("new", None)
         h._send(409, {"error": msg, **r})
         return True
     names = r["added"] + r["linked"]
     r["fetching"] = False
     import first_search
+    first_search._CACHE.pop(pid, None); first_search._EST.clear()
+    first_search.note_added(pid)
     r["pending"] = len(first_search.pending(pid))
     if body.get("fetch") and r["pending"]:
         # the staged first check (most jobs nearby first; the board fills in as it goes; survives a restart)
         ok, err = first_search.start_checking(pid)
         r["fetching"] = ok or "already" in (err or "")
-    server._actlog("companies added", pid, f"{len(names)} from the Siftwell directory")
-    r.pop("jobs", None)
+    if names:
+        server._actlog("companies added", pid, f"{len(names)} from the Siftwell directory")
+    for k in ("jobs", "new"):
+        r.pop(k, None)
     r["added"], r["linked"] = len(r["added"]), len(r["linked"])
+    r["last"] = last_batch(pid)
     h._send(200, r)
     return True
 
@@ -820,16 +1077,24 @@ def handle_post(h, path, body, pid, server):
 CAT = ("directory", "Employer directory", '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01"/><path d="M15 10h.01"/>')
 
 PANE_HTML = """<section class="sgsec"><h3 class="sgtitle">Employers near you</h3><div class="sgroup">
-<div class="srow stack"><div class="slab"><span>Siftwell employer directory</span><small id="dirState">Checking…</small></div>
-<div class="bk-btnrow"><button class="btn primary" type="button" id="dirApply" style="white-space:normal;max-width:100%;height:auto;text-align:left">Add employers near me from the Siftwell directory</button></div>
+<div class="srow stack"><div class="slab"><span>Siftwell employer directory</span><small id="dirState" role="status" aria-live="polite">Checking…</small></div>
+<div id="dirArea" hidden><div class="bk-btnrow" style="align-items:flex-end">
+<label class="note" style="display:flex;flex-direction:column;gap:3px">Look for employers near<input type="text" id="dirZip" placeholder="ZIP code or City, ST" autocomplete="postal-code" style="min-width:0;width:13em;max-width:100%"></label>
+<label class="note" style="display:flex;flex-direction:column;gap:3px">Within<select id="dirRadius"><option value="10">10 miles</option><option value="25">25 miles</option><option value="35">35 miles</option><option value="50">50 miles</option><option value="75">75 miles</option></select></label>
+<button class="btn" type="button" id="dirAreaSave">Use this area</button></div>
+<small class="note" style="display:block;margin-top:6px">This only chooses which employers are added. Which jobs count as near you stays exactly as it is; to change that, set your home ZIP on the board (Filters, then My search).</small></div>
+<div id="dirPlan" class="note" style="display:none"></div>
+<div class="bk-btnrow"><button class="btn primary" type="button" id="dirApply" style="white-space:normal;max-width:100%;height:auto;text-align:left" disabled>Add employers near me</button>
+<button class="btn" type="button" id="dirRetry" hidden>Try the directory again</button>
+<button class="btn" type="button" id="dirUndo" hidden>Remove the employers this added</button></div>
 <span class="note" id="dirMsg" role="status" aria-live="polite"></span></div>
 <div class="srow"><div class="slab"><span>Find more with Claude</span><small>Claude can also search the web for employers the directory doesn't have. It uses your Claude plan, and only runs when you start it.</small></div>
 <div class="sctl"><a class="btn sm" href="/catalog#find">Find employers</a></div></div></div>
 <p class="sfoot">The directory is a free list of employers whose job pages Siftwell can read, with the places they hire, rebuilt every week
 from public sources (web crawl indexes, certificate logs and public employer lists). It needs no key, no account and no Claude.
 Siftwell downloads only whole-state files for the states around your home (and a remote-jobs file if you only want remote work), so
-your exact location never leaves this computer. Once a week it checks for newly listed employers near you and adds them; employers
-you stop watching stay off. <span id="dirSources"></span></p></section>"""
+your exact location never leaves this computer. Once a week it checks for newly listed employers near you and adds them (not if you chose
+to add only the ones with the most openings); employers you stop watching stay off. <span id="dirSources"></span></p></section>"""
 
 PANE_JS = r"""(function(){
 const $ = id => document.getElementById(id);
@@ -837,30 +1102,94 @@ if (!$("dirApply")) return;
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 const day = s => { try { return new Date(s).toLocaleDateString(); } catch(e) { return s; } };
+const n = x => Number(x || 0).toLocaleString();
+const post = (url, body) => fetch(url, {method: "POST", headers: H, body: JSON.stringify(body || {})}).then(r => r.json().then(d => ({ok: r.ok, d})));
+let PV = null;
+function limit(){ const s = $("dirOpt"); return s && s.value !== "all" ? Number(s.value) : null; }
+function plan(){
+  // Before anything is added: how many employers, about how many openings, and what it costs in time.
+  const box = $("dirPlan"), pv = PV;
+  if (!pv || !pv.available) {
+    box.style.display = pv && (pv.reason === "offline" || pv.reason === "error") ? "block" : "none";
+    box.innerHTML = "<b>Siftwell can’t reach its employer directory right now.</b> Check your internet connection, then press Try the directory again.";
+    $("dirApply").disabled = true; $("dirRetry").hidden = !(pv && (pv.reason === "offline" || pv.reason === "error"));
+    return;
+  }
+  $("dirRetry").hidden = !pv.offline_start;
+  if (!pv.new) { box.style.display = "block"; box.textContent = "There are no new employers to add right now. Employers you took off your list stay off."; $("dirApply").disabled = true; $("dirApply").textContent = "Add employers near me"; return; }
+  const o = pv.options, all = o[o.length - 1];
+  const def = all.employers <= 500 ? all : (o.filter(x => x.limit && x.limit <= 500).pop() || o[0]);
+  const keep = $("dirOpt") ? $("dirOpt").value : String(def.limit || "all");
+  box.style.display = "block";
+  box.innerHTML = `<b>${n(pv.new)} employers</b> ${pv.remote_only ? "that hire remotely" : `with openings within ${pv.radius} miles of ${esc(pv.label)}`} can be added.` +
+    (o.length > 1 ? ` <label>Add <select id="dirOpt">${o.map(x => `<option value="${x.limit || "all"}">${x.limit ? `the ${n(x.employers)} with the most openings near you` : `all ${n(x.employers)}`}</option>`).join("")}</select></label>` : "") +
+    `<div id="dirEst" style="margin-top:4px"></div>`;
+  const say = () => {
+    const v = $("dirOpt") ? $("dirOpt").value : "all", x = o.find(y => String(y.limit || "all") === v) || all, b = pv.daily_before || {};
+    $("dirEst").textContent = `${x.jobs ? `About ${n(x.jobs)} openings near you. ` : ""}First check: ${x.first_text} (your board fills in as it goes). Daily Find new jobs afterwards: ${x.daily_text}` + (b.minutes && b.text !== x.daily_text ? `, up from ${b.text}` : "") + ". In a household, the daily check covers everyone’s employers once.";
+    $("dirApply").textContent = `Add ${n(x.employers)} employer${x.employers === 1 ? "" : "s"}`;
+  };
+  if ($("dirOpt")) { $("dirOpt").value = [...$("dirOpt").options].some(z => z.value === keep) ? keep : String(def.limit || "all"); $("dirOpt").addEventListener("change", say); }
+  say(); $("dirApply").disabled = false;
+}
+function preview(refresh){
+  return fetch("/api/directory/preview" + (refresh ? "?refresh=1" : "")).then(r => r.json()).then(pv => { PV = pv; plan(); return pv; }).catch(() => { PV = null; plan(); });
+}
 function load(){
-  fetch("/api/directory").then(r => r.json()).then(d => {
+  return fetch("/api/directory").then(r => r.json()).then(d => {
     let t = d.possible ? (d.remote_only ? "Remote-friendly employers anywhere in the US." : `Employers with openings within ${d.radius} miles of ${esc(d.label)}.`)
-                       : "Add your home ZIP (Filters, then My search on the board) so Siftwell knows where to look.";
-    if (d.applied) t += ` Last added ${day(d.applied)}; ${Number(d.near_list || 0).toLocaleString()} of your employers come from it.`;
-    if (d.built) t += ` Directory updated ${day(d.built)}.`;
+                       : "Siftwell needs to know where to look.";
+    if (d.offline_start) t = `<b>Siftwell couldn’t reach its employer directory when it set up your search</b>, so it started with a starter list of large US employers that comes with the app${d.starters_pending ? ` (${n(d.starters_pending)} still to be checked; the ones with no jobs near you are taken off)` : ""}. Press Try the directory again to get the employers near you.`;
+    else if (d.applied) t += ` Last added ${day(d.applied)}; ${n(d.near_list)} employers on your list were found this way.`;
+    if (d.built && !d.offline_start) t += ` Directory updated ${day(d.built)}.`;
     $("dirState").innerHTML = t;
-    $("dirApply").disabled = !d.possible;
+    $("dirArea").hidden = !d.own_area;
+    if (d.own_area) { if (document.activeElement !== $("dirZip")) $("dirZip").value = d.directory_zip || ""; $("dirRadius").value = String(d.directory_radius || 35); }
+    $("dirUndo").hidden = !(d.last && d.last.employers);
+    if (d.last) $("dirUndo").textContent = `Remove the ${n(d.last.employers)} employers added ${day(d.last.at)}`;
     const src = Object.values(d.sources || {}).map(s => s.attribution && s.attribution.link ? `<a href="${esc(s.attribution.link)}" target="_blank" rel="noopener">${esc(s.attribution.name)}</a>` : "").filter(Boolean);
     $("dirSources").innerHTML = src.length ? `It also brings job postings from ${src.join(", ")}, each linked to the original posting.` : "";
-  }).catch(() => { $("dirState").textContent = "Couldn't reach Siftwell."; });
+    if (!d.possible) { $("dirApply").disabled = true; $("dirPlan").style.display = "none"; return; }
+    return preview(false);
+  }).catch(() => { $("dirState").textContent = "Couldn’t reach Siftwell."; });
+}
+function added(d){
+  const k = (d.added || 0) + (d.linked || 0), p = d.pending || 0;
+  $("dirMsg").textContent = k ? `Added ${n(k)} to your employers.` + (d.fetching ? " Siftwell is checking their openings now, the ones with the most jobs near you first; your board fills in as it goes." : " Their jobs show up after the next Find new jobs.")
+                              : p && d.fetching ? `No new employers to add, but ${n(p)} on your list haven’t been checked yet. Siftwell is checking them now; your board fills in as it goes.`
+                              : "No new employers near you in the directory right now. Employers you took off your list stay off.";
+  load();
 }
 $("dirApply").addEventListener("click", () => {
   $("dirApply").disabled = true; $("dirMsg").textContent = "Adding…";
-  fetch("/api/directory/apply", {method: "POST", headers: H, body: JSON.stringify({fetch: true})})
-    .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
-      $("dirApply").disabled = false;
-      if (!ok) { $("dirMsg").textContent = d.error || "That didn't work."; return; }
-      const k = (d.added || 0) + (d.linked || 0), p = d.pending || 0;
-      $("dirMsg").textContent = k ? `Added ${k.toLocaleString()} to your employers.` + (d.fetching ? " Siftwell is checking their openings now, the ones with the most jobs near you first; your board fills in as it goes." : " Their jobs show up after the next Find new jobs.")
-                                  : p && d.fetching ? `No new employers to add, but ${p.toLocaleString()} on your list haven't been checked yet. Siftwell is checking them now; your board fills in as it goes.`
-                                  : "No new employers near you in the directory right now. Employers you took off your list stay off.";
-      load();
-    }).catch(() => { $("dirApply").disabled = false; $("dirMsg").textContent = "Couldn't reach Siftwell. Is it still running?"; });
+  post("/api/directory/apply", {fetch: true, limit: limit()}).then(({ok, d}) => {
+    if (!ok) { $("dirMsg").textContent = d.error || "That didn’t work."; load(); return; }
+    added(d);
+  }).catch(() => { $("dirApply").disabled = false; $("dirMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
+});
+$("dirRetry").addEventListener("click", () => {
+  $("dirRetry").disabled = true; $("dirMsg").textContent = "Trying the directory…";
+  preview(true).then(pv => {
+    $("dirRetry").disabled = false;
+    $("dirMsg").textContent = pv && pv.available ? (pv.new ? "The directory is back. Choose how many employers to add." : "The directory is back.") : "Still can’t reach it. Check your internet connection and try again.";
+  });
+});
+$("dirUndo").addEventListener("click", () => {
+  if (!confirm($("dirUndo").textContent + "?\n\nThey leave your list (their jobs leave your board). You can add them again later.")) return;
+  $("dirUndo").disabled = true; $("dirMsg").textContent = "Removing…";
+  post("/api/directory/undo").then(({ok, d}) => {
+    $("dirUndo").disabled = false;
+    $("dirMsg").textContent = ok ? `Removed ${n(d.removed)} employers. Your board is being re-checked.` : (d.error || "That didn’t work.");
+    load();
+  }).catch(() => { $("dirUndo").disabled = false; $("dirMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
+});
+$("dirAreaSave").addEventListener("click", () => {
+  $("dirAreaSave").disabled = true; $("dirMsg").textContent = "Saving…";
+  post("/api/directory/area", {zip: $("dirZip").value, radius: $("dirRadius").value}).then(({ok, d}) => {
+    $("dirAreaSave").disabled = false;
+    $("dirMsg").textContent = ok ? "" : (d.error || "That didn’t work.");
+    if (ok) load();
+  }).catch(() => { $("dirAreaSave").disabled = false; $("dirMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
 });
 load();
 })();"""

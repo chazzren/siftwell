@@ -68,24 +68,24 @@ CATEGORIES = [
         ]),
     ]),
     ("claude", "Claude usage", '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', [
-        ("How much Claude rates in one run", "A run is one automatic rating after Find new jobs, one scheduled night (its update and "
+        ("How much Claude rates in one run", "A run is one automatic rating after Find new jobs, one scheduled night (its Find new jobs and "
          "the re-rate after it count as one run together), or one press of Rate more or Re-rate. The limits are per run and the same "
-         "for all of them; they don't grow with the number of jobs in your area. Jobs over a limit keep a — for Match until the next run. Which model does what: quick checks use Claude Haiku, second "
-         "looks Sonnet, the most careful rating Opus. Applies from the next run.", [
-            ("number", "claude.haiku_per_night", "Quick checks per run", "New jobs that get a first, quick Match rating, the ones most relevant to your work first. 0 to 500."),
-            ("number", "claude.sonnet_pct", "Second look: best % of rated jobs", "The best-scoring share of your rated jobs get a closer second rating, at most 100 per run. 0 to 50."),
-            ("number", "claude.opus_top", "Most careful rating: your top jobs", "How many of your best jobs get the most careful rating, at most 50 new per run, plus up to 25 jobs you saved (the latest first). 0 to 1,000."),
+         "for all of them; they don't grow with the number of jobs in your area. Jobs over a limit keep a — for Match until the next run. The three kinds of rating have the same names everywhere in Siftwell, each with the Claude model it uses: Quick check (Haiku), "
+         "Careful look (Sonnet) and Best judgment (Opus). Applies from the next run.", [
+            ("number", "claude.haiku_per_night", "Quick checks per run", "New jobs that get a quick check (Haiku), the ones most relevant to your work first. 0 to 500."),
+            ("number", "claude.sonnet_pct", "Careful look: best % of rated jobs", "The best-scoring share of your rated jobs get a careful look (Sonnet), at most 100 per run. 0 to 50."),
+            ("number", "claude.opus_top", "Best judgment: your top jobs", "How many of your best jobs get Claude's best judgment (Opus), at most 50 new per run, plus up to 25 jobs you saved (the latest first). 0 to 1,000."),
             ("number", "claude.per_update", "Target-tab ratings per run", "Jobs rated for your Target tab in one run. 0 to 50."),
         ]),
         ("Automatic rating", "", [
-            ("toggle", "claude.auto_rate", "Rate new jobs during updates", ""),
+            ("toggle", "claude.auto_rate", "Rate new jobs when Siftwell finds them", ""),
             ("toggle", "claude.auto_rerate", "Re-rate overnight when my info changes", ""),
         ]),
-        ("Company facts", "At the end of each update Claude (Haiku, with web search) looks up facts such as size, funding, "
+        ("Company facts", "Each time Siftwell finds new jobs, Claude (Haiku, with web search) looks up facts such as size, funding, "
          "layoffs and Glassdoor rating for a few companies that are on someone's board, the ones with the best-ranked jobs "
          "first, and looks each one up again after about six months. Companies that are on nobody's board are never looked "
-         "up. Facts are shared by everyone in the household, so an update uses the highest number any profile sets here.", [
-            ("number", "claude.facts_per_update", "Company facts per update", "0 to 200 companies (10 unless you change it). 0 turns it off."),
+         "up. Facts are shared by everyone in the household, so Siftwell uses the highest number any profile sets here.", [
+            ("number", "claude.facts_per_update", "Company facts each time", "0 to 200 companies (10 unless you change it). 0 turns it off."),
         ]),
     ]),
     ("display", "Display", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>', [
@@ -103,7 +103,7 @@ GS_CAT = ("get-started", "Get started", '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0
 PROF_CAT = ("profiles", "Profiles", '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')
 BACKUP_CAT = ("backup", "Backup & move", '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>')
 ABOUT_CAT = ("about", "About & updates", '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>')
-UPDATES_CAT = ("updates", "Updates", '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>')
+UPDATES_CAT = ("updates", "Finding new jobs", '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>')
 KEY_CAT = ("apikey", "API key", '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>')
 
 e = html.escape
@@ -270,6 +270,7 @@ CSS = """<style>
 </style>
 """
 
+SUBTITLE = "App-wide: setup, resume PDFs, tailoring, Claude usage and display"
 BODY = """<div class="wrap">
 <header class="top">
   <div class="brandline">
@@ -336,16 +337,26 @@ document.querySelector(".spanes").addEventListener("click", e => {
 
 # Header icon row behaviour. Update / Re-rate run on the board (it has the confirm and progress panel); the page may define
 # onPeople() to react once the household list has loaded.
-HEADER_JS = r"""// ---- header: Update / Re-rate run on the board, which has the confirm and progress panel
+HEADER_JS = r"""// ---- header: Find new jobs / Re-rate run on the board, which has the confirm and progress panel
 const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
 $("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
 $("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
-$("updateBtn").title = "Find new jobs (opens the board): check every company for new openings (about 40 min)";
+$("updateBtn").title = "Find new jobs (opens the board): check your employers for new openings";
 $("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Claude re-rates your jobs, no new listings";
-fetch("/api/status").then(r => r.json()).then(s => {
-  if (!s.running) return;
-  $("updateBtn").disabled = true; $("updateBtn").classList.add("busy"); $("updateBtn").title = "Finding new jobs now…";
-}).catch(() => {});
+// The ONE plain progress line (first_search.progress), the same words as on the board: a slim bar under the header
+// while anything is checking employers, nothing otherwise.
+(function watch(){
+  fetch("/api/status").then(r => r.json()).then(s => {
+    const pg = s.progress || {active: !!s.running, line: "Finding new jobs…"};
+    let b = $("runBanner");
+    if (!b && $("updBanner")) { b = document.createElement("div"); b.id = "runBanner"; b.className = "banner gsbn"; b.setAttribute("role", "status"); b.hidden = true; $("updBanner").after(b); }
+    if (b) { b.hidden = !pg.active; if (pg.active) b.innerHTML = `<span>${esc(pg.line)}</span><a class="btn sm ghost" href="/#jobs">Go to my board</a>`; }
+    $("updateBtn").disabled = !!pg.active; $("updateBtn").classList.toggle("busy", !!pg.active);
+    const e = s.estimate && (s.estimate.profiles > 1 && s.estimate.mine.companies < s.estimate.all.companies ? s.estimate.mine : s.estimate.all);
+    $("updateBtn").title = pg.active ? pg.line : "Find new jobs (opens the board)" + (e ? `: check ${e.companies.toLocaleString()} employers for new openings (${e.text})` : "");
+    setTimeout(watch, pg.active ? 3000 : 20000);
+  }).catch(() => setTimeout(watch, 10000));
+})();
 fetch("/api/rerate").then(r => r.json()).then(s => {
   if (!s.running) return;
   $("rerateBtn").disabled = true; $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Re-rating your best jobs now…";
