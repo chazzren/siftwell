@@ -208,7 +208,8 @@ def _iso(s):
 
 
 def _remote(locs, title=""):
-    return "remote" if any("remote" in (l or "").lower() for l in locs) or re.search(r"\bremote\b", title or "", re.I) else ""
+    import jobtext   # ("Not Remote" / "Non-Remote" labels and "Remote Sensing" titles are not remote work)
+    return "remote" if any(jobtext.remote_label(l) for l in locs) or jobtext.workplace_label(title) == "remote" else ""
 
 
 # ---------------------------------------------------------------- SuccessFactors

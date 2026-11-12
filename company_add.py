@@ -233,7 +233,11 @@ def looks_like_code(name):
     if _UUID.fullmatch(n) or _UUID.match(n):
         return True
     toks = n.split()
-    return len(toks) <= 2 and all(_CODE_TOKEN.fullmatch(t) for t in toks)
+    if len(toks) <= 2 and all(_CODE_TOKEN.fullmatch(t) for t in toks):
+        return True
+    # pieces of a GUID written with spaces: "07e0 416d A243 7556983c79c7" (hex words, most of them with digits)
+    hexy = [t for t in toks if re.fullmatch(r"[0-9a-fA-F]{4,}", t)]
+    return len(toks) >= 2 and len(hexy) == len(toks) and sum(1 for t in toks if re.search(r"\d", t)) * 2 >= len(toks)
 
 
 def strip_code_prefix(name):
@@ -309,7 +313,7 @@ def default_name(c, suggested=None, name=""):
         out = readable_name(suggested or "", c) or placeholder_name(c)
     return out
 
-def save_found(c, nm, set_id, pid, sector="Added by you"):
+def save_found(c, nm, set_id, pid, sector="Added by you", typed=False):
     """Save a detected board as a company in list set_id, or add that list to the company already using this board.
     Returns (entry, existing)."""
     with _lock:
@@ -324,6 +328,8 @@ def save_found(c, nm, set_id, pid, sector="Added by you"):
             if any(x["name"].lower() == nm.lower() for x in cos):
                 nm = f"{nm} ({c['ats']})"
             entry = {"name": nm, "tier": "dmv_office", "sector": sector, **c, "sets": [set_id], "added_by": pid}
+            if typed:
+                entry["nm"] = 1     # the person named it: Siftwell never renames it (names.learn)
         catalog.save_company(entry)
     return entry, bool(same)
 
@@ -338,7 +344,7 @@ def add(url, name="", scope="me", target_set=None):
         raise ValueError("That job board is reachable but has no open jobs right now.")
     pid = people.current()
     nm = default_name(c, suggested, name)
-    entry, same = save_found(c, nm, target_set or ("all" if scope == "all" else f"own-{pid}"), pid)
+    entry, same = save_found(c, nm, target_set or ("all" if scope == "all" else f"own-{pid}"), pid, typed=bool((name or "").strip()))
     return {"name": entry["name"], "ats": c["ats"], "open_jobs": total, "existing": same}
 
 def own(pid=None):

@@ -50,6 +50,11 @@ REBUILD_SECS = 240  # boards are rebuilt after a chunk when the last rebuild is 
 STALL_LEFT = 3    # a chunk with at most this many employers still running ...
 STALL_SECS = 75   # ... and nothing finished for this long is ended; those employers are checked at the very end
 SLOW_STALL_SECS = 900   # the last pass over the slow employers: this long without any progress and they are left for the next update
+# The most time one employer may take in a chunk (jobfinder --budget): it then stops by itself, keeps what it read and
+# counts as checked, well inside STALL_SECS, instead of being cut off with nothing. The slow pass at the end gives
+# whoever was still cut a longer budget; anything left after that is finished by the next regular update.
+CHUNK_BUDGET = 55
+SLOW_BUDGET = 600
 FAST_LANES, WD_LANES = 12, 4          # jobfinder.fetch reads this many employers at once (Workday has its own lane)
 DEFAULT_SECS = {"fast": 25.0, "workday": 90.0}   # one employer's check when nothing has been measured yet
 JOB = {"running": False, "pid": None, "phase": "", "find": False, "find_run": None, "added": 0, "note": "",
@@ -630,6 +635,7 @@ def _check(pid, stale, rate=True):
         last = slow_pass or (len(queue) <= len(chunk) and not slow)
         build = first or last or need_build or time.time() - last_build >= REBUILD_SECS
         flags = ["--boards-every", str(REBUILD_SECS)] + ([] if (last and rate) else ["--no-rate"] + ([] if build else ["--no-boards"]))
+        flags += ["--budget", str(SLOW_BUDGET if slow_pass else CHUNK_BUDGET)]
         _set(check_chunk=len(chunk), slow_pass=slow_pass)
         if first:
             S._actlog("update started", pid, f"Checking employers: {len(queue)} to check, most jobs nearby first")

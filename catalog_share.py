@@ -51,6 +51,7 @@ def export(names, with_listings=True, app_version=""):
     listings = []
     if with_listings and cos:
         names_l = [c["name"] for c in cos]
+        prefixes = {c["name"]: catalog.id_prefix(c) for c in cos}
         with catalog.db() as con:
             for i in range(0, len(names_l), 400):
                 chunk = names_l[i:i + 400]
@@ -58,6 +59,10 @@ def export(names, with_listings=True, app_version=""):
                      f"AND company IN ({','.join('?' * len(chunk))})")
                 for r in con.execute(q, chunk):
                     row = {k: r[k] for k in LISTING_COLS}
+                    # (a renamed company's ids still start with its first name here; a shared file always says Company::id)
+                    pre = prefixes.get(row["company"])
+                    if pre and pre != row["company"] and row["id"].startswith(pre + "::"):
+                        row["id"] = row["company"] + row["id"][len(pre):]
                     row["locations"] = json.loads(r["locations"] or "[]")
                     row["data"] = _public_data(json.loads(r["data"] or "{}"))
                     row["desc"] = r["desc"] or ""
@@ -214,6 +219,8 @@ def read(src):
 def _plan(companies, listings):
     """Match the file against the catalog: {src name: (local name, is_new)} plus listing ids already present."""
     local = catalog.companies()
+    _PREFIX.clear()
+    _PREFIX.update({c["name"]: catalog.id_prefix(c) for c in local})
     by_key = {catalog.ats_key(c): c["name"] for c in local}
     taken = {c["name"].lower() for c in local}
     names = {}
@@ -240,10 +247,15 @@ def _plan(companies, listings):
     return names, present
 
 
+_PREFIX = {}    # {local company name: what its listing ids start with here}, filled by _plan()
+
+
 def _local_id(j, names):
-    """Listing ids start with the company name; a company that has another name here gets its listings renamed too."""
+    """Listing ids in a file start with the company's name there; here they start with what this catalog's company
+    of that board uses (its name, or the name it had before a rename)."""
     src = j["company"]
     dst = names[src][0]
+    dst = _PREFIX.get(dst, dst)
     jid = str(j["id"])
     return dst + jid[len(src):] if dst != src and jid.startswith(src + "::") else jid
 

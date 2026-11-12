@@ -865,20 +865,50 @@ $("msGrid").addEventListener("change", e => {
   if (el.dataset.ms) msSave({[el.dataset.ms]: el.type === "checkbox" ? el.checked : el.value});
 });
 
+// Pay is stored per year so every job compares on one scale (hourly pay at 2,080 hours a year); a job that states
+// hourly, weekly or monthly pay is shown the way its posting states it ("$36.90/hr").
+const PAYU = {hour: "/hr", day: "/day", week: "/wk", month: "/mo"};
+const fmtU = v => "$" + (Math.abs(v - Math.round(v)) > 0.004 ? v.toFixed(2) : Math.round(v).toLocaleString());
+function payOwn(j, sep){
+  const u = PAYU[j.pay_unit];
+  if (!u || j.pay_min == null) return "";
+  const a = fmtU(j.pay_min), b = fmtU(j.pay_max ?? j.pay_min);
+  return (a === b ? a : a + (sep || "–") + b) + u;
+}
+// The pay bar's scale is this board's own range of listed pay (5th to 95th percentile), widened to take in your
+// floor, your current base and the job itself: a $45k or $20/hr job is drawn as sensibly as a $300k one.
+let PAYQ = null;
+function payScale(j){
+  if (!PAYQ) {
+    const q = (a, p) => a.length ? a[Math.min(a.length - 1, Math.max(0, Math.round(p * (a.length - 1))))] : null;
+    const los = jobs.map(x => x.salary_min).filter(v => v != null).sort((x, y) => x - y), his = jobs.map(x => x.salary_max).filter(v => v != null).sort((x, y) => x - y);
+    PAYQ = [q(los, .05) ?? 30000, q(his, .95) ?? 150000];
+  }
+  let lo = Math.min(PAYQ[0], j.salary_min * .9), hi = Math.max(PAYQ[1], j.salary_max * 1.1);
+  for (const v of [D.salary_floor, CUR.base]) if (v) { lo = Math.min(lo, v * .9); hi = Math.max(hi, v * 1.1); }
+  const step = hi - lo > 150000 ? 50000 : hi - lo > 40000 ? 10000 : 5000;
+  lo = Math.max(0, Math.floor(lo / step) * step); hi = Math.ceil(hi / step) * step;
+  return [lo, hi > lo ? hi : lo + step];
+}
 function payBar(j){
   if (j.salary_max == null) return `<div class="pay"><span class="amt">Not listed</span><div>No salary range in posting</div></div>`;
-  const lo = 100000, hi = 400000, p = v => Math.max(0, Math.min(100, (v-lo)/(hi-lo)*100));
+  const [lo, hi] = payScale(j), p = v => Math.max(0, Math.min(100, (v-lo)/(hi-lo)*100));
   const mid = j.salary_mid ?? Math.round((j.salary_min + j.salary_max)/2);
+  const hourly = j.pay_unit === "hour" && j.pay_min != null, own = payOwn(j, " – ");
+  const ax = v => hourly ? "$" + Math.round(v / 2080) + "/hr" : fmt(v);
+  const midTxt = hourly ? fmtU(Math.round(mid / 2080 * 100) / 100) + "/hr" : fmt(mid);
+  const one = j.salary_max === j.salary_min;
+  const year = own ? ` · about ${one ? fmt(mid) : fmt(j.salary_min) + "–" + fmt(j.salary_max)} a year${hourly ? " full time" : ""}` : "";
   const note = j.wide_band
-    ? `<div class="note">Wide band (top is ${(j.salary_max/j.salary_min).toFixed(1)}× bottom). Scored on midpoint ${fmt(mid)}.</div>`
-    : `<div>Midpoint ${fmt(mid)}${mid < D.salary_floor ? " · below your floor" : ""}</div>`;
-  return `<div class="pay"><span class="amt">${fmt(j.salary_min)} – ${fmt(j.salary_max)}</span>
-    <div class="bar${j.wide_band ? " wide" : ""}" title="Range ${fmt(j.salary_min)}–${fmt(j.salary_max)}, midpoint ${fmt(mid)}">
+    ? `<div class="note">Wide band (top is ${(j.salary_max/j.salary_min).toFixed(1)}× bottom). Scored on midpoint ${midTxt}.</div>`
+    : `<div>${one ? "" : "Midpoint " + midTxt}${mid < D.salary_floor ? (one ? "Below your floor" : " · below your floor") : ""}${one && mid >= D.salary_floor ? year.slice(3) : year}</div>`;
+  return `<div class="pay"><span class="amt">${own || (one ? fmt(j.salary_min) : `${fmt(j.salary_min)} – ${fmt(j.salary_max)}`)}</span>
+    <div class="bar${j.wide_band ? " wide" : ""}" title="${one ? "Pay" : "Range"} ${own || (one ? fmt(j.salary_min) : `${fmt(j.salary_min)}–${fmt(j.salary_max)}`)}${one ? "" : ", midpoint " + midTxt}">
       <i style="left:${p(j.salary_min)}%;width:${Math.max(1.5,p(j.salary_max)-p(j.salary_min))}%"></i>
       ${CUR.base ? `<span class="mk cur" style="left:${p(CUR.base)}%" title="Your current base ${fmt(CUR.base)}"></span>` : ""}
       ${D.salary_floor ? `<span class="mk" style="left:${p(D.salary_floor)}%" title="Your floor ${fmt(D.salary_floor)}"></span>` : ""}
-      <span class="mid" style="left:${p(mid)}%" title="Midpoint ${fmt(mid)}"></span>
-    </div><div class="axis"><span>$100k</span><span>$250k</span><span>$400k</span></div>
+      <span class="mid" style="left:${p(mid)}%" title="Midpoint ${midTxt}"></span>
+    </div><div class="axis"><span>${ax(lo)}</span><span>${ax((lo + hi) / 2)}</span><span>${ax(hi)}</span></div>
     ${note}</div>`;
 }
 
@@ -1053,7 +1083,7 @@ function coPanel(j){
 
 const ago = d => { if (!d) return ""; const t = Date.parse(d); if (!t) return ""; const n = Math.round((Date.now() - t) / 864e5); return n <= 0 ? "today" : n === 1 ? "yesterday" : n < 7 ? n + "d ago" : n < 45 ? Math.round(n / 7) + "w ago" : Math.round(n / 30) + "mo ago"; };
 const whereTxt = j => j.workplace === "remote" ? "Remote" : ((j.dmv_locations.length ? j.dmv_locations : j.locations)[0] || "").replace(/,?\s*(United States( of America)?|USA)$/i, "").slice(0, 40) + (j.workplace === "hybrid" ? " · Hybrid" : "");
-const payTxt = j => j.salary_min == null ? "Pay not listed" : (j.salary_max && j.salary_max !== j.salary_min ? `${fmt(j.salary_min)}–${fmt(j.salary_max)}` : fmt(j.salary_min));
+const payTxt = j => j.salary_min == null ? "Pay not listed" : (payOwn(j) || (j.salary_max && j.salary_max !== j.salary_min ? `${fmt(j.salary_min)}–${fmt(j.salary_max)}` : fmt(j.salary_min)));
 const TIERN = {haiku: "Quick check (Haiku)", sonnet: "Careful look (Sonnet)", opus: "Best judgment (Opus)"};   // the same three names everywhere
 const tierName = j => j.ai_tier ? TIERN[j.ai_tier] + (j.ai_at ? " · " + j.ai_at : "") + (j.ai_stale ? " · made with older info" : "") : "Not rated yet";
 const verdict = j => mode === "pivot" ? (j.pv_label ? [pvLab(j), PVL[j.pv_label]] : null) : (j.ai_label ? [j.ai_label, LBL[j.ai_label]] : null);
@@ -1190,10 +1220,11 @@ document.addEventListener("keydown", e => {
 });
 function render(){
   const q = $("q").value.trim().toLowerCase(), clr = $("clr").value, co = $("co").value, st = $("st").value;
-  window.__reqHidden = 0;
+  window.__reqHidden = 0; window.__lvlHidden = 0;
+  const lvlBand = msNow().seniority_band || [1, 7];
   let r = jobs.filter(j => {
     if (wp === "remote" && j.workplace !== "remote") return false;
-    if (!mySearchOk(j)) return false;
+    if (!mySearchOk(j)) { if (j.level != null && (j.level < lvlBand[0] || j.level > lvlBand[1])) window.__lvlHidden++; return false; }
     if (co !== "all" && j.company !== co) return false;
     const lb = $("lbl").value;
     if (mode === "pivot") {
@@ -1239,6 +1270,7 @@ function render(){
   $("count").innerHTML = `${r.length.toLocaleString()} of ${base.toLocaleString()} jobs` + (r.length > shown ? ` · showing ${shown}` : "") +
     (notRated ? ` · <span title="Claude rates a limited number of jobs in one go, the ones most relevant to your work first. The rest show a dash for Match until they are rated.">${notRated.toLocaleString()} job${notRated === 1 ? "" : "s"} not rated yet</span>` : "") +
     (!NOAI && staleN ? ` · <span title="Rated before your latest resume, answers or goals. Rate more (or the Re-rate icon at the top) brings them up to date.">${staleN.toLocaleString()} rated with older info</span>` : "") +
+    (window.__lvlHidden ? ` · <span title="These jobs state a level outside the levels you chose (Filters, then My search). Jobs that state no level are always shown.">${window.__lvlHidden.toLocaleString()} hidden by your level</span>` : "") +
     (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "");
   drawChips();
   const moreN = notRated + (NOAI ? 0 : staleN);

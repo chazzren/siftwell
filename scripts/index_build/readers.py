@@ -33,7 +33,8 @@ def _nonus(label):
 
 def _remote(label, wp=""):
     l = label.lower()
-    return ("remote" in l or "anywhere" in l or wp == "remote") and not _nonus(label)
+    import jobtext   # ("Not Remote" and "Remote: No" labels are not remote; "Remote, PL" is not US-remote)
+    return (jobtext.remote_label(label) or wp == "remote") and not _nonus(label) and not jobtext.foreign_remote(label)
 
 
 def _summ(rows, name=None, sample=False):
@@ -129,7 +130,9 @@ def workday(c):
             if cities is None or len(f.get("values", [])) > len(cities):
                 cities = f.get("values", [])
         elif "remote" in pl:
-            remote = sum(v.get("count", 0) for v in f.get("values", []) if "remote" in v.get("descriptor", "").lower())
+            # (only the values that mean remote: "Remote work is not available" is this facet's on-site value)
+            remote = sum(v.get("count", 0) for v in f.get("values", [])
+                         if __import__("jobtext").workplace_label(v.get("descriptor", ""), typed=True) == "remote")
     us_total = country[1]["count"] if country and country[1] else (0 if country else total)
     name = None
     rows_summary = None
@@ -154,8 +157,8 @@ def workday(c):
             else:
                 page = net.get_json(api + "/jobs", {"limit": 20, "offset": off, "searchText": "", "appliedFacets": applied})
             for p in page.get("jobPostings", []):
-                rt = (p.get("remoteType") or "").lower()
-                rows.append(([p.get("locationsText", "")], "remote" if "remote" in rt else "", ""))
+                wp_ = __import__("jobtext").workplace_label(p.get("remoteType"), typed=True)
+                rows.append(([p.get("locationsText", "")], "remote" if wp_ == "remote" else "", ""))
                 sample_path = sample_path or p.get("externalPath")
             if not page.get("jobPostings"):
                 break
@@ -178,6 +181,10 @@ def workday(c):
         try:
             d = net.get_json(api + sample_path)
             name = ((d.get("hiringOrganization") or {}).get("name") or "").strip() or None
+            info = d.get("jobPostingInfo") or {}
+            text = re.sub(r"<[^>]+>", " ", (info.get("title") or "") + "\n" + (info.get("jobDescription") or ""))
+            if len(text) > 200:
+                rows_summary["texts"] = [text[:12000]]     # (for the display name: names.derive)
         except Exception:
             pass
     rows_summary["name"] = name
@@ -243,10 +250,13 @@ def generic(c):
     u = careers_url(c)   # (the app's readers don't all check robots.txt: the builder checks the board's own address first)
     if u.startswith("http") and not net.robots_ok(u):
         raise net.Blocked("robots.txt forbids the job board")
-    rows, err, sample = [], [], [False]
+    rows, err, sample, texts = [], [], [False], []
+    cc = dict(c, name="directory")
     def run():
         try:
-            for j in fx(dict(c, name="directory")):
+            for j in fx(cc):
+                if len(texts) < 12 and len(j.get("desc") or "") > 200:
+                    texts.append(((j.get("title") or "") + "\n" + j["desc"])[:12000])   # (for the display name)
                 rows.append((j.get("locations") or [], j.get("workplace") or "", ""))
                 if len(rows) >= CAP:
                     sample[0] = True
@@ -260,28 +270,17 @@ def generic(c):
         sample[0] = True
     if err and not rows:
         raise err[0]
-    return _summ(list(rows), None, sample=sample[0])
+    out = _summ(list(rows), None, sample=sample[0])
+    out["texts"], out["btitle"] = list(texts), cc.get("_board_title")
+    return out
 
 
 # ---------------------------------------------------------------- names for boards known only by a code
-GENERIC_TITLE = re.compile(r"(?i)^(careers?( (page|site|center|portal|opportunities))?|jobs?|job (opportunities|openings|board|listings?|search)|"
-                           r"current (openings|opportunities)|open (positions|roles|jobs)|recruit(ment|ing)|bamboohr|dayforce( jobs)?|home|apply|"
-                           r"employment( opportunities)?|work (with|for) us|join (us|our team)|search( results| jobs)?|welcome|"
-                           r"candidate (portal|experience)|external|ultipro|ukg( pro)?|paylocity|adp|workforce now|icims|taleo|"
-                           r"error|page not found|not found|access denied|sign in|log ?in|untitled|loading(\.\.\.)?|.{0,2})$")
-
-
 def name_from_title(title):
-    """"Woodmans Inc - Job Opportunities" -> "Woodmans Inc"; "Careers at Acme" -> "Acme"; None for generic titles."""
-    import html as _html
-    t = re.sub(r"\s+", " ", _html.unescape(title or "")).strip()
-    for part in re.split(r"\s+[-|\u2013\u2014:\u00b7]\s+|\s*\|\s*", t):
-        part = part.strip(" -|:")
-        part = re.sub(r"(?i)^(careers?|jobs?|job openings|job opportunities|opportunities|employment|work|current openings) (at|with|@|for)\s+", "", part)
-        part = re.sub(r"(?i)\s+(careers?( (page|site|center|portal))?|jobs?|job (openings|opportunities|board)|career opportunities|employment)$", "", part).strip()
-        if len(part) >= 2 and not GENERIC_TITLE.match(part) and len(part) <= 80:
-            return part
-    return None
+    """"Woodmans Inc - Job Opportunities" -> "Woodmans Inc"; "Careers at Acme" -> "Acme"; None for generic titles.
+    (The rules live in the app's names.py, which reads a board's page title the same way after a fetch.)"""
+    import names
+    return names.name_from_title(title)
 
 
 def board_name(c):

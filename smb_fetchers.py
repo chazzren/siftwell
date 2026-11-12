@@ -36,14 +36,12 @@ POOL = 6
 
 
 def _wp(*vals):
-    s = " ".join(str(v or "") for v in vals).lower()
-    if "remote" in s or "telecommut" in s:
-        return "remote"
-    if "hybrid" in s:
-        return "hybrid"
-    if "on-site" in s or "onsite" in s or "on site" in s or "in office" in s:
-        return "onsite"
-    return ""
+    """Workplace from a board's label, a location or a title: negation first ("Not Remote" is on-site), whole words."""
+    import jobtext
+    got = [jobtext.workplace_label(v) for v in vals if v]
+    if any(g == "onsite" and "remote" in str(v).lower() for g, v in zip(got, [v for v in vals if v])):
+        return "onsite"     # a label that says "not remote" outranks a title that mentions remote
+    return "remote" if "remote" in got else "hybrid" if "hybrid" in got else "onsite" if "onsite" in got else ""
 
 
 def _ldjob(h):
@@ -173,7 +171,7 @@ def f_jazzhr(c):
                 desc = strip_html(d.get("description") or "")
                 posted = (d.get("datePosted") or posted or "")[:10]
                 locs = locs or _ld_locs(d)
-                if (d.get("jobLocationType") or "").upper() == "TELECOMMUTE":
+                if __import__("jobtext").telecommute(d):
                     wp = "remote"
             except Exception:
                 pass
@@ -201,7 +199,7 @@ def f_breezy(c):
             try:
                 d = _ldjob(http_text(j["url"]))
                 desc = strip_html(d.get("description") or "")
-                if (d.get("jobLocationType") or "").upper() == "TELECOMMUTE":
+                if __import__("jobtext").telecommute(d):
                     wp = "remote"
             except Exception:
                 pass

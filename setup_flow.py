@@ -118,14 +118,16 @@ def infer_level(prof):
     if by_years and years <= 1 and not by_title:
         by_years = 1  # a first job: entry level
     if by_title and by_years:
-        level = round((2 * by_title + by_years) / 3)   # the title says more than the years
+        # the title says more than the years; a title that names a lead, manager or higher rung is taken as it is
+        # (years alone only ever say entry, mid or senior: "Staff RN" with 8 years is Senior, not Lead / Manager)
+        level = by_title if by_title >= 4 else round((2 * by_title + by_years) / 3)
     else:
         level = by_title or by_years
     if not level:
         return None
     level = max(1, min(7, level))
     why = []
-    if title:
+    if title and by_title:
         why.append(f"your most recent title, “{title}”")
     if by_years:
         why.append(f"about {years} years of experience")

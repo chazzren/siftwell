@@ -190,7 +190,7 @@ fetch("Car1038", ["a", "b"])
 check("rename moves the listings", catalog.rename_company("Car1038", "Cardinal Example") and open_n("Cardinal Example") == 2 and open_n("Car1038") == 0)
 with catalog.db() as con:
     rid = [r[0] for r in con.execute("SELECT id FROM listings WHERE company='Cardinal Example' ORDER BY id")]
-check("... and re-keys their ids", rid == ["Cardinal Example::a", "Cardinal Example::b"])
+check("... and keeps their ids (ratings and marks are keyed by them)", rid == ["Car1038::a", "Car1038::b"])
 check("rename refuses a taken name", not catalog.rename_company("Cardinal Example", "Local Clinic"))
 
 # ---------------------------------------------------------------- directory.apply: every nearby employer

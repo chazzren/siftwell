@@ -1,13 +1,17 @@
 """Fetchers for non-standard career sites (Amazon, Phenom, Oracle HCM, iCIMS Jibe, ClearCompany, Rippling,
 iCIMS classic, UKG/UltiPro, Paylocity, ADP Workforce Now)."""
 import json, re, sys, html as _html, urllib.request, concurrent.futures as cf
-from jobfinder import http_json, strip_html, J
+from jobfinder import http_json, strip_html, J, over_budget, budget_stop
+import jobtext
 import netsafe
 
-def household_homes():
+def household_homes(whole_if_legacy=False):
     """[((lat, lon, label), radius miles)]: every profile's home area, the same union the Workday location facets use.
     During a fetch that's jobfinder's CFG["homes"]; elsewhere (e.g. checking a new company) it is read from the profiles."""
-    homes = list((getattr(_jf(), "CFG", None) or {}).get("homes") or [])
+    cfg = getattr(_jf(), "CFG", None) or {}
+    if whole_if_legacy and cfg.get("homes") and cfg.get("legacy_area"):
+        return []   # someone in the household still uses the older fixed area: read big boards whole, as before
+    homes = list(cfg.get("homes") or [])
     if not homes:
         try:
             import geo, people
@@ -89,48 +93,114 @@ def f_phenom(c):
         off += 50
         if off >= d.get("totalHits", 0):
             break
+        if over_budget(c):
+            budget_stop(c, f"listing postings ({off} of {d.get('totalHits', 0)})")
+            break
         if not jobs:
             c["_truncated"] = f"empty page at {off - 50} of {d.get('totalHits', 0)}"
             break
 
+ORACLE_ALL_MAX = 1500    # an Oracle board with more postings than this is searched by place instead of read whole
+
+def oracle_searches(c, total):
+    """How to read an Oracle board: whole when it is small; a big one (Dollar General lists 90,000 postings, JPMorgan
+    and Albertsons thousands) by place: one search around each home (radius + 10 miles) plus the board's own Remote
+    workplace type. Returns [(finder suffix, label)]; [("", "")] = everything."""
+    if total <= ORACLE_ALL_MAX or c.get("all"):
+        return [("", "")]
+    homes = household_homes(True)
+    if not homes:
+        return [("", "")]
+    out = [(f",latitude={h[0]:.4f},longitude={h[1]:.4f},radius={int(r) + 10},radiusUnit=MI", str(h[2])[:40]) for h, r in homes]
+    out.append((",selectedWorkplaceTypesFacet=ORA_REMOTE", "remote"))
+    return out
+
 def f_oracle(c):
-    off = 0
-    while True:
-        d = http_json(f'{c["base"]}/hcmRestApi/resources/latest/recruitingCEJobRequisitions?onlyData=true'
-                      f'&expand=requisitionList.secondaryLocations&finder=findReqs;siteNumber={c["site"]},limit=25,offset={off},sortBy=POSTING_DATES_DESC')
-        item = d["items"][0]
-        reqs = item.get("requisitionList", [])
-        for r in reqs:
-            locs = [r.get("PrimaryLocation", "")] + [s.get("Name", "") for s in r.get("secondaryLocations") or []]
-            wp = {"ORA_HYBRID": "hybrid", "ORA_REMOTE": "remote", "ORA_ON_SITE": "onsite"}.get(r.get("WorkplaceTypeCode") or "", "")
-            yield J(c, r.get("Title"), f'{c["base"]}/en/sites/{c["site"]}/job/{r["Id"]}', locs, wp, None,
-                    (r.get("ShortDescriptionStr") or ""), r.get("PostedDate", ""), "", r["Id"])
-        off += 25
-        if off >= item.get("TotalJobsCount", 0):
-            break
-        if not reqs:
-            c["_truncated"] = f"empty page at {off - 25} of {item.get('TotalJobsCount', 0)}"
-            break
+    root = (f'{c["base"]}/hcmRestApi/resources/latest/recruitingCEJobRequisitions?onlyData=true'
+            f'&expand=requisitionList.secondaryLocations&finder=findReqs;siteNumber={c["site"]}')
+    first = http_json(f"{root},limit=25,offset=0,sortBy=POSTING_DATES_DESC")
+    total = (first.get("items") or [{}])[0].get("TotalJobsCount", 0)
+    seen = set()
+    for extra, label in oracle_searches(c, total):
+        off = 0
+        while True:
+            d = first if (not extra and off == 0) else http_json(f"{root}{extra},limit=25,offset={off},sortBy=POSTING_DATES_DESC")
+            item = d["items"][0]
+            reqs = item.get("requisitionList", [])
+            for r in reqs:
+                if r["Id"] in seen:
+                    continue
+                seen.add(r["Id"])
+                locs = [r.get("PrimaryLocation", "")] + [s.get("Name", "") for s in r.get("secondaryLocations") or []]
+                wp = {"ORA_HYBRID": "hybrid", "ORA_REMOTE": "remote", "ORA_ON_SITE": "onsite"}.get(r.get("WorkplaceTypeCode") or "", "")
+                yield J(c, r.get("Title"), f'{c["base"]}/en/sites/{c["site"]}/job/{r["Id"]}', locs, wp, None,
+                        (r.get("ShortDescriptionStr") or ""), r.get("PostedDate", ""), "", r["Id"])
+            off += 25
+            if off >= item.get("TotalJobsCount", 0):
+                break
+            if not reqs:
+                c["_truncated"] = f"empty page at {off - 25} of {item.get('TotalJobsCount', 0)}"
+                break
+            if over_budget(c):
+                budget_stop(c, f"listing postings ({off} of {item.get('TotalJobsCount', 0)}{' near ' + label if label else ''})")
+                return
+
+JIBE_ALL_MAX = 1500      # a Jibe board with more postings than this is searched by place instead of read whole
+
+def home_place(h):
+    """"Columbus, OH" for a home (lat, lon, label): what a job site's own location search understands."""
+    import geo
+    label = str(h[2]) if len(h) > 2 else ""
+    m = re.search(r"\((.+)\)", label)
+    if not m and re.search(r",\s*[A-Z]{2}$", label):
+        return label
+    city = m.group(1).split(",")[0].strip() if m else label.split(",")[0].strip()
+    st = geo.state_at(h[0], h[1])
+    return f"{city}, {st}" if city and st and not city.isdigit() else None
+
+def jibe_searches(c, total):
+    """How to read a Jibe board: whole when it is small; a big one (Costco lists 19,000 postings) by place, one search
+    around each home (radius + 10 miles). Returns the extra query parameters of each search; [{}] = everything."""
+    if total <= JIBE_ALL_MAX or c.get("all"):
+        return [{}]
+    out = []
+    for h, r in household_homes(True):
+        place = home_place(h)
+        if not place:
+            return [{}]
+        out.append({"location": place, "stretch": int(r) + 10, "stretchUnit": "MILES"})
+    return out or [{}]
 
 def f_jibe(c):
-    page = 1
-    while True:
-        d = http_json(f'{c["base"]}/api/jobs?page={page}&limit=100')
-        for w in d.get("jobs", []):
-            j = w.get("data", {})
-            locs = [j.get("full_location") or j.get("location_name") or ", ".join(filter(None, [j.get("city"), j.get("state")]))]
-            desc = strip_html(j.get("description", ""))
-            yield J(c, j.get("title"), f'{c["base"]}/jobs/{j.get("slug")}', locs, "", None, desc,
-                    (j.get("posted_date") or "")[:10], "", j.get("slug"))
-        if page * 100 >= d.get("totalCount", 0):
-            break
-        page += 1
+    import urllib.parse
+    first = http_json(f'{c["base"]}/api/jobs?page=1&limit=100')
+    seen = set()
+    for extra in jibe_searches(c, first.get("totalCount", 0)):
+        page = 1
+        while True:
+            d = first if (not extra and page == 1) else http_json(f'{c["base"]}/api/jobs?' + urllib.parse.urlencode({"page": page, "limit": 100, **extra}))
+            new = 0
+            for w in d.get("jobs", []):
+                j = w.get("data", {})
+                if j.get("slug") in seen:
+                    continue
+                seen.add(j.get("slug")); new += 1
+                locs = [j.get("full_location") or j.get("location_name") or ", ".join(filter(None, [j.get("city"), j.get("state")]))]
+                desc = strip_html(j.get("description", ""))
+                yield J(c, j.get("title"), f'{c["base"]}/jobs/{j.get("slug")}', locs, "", None, desc,
+                        (j.get("posted_date") or "")[:10], "", j.get("slug"))
+            if page * 100 >= d.get("totalCount", 0) or not d.get("jobs"):
+                break
+            if over_budget(c):
+                budget_stop(c, f"listing postings ({page * 100} of {d.get('totalCount', 0)})")
+                return
+            page += 1
 
 def f_clearcompany(c):
     d = http_json(c["url"])
     for j in d.get("results", []):
         desc = strip_html(j.get("description", ""))
-        wp = "remote" if "remote" in (j.get("location") or "").lower() else ""
+        wp = "remote" if jobtext.remote_label(j.get("location")) else ""
         url = j.get("url") or j.get("applyUrl") or c.get("board", "")
         yield J(c, j.get("positionTitle"), url, [j.get("location", "")], wp, None, desc,
                 (j.get("postedDate") or "")[:10], j.get("departmentName", ""), j.get("id"))
@@ -139,7 +209,7 @@ def f_rippling(c):
     d = http_json(f'https://api.rippling.com/platform/api/ats/v1/board/{c["token"]}/jobs')
     for j in d:
         loc = (j.get("workLocation") or {}).get("label", "")
-        yield J(c, j.get("name"), j.get("url"), [loc], "remote" if "remote" in loc.lower() else "", None, "",
+        yield J(c, j.get("name"), j.get("url"), [loc], "remote" if jobtext.remote_label(loc) else "", None, "",
                 "", (j.get("department") or {}).get("label", ""), j.get("uuid"))
 
 
@@ -154,6 +224,14 @@ def _jf():
 def wanted(c, title):
     """Same title test the pipeline applies; used to skip detail fetches for jobs that would be dropped anyway."""
     jf = _jf()
+    if over_budget(c):
+        budget_stop(c, listed=True)
+        return False   # (this employer's time is used up: the posting is stored from its list row, the text comes next time)
+    if str(c.get("name") or "").startswith("Employer") and c.get("_name_sample", 0) < 6:
+        # a board known only by a code ("Employer in Columbus OH (ADP 0330de)"): read a few postings whatever their
+        # titles, so the employer's real name can be learned from them (names.learn)
+        c["_name_sample"] = c.get("_name_sample", 0) + 1
+        return True
     try:
         return jf.title_ok(title) or any(jf.target_ok(st, c.get("ai_track"), title) for st in jf.CFG.get("targets", []))
     except Exception:
@@ -177,6 +255,21 @@ def _icims_loc(s):
     m = re.match(r"^(?:US|USA)-([A-Z]{2})-(.+)$", s)
     return f"{m.group(2).strip()}, {m.group(1)}" if m else s
 
+def _icims_workplace(card):
+    """The workplace an iCIMS job card states in its header fields ("Work Location: In Person", "Remote: No",
+    "Location Type: Hybrid", "Workplace Type: Remote"); "" when the card has no such field."""
+    for m in re.finditer(r'field-label">\s*([^<]{2,40}?)\s*</span>\s*(?:</dt>\s*<dd[^>]*>\s*)?<span[^>]*>\s*([^<]{1,60}?)\s*</span>', card, re.S):
+        label, val = m.group(1).strip().lower(), _html.unescape(m.group(2)).strip()
+        if re.fullmatch(r"remote(?:\s*(?:work|eligible|status|option))?\??", label):
+            v = val.lower()
+            return "remote" if v in ("yes", "y", "true", "remote", "fully remote") else "hybrid" if "hybrid" in v or "partial" in v \
+                else "onsite" if v in ("no", "n", "false", "none", "on-site", "onsite") else jobtext.workplace_label("remote " + val, typed=True)
+        if re.fullmatch(r"(?:work\s*(?:place|location)(?:\s*type)?|workplace|location type|work type|work arrangement|work model|work style)", label):
+            wp = jobtext.workplace_label(val, typed=True)
+            if wp:
+                return wp
+    return ""
+
 def f_icims(c):
     base = c["base"].rstrip("/")
     rows, pr = [], 0
@@ -194,19 +287,24 @@ def f_icims(c):
             url, jid, title = m.group(1).split("?")[0], m.group(2), _html.unescape(re.sub(r"\s+", " ", m.group(3)))
             title = re.sub(r"\s*\((?:Job ID|Req(?:uisition)? ?#?)[^)]*\)\s*$", "", title, flags=re.I).strip()
             locs = []
-            for lm in re.finditer(r'field-label">\s*Location[^<]*</span>\s*</dt>\s*<dd[^>]*>\s*<span[^>]*>\s*(.*?)\s*</span>', card, re.S):
+            # ("Location", "Locations", "Job Locations": the label differs by board)
+            for lm in re.finditer(r'field-label">\s*(?:Job\s+)?Location[^<]*</span>\s*</dt>\s*<dd[^>]*>\s*<span[^>]*>\s*(.*?)\s*</span>', card, re.S):
                 locs += [_icims_loc(x) for x in re.split(r"\s*\|\s*|\s*;\s*", strip_html(lm.group(1))) if x.strip()]
             if any(r[1] == jid for r in rows):
                 continue
-            rows.append((url, jid, title, locs)); new += 1
+            rows.append((url, jid, title, locs, _icims_workplace(card))); new += 1
         m = re.search(r"Page\s+(\d+)\s+of\s+(\d+)", strip_html(h))
         if not new or not m or int(m.group(1)) >= int(m.group(2)):
+            break
+        if over_budget(c):
+            budget_stop(c, f"listing postings (page {m.group(1)} of {m.group(2)})")
             break
         pr += 1
 
     def detail(r):
-        url, jid, title, locs = r
-        desc, posted, wp = "", "", ""
+        url, jid, title, locs, wp = r
+        locs = list(locs)
+        desc, posted = "", ""
         if wanted(c, title):
             try:
                 h = http_text(url + "?in_iframe=1")
@@ -219,11 +317,13 @@ def f_icims(c):
                         for jl in d.get("jobLocation") or []:
                             a = jl.get("address") or {}
                             locs.append(", ".join(x for x in (a.get("addressLocality"), a.get("addressRegion")) if x))
-                    if (d.get("jobLocationType") or "").upper() == "TELECOMMUTE":
+                    # iCIMS marks every posting TELECOMMUTE, in-person jobs with a street address included: the
+                    # board's own "Work Location" / "Remote" field decides, then a posting with no street address
+                    if not wp and jobtext.telecommute(d):
                         wp = "remote"
             except Exception:
                 pass
-        if not wp and any("remote" in (l or "").lower() for l in locs):
+        if not wp and any(jobtext.remote_label(l) for l in locs):
             wp = "remote"
         return J(c, title, url, locs, wp, None, desc, posted, "", jid)
     with cf.ThreadPoolExecutor(6) as ex:
@@ -243,13 +343,16 @@ def f_ukg(c):
         skip += 100
         if len(got) < 100:
             break
+        if over_budget(c):
+            budget_stop(c, f"listing postings ({skip} of {d.get('totalCount') or '?'})")
+            break
 
     def loc_of(l):
         a = l.get("Address") or {}
         city, st = a.get("City"), (a.get("State") or {}).get("Code")
         name = l.get("LocalizedName") or ""
         parts = [x for x in (city, st) if x]
-        return (", ".join(parts) + (f" ({name})" if name and "remote" in name.lower() else "")) if parts else name
+        return (", ".join(parts) + (f" ({name})" if name and jobtext.remote_label(name) else "")) if parts else name
 
     def detail(o):
         title = o.get("Title", "")
@@ -265,7 +368,7 @@ def f_ukg(c):
                     desc = strip_html(d.get("Description") or "") or desc
             except Exception:
                 pass
-        wp = "remote" if any("remote" in (l or "").lower() for l in locs) else ""
+        wp = "remote" if any(jobtext.remote_label(l) for l in locs) else ""
         return J(c, title, url, locs, wp, None, desc, (o.get("PostedDate") or "")[:10], o.get("JobCategoryName") or "", o["Id"])
     with cf.ThreadPoolExecutor(6) as ex:
         yield from ex.map(detail, ops)
@@ -275,6 +378,9 @@ def f_paylocity(c):
     h = http_text(f'https://recruiting.paylocity.com/recruiting/jobs/All/{c["id"]}')
     m = re.search(r"window\.pageData\s*=\s*(\{.*?\});\s*\n", h, re.S)
     jobs = [j for j in (json.loads(m.group(1)).get("Jobs") or []) if not j.get("IsInternal")] if m else []
+    tm = re.search(r"<title[^>]*>(.*?)</title>", h, re.S | re.I)
+    if tm:
+        c["_board_title"] = _html.unescape(re.sub(r"\s+", " ", tm.group(1))).strip()[:120]   # (names.learn reads it)
 
     def detail(j):
         jl = j.get("JobLocation") or {}
@@ -320,10 +426,13 @@ def f_adp(c):
                     desc = strip_html(dd.get("requisitionDescription") or "")
                 except Exception:
                     pass
-            wp = "remote" if any("remote" in (l or "").lower() for l in locs) else ""
+            wp = "remote" if any(jobtext.remote_label(l) for l in locs) else ""
             yield J(c, title, url, locs, wp, None, desc, (r.get("postDate") or "")[:10], "", rid)
         skip += 100
         if len(reqs) < 100:
+            break
+        if over_budget(c):
+            budget_stop(c, f"listing postings ({skip})")
             break
 
 FETCHERS = {"icims": f_icims, "ukg": f_ukg, "paylocity": f_paylocity, "adp": f_adp, "amazon": f_amazon, "phenom": f_phenom, "oracle": f_oracle, "jibe": f_jibe,

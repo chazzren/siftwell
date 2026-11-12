@@ -16,6 +16,7 @@ CFG = paths.load_config()
 
 import copy
 import people
+import jobtext
 BASE_CFG = copy.deepcopy(CFG)
 
 def _user_cfg():
@@ -197,7 +198,7 @@ def strip_html(s):
     s = html.unescape(html.unescape(s))
     s = re.sub(r"<(br|/p|/div|/li|/h\d)[^>]*>", "\n", s, flags=re.I)
     s = re.sub(r"<[^>]+>", " ", s)
-    return re.sub(r"[ \t\xa0]+", " ", s).strip()
+    return jobtext.clean_text(re.sub(r"[ \t\xa0]+", " ", s))   # (runs of blank lines become one)
 
 # ---------------------------------------------------------------- classification
 NON_US = ["canada", "toronto", "vancouver", "montreal", "united kingdom", " uk", "uk ", "london", "ireland", "dublin",
@@ -215,14 +216,86 @@ def is_foreign(loc):
     import geo
     return geo.looks_foreign(loc)
 
-def near(loc):
-    """Is this location inside anyone's search area (the current CFG): a home radius, or the DC-area list."""
+def near(loc, states=None):
+    """Is this location inside anyone's search area (the current CFG): a home radius, or the DC-area list.
+    states: the states there is evidence for when the label is a bare city name ("Columbus"); see bare_support()."""
     if CFG.get("legacy_area", True) and is_close(loc):
         return True
     if CFG.get("homes"):
         import geo
-        return any(geo.within([loc], h, r)[0] for h, r in CFG["homes"])
+        return any(geo.within([loc], h, r, states=states)[0] for h, r in CFG["homes"])
     return False
+
+class EmployerPlaces:
+    """Where each employer is known to hire, for placing a bare city name ("Columbus", "Columbus Healthcare Center"):
+    the places its other postings name with their state, and the places and states the employer directory lists.
+    Built lazily, one employer at a time."""
+    def __init__(self, pool, places=None):
+        self.locs, self.dir, self.done, self._dir_st = {}, places or {}, {}, None
+        for j in pool:
+            self.locs.setdefault(j["company"], set()).update(l for l in (j.get("locations") or []) if l)
+
+    def dir_states(self):
+        if self._dir_st is None:
+            try:
+                import catalog
+                self._dir_st = catalog.dir_states_map()
+            except Exception:
+                self._dir_st = {}
+        return self._dir_st
+
+    def of(self, company):
+        """({place name key: {states}}, {states}) for one employer."""
+        got = self.done.get(company)
+        if got is None:
+            import geo
+            city, sts = {}, set()
+            for l in self.locs.get(company, ()):
+                for nm, st in geo.place_states(l):
+                    sts.add(st)
+                    if nm:
+                        city.setdefault(nm, set()).add(st)
+            sts.update((self.dir.get(company) or {}).get("states") or [])
+            sts.update(self.dir_states().get(company) or [])
+            got = self.done[company] = (city, sts)
+        return got
+
+_BARE = {}
+
+def bare_support(loc, job, emp):
+    """The states a location label's bare city names may be placed in, or None when the label has none (then nothing
+    changes). A bare name ("Columbus" exists in Ohio, Georgia, Indiana...) is accepted only with support, in order:
+    one state the posting itself names (its text or its other location labels), one state where this employer's
+    other postings (or the directory) put a town of that name, one state the employer is known to hire in. With no
+    support, or support for several states at once, the name stays unplaced (an empty set) and the posting is then
+    treated like any other posting that names no place."""
+    import geo
+    names_ = _BARE.get(loc)
+    if names_ is None:
+        if len(_BARE) > 200000:
+            _BARE.clear()
+        names_ = _BARE[loc] = geo.bare_names(loc)
+    if not names_:
+        return None
+    own = set(job.get("loc_st") or [])
+    for l in job.get("locations") or []:
+        if l and l != loc:
+            own.update(st for _, st in geo.place_states(l))
+    out = set()
+    for name, opts in names_:
+        cand = set(opts)
+        mine = own & cand
+        if len(mine) == 1:
+            out |= mine
+            continue
+        city, sts = emp.of(job["company"])
+        pool_ = mine or cand
+        same = city.get(geo._key(name), set()) & pool_
+        if len(same) == 1:
+            out |= same
+        elif not same and len(sts & pool_) == 1:
+            out |= sts & pool_
+    return out
 
 def is_close(loc):
     l = " " + loc.lower() + " "
@@ -232,10 +305,11 @@ def is_close(loc):
     return has_va and any(re.search(r"\b" + p + r"\b", l) for p in CFG["close_places_need_va"])
 
 def is_remote_us(loc):
-    l = " " + loc.lower() + " "
-    if not any(w in l for w in REMOTE_WORDS):
+    """A location label that says the job is remote and names no other country ("Remote", "US - Remote"; never
+    "Not Remote", "Remote: No", "Remote, Poland", "Remote, PL")."""
+    if not jobtext.remote_label(loc):
         return False
-    return not is_foreign(loc)
+    return not is_foreign(loc) and not jobtext.foreign_remote(loc)
 
 # ---- title excludes are whole words: "intern" drops "Marketing Intern" and "Summer Interns", never "Internal Auditor",
 # "Internal Medicine" or "International Sales Manager". A plural "s"/"es" still counts, and an entry ending in "*" is a
@@ -302,10 +376,10 @@ def vague_location(l, emp_states=()):
     if not l:
         return True
     low = " " + l.lower() + " "
-    if any(w in low for w in REMOTE_WORDS) or _names_foreign(l):
+    if jobtext.remote_label(l) or _names_foreign(l):
         return False
     import geo
-    hits = geo.locate_all(l)
+    hits = [h for h in geo.locate_all(l) if h.kind != "bare"]   # (a bare city name nobody could place names no place)
     if any(h.kind != "state" for h in hits):
         return False
     if hits:   # state only: fine when the employer hires in that state
@@ -361,34 +435,14 @@ def pivot_title_ok(title):
     return _named(t, CFG["title_include"] + (pv.get("title_extra", []) if CFG["title_include"] or CFG.get("title_words") else []),
                   CFG.get("title_words"), open_ok=True)
 
-MONEY = r"\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{2,3}(?:\.\d+)?\s?[kK]|\d{2,3})"
-RANGE_RE = re.compile(MONEY + r"\s*(?:USD|usd)?\s*(?:-|–|—|to)\s*" + MONEY + r"(\s*(?:/|per)\s*(?:hr|hour))?")
-
-def money(s):
-    s = s.replace(",", "").replace(" ", "")
-    if s[-1] in "kK":
-        return float(s[:-1]) * 1000
-    return float(s)
-
-FROM_TO_RE = re.compile(r"from\s+" + MONEY + r"(?:/year)?[^$]{0,80}?(?:up )?to\s+" + MONEY, re.I)
-
 def parse_salary(text):
-    best = None
-    for m in FROM_TO_RE.finditer(text or ""):
-        lo, hi = money(m.group(1)), money(m.group(2))
-        if 30000 <= lo <= hi <= 2_000_000 and (best is None or hi > best[1]):
-            best = (lo, hi, m.group(0).strip()[:80])
-    for m in RANGE_RE.finditer(text or ""):
-        lo, hi = money(m.group(1)), money(m.group(2))
-        if m.group(3) or hi < 400:  # hourly
-            lo, hi = lo * 2080, hi * 2080
-        if hi < 1000:  # bare numbers like "$120 - 180" meaning k
-            lo, hi = lo * 1000, hi * 1000
-        if not (30000 <= lo <= hi <= 2_000_000):
-            continue
-        if best is None or hi > best[1]:
-            best = (lo, hi, m.group(0).strip())
-    return best
+    """The posting's base pay as (low, high, the words it was read from, unit, low in that unit, high in that unit),
+    low and high per year (hourly pay at 2,080 hours) so every job compares on one scale. None when the text states
+    no pay. See jobtext.parse_pay for what counts (hourly, single values) and what doesn't (bonuses, 401k)."""
+    p = jobtext.parse_pay(text)
+    if not p:
+        return None
+    return (p["lo"] * jobtext.PER_YEAR[p["unit"]], p["hi"] * jobtext.PER_YEAR[p["unit"]], p["text"], p["unit"], p["lo"], p["hi"])
 
 CLEAR_PATTERNS = [
     ("TS/SCI + poly", r"(ts\s*/\s*sci|top secret/sci|top secret / sci)[^.\n]{0,60}(poly|polygraph)"),
@@ -455,8 +509,8 @@ def band(job):
     if lo is None or hi is None:
         return
     if lo <= 0 or hi / lo > JUNK_BAND_RATIO:
-        job["salary_min"] = job["salary_max"] = None
-        job["salary_text"] = ""
+        job["salary_min"] = job["salary_max"] = job["pay_min"] = job["pay_max"] = None
+        job["salary_text"] = job["pay_unit"] = ""
         return
     job["salary_mid"] = round((lo + hi) / 2)
     job["wide_band"] = hi / lo >= WIDE_BAND_RATIO
@@ -503,53 +557,10 @@ def travel(text):
     return "", None, ""
 
 # ---------------------------------------------------------------- seniority
-IC_MANAGER = r"(?:product|program|project|account|success|partner|partnership|relationship|case|community|portfolio|delivery|release|marketing|channel|alliance|territory|solutions?|implementation|deployment|engagement|technical program|technical account|technical product|risk|compliance|vendor|contract|grants?|data|knowledge|content|campaign|brand|events?|office|facility|property|operations program)"
-LEVEL_NAMES = {1: "Entry level", 2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"}
-def title_level(title):
-    t = " " + re.sub(r"[^a-z0-9/&+ ]", " ", title.lower()) + " "
-    t = re.sub(r"\s+", " ", t)
-    if re.search(r" (vp|svp|evp|vice president|chief|cto|ciso|cio|coo|distinguished|fellow) ", t) or re.search(r" (senior|sr) director ", t):
-        return 7
-    if re.search(r" (director|head of|head) ", t) or re.search(r" (senior|sr) principal ", t):
-        return 6
-    if re.search(r" (principal|group manager|group product manager|senior staff|sr staff|senior manager|sr manager|senior engineering manager) ", t) or re.search(r" (v|level 5) ", t):
-        return 5
-    if re.search(r" (staff|lead|tech lead|team lead|supervisor|iv|level 4) ", t):
-        return 4
-    m = re.search(r" (\w+ )?(\w+ )?manager ", t)
-    if m and not re.search(IC_MANAGER + r" manager ", t):
-        return 4  # people manager (engineering manager, manager of X, ...)
-    if re.search(r" (senior|sr|iii|level 3) ", t):
-        return 3
-    if re.search(r" (mid|ii|level 2) ", t):
-        return 2
-    m = re.search(r" ([1-6]) $", t)  # "Full-stack Engineer 4"
-    if m:
-        return max(2, min(6, int(m.group(1))))
-    return None
-YEARS = re.compile(r"(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*(\d{1,2})\s*\+?\s*)?(?:years|yrs)", re.I)
-def years_required(text):
-    best = None
-    for m in YEARS.finditer(text or ""):
-        ctx = text[m.end(): m.end() + 60].lower()
-        pre = text[max(0, m.start() - 40): m.start()].lower()
-        if "experience" not in ctx and "experience" not in pre:
-            continue
-        y = int(m.group(1))
-        if re.search(r"prefer|nice to have|bonus|plus\b|desired|ideal", text[max(0, m.start() - 200): m.start()].lower()):
-            continue  # preferred qualifications overstate the bar
-        if 1 <= y <= 20 and (best is None or y > best):  # the main (largest) required minimum
-            best = y
-    return best
-def years_level(y):
-    if y is None: return None
-    return 2 if y <= 3 else 3 if y <= 6 else 4 if y <= 9 else 5 if y <= 13 else 6
-def seniority(title, text):
-    lv = title_level(title)
-    if lv is not None:
-        return lv, "title"
-    y = years_required(text)
-    return years_level(y), ("years" if y is not None else "")
+# (the level readers live in jobtext.py; these names are kept for the modules that use them from here)
+IC_MANAGER, LEVEL_NAMES = jobtext.IC_MANAGER, jobtext.LEVEL_NAMES
+title_level, years_required, years_level, seniority, YEARS = (jobtext.title_level, jobtext.years_required, jobtext.years_level,
+                                                             jobtext.seniority, jobtext.YEARS)
 
 TRAVEL_QOL = {"heavy": -20, "moderate": -10, "some": -5, "light": -3, "none": 0, "": 0}
 
@@ -561,7 +572,7 @@ def enrich(job, text):
     job["clearance"] = clearance(text)
     job["scif"] = bool(re.search(r"\bscif\b", (text or "").lower()))
     job["travel"], job["travel_pct"], job["travel_text"] = travel(text)
-    job["level"], job["level_src"] = seniority(job["title"], text)
+    job["level"], job["level_src"] = jobtext.seniority(job["title"], text)
     try:
         import requirements
         job["req"] = requirements.parse(text or "", job["title"])
@@ -657,10 +668,13 @@ def pay_rank(mid):
 
 # ---------------------------------------------------------------- fetchers (each yields normalized dicts)
 def J(company, title, url, locations, workplace="", salary=None, desc="", posted="", dept="", jid=""):
+    # The id starts with the name the company had when its first posting was stored ("idp", kept by
+    # catalog.rename_company), so giving a company a better display name never changes a listing's id: ratings,
+    # saved marks and first-seen dates are all keyed by it.
     return {"company": company["name"], "sector": company.get("sector", ""), "tier": company.get("tier", ""),
-            "title": (title or "").strip(), "url": url, "locations": list(dict.fromkeys(l.strip() for l in locations if l and l.strip())),
+            "title": jobtext.clean_title(title), "url": url, "locations": list(dict.fromkeys(l.strip() for l in locations if l and l.strip())),
             "workplace": workplace, "salary": salary, "desc": desc, "posted": posted, "dept": dept,
-            "id": f'{company["name"]}::{jid or url}'}
+            "id": f'{company.get("idp") or company["name"]}::{jid or url}'}
 
 def f_greenhouse(c):
     d = http_json(f'https://boards-api.greenhouse.io/v1/boards/{c["token"]}/jobs?content=true')
@@ -671,10 +685,9 @@ def f_greenhouse(c):
         desc = strip_html(j.get("content"))
         wp = ""
         for m in j.get("metadata") or []:
-            v = str(m.get("value") or "").lower()
-            if "remote" in v: wp = "remote"
-            elif "hybrid" in v: wp = "hybrid"
-            elif "on-site" in v or "onsite" in v or "in office" in v: wp = "onsite"
+            v = str(m.get("value") or "")
+            if len(v) <= 60 and re.search(r"remote|hybrid|on-?site|in[- ]office", v, re.I):
+                wp = jobtext.workplace_label(v) or wp
         yield J(c, j.get("title"), j.get("absolute_url"), locs, wp, None, desc,
                 (j.get("first_published") or j.get("updated_at") or "")[:10],
                 ", ".join(x["name"] for x in j.get("departments", [])), j.get("id"))
@@ -692,8 +705,9 @@ def f_lever(c):
         sal = None
         sr = j.get("salaryRange")
         if sr and sr.get("max") and (sr.get("currency") in (None, "USD")):
-            mult = 2080 if sr.get("interval", "").startswith("per-hour") else 1
-            sal = (sr["min"] * mult, sr["max"] * mult, "listed range")
+            hourly = sr.get("interval", "").startswith("per-hour")
+            mult = 2080 if hourly else 1
+            sal = (sr["min"] * mult, sr["max"] * mult, "listed range") + (("hour", sr["min"], sr["max"]) if hourly else ())
         posted = dt.datetime.fromtimestamp(j["createdAt"] / 1000).strftime("%Y-%m-%d") if j.get("createdAt") else ""
         yield J(c, j.get("text"), j.get("hostedUrl"), locs, wp, sal, desc, posted, cat.get("team", ""), j.get("id"))
 
@@ -736,6 +750,9 @@ def f_smartrecruiters(c):
         off += 100
         if off >= d.get("totalFound", 0):
             break
+        if over_budget(c):
+            budget_stop(c, f"listing postings ({off} of {d.get('totalFound', 0)})")
+            break
 
 WD_UNNAMED_VALUES = 25   # unnamed location-facet values ("Main Campus", "Building 5") also queried for a local employer
 WD_UNNAMED_JOBS = 600    # ... while their postings add up to no more than this
@@ -752,7 +769,9 @@ def _wd_location_facets(facets, unnamed=False):
             if vals and isinstance(vals[0], dict) and "facetParameter" in vals[0]:
                 walk(vals); continue
             if "remote" in param.lower():
-                ids = [v["id"] for v in vals if "remote" in v.get("descriptor", "").lower()]
+                # only the values that mean remote: "Remote work is not available" and "Office Worker (NOT Remote)"
+                # are this facet's on-site values
+                ids = [v["id"] for v in vals if jobtext.workplace_label(v.get("descriptor", ""), typed=True) == "remote"]
                 if ids:
                     out[param] = ids
             elif "location" in param.lower() and "country" not in param.lower():
@@ -826,8 +845,7 @@ def lazy_text(jid):
     locs = [d.get("location") or ""] + (d.get("additionalLocations") or [])
     if not any(locs):
         locs = old.get("locations") or []
-    rt = (d.get("remoteType") or "").lower()
-    wp = "remote" if "remote" in rt else "hybrid" if "hybrid" in rt else "onsite" if ("site" in rt or "office" in rt) else (old.get("base_wp") or "")
+    wp = jobtext.workplace_label(d.get("remoteType"), typed=True) or (old.get("base_wp") or "")
     j = J(c, old.get("title") or d.get("title"), old.get("url") or f'{base}/en-US/{c["site"]}{path}', locs, wp, None, desc,
           d.get("startDate", "") or old.get("posted", ""), "", path)
     p = prepare_listing(j, c)
@@ -888,6 +906,10 @@ def f_workday(c):
                 if total > WD_CAP:
                     truncated.append(f"Workday stops at {WD_CAP} of {total}")
                 break
+            if over_budget(c):
+                budget_stop(c, f"listing postings ({off} of {total})")
+                truncated.append(c["_truncated"])
+                break
             if not d.get("jobPostings"):
                 truncated.append(f"empty page at {off - 20} of {total}")
                 break
@@ -902,14 +924,15 @@ def f_workday(c):
     # when an edited posting is noticed. process() keeps the stored text and the row is left as it is.
     try:
         import catalog
-        have = {k for k, v in catalog.known(c["name"]).items() if v[2] and not v[1]}
+        # (a row whose stored hash was cleared by reparse_stored() is read again: its workplace needs the board's word)
+        have = {k for k, v in catalog.known(c["name"]).items() if v[2] and not v[1] and v[0]}
     except Exception:
         have = set()
     day = dt.date.today().toordinal() % WD_RECHECK_DAYS
     def detail(p):
-        want = fetch_wanted(c, p.get("title", ""))
+        want = fetch_wanted(c, p.get("title", "")) and not over_budget(c)   # (budget spent: stored from its list row)
         d, failed = {}, False
-        jid_ = f'{c["name"]}::{p["externalPath"]}'
+        jid_ = f'{c.get("idp") or c["name"]}::{p["externalPath"]}'
         if want and jid_ in have and __import__("zlib").crc32(jid_.encode()) % WD_RECHECK_DAYS != day:
             j = J(c, p.get("title"), f'{base}/en-US/{c["site"]}{p["externalPath"]}', [p.get("locationsText", "")], "", None, "", "", "", p["externalPath"])
             return j
@@ -920,8 +943,7 @@ def f_workday(c):
                 failed = True
         locs = [d.get("location") or p.get("locationsText", "")] + (d.get("additionalLocations") or [])
         desc = strip_html(d.get("jobDescription", ""))
-        rt = (d.get("remoteType") or p.get("remoteType") or "").lower()
-        wp = "remote" if "remote" in rt else "hybrid" if "hybrid" in rt else "onsite" if ("site" in rt or "office" in rt) else ""
+        wp = jobtext.workplace_label(d.get("remoteType") or p.get("remoteType"), typed=True)
         j = J(c, p.get("title"), f'{base}/en-US/{c["site"]}{p["externalPath"]}', locs, wp, None, desc,
               d.get("startDate", "") or "", "", p["externalPath"])
         if not want or failed:
@@ -931,6 +953,8 @@ def f_workday(c):
         return j
     with cf.ThreadPoolExecutor(6) as ex:
         yield from ex.map(detail, postings)
+    if over_budget(c):
+        budget_stop(c, listed=True)   # (every posting was listed; the texts left out are read by the next fetch)
 
 FETCHERS = {"greenhouse": f_greenhouse, "lever": f_lever, "ashby": f_ashby,
             "smartrecruiters": f_smartrecruiters, "workday": f_workday}
@@ -950,64 +974,139 @@ def load_extra():
 BARE_US = re.compile(r"\s*(us|usa|u\.s\.|united states( of america)?|dragos usa)\s*")
 REMOTE_DESC = re.compile(r"fully remote|remote[- ]first|100% remote|remote position|remote role|work remotely|remote within the (us|united states)|remote \(us\)|this role is remote|remote, us")
 
+def set_pay(j, sal):
+    """Store a posting's pay. sal: (low per year, high per year, words[, unit, low in that unit, high in that unit])
+    or None. salary_min / salary_max / salary_mid are always per year (hourly at 2,080 hours), so the pay floor, the
+    Highest pay sort and Appeal compare every job on one scale; pay_unit / pay_min / pay_max keep what the posting
+    said, so an hourly job is shown as hourly."""
+    if not sal:
+        j["salary_min"] = j["salary_max"] = j["pay_min"] = j["pay_max"] = None
+        j["salary_text"] = j["pay_unit"] = ""
+        return
+    unit = sal[3] if len(sal) > 5 and sal[3] in jobtext.PER_YEAR else "year"
+    per = jobtext.PER_YEAR[unit]
+    j["salary_min"], j["salary_max"], j["salary_text"] = round(sal[0]), round(sal[1]), sal[2]
+    j["pay_unit"] = unit
+    j["pay_min"], j["pay_max"] = (round(sal[4], 2), round(sal[5], 2)) if len(sal) > 5 else (round(sal[0] / per, 2), round(sal[1] / per, 2))
+
 def prepare_listing(j, c):
     """Parse one fetched posting for the catalog. Nothing here depends on who is looking: whether it is near someone,
     pays enough or has a fitting title is decided per person in select_for_person(). Returns None for postings
     outside the US (and not remote-US), which no one can use."""
     locs = j["locations"]
     base = j.get("workplace") or ""
-    nonus = is_foreign
+    nonus = lambda l: is_foreign(l) or jobtext.foreign_remote(l)
     strict = base == "remote" and not any(nonus(l) for l in locs if l) or any(is_remote_us(l) for l in locs)
     if base == "remote" and locs and all(nonus(l) for l in locs):
         strict = False
+    # "Customer Success Manager - Belfast, UK" listed at "Remote": the title says where the job really is
+    tp = jobtext.title_place(j.get("title"))
+    if tp and nonus(tp) and not any(l and not nonus(l) and not jobtext.remote_label(l) and not BARE_US.fullmatch(l.lower()) for l in locs):
+        return None
     text = j.get("desc") or ""
     bare = any(BARE_US.fullmatch(l.lower()) for l in locs) and (c.get("tier") == "remote_first" or bool(REMOTE_DESC.search(text.lower())))
     unnamed = c.get("tier") == "dmv_hq" and bool(locs) and all(looks_local_unnamed(l) for l in locs if l)
     if not (strict or bare or unnamed or not locs or any(not nonus(l) for l in locs if l)):
         return None
-    j.update(ai_track=c.get("ai_track", ""), base_wp=base, remote_strict=bool(strict), remote_bare=bool(bare), local_unnamed=unnamed)
-    if not j["salary"]:
-        j["salary"] = parse_salary(text)
-    if j["salary"]:
-        j["salary_min"], j["salary_max"], j["salary_text"] = round(j["salary"][0]), round(j["salary"][1]), j["salary"][2]
-    else:
-        j["salary_min"] = j["salary_max"] = None; j["salary_text"] = ""
-    del j["salary"]
+    j.update(ai_track=c.get("ai_track", ""), base_wp=base, remote_strict=bool(strict), remote_bare=bool(bare), local_unnamed=unnamed,
+             pv=jobtext.PARSE_VERSION)
+    # pay: what the board itself listed, else the posting's text, else its title ("Line Cook - $17/hour")
+    set_pay(j, j.pop("salary", None) or parse_salary(text) or parse_salary(j.get("title") or ""))
+    # the states the posting names, for placing a bare city name ("Columbus" + "a current Georgia license")
+    # (the employer's own name is taken out first: "Georgia-Pacific" and "Texas Roadhouse" name no place)
+    co = (j.get("company") or "").strip()
+    named = (j.get("title") or "") + "\n" + text
+    if len(co) >= 4 and jobtext.text_states(co):
+        named = re.sub(re.escape(co), " ", named, flags=re.I)
+    j["loc_st"] = jobtext.text_states(named)
     enrich(j, text)  # also fills workplace from the text when the board didn't say
     j["snippet"] = text[:600]
     return j
 
-def process(c):
-    """Fetch one company. Postings whose title and text are unchanged since the last fetch aren't parsed again."""
+# ---------------------------------------------------------------- one slow employer must not hold a whole fetch
+# Each employer gets a time budget and a posting budget per fetch. A reader that pages (Workday, Oracle, UKG, iCIMS,
+# SmartRecruiters...) asks over_budget(c) between pages and stops listing; per-posting detail requests are skipped
+# once the budget is spent (those postings are stored from their list row and filled in by the next fetch). What was
+# read is kept, the company is marked "capped" (nothing is closed) and the fetch moves on.
+# The budget: --budget SECS on the command line, else env SIFTWELL_FETCH_BUDGET, else FETCH_BUDGET_SECS; 0 = none.
+FETCH_BUDGET_SECS = 240
+FETCH_BUDGET_GRACE = 45      # after the budget, a reader that doesn't ask over_budget() is cut off this much later (at most budget / 4)
+FETCH_MAX_POSTINGS = 8000    # postings read from one employer in one fetch
+_BUDGET = {"secs": None}
+
+def fetch_budget():
+    if _BUDGET["secs"] is not None:
+        return _BUDGET["secs"]
+    try:
+        return max(0, int(os.environ.get("SIFTWELL_FETCH_BUDGET") or FETCH_BUDGET_SECS))
+    except ValueError:
+        return FETCH_BUDGET_SECS
+
+def over_budget(c):
+    """Has this employer's fetch used up its time? (False when no budget is set: checking a new company, tests.)"""
+    d = c.get("_deadline")
+    return bool(d) and time.time() > d
+
+def budget_stop(c, where="", listed=False):
+    """Note that a reader stopped early for its budget. listed=False: it stopped while listing postings, so the list
+    is incomplete and the company is marked "capped" (nothing is closed). listed=True: every posting was listed and
+    only some full texts were left for next time, so the fetch still counts as complete."""
+    if not listed and not c.get("_truncated"):
+        c["_truncated"] = f"time budget of {int(c.get('_budget') or 0)}s used up{(' ' + where) if where else ''}; the rest is read next time"
+    c["_budget_hit"] = True
+
+def process(c, budget=None):
+    """Fetch one company. Postings whose title and text are unchanged since the last fetch aren't parsed again.
+    budget: seconds this employer may take (default fetch_budget(); 0 = no limit)."""
     import catalog
     t0 = time.time()
     raw = 0
     out = []
     c.pop("_truncated", None)
+    c.pop("_budget_hit", None)
+    budget = fetch_budget() if budget is None else budget
+    if budget:
+        c["_deadline"], c["_budget"] = t0 + budget, budget
     try:
         import netsafe
         netsafe.check_config(c)  # (a malformed or unsafe board config is never fetched)
         known = catalog.known(c["name"])
-        for j in FETCHERS[c["ats"]](c):
-            raw += 1
-            k = known.get(j["id"])  # (hash, partial, has_text)
-            if not (j.get("desc") or "").strip() and k and k[2]:
-                # the fetcher skipped or failed the full text this time: keep the text stored earlier
-                j["desc"] = catalog.description(j["id"])
-                j.pop("_partial", None)
-                j.pop("lazy", None)
-            if k and not k[1] and k[0] == catalog.listing_hash(j["title"], j.get("desc")):
-                out.append({"id": j["id"], "_unchanged": True})
-                continue
-            p = prepare_listing(j, c)
-            if p:
-                out.append(p)
+        gen = FETCHERS[c["ats"]](c)
+        try:
+            for j in gen:
+                raw += 1
+                k = known.get(j["id"])  # (hash, partial, has_text)
+                if not (j.get("desc") or "").strip() and k and k[2]:
+                    # the fetcher skipped or failed the full text this time: keep the text stored earlier
+                    j["desc"] = catalog.description(j["id"])
+                    j.pop("_partial", None)
+                    j.pop("lazy", None)
+                if k and not k[1] and k[0] == catalog.listing_hash(j["title"], j.get("desc")):
+                    out.append({"id": j["id"], "_unchanged": True})
+                else:
+                    p = prepare_listing(j, c)
+                    if p:
+                        out.append(p)
+                if raw >= FETCH_MAX_POSTINGS:
+                    c["_truncated"] = c.get("_truncated") or f"stopped at {FETCH_MAX_POSTINGS} postings; the rest is read next time"
+                    c["_budget_hit"] = True
+                    break
+                if budget and time.time() > c["_deadline"] + min(FETCH_BUDGET_GRACE, budget / 4):
+                    budget_stop(c, f"after {raw} postings")
+                    break
+        finally:
+            close = getattr(gen, "close", None)
+            if close:
+                close()
         status = "ok"
     except Exception as e:
         status = f"error: {type(e).__name__}: {e}"[:200]
+    c.pop("_deadline", None)
+    c.pop("_budget", None)
     return {"company": c["name"], "ats": c["ats"], "tier": c.get("tier"), "sector": c.get("sector"),
             "raw_jobs": raw, "matched": len(out), "status": status, "secs": round(time.time() - t0, 1),
-            "truncated": c.pop("_truncated", None)}, out
+            "truncated": c.pop("_truncated", None), "budget_hit": bool(c.pop("_budget_hit", False)),
+            "board_title": c.pop("_board_title", None)}, out
 
 def main():
     ap = argparse.ArgumentParser()
@@ -1016,6 +1115,7 @@ def main():
     ap.add_argument("--no-rate", action="store_true", help="fetch only: rebuild the boards without Claude rating (the staged first check rates once, at the end)")
     ap.add_argument("--no-boards", action="store_true", help="fetch only: don't rebuild the boards after this fetch (a later one will)")
     ap.add_argument("--boards-every", type=int, default=0, metavar="SECS", help="fetch only: also rebuild the boards (no Claude) while the fetch runs, the first time after about a minute and then every SECS, so jobs show up before slow boards finish")
+    ap.add_argument("--budget", type=int, default=None, metavar="SECS", help="fetch only: the most time one employer may take (default %d; 0 = no limit). An employer that runs out is marked 'capped', keeps what was read and is finished by a later fetch" % FETCH_BUDGET_SECS)
     ap.add_argument("--rescore", action="store_true", help="re-parse every open listing from its saved text, then rebuild boards (no fetching)")
     ap.add_argument("--recompute", nargs="*", metavar="PID", help="rebuild these people's boards (everyone if none given) from the catalog; no fetching, no Claude")
     ap.add_argument("--rerate", metavar="PID", help="have Claude rate this person's unrated listings and redo ones rated with older info (no fetching)")
@@ -1046,6 +1146,9 @@ def fetch(args):
     import catalog
     use_cfg(fetch_cfg([person_cfg(pid)[0] for pid in people.ids()]))  # decides which postings get their full text fetched
     load_extra()
+    if getattr(args, "budget", None) is not None:
+        _BUDGET["secs"] = max(0, int(args.budget))
+    reparse_stored()   # (one time after an update that reads postings better: stored listings are read again first)
     companies = catalog.companies(include_paused=False)
     if getattr(args, "only_file", None):
         with open(args.only_file, encoding="utf-8") as fh:
@@ -1061,7 +1164,7 @@ def fetch(args):
         return 0
     rid = catalog.start_run("fetch", details={"only": args.only})
     totals = {"new": 0, "changed": 0, "reopened": 0, "closed": 0, "unchanged": 0}
-    errors, flagged, n_ok, futs, boards, status, facts = [], [], 0, {}, None, "error", None
+    errors, flagged, n_ok, futs, boards, status, facts, over = [], [], 0, {}, None, "error", None, []
     # --boards-every: boards from what is in the catalog so far, about a minute in and then every SECS, in a child
     # process (this one's filters are the fetch's, shared by its threads; the job lock is inherited). The fetch
     # threads keep going meanwhile, so jobs show up while slow boards are still being read.
@@ -1088,6 +1191,8 @@ def fetch(args):
                     s, js = f.result()
                     with catalog.db() as con:
                         counts = catalog.record_fetch(s["company"], s, js, con)
+                    if s["status"] == "ok":   # (a code or placeholder name -> the employer's real one, from its postings)
+                        s["company"] = learn_company_name(s["company"], s.get("board_title"))
                 except Exception as e:
                     s = {"company": futs[f]["name"], "ats": futs[f]["ats"], "raw_jobs": 0, "matched": 0, "secs": 0,
                          "status": f"error: saving failed: {type(e).__name__}: {e}"[:200]}
@@ -1101,6 +1206,8 @@ def fetch(args):
                 else:
                     errors.append({"company": s["company"], "error": s["status"]})
                 note = ""
+                if s.get("budget_hit"):
+                    over.append(s["company"])
                 if counts.get("status") not in (None, "ok", "error"):
                     note = f' [{counts["status"]}: missing postings kept open{"; " + s["truncated"] if s.get("truncated") else ""}]'
                 print(f'{s["company"]:<24} {s["ats"]:<15} raw={s["raw_jobs"]:<5} kept={s["matched"]:<4} new={counts["new"]:<4} closed={counts["closed"]:<4} {s["status"]}{note} ({s["secs"]}s)', flush=True)
@@ -1108,6 +1215,8 @@ def fetch(args):
         mid_stop.set()
         if mid_thread:
             mid_thread.join(900)
+        if over:   # (one line a caller can read: these ran out of their time budget and are finished by a later fetch)
+            print("OVER_BUDGET " + json.dumps(sorted(over)), flush=True)
         if not args.only:
             catalog.set_meta("last_full_fetch", dt.date.today().isoformat())
         pool = catalog.open_listings(lazy=True)
@@ -1129,14 +1238,19 @@ def fetch(args):
         catalog.finish_run(rid, status=status, companies=len(futs), fetched=n_ok,
                            new=totals["new"], closed=totals["closed"], changed=totals["changed"], reopened=totals["reopened"],
                            errors=(errors + flagged + [{"person": p, "error": boards[p]["error"]} for p in _failed(boards)])[:200],
-                           details={"boards": boards, **({"facts": facts} if facts else {})})
+                           details={"boards": boards, **({"facts": facts} if facts else {}), **({"over_budget": sorted(over)} if over else {})})
     print(f"boards rebuilt for {len(boards) - len(_failed(boards))} profile(s)", flush=True)
     return 3 if _failed(boards) else 0
 
 CSV_COLS = ["req_status", "score", "pv_score", "pv_label", "pv_now", "pv_later", "ai_label", "ai_asis", "ai_fit", "ai_reason", "ai_tailor",
             "fit_score", "comp_score", "qol_score", "company", "title", "level", "workplace", "dmv_locations", "locations",
-            "salary_min", "salary_max", "salary_mid", "wide_band", "travel", "travel_pct", "clearance", "scif", "posted",
+            "pay", "salary_min", "salary_max", "salary_mid", "wide_band", "travel", "travel_pct", "clearance", "scif", "posted",
             "first_seen", "sector", "url"]
+# what the columns are called in jobs.csv (the keys above are internal names from when Siftwell knew one area only)
+CSV_HEAD = {"dmv_locations": "locations_near_you", "locations": "all_locations", "pv_score": "target_score", "pv_label": "target_label",
+            "pv_now": "target_now", "pv_later": "target_after_prep", "ai_label": "match_label", "ai_asis": "match_as_is", "ai_fit": "match",
+            "ai_reason": "match_reason", "ai_tailor": "tailoring_tips", "req_status": "requirements", "pay": "pay_as_posted",
+            "salary_min": "pay_per_year_min", "salary_max": "pay_per_year_max", "salary_mid": "pay_per_year_mid"}
 
 def company_sets_map():
     import catalog
@@ -1161,6 +1275,7 @@ def select_for_person(pool, sets=None):
     except Exception:
         pass
     emp_near = {}
+    emp_places = EmployerPlaces(pool, places)
     for j0 in pool:
         if not (sets.get(j0["company"], set()) & watch):
             continue
@@ -1174,7 +1289,8 @@ def select_for_person(pool, sets=None):
         if smax is None and not CFG["keep_unlisted_salary"]:
             continue
         locs = j0.get("locations") or []
-        mine = [l for l in locs if near(l)]
+        # a bare city name ("Columbus", "Columbus Healthcare Center") counts only in a state there is support for
+        mine = [l for l in locs if near(l, bare_support(l, j0, emp_places) if homes else None)]
         remote = bool(j0.get("remote_strict") or (j0.get("remote_bare") and not mine))
         dc_fallback = not remote and not mine and bool(j0.get("local_unnamed")) and dc_ok
         vague_near = None   # employer-places rule: no readable place on the posting, and everywhere the employer hires is nearby
@@ -1436,9 +1552,11 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     import io
     paths.dump_json_atomic(people.pdir("jobs.json", pid=pid), payload, indent=1)
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=CSV_COLS, extrasaction="ignore"); w.writeheader()
+    w = csv.DictWriter(buf, fieldnames=CSV_COLS, extrasaction="ignore")
+    w.writerow({k: CSV_HEAD.get(k, k) for k in CSV_COLS})   # (plain column names in the file people open)
     for j in jobs:
-        w.writerow({**j, "dmv_locations": "; ".join(j["dmv_locations"]), "locations": "; ".join(j["locations"])})
+        w.writerow({**j, "dmv_locations": "; ".join(j["dmv_locations"]), "locations": "; ".join(j["locations"]),
+                    "pay": jobtext.pay_label(j.get("pay_min"), j.get("pay_max"), j.get("pay_unit")) if j.get("pay_min") is not None else ""})
     paths.write_atomic(people.pdir("jobs.csv", pid=pid), buf.getvalue(), newline="")
     report.build(payload, people.pdir("report.html", pid=pid))  # (written atomically too)
     print(f"{people.name(pid)}: {len(jobs)} jobs on the board", flush=True)
@@ -1503,6 +1621,8 @@ def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
     Returns {pid: {"jobs": n, "unrated": n, "secs": s} or {"error": "..."}}."""
     import catalog, ai_score, traceback
     pids = [p for p in (pids or people.ids()) if p]
+    if pool is None:
+        reparse_stored()   # (one time after an update that reads postings better; no network, no Claude)
     pool = pool if pool is not None else catalog.open_listings(lazy=True)
     since = catalog.get_meta("last_full_fetch") or ""
     import lookfor
@@ -1631,6 +1751,88 @@ def rerate(pid, n=None, opts=None):
     print("done", flush=True)
     return 0
 
+# Job systems whose "remote" flag earlier versions read wrongly (Workday's "Office Worker (NOT Remote)" and "Remote work is
+# not available"; schema.org TELECOMMUTE on in-person iCIMS jobs): a stored "remote" from them is kept only when the
+# posting itself says so, and the row is read again from the board at the next fetch.
+UNSURE_REMOTE_ATS = {"workday", "icims", "jsonld", "jazzhr", "breezy", "paylocity"}
+
+def reparse_one(old, text, c):
+    """One stored listing parsed again from its saved text with today's rules. Returns (listing or None, recheck):
+    None when the posting turns out to be outside the US; recheck when its workplace needs the board's word again.
+    The id, the first-seen date and everything Claude said about it are untouched."""
+    j = dict(old)
+    j["title"] = jobtext.clean_title(old.get("title"))
+    text = jobtext.clean_text(text)
+    locs = old.get("locations") or []
+    base, recheck = old.get("base_wp", old.get("workplace", "")) or "", False
+    if base == "remote":
+        said = (any(jobtext.remote_label(l) for l in locs) or jobtext.workplace_label(j["title"]) == "remote"
+                or bool(REMOTE_DESC.search(text.lower())))
+        if any(l and jobtext.workplace_label(l) == "onsite" and not jobtext.remote_label(l) and "remote" in l.lower() for l in locs):
+            base = "onsite"          # "Not Remote", "Remote: No"
+        elif (c.get("ats") or "") in UNSURE_REMOTE_ATS and not said and int(old.get("pv") or 1) < 2:
+            base, recheck = "", True     # (only rows stored before the fix: later ones were read correctly)
+    j["workplace"] = base
+    # pay the board itself listed (not words from the text) is kept as it is; everything else is read again
+    flat = lambda x: " ".join(str(x or "").split())
+    kept = None
+    if old.get("salary_max") is not None and old.get("salary_min") is not None and old.get("salary_text") \
+            and flat(old["salary_text"]) not in flat(text) and flat(old["salary_text"]) not in flat(old.get("title")):
+        kept = (old["salary_min"], old["salary_max"], old["salary_text"])
+        if old.get("pay_unit") and old.get("pay_min") is not None:
+            kept += (old["pay_unit"], old["pay_min"], old.get("pay_max") or old["pay_min"])
+    j["desc"], j["salary"] = text, kept
+    return prepare_listing(j, c), recheck
+
+def reparse_stored(force=False, log=lambda m: print(m, flush=True)):
+    """Read every open stored listing again from its saved text when the parsing rules are newer than the ones it
+    was stored with (jobtext.PARSE_VERSION): pay (hourly, single values), level, remote / not remote, foreign remote
+    jobs, the states its text names, blank lines, requisition codes in titles. No fetching and no Claude; listing ids
+    don't change, so ratings, saved jobs and first-seen dates stay. Runs once (catalog meta "parse_version"); a run
+    that is cut short picks up where it stopped. Returns how many listings were read again."""
+    import catalog
+    if not force and catalog.get_meta("parse_version") == jobtext.PARSE_VERSION:
+        return 0
+    mark = f'%"pv": {jobtext.PARSE_VERSION}%'
+    with catalog.db() as con:
+        q = "SELECT id FROM listings WHERE closed_at IS NULL" + ("" if force else " AND data NOT LIKE ?")
+        ids = [r[0] for r in con.execute(q, () if force else (mark,))]
+    if not ids:
+        catalog.set_meta("parse_version", jobtext.PARSE_VERSION)
+        return 0
+    log(f"Reading {len(ids):,} saved postings again with the improved pay, level and location rules (one time; nothing is fetched and no ratings change)...")
+    cos = {c["name"]: c for c in catalog.companies()}
+    n = closed = 0
+    for k in range(0, len(ids), 500):
+        chunk = ids[k:k + 500]
+        with catalog.db() as con:
+            rows = con.execute("SELECT id, data, desc, first_seen, last_seen, partial FROM listings WHERE id IN (%s)"
+                               % ",".join("?" * len(chunk)), chunk).fetchall()
+        parsed = []
+        for r in rows:
+            try:
+                old = json.loads(r["data"])
+                c = cos.get(old.get("company")) or {"name": old.get("company") or "", "ats": ""}
+                new, recheck = reparse_one(old, r["desc"] or old.get("snippet", ""), c)
+            except Exception as e:   # (one odd row never stops the rest; it is left as it was)
+                log(f"  couldn't re-read {r['id'][:80]}: {type(e).__name__}: {e}")
+                continue
+            parsed.append((r, new, recheck))
+        with catalog.db() as con:
+            for r, new, recheck in parsed:
+                if new is None:
+                    con.execute("UPDATE listings SET closed_at=? WHERE id=?", (catalog.today(), r["id"]))
+                    closed += 1
+                    continue
+                new["id"] = r["id"]
+                catalog.put_listing(con, new, first_seen=r["first_seen"], last_seen=r["last_seen"], partial=bool(r["partial"]))
+                if recheck:
+                    con.execute("UPDATE listings SET desc_hash='' WHERE id=?", (r["id"],))
+        n += len(parsed)
+    catalog.set_meta("parse_version", jobtext.PARSE_VERSION)
+    log(f"Done: {n:,} postings read again" + (f", {closed:,} closed (outside the US)" if closed else "") + ".")
+    return n
+
 def rescore():
     """Re-parse every open listing from its saved text (after a parsing change), then rebuild every board.
     No fetching, no new Claude calls. Writes go in short transactions so the server can keep reading."""
@@ -1638,30 +1840,23 @@ def rescore():
     rid = catalog.start_run("rescore")
     n, out, status = 0, None, "error"
     try:
-        with catalog.db() as con:
-            ids = [r[0] for r in con.execute("SELECT id FROM listings WHERE closed_at IS NULL AND partial=0")]
-        for k in range(0, len(ids), 500):
-            chunk = ids[k:k + 500]
-            with catalog.db() as con:
-                rows = con.execute("SELECT id, data, desc, first_seen, last_seen FROM listings WHERE id IN (%s)"
-                                   % ",".join("?" * len(chunk)), chunk).fetchall()
-            parsed = []
-            for r in rows:
-                j = json.loads(r["data"])
-                text = r["desc"] or j.get("snippet", "")
-                j["workplace"] = j.get("base_wp", j.get("workplace", ""))
-                enrich(j, text)
-                j["desc"] = text
-                parsed.append((j, r["first_seen"], r["last_seen"]))
-            with catalog.db() as con:
-                for j, fs, ls in parsed:
-                    catalog.put_listing(con, j, first_seen=fs, last_seen=ls)
-            n += len(parsed)
+        n = reparse_stored(force=True)
         out = recompute(None)
         status = "partial" if _failed(out) else "ok"
     finally:
         catalog.finish_run(rid, status, fetched=n, details={"boards": out})
     return 3 if _failed(out) else 0
+
+def learn_company_name(name, board_title=None):
+    """After a company's fetch: when its name is a board code, a placeholder or a run-together address, learn the
+    employer's real name from its postings (names.learn) and rename it. Listing ids don't change. Never raises;
+    returns the name the company has now."""
+    try:
+        import names
+        return names.learn(name, board_title) or name
+    except Exception as e:
+        print(f"(couldn't work out a better name for {name}: {type(e).__name__}: {e})", flush=True)
+        return name
 
 if __name__ == "__main__":
     osdeps.ensure_utf8()
