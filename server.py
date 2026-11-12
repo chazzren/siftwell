@@ -902,10 +902,26 @@ def scheduler():
                 run_scheduled_update()
             time.sleep(90)
 
-def run_update(only=None, defer_running=False):
+UPDATE_PROC = {"p": None}   # the running fetch's process (only so the staged first check can be paused)
+
+def stop_update():
+    """End the running fetch now (Pause on the staged first check). Every company it already finished is in the
+    catalog; the ones it was in the middle of are simply checked again later. True when there was one to stop."""
+    p = UPDATE_PROC["p"]
+    if p is None or p.poll() is not None:
+        return False
+    try:
+        p.terminate()
+    except Exception:
+        return False
+    return True
+
+def run_update(only=None, defer_running=False, flags=(), quiet=False):
     """defer_running: the caller didn't mark the update as running; it counts as running only once it holds the job
-    lock (Catalog's Fetch now / Add, so a fetch queued behind Find employers doesn't block Remove or Import)."""
-    cmd = frozen.command("jobfinder", *(["--only", only] if only else []))
+    lock (Catalog's Fetch now / Add, so a fetch queued behind Find employers doesn't block Remove or Import).
+    flags: extra jobfinder options (--no-rate, --no-boards: the staged first check, first_search._check); quiet: no
+    activity-log line per run (the staged check logs once for all its chunks)."""
+    cmd = frozen.command("jobfinder", *(["--only", only] if only else []), *flags)
     osdeps.keep_awake(True)
     fresh = dict(started=dt.datetime.now().isoformat(timespec="seconds"), finished=None, exit=None, phase="fetch", done=0, total=0, lines=[])
     with lock:
@@ -926,6 +942,7 @@ def run_update(only=None, defer_running=False):
             with open(LOG, "w") as log:
                 p = osdeps.popen_hidden(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                                      env=joblock.child_env(token))
+                UPDATE_PROC["p"] = p
                 for line in p.stdout:
                     log.write(line); log.flush()
                     line = line.rstrip()
@@ -941,9 +958,11 @@ def run_update(only=None, defer_running=False):
         with lock:
             state["lines"] = (state["lines"] + [f"The update couldn't start: {type(e).__name__}: {e}"])[-12:]
     finally:
+        UPDATE_PROC["p"] = None
         with lock:
             state.update(running=False, exit=rc if rc is not None else -1, finished=dt.datetime.now().isoformat(timespec="seconds"))
-        _actlog("update finished" if rc in (0, 3) else "update stopped", None, f"exit {rc}")
+        if not quiet or rc not in (0, 3):
+            _actlog("update finished" if rc in (0, 3) else "update stopped", None, f"exit {rc}")
         osdeps.keep_awake(False)
         flush_recompute()
 
@@ -1127,6 +1146,16 @@ class H(BaseHTTPRequestHandler):
             s["schedule"] = schedule()
             s["recomputing"] = _RECOMPUTE["running"]
             s["job"] = joblock.info()  # whoever holds the job lock, even a job this server didn't start
+            try:  # the staged first check of the employers on this person's lists (first_search._check)
+                import first_search
+                cp =self._page_person(_qarg(self.path, "person"))
+                s["check"] = first_search.check_status(cp)
+                try:
+                    s["check"]["board_at"] = os.stat(people.pdir("report.html", pid=cp)).st_mtime_ns
+                except OSError:
+                    s["check"]["board_at"] = None
+            except Exception:
+                s["check"] = None
             return self._send(200, s)
         if path == "/api/schedule":
             return self._send(200, autoupdate.status())
@@ -1415,6 +1444,19 @@ class H(BaseHTTPRequestHandler):
                 return self._send(409, {"error": err})
             self._act("job search started", pid, "from the board")
             return self._send(202, {"ok": True})
+        if path == "/api/search/continue":  # Continue checking: the employers on this person's lists not checked yet
+            import first_search
+            ok, err = first_search.start_checking(pid)
+            if not ok:
+                return self._send(409, {"error": err})
+            self._act("job search continued", pid, "checking the remaining employers")
+            return self._send(202, {"ok": True})
+        if path == "/api/search/pause":
+            import first_search
+            if not first_search.pause(pid):
+                return self._send(409, {"error": "Nothing is being checked right now."})
+            self._act("job search paused", pid, "")
+            return self._send(200, {"ok": True})
         if path == "/api/rate":
             ids = [str(x) for x in (body.get("ids") or [])][:60]
             if not ids:

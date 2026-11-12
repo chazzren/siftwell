@@ -4,15 +4,22 @@ read(cfg) -> {"name": board's own name or None, "jobs": open postings, "remote":
               "locs": {location label: postings}, "sample": True when only part of a big board was read}
 
 Greenhouse, Lever, Ashby and Workday have light readers here (one or two requests per board: Greenhouse's list
-without job text, Workday's location facets). Every other system uses the app's own reader from jobfinder.FETCHERS,
-stopped after CAP postings (so a new system the app learns to read is covered without changes here)."""
+without job text, Workday's location facets; a Workday board without city facets is sampled across its whole list).
+Every other system uses the app's own reader from jobfinder.FETCHERS, stopped after CAP postings or GENERIC_SECS (so a
+new system the app learns to read is covered without changes here). A board that was only partly read is marked
+"sample": the directory publishes it as "maybe near" in every state where the sample saw it, and the app keeps it only
+if its first full fetch finds jobs near the person.
+
+workday_sites(tenant, wd): every career site of a Workday tenant, from the "Sitemap:" lines of its robots.txt (one GET).
+board_name(cfg): the employer's name from its board page, for systems whose address is only a code (one GET)."""
 import re, threading, time, urllib.parse
 
 from . import net
 
-CAP = 150            # postings looked at per board through the app's readers (enough to see where it hires)
+CAP = 1000           # postings looked at per board through the app's readers (most boards are read whole)
 GENERIC_SECS = 90    # time limit per board through the app's readers
-WD_PAGES = 10        # Workday list pages (20 each) when the board has no city-level location facet
+WD_PAGES = 15        # Workday list pages (20 each) when the board has no city-level location facet, spread over the list
+WD_LIST_MAX = 2000   # Workday stops paging here
 
 
 class Skip(Exception):
@@ -136,19 +143,22 @@ def workday(c):
     sample_path = None
     if rows_summary is None or not rows_summary["locs"]:
         applied = {country[0]: [country[1]["id"]]} if country and country[1] else {}
-        rows, off, n = [], 0, us_total
-        page = first if not applied else None
-        for _ in range(WD_PAGES):
-            if page is None:
+        rows, n = [], us_total
+        reach = min(n, WD_LIST_MAX)
+        pages = max(1, min(WD_PAGES, -(-reach // 20)))
+        # pages spread evenly over the whole list (not just the newest 200 postings), so every region shows up
+        offsets = sorted({min(max(0, reach - 20), round(i * max(0, reach - 20) / max(1, pages - 1)) // 20 * 20) for i in range(pages)}) if pages > 1 else [0]
+        for off in offsets:
+            if off == 0 and not applied:
+                page = first
+            else:
                 page = net.get_json(api + "/jobs", {"limit": 20, "offset": off, "searchText": "", "appliedFacets": applied})
             for p in page.get("jobPostings", []):
                 rt = (p.get("remoteType") or "").lower()
                 rows.append(([p.get("locationsText", "")], "remote" if "remote" in rt else "", ""))
                 sample_path = sample_path or p.get("externalPath")
-            off += 20
-            if off >= min(n, WD_PAGES * 20) or not page.get("jobPostings"):
+            if not page.get("jobPostings"):
                 break
-            page = None
         s = _summ(rows, None, sample=n > len(rows))
         if s["sample"] and rows:     # scale the sample up to the board's US total
             k = n / max(1, len(rows))
@@ -172,6 +182,23 @@ def workday(c):
             pass
     rows_summary["name"] = name
     return rows_summary
+
+
+def workday_sites(tenant, wd):
+    """Every career site of a Workday tenant, from its robots.txt ("Sitemap: https://<host>/<Site>/siteMap.xml").
+    [] when it lists none; raises when the host can't be reached."""
+    host = f"{tenant}.{wd}.myworkdayjobs.com"
+    txt = net.get_text(f"https://{host}/robots.txt", robots=False, tries=2, timeout=25, cap=200_000)
+    return parse_workday_robots(txt, host)
+
+
+def parse_workday_robots(txt, host):
+    from .systems import bad_workday_site
+    out = []
+    for m in re.finditer(r"(?im)^\s*Sitemap:\s*https?://([^/\s]+)/([A-Za-z0-9_-]+)/siteMap\.xml", txt or ""):
+        if m.group(1).lower() == host.lower() and not bad_workday_site(m.group(2)) and m.group(2) not in out:
+            out.append(m.group(2))
+    return out
 
 
 def workday_find_site(c):
@@ -234,6 +261,52 @@ def generic(c):
     if err and not rows:
         raise err[0]
     return _summ(list(rows), None, sample=sample[0])
+
+
+# ---------------------------------------------------------------- names for boards known only by a code
+GENERIC_TITLE = re.compile(r"(?i)^(careers?( (page|site|center|portal|opportunities))?|jobs?|job (opportunities|openings|board|listings?|search)|"
+                           r"current (openings|opportunities)|open (positions|roles|jobs)|recruit(ment|ing)|bamboohr|dayforce( jobs)?|home|apply|"
+                           r"employment( opportunities)?|work (with|for) us|join (us|our team)|search( results| jobs)?|welcome|"
+                           r"candidate (portal|experience)|external|ultipro|ukg( pro)?|paylocity|adp|workforce now|icims|taleo|"
+                           r"error|page not found|not found|access denied|sign in|log ?in|untitled|loading(\.\.\.)?|.{0,2})$")
+
+
+def name_from_title(title):
+    """"Woodmans Inc - Job Opportunities" -> "Woodmans Inc"; "Careers at Acme" -> "Acme"; None for generic titles."""
+    import html as _html
+    t = re.sub(r"\s+", " ", _html.unescape(title or "")).strip()
+    for part in re.split(r"\s+[-|\u2013\u2014:\u00b7]\s+|\s*\|\s*", t):
+        part = part.strip(" -|:")
+        part = re.sub(r"(?i)^(careers?|jobs?|job openings|job opportunities|opportunities|employment|work|current openings) (at|with|@|for)\s+", "", part)
+        part = re.sub(r"(?i)\s+(careers?( (page|site|center|portal))?|jobs?|job (openings|opportunities|board)|career opportunities|employment)$", "", part).strip()
+        if len(part) >= 2 and not GENERIC_TITLE.match(part) and len(part) <= 80:
+            return part
+    return None
+
+
+def board_name(c):
+    """The employer's name as its board page gives it (one GET; robots.txt is respected). None when the page doesn't
+    say. Dayforce: the page's ClientName; UKG: the employer's own site linked from the header logo (its host name);
+    everything else: the page title / og:title without the generic words."""
+    from .systems import careers_url
+    import company_add
+    u = careers_url(c)
+    if not u.startswith("http") or c.get("ats") in ("adp", "greenhouse", "lever", "ashby", "workday"):
+        return None     # (ADP's page is an empty shell; the others have their own name sources)
+    page = net.get_text(u, tries=1, timeout=25, cap=3_000_000)
+    if c.get("ats") == "dayforce":
+        m = re.search(r'ClientName\\?"\s*:\s*\\?"([^"\\]{2,80})', page)
+        return m.group(1).strip() if m else None
+    if c.get("ats") == "ukg":
+        m = re.search(r"logoHref:\s*['\"](https?://[^'\"]+)['\"]", page)
+        return (company_add.host_label({}, m.group(1)) or None) if m else None
+    for rx in (r'<meta[^>]+property=["\']og:site_name["\'][^>]*content=["\']([^"\']+)', r"<title[^>]*>(.*?)</title>",
+               r'<meta[^>]+property=["\']og:title["\'][^>]*content=["\']([^"\']+)'):
+        m = re.search(rx, page, re.S | re.I)
+        n = name_from_title(m.group(1)) if m else None
+        if n:
+            return n
+    return None
 
 
 LIGHT = {"greenhouse": greenhouse, "lever": lever, "ashby": ashby, "workday": workday, "jsonld": jsonld}

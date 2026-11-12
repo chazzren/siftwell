@@ -9,13 +9,16 @@ https://download.geonames.org/export/zip/US.zip, CC BY 4.0 - keep the attributio
                z=postal city name only, e.g. "Hanover, MD")
   zcta.tsv     ZIP (ZCTA) internal points + postal city label
   states.tsv   state centroids
+  counties.tsv county name (without "County"), state, internal point, land area (sq mi): Census Gazetteer 2024
+               counties (public domain). "Franklin County, OH" resolves to the county (kind "county", radius = the
+               county's rough radius), never to a same-named town.
   aliases.json hand-curated aliases (Fort Meade, NYC...), metro phrases (Bay Area, Twin Cities...),
                foreign markers
 
 API
   geocode_home("10001") / geocode_home("Austin, TX") -> (lat, lon, label)
   locate("US-TX-Austin") -> (lat, lon, confidence) | None
-  locate_all(s) -> [Hit(lat, lon, conf, kind, label, radius_mi)]   kind: zip|place|alias|metro|state
+  locate_all(s) -> [Hit(lat, lon, conf, kind, label, radius_mi)]   kind: zip|place|alias|metro|county|state
   within(["McLean, VA", "Remote"], home, 35) -> (bool, nearest_miles|None, [matched strings])
   miles(lat1, lon1, lat2, lon2)
 """
@@ -180,8 +183,19 @@ def _read():
     foreign = sorted({_key(x) for x in al["foreign"]}, key=len, reverse=True)
     foreign_rx = re.compile(r"(?<![a-z0-9])(" + "|".join(re.escape(x) for x in foreign) + r")(?![a-z0-9])")
     maxn = max(len(k.split()) for k in list(names) + list(STATE_WORDS))
+    counties = {}                  # key -> [(state, lat, lon, radius_mi)]
+    try:
+        with open(os.path.join(GEO, "counties.tsv"), encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("#"):
+                    continue
+                p = line.rstrip("\n").split("\t")
+                if len(p) >= 5:
+                    counties.setdefault(_key(p[0]), []).append((p[1], float(p[2]), float(p[3]), math.sqrt(float(p[4]) / math.pi)))
+    except OSError:
+        pass
     return dict(names=names, zips=zips, cent=cent, metros={m[0]: m[1:] for m in metros}, metro_rx=metro_rx,
-                foreign_rx=foreign_rx, maxn=min(maxn, 6))
+                foreign_rx=foreign_rx, maxn=min(maxn, 6), counties=counties)
 
 def miles(la1, lo1, la2, lo2):
     p1, p2 = math.radians(la1), math.radians(la2)
@@ -219,9 +233,51 @@ def _segments(part):
             out.append((raw, weak, comma))
     return out
 
+COUNTY_RX = re.compile(r"((?:[A-Za-z'\u2019.\-]+\s+){0,2}[A-Za-z'\u2019.\-]+)\s+(County|Parish|Borough|Census Area)(?![A-Za-z])", re.I)
+_STATE_WORDS_LONGEST = sorted(STATE_WORDS, key=len, reverse=True)
+
+def _state_in(text):
+    """The first US state named in a piece of text: a capitalised code ("OH") or a full name ("Ohio")."""
+    best = None
+    for m in re.finditer(r"(?<![A-Za-z])([A-Z]{2})(?![A-Za-z])", text):
+        if m.group(1) in STATES:
+            best = (m.start(), m.group(1)); break
+    low = " " + _key(text) + " "
+    for w in _STATE_WORDS_LONGEST:
+        i = low.find(" " + w + " ")
+        if i >= 0 and (best is None or i < best[0]):
+            best = (i, STATE_WORDS[w]); break
+    return best[1] if best else None
+
+def _county_hits(part, d):
+    """"Franklin County, OH" -> ([Hit(county)], the text without the county name). A county name with a state is looked
+    up in counties.tsv; without a state only when no other state has a county of that name."""
+    cty = d.get("counties")
+    if not cty or not re.search(r"(?i)(county|parish|borough|census area)", part):
+        return [], part
+    hits, out, last, cut = [], [], 0, False
+    for m in COUNTY_RX.finditer(part):
+        words = m.group(1).split()
+        st = _state_in(part[m.end():]) or _state_in(part[:m.start()])
+        for k in range(len(words), 0, -1):
+            cands = cty.get(_key(" ".join(words[-k:])))
+            if not cands:
+                continue
+            # a county name is never read as a town of that name; an ambiguous one ("Franklin County" alone) names nothing
+            pick = [c for c in cands if c[0] == st] if st else (cands if len(cands) == 1 else [])
+            if pick:
+                c = pick[0]
+                nm = " ".join(w.capitalize() if (w.islower() or (w.isupper() and len(w) > 3)) else w for w in words[-k:])
+                hits.append(Hit(c[1], c[2], 0.75, "county", f"{nm} {m.group(2).title()}, {c[0]}", c[3]))
+            start = m.start(1) + (len(m.group(1)) - len(" ".join(words[-k:])))
+            out.append(part[last:start]); last = m.end(); cut = True
+            break
+    out.append(part[last:])
+    return hits, " ".join(out) if cut else part
+
 def _parse_part(part, d):
     """Resolve one location (no ';' or '/' inside). Returns list of Hits."""
-    hits = []
+    hits, part = _county_hits(part, d)
     n = norm(part)
     flat = _key(part)
     foreign = bool(d["foreign_rx"].search(re.sub(r"new mexico|new jersey|new england|new south", "", flat))
@@ -328,7 +384,7 @@ def _parse_part(part, d):
         if top[3] >= floor and top[3] >= 2 * second:
             hits.append(Hit(top[1], top[2], 0.7 if top[3] >= 250000 else 0.6, "place", _label(t["phrase"], top[0]), 0))
     # a lone state: DC is a city; anything else is just a state centroid (never 'within')
-    if not any(h.kind in ("zip", "place", "alias", "metro") for h in hits) and not foreign:
+    if not any(h.kind in ("zip", "place", "alias", "metro", "county") for h in hits) and not foreign:
         for s in states:
             if id(s) in used_as_state:
                 continue
@@ -357,7 +413,7 @@ def _locate_all(s):
     return tuple(hits)
 
 def locate_all(s):
-    """All places named in a location string, as Hit tuples (kind: zip|place|alias|metro|state)."""
+    """All places named in a location string, as Hit tuples (kind: zip|place|alias|metro|county|state)."""
     return list(_locate_all(s or ""))
 
 def locate(s):
@@ -379,7 +435,7 @@ def geocode_home(q):
             raise ValueError(f"unknown ZIP {q}")
         la, lo, city = d["zips"][m.group(1)]
         return (la, lo, f"{m.group(1)} ({city})" if city else m.group(1))
-    hs = [h for h in _locate_all(q) if h.kind in ("zip", "place", "alias", "metro")]
+    hs = [h for h in _locate_all(q) if h.kind in ("zip", "place", "alias", "metro", "county")]
     if not hs:
         raise ValueError(f"can't geocode home {q!r}")
     h = max(hs, key=lambda h: h.conf)
@@ -427,7 +483,7 @@ def within(job_locations, home, radius_miles):
                 continue
             dist = miles(hla, hlo, h.lat, h.lon)
             nearest = dist if nearest is None else min(nearest, dist)
-            if dist <= radius_miles or (h.kind == "metro" and dist <= h.radius):
+            if dist <= radius_miles or (h.kind in ("metro", "county") and dist <= h.radius):
                 hit = True
         if hit:
             matched.append(loc)

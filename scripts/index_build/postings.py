@@ -2,12 +2,23 @@
 [{"t": title, "o": organisation, "u": link to the original posting, "l": [location labels], "w": "remote"|"",
   "pay": [min, max] or None, "d": "YYYY-MM-DD", "x": short summary}] for the whole US; build.py buckets them by state.
 
-  usajobs       USAJOBS Search API (federal jobs). Needs USAJOBS_API_KEY + USAJOBS_EMAIL (free at developer.usajobs.gov).
-                The key stays in the builder: it is never written to the index. OPM: public data may be redistributed;
-                attribution encouraged (we link every posting to its official announcement and name USAJOBS).
-  careeronestop CareerOneStop Jobs API (U.S. Department of Labor, listings from the National Labor Exchange). Needs
-                CAREERONESTOP_TOKEN + CAREERONESTOP_USERID. Its terms require CareerOneStop's logo, linked to
-                CareerOneStop, near the data: the app shows its attribution wherever these jobs appear.
+  usajobs       USAJOBS Search API (federal jobs). Needs USAJOBS_API_KEY + USAJOBS_EMAIL (free at developer.usajobs.gov);
+                it runs the moment those two repository secrets exist, nothing else to switch on. The key stays in the
+                builder: it is never written to the index. One search returns at most 10,000 postings, so the pull goes
+                state by state (LocationName=<state>, 500 a page, every page), plus one pass for remote jobs, and merges
+                by announcement: every public posting in every state, a few hundred paced requests a week, well inside
+                the API's terms (identify yourself with the e-mail header, don't hammer it). OPM: public data may be
+                redistributed; attribution encouraged. The app names USAJOBS and links every posting to its official
+                announcement (the source's note is added to each posting, and Settings -> Employer directory lists it).
+  careeronestop CareerOneStop Jobs API (U.S. Department of Labor, listings from the National Labor Exchange).
+                DISABLED BY DEFAULT, even when its keys exist: its terms require CareerOneStop's logo, linked to
+                CareerOneStop, next to the data, and Siftwell doesn't show a logo yet, and whether its listings may be
+                redistributed in a public index is unresolved. To turn it on once that is settled: set
+                CAREERONESTOP_ENABLE=1 next to CAREERONESTOP_TOKEN + CAREERONESTOP_USERID. Don't enable it before.
+  schoolspring  SchoolSpring's nationwide job search (the same public API the app's SchoolSpring reader uses, asked
+                for www.schoolspring.com instead of one district): every school posting with its school or district,
+                town and state. No key. robots.txt allows it (www: nothing disallowed; the API host has none). Only
+                title, employer, place, date and the link to the posting are kept. Time-boxed and paced.
   hn            Hacker News "Ask HN: Who is hiring?" (latest monthly thread) through the public Algolia HN API; no key.
                 Only the company, the role line, places and a link to the comment are kept (no comment text).
   muse          The Muse public jobs API. Its old public endpoint answers 404 now (checked 2026-11); kept so it starts
@@ -23,53 +34,136 @@ def _env(*names):
     return vals if all(vals) else None
 
 
-def usajobs(log=print, max_pages=60):
+US_PAGE = 500            # USAJOBS: results per page (the API's maximum)
+US_QUERY_MAX = 10_000    # ... and the most one search will page through
+US_STATES = ("Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|District of Columbia|Florida|Georgia|Hawaii|"
+             "Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|"
+             "Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|"
+             "Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|"
+             "Washington|West Virginia|Wisconsin|Wyoming|Puerto Rico").split("|")
+
+
+def _usajobs_item(it, remote=False):
+    m = it.get("MatchedObjectDescriptor") or {}
+    locs = []
+    for p in m.get("PositionLocation") or []:
+        nm = p.get("LocationName") or ""
+        if "anywhere" in nm.lower() or "remote" in nm.lower():
+            remote = True
+        elif nm:
+            locs.append(nm)
+    pay = None
+    for r in m.get("PositionRemuneration") or []:
+        try:
+            lo, hi = float(r.get("MinimumRange") or 0), float(r.get("MaximumRange") or 0)
+            k = 2080 if (r.get("RateIntervalCode") or "").upper() in ("PH", "PER HOUR") else 1
+            if hi:
+                pay = [round(lo * k), round(hi * k)]
+        except ValueError:
+            pass
+    return {"t": m.get("PositionTitle", ""), "o": m.get("OrganizationName") or m.get("DepartmentName") or "",
+            "u": m.get("PositionURI", ""), "l": locs, "w": "remote" if remote else "", "pay": pay,
+            "d": (m.get("PublicationStartDate") or "")[:10],
+            "x": ((m.get("UserArea") or {}).get("Details") or {}).get("JobSummary", "")[:400]}
+
+
+def usajobs(log=print, states=None, get=None):
+    """Every public USAJOBS posting: one search per state (and one for remote jobs), every page, merged by
+    announcement link. A state with more than US_QUERY_MAX postings is read from both ends (oldest and newest first).
+    get: the JSON fetcher (tests pass a fake)."""
+    import urllib.parse
     keys = _env("USAJOBS_API_KEY", "USAJOBS_EMAIL")
     if not keys:
         log("  USAJobs: skipped (no USAJOBS_API_KEY / USAJOBS_EMAIL secret)")
         return []
     key, email = keys
     hdr = {"Host": "data.usajobs.gov", "User-Agent": email, "Authorization-Key": key}
-    out, page = [], 1
-    while page <= max_pages:
+    get = get or (lambda url: net.get_json(url, headers=hdr, robots=False, timeout=90))
+    out, short, failed = {}, [], 0
+
+    def pull(query, remote=False, direction=""):
+        page, n = 1, 0
+        while (page - 1) * US_PAGE < US_QUERY_MAX:
+            url = f"https://data.usajobs.gov/api/search?ResultsPerPage={US_PAGE}&Page={page}&WhoMayApply=public&{query}{direction}"
+            d = get(url)
+            res = d.get("SearchResult") or {}
+            items = res.get("SearchResultItems") or []
+            for it in items:
+                j = _usajobs_item(it, remote)
+                if not j["u"]:
+                    continue
+                prev = out.get(j["u"])
+                if prev is None:
+                    out[j["u"]] = j
+                elif remote and not prev["w"]:
+                    prev["w"] = "remote"
+            n = int(res.get("SearchResultCountAll") or 0)
+            if not items or page * US_PAGE >= n:
+                break
+            page += 1
+        return n
+
+    for st in (states or US_STATES):
         try:
-            d = net.get_json(f"https://data.usajobs.gov/api/search?ResultsPerPage=500&Page={page}&WhoMayApply=public",
-                             headers=hdr, robots=False, timeout=90)
+            q = "LocationName=" + urllib.parse.quote(st)
+            n = pull(q)
+            if n > US_QUERY_MAX:     # more than one search can page through: read the list from the other end too
+                pull(q, direction="&SortField=opendate&SortDirection=asc")
+                pull(q, direction="&SortField=opendate&SortDirection=desc")
+                if n > 2 * US_QUERY_MAX:
+                    short.append(f"{st} ({n})")
         except Exception as e:
-            log(f"  USAJobs page {page}: {type(e).__name__}")
+            failed += 1
+            log(f"  USAJobs {st}: {type(e).__name__}")
+            if failed >= 5 and not out:
+                break               # (a bad key or the API is down: don't knock 52 times)
+    try:
+        pull("RemoteIndicator=True", remote=True)
+    except Exception as e:
+        log(f"  USAJobs remote: {type(e).__name__}")
+    log(f"  USAJobs: {len(out)} postings" + (f"; more than the API pages through in {', '.join(short)}" if short else "")
+        + (f"; {failed} state searches failed" if failed else ""))
+    return list(out.values())
+
+
+SS_URL = ("https://api.schoolspring.com/api/Jobs/GetPagedJobsWithSearch?domainName=www.schoolspring.com&keyword=&location=&category="
+          "&gradelevel=&jobtype=&organization=&swLat=&swLon=&neLat=&neLon=&page={page}&size=100&sortDateAscending=false")
+
+
+def schoolspring(log=print, max_pages=1500, minutes=25, get=None):
+    """School jobs nationwide from SchoolSpring's public search (see the module docstring)."""
+    import time
+    get = get or (lambda url: net.get_json(url, timeout=60, tries=2))
+    out, seen, t0, page = [], set(), time.time(), 1
+    while page <= max_pages and time.time() - t0 < minutes * 60:
+        try:
+            d = get(SS_URL.format(page=page))
+        except Exception as e:
+            log(f"  SchoolSpring page {page}: {type(e).__name__}")
             break
-        items = ((d.get("SearchResult") or {}).get("SearchResultItems") or [])
-        for it in items:
-            m = it.get("MatchedObjectDescriptor") or {}
-            locs, remote = [], False
-            for p in m.get("PositionLocation") or []:
-                nm = p.get("LocationName") or ""
-                if "anywhere" in nm.lower() or "remote" in nm.lower():
-                    remote = True
-                elif nm:
-                    locs.append(nm)
-            pay = None
-            for r in m.get("PositionRemuneration") or []:
-                try:
-                    lo, hi = float(r.get("MinimumRange") or 0), float(r.get("MaximumRange") or 0)
-                    k = 2080 if (r.get("RateIntervalCode") or "").upper() in ("PH", "PER HOUR") else 1
-                    if hi:
-                        pay = [round(lo * k), round(hi * k)]
-                except ValueError:
-                    pass
-            out.append({"t": m.get("PositionTitle", ""), "o": m.get("OrganizationName") or m.get("DepartmentName") or "",
-                        "u": m.get("PositionURI", ""), "l": locs, "w": "remote" if remote else "", "pay": pay,
-                        "d": (m.get("PublicationStartDate") or "")[:10],
-                        "x": ((m.get("UserArea") or {}).get("Details") or {}).get("JobSummary", "")[:400]})
-        n = int((d.get("SearchResult") or {}).get("SearchResultCountAll") or 0)
-        if not items or page * 500 >= n:
+        rows = ((d or {}).get("value") or {}).get("jobsList") or []
+        new = 0
+        for r in rows:
+            jid = r.get("jobId")
+            if not jid or jid in seen:
+                continue
+            seen.add(jid)
+            new += 1
+            loc = str(r.get("location") or "").strip()
+            out.append({"t": str(r.get("title") or "").strip(), "o": str(r.get("employer") or "").strip(),
+                        "u": f"https://www.schoolspring.com/jobs?jobid={jid}", "l": [loc] if loc else [], "w": "",
+                        "pay": None, "d": str(r.get("displayDate") or "")[:10], "x": ""})
+        if len(rows) < 100 or not new:
             break
         page += 1
-    log(f"  USAJobs: {len(out)} postings")
+    log(f"  SchoolSpring: {len(out)} postings ({page} pages)")
     return out
 
 
 def careeronestop(states, log=print, per_state=500):
+    if os.environ.get("CAREERONESTOP_ENABLE", "").strip() != "1":
+        log("  CareerOneStop: off (disabled by default until its logo/redistribution terms are settled; see postings.py)")
+        return []
     keys = _env("CAREERONESTOP_TOKEN", "CAREERONESTOP_USERID")
     if not keys:
         log("  CareerOneStop: skipped (no CAREERONESTOP_TOKEN / CAREERONESTOP_USERID secret)")
@@ -150,6 +244,8 @@ SOURCES = {  # id -> (label shown in the app, attribution)
                 "note": "From USAJOBS (U.S. Office of Personnel Management). Siftwell is not operated or endorsed by OPM. Apply through the official announcement."}),
     "careeronestop": ("Jobs from CareerOneStop", {"name": "CareerOneStop", "link": "https://www.careeronestop.org/",
                       "note": "Job listings from CareerOneStop, sponsored by the U.S. Department of Labor.", "logo_required": True}),
+    "schoolspring": ("School jobs (SchoolSpring)", {"name": "SchoolSpring", "link": "https://www.schoolspring.com/",
+                     "note": "From SchoolSpring's public job search. Apply through the original posting."}),
     "hn": ("Hacker News: Who is hiring", {"name": "Hacker News", "link": "https://news.ycombinator.com/",
            "note": "From the monthly Ask HN: Who is hiring? thread. Each job links to the original comment."}),
     "muse": ("Jobs from The Muse", {"name": "The Muse", "link": "https://www.themuse.com/"}),

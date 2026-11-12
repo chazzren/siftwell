@@ -1092,10 +1092,10 @@ SCREENS.board = {
     const steps = [];
     if (d.possible) steps.push([d.remote_only ? "Add remote-friendly employers from the Siftwell directory" : `Add employers near ${esc(d.label)} from the Siftwell directory`,
       d.remote_only ? "Siftwell’s free employer directory lists employers whose job pages it can read. The ones with the most remote jobs in the US are added to your employers. Takes a few seconds; no Claude needed."
-                    : `Siftwell’s free employer directory lists employers whose job pages it can read, and where they hire. The ones with the most openings within ${d.radius} miles (up to 400) are added to your employers. Takes a few seconds; no Claude needed.`]);
+                    : `Siftwell’s free employer directory lists employers whose job pages it can read, and where they hire. Every one with openings within ${d.radius} miles is added to your employers (near a big city that can be a thousand or more). Takes a few seconds; no Claude needed.`]);
     if (f.possible && this.findOn) steps.push([findTitle, findText]);
     const found = d.possible || (f.possible && this.findOn);
-    steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just added" : "") : found ? "the employers it just added" : lists}. About ${p.fetch_minutes} minutes the first time.`]);
+    steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just added" : "") : found ? "the employers it just added" : lists}, the ones with the most openings near you first. The first jobs reach your board within a few minutes and it keeps filling in; checking every employer near a big city can take a few hours.`]);
     steps.push(["Keep the jobs that fit", `Jobs ${where}${v.salary_floor ? `, paying at least ${fmtK(v.salary_floor)}` : ""}${v.seniority_mine ? ", around your level" : ""}, minus your dealbreakers.`]);
     if (cl) steps.push(["Rate the best matches", "Claude reads the most appealing jobs against your resume and gives each a Match rating, using your Claude plan: up to 500 jobs in one go. The rest show — until you press Rate more on your board."]);
     const none = !this.canStart();
@@ -1139,7 +1139,7 @@ SCREENS.board = {
     $("bBody").innerHTML = `
       <p class="eyebrow">Your job search</p>
       <h1 class="q" tabindex="-1" id="bTitle">Your job search is running…</h1>
-      <p class="lede" id="bLede">You can leave this page; the search keeps going as long as Siftwell is running, and your board fills in when it’s done.</p>
+      <p class="lede" id="bLede">You can leave this page; the search keeps going as long as Siftwell is running. Your board fills in as it goes: the first jobs show up within a few minutes, so you can go to your board any time.</p>
       <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bBar"><i></i></div>
       <ol class="checklist" id="bList" aria-live="polite"></ol>${errBox("_")}
       <p class="lede" style="margin-top:20px" id="bWait">While you wait: the Get started checklist (in <a href="/settings#get-started" style="color:var(--accent);font-weight:600">Settings</a>) checks Claude, PDFs, starting at login and phone access. Your search keeps going if you go there.</p>`;
@@ -1176,7 +1176,8 @@ SCREENS.board = {
     };
     const apply = () => {
       if (!s) return false;
-      const job = s.mine ? s.job : {}, up = s.update || {};
+      const job = s.mine ? s.job : {}, up = s.update || {}, ck = (s.plan && s.plan.check) || {};
+      const staged = job.running && job.phase === "check" && ck.total;
       st.save = "done";
       if (job.dir) {
         st.dir = job.phase === "directory" ? "run" : "done";
@@ -1193,10 +1194,15 @@ SCREENS.board = {
         sawRun = true;
         if (job.find) st.find = "done";
         if (job.dir) st.dir = "done";
-        if (up.phase === "fetch") { st.fetch = "run"; sub.fetch = up.total ? `${up.done} of ${up.total} companies checked` : "Starting…"; sub.fetch_frac = up.total ? up.done / up.total : 0; }
+        if (staged && up.phase === "fetch") { st.fetch = "run"; sub.fetch = `Checking employers: ${ck.done.toLocaleString()} of ${ck.total.toLocaleString()} · your board fills in as we go`; sub.fetch_frac = ck.done / ck.total; }
+        else if (up.phase === "fetch") { st.fetch = "run"; sub.fetch = up.total ? `${up.done} of ${up.total} companies checked` : "Starting…"; sub.fetch_frac = up.total ? up.done / up.total : 0; }
         else { st.fetch = "done"; st.score = "run"; sub.score = up.total ? `Batch ${up.done} of ${up.total}` : "Starting…"; sub.score_frac = up.total ? up.done / up.total : 0; }
       } else if (job.running && job.phase === "build") {
         st.fetch = "done"; sub.fetch = "Every company was checked today already"; st.score = "done"; st.build = "run";
+      } else if (staged) {
+        if (job.find) st.find = "done";
+        if (job.dir) st.dir = "done";
+        st.fetch = "run"; sub.fetch = `Checking employers: ${ck.done.toLocaleString()} of ${ck.total.toLocaleString()} · your board fills in as we go`; sub.fetch_frac = ck.done / ck.total;
       } else if (job.running && job.phase === "fetch") {
         st.fetch = "run"; sub.fetch = "Waiting for another job to finish…";
       }
@@ -1216,6 +1222,11 @@ SCREENS.board = {
         const job = s.mine ? s.job : {}, up = s.update || {};
         if (job.error) { $("bTitle").textContent = "The search couldn’t finish."; $("bLede").textContent = job.error; say(job.error); return; }
         $("bTitle").textContent = "Your board is ready.";
+        if (ck.pending > 0) {   // paused or stopped part-way: the board offers Continue checking
+          $("bTitle").textContent = "Your board is ready, and there is more to check.";
+          $("bLede").textContent = [job.note, `Siftwell has checked ${ck.done.toLocaleString()} of your ${ck.total.toLocaleString()} employers so far. Press Continue checking on your board to do the rest.`].filter(Boolean).join(" ");
+          say("Your board is ready."); return;
+        }
         $("bLede").textContent = [job.note, up.exit && up.exit !== 0 && up.exit !== 3 ? "Some companies couldn’t be reached this time; they’ll be tried again the next time you find new jobs." : "Everything’s in place. Have a look."].filter(Boolean).join(" ");
         say("Your board is ready.");
         return;

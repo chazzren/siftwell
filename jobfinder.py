@@ -280,6 +280,39 @@ def looks_local_unnamed(loc):
     l = (loc or "").strip().lower()
     return bool(l) and not ELSEWHERE.search(l) and not is_foreign(loc) and "remote" not in l
 
+def _names_foreign(l):
+    import geo
+    fn = getattr(geo, "looks_foreign", None)
+    if fn:
+        return bool(fn(l))
+    return bool(geo.FOREIGN_CODES.search(l or "")) or any(c in " " + (l or "").lower() + " " for c in NON_US)
+
+def vague_location(l, emp_states=()):
+    """A posting location that names no place Siftwell can put on a map: empty, "Main Office", "Headquarters",
+    "Statewide", "Multiple Locations - OH". A state only counts when it is one the employer is known to hire in
+    (emp_states); remote and foreign labels are never vague."""
+    l = (l or "").strip()
+    if not l:
+        return True
+    low = " " + l.lower() + " "
+    if any(w in low for w in REMOTE_WORDS) or _names_foreign(l):
+        return False
+    import geo
+    hits = geo.locate_all(l)
+    if any(h.kind != "state" for h in hits):
+        return False
+    if hits:   # state only: fine when the employer hires in that state
+        return all(geo.STATE_WORDS.get(h.label.lower(), h.label) in emp_states for h in hits)
+    return True
+
+def employer_all_near(info, homes):
+    """True when every place the directory knows the employer hires is within some home's radius (then a posting that
+    names no place is almost surely local). info: a catalog.places_map() entry."""
+    import geo
+    if not info or not homes or not info.get("places") or not info.get("all"):
+        return False
+    return all(any(geo.miles(h[0], h[1], p[0], p[1]) <= r for h, r in homes) for p in info["places"])
+
 def title_ok(title):
     """The title filter: no excluded word, and one of the person's own title words. With no title words at all (no
     job titles on their profile yet), every title passes: there is no built-in vocabulary."""
@@ -684,8 +717,13 @@ def f_smartrecruiters(c):
         if off >= d.get("totalFound", 0):
             break
 
-def _wd_location_facets(facets):
-    """Walk Workday facet tree; return {facetParameter: [ids]} for local/remote location values."""
+WD_UNNAMED_VALUES = 25   # unnamed location-facet values ("Main Campus", "Building 5") also queried for a local employer
+WD_UNNAMED_JOBS = 600    # ... while their postings add up to no more than this
+
+def _wd_location_facets(facets, unnamed=False):
+    """Walk Workday facet tree; return {facetParameter: [ids]} for local/remote location values. unnamed=True (an
+    employer known to hire only near someone here): values that name no place at all ("Main Campus", "Building 5")
+    are included too, biggest first within the caps above; select_for_person() then decides per person."""
     out = {}
     def walk(fs):
         for f in fs or []:
@@ -699,12 +737,22 @@ def _wd_location_facets(facets):
                     out[param] = ids
             elif "location" in param.lower() and "country" not in param.lower():
                 ids = [v["id"] for v in vals if near(v.get("descriptor", "")) or is_remote_us(v.get("descriptor", ""))]
+                if unnamed:
+                    have, n = set(ids), 0
+                    extra = [v for v in vals if v.get("id") not in have and v.get("descriptor") and vague_location(v["descriptor"])]
+                    extra.sort(key=lambda v: -int(v.get("count") or 0))
+                    for v in extra[:WD_UNNAMED_VALUES]:
+                        n += int(v.get("count") or 0)
+                        if n > WD_UNNAMED_JOBS:
+                            break
+                        ids.append(v["id"])
                 if ids:
                     out[param] = ids
     walk(facets)
     return out
 
 WD_CAP = 2000  # Workday's job search stops paging here
+WD_RECHECK_DAYS = 7  # a Workday posting whose text is stored is read again once in this many days
 
 def fetch_wanted(c, title):
     """Does anyone's list name this title: their own title words, their what-to-look-for sheet, or their target?
@@ -789,13 +837,17 @@ def f_workday(c):
     base = f'https://{c["host"]}' if c.get("host") else f'https://{c["tenant"]}.{c["wd"]}.myworkdayjobs.com'
     api = f'{base}/wday/cxs/{c["tenant"]}/{c["site"]}'
     first = http_json(api + "/jobs", {"limit": 20, "offset": 0, "searchText": c.get("search", ""), "appliedFacets": {}})
-    facets = _wd_location_facets(first.get("facets"))
+    # An employer that hires only near someone here (a DC-headquartered one in the original list, or one whose every
+    # directory place is inside a home radius): its unnamed location labels are worth reading too.
+    d_ = c.get("dir") or {}
+    local_emp = c.get("tier") == "dmv_hq" or employer_all_near({"places": d_.get("p"), "all": d_.get("all")}, CFG.get("homes") or [])
+    facets = _wd_location_facets(first.get("facets"), unnamed=local_emp)
     postings, seen = [], set()
     # Workday ORs values within a facet; query each location facet separately and merge.
     queries = [{k: v} for k, v in facets.items()] or [{}]
     # A DC-headquartered employer whose location labels we can't read ("Main Campus") gets its full list;
     # select_for_person() then keeps anything that doesn't name another state or country.
-    if c.get("tier") == "dmv_hq" and (not any("location" in k.lower() for k in facets) or first.get("total", 0) <= 600):
+    if local_emp and (not any("location" in k.lower() for k in facets) or first.get("total", 0) <= 600):
         queries = [{}]
     # Known limitation: the location facets above are still chosen from everyone's search areas (near() over the
     # union of homes + remote), because big tenants post tens of thousands of jobs and Workday stops paging at 2000,
@@ -825,9 +877,22 @@ def f_workday(c):
     # Every posting gets a catalog row. Full text costs one request each (and Workday rate-limits per IP), so it is
     # fetched only for titles someone's filters could want; the rest are stored as partial rows (title, location,
     # link) and get their text on a later fetch once someone's filters want them.
+    # A posting whose text is already stored isn't asked for again on every update (that was one request per posting
+    # per day, most of a daily update's time): it is re-read one day a week (each posting has its own day), which is
+    # when an edited posting is noticed. process() keeps the stored text and the row is left as it is.
+    try:
+        import catalog
+        have = {k for k, v in catalog.known(c["name"]).items() if v[2] and not v[1]}
+    except Exception:
+        have = set()
+    day = dt.date.today().toordinal() % WD_RECHECK_DAYS
     def detail(p):
         want = fetch_wanted(c, p.get("title", ""))
         d, failed = {}, False
+        jid_ = f'{c["name"]}::{p["externalPath"]}'
+        if want and jid_ in have and __import__("zlib").crc32(jid_.encode()) % WD_RECHECK_DAYS != day:
+            j = J(c, p.get("title"), f'{base}/en-US/{c["site"]}{p["externalPath"]}', [p.get("locationsText", "")], "", None, "", "", "", p["externalPath"])
+            return j
         if want:
             try:
                 d = http_json(api + p["externalPath"]).get("jobPostingInfo", {})
@@ -936,6 +1001,9 @@ def process(c):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="comma-separated company names")
+    ap.add_argument("--no-rate", action="store_true", help="fetch only: rebuild the boards without Claude rating (the staged first check rates once, at the end)")
+    ap.add_argument("--no-boards", action="store_true", help="fetch only: don't rebuild the boards after this fetch (a later one will)")
+    ap.add_argument("--boards-every", type=int, default=0, metavar="SECS", help="fetch only: also rebuild the boards (no Claude) while the fetch runs, the first time after about a minute and then every SECS, so jobs show up before slow boards finish")
     ap.add_argument("--rescore", action="store_true", help="re-parse every open listing from its saved text, then rebuild boards (no fetching)")
     ap.add_argument("--recompute", nargs="*", metavar="PID", help="rebuild these people's boards (everyone if none given) from the catalog; no fetching, no Claude")
     ap.add_argument("--rerate", metavar="PID", help="have Claude rate this person's unrated listings and redo ones rated with older info (no fetching)")
@@ -976,6 +1044,22 @@ def fetch(args):
     rid = catalog.start_run("fetch", details={"only": args.only})
     totals = {"new": 0, "changed": 0, "reopened": 0, "closed": 0, "unchanged": 0}
     errors, flagged, n_ok, futs, boards, status, facts = [], [], 0, {}, None, "error", None
+    # --boards-every: boards from what is in the catalog so far, about a minute in and then every SECS, in a child
+    # process (this one's filters are the fetch's, shared by its threads; the job lock is inherited). The fetch
+    # threads keep going meanwhile, so jobs show up while slow boards are still being read.
+    mid_stop, mid_thread, every = threading.Event(), None, int(getattr(args, "boards_every", 0) or 0)
+    def mid_boards():
+        wait = min(every, 60)
+        while not mid_stop.wait(wait):
+            wait = every
+            try:
+                import frozen
+                osdeps.run_hidden(frozen.command("jobfinder", "--recompute"), cwd=HERE, capture_output=True, timeout=900)
+            except Exception as e:
+                print(f"(couldn't rebuild the boards mid-fetch: {type(e).__name__})", flush=True)
+    if every and len(companies) > 1:
+        mid_thread = threading.Thread(target=mid_boards, daemon=True)
+        mid_thread.start()
     try:
         # Workday tenants share one per-IP rate limit, so they get their own small lane; everything else runs wide.
         with cf.ThreadPoolExecutor(12) as fast, cf.ThreadPoolExecutor(4) as slow:
@@ -1003,6 +1087,9 @@ def fetch(args):
                     note = f' [{counts["status"]}: missing postings kept open{"; " + s["truncated"] if s.get("truncated") else ""}]'
                 print(f'{s["company"]:<24} {s["ats"]:<15} raw={s["raw_jobs"]:<5} kept={s["matched"]:<4} new={counts["new"]:<4} closed={counts["closed"]:<4} {s["status"]}{note} ({s["secs"]}s)', flush=True)
                 print(f"PROGRESS fetch {n}/{len(futs)}", flush=True)
+        mid_stop.set()
+        if mid_thread:
+            mid_thread.join(900)
         if not args.only:
             catalog.set_meta("last_full_fetch", dt.date.today().isoformat())
         pool = catalog.open_listings(lazy=True)
@@ -1012,13 +1099,15 @@ def fetch(args):
         print(f"\nCatalog: {len(pool)} open listings; this run {totals['new']} new, {totals['closed']} closed, "
               f"{totals['changed']} changed, {totals['reopened']} back again, {len(errors)} companies failed, "
               f"{len(flagged)} kept open (suspect or incomplete fetch)", flush=True)
-        boards = recompute(None, rate=True, pool=pool)
-        if not args.only:  # last: Claude looks up facts for companies that need them (capped in Settings, Claude usage)
+        quiet = bool(getattr(args, "no_rate", False) or getattr(args, "no_boards", False))
+        boards = {} if getattr(args, "no_boards", False) else recompute(None, rate=not quiet, pool=pool)
+        if not args.only and not quiet:  # last: Claude looks up facts for companies that need them (capped in Settings, Claude usage)
             facts, fboards = research_company_facts()
             for p in _failed(fboards):
                 boards[p] = fboards[p]
         status = "ok" if not (errors or _failed(boards)) else "partial"
     finally:
+        mid_stop.set()
         catalog.finish_run(rid, status=status, companies=len(futs), fetched=n_ok,
                            new=totals["new"], closed=totals["closed"], changed=totals["changed"], reopened=totals["reopened"],
                            errors=(errors + flagged + [{"person": p, "error": boards[p]["error"]} for p in _failed(boards)])[:200],
@@ -1047,6 +1136,13 @@ def select_for_person(pool, sets=None):
     homes = CFG.get("homes", [])
     dc_ok = CFG.get("legacy_area", True) or (bool(homes) and any(__import__("geo").within(["Washington, DC"], h, r + 10)[0] for h, r in homes))
     targets = CFG.get("targets", [])
+    places = {}
+    try:
+        import catalog
+        places = catalog.places_map()
+    except Exception:
+        pass
+    emp_near = {}
     for j0 in pool:
         if not (sets.get(j0["company"], set()) & watch):
             continue
@@ -1063,14 +1159,22 @@ def select_for_person(pool, sets=None):
         mine = [l for l in locs if near(l)]
         remote = bool(j0.get("remote_strict") or (j0.get("remote_bare") and not mine))
         dc_fallback = not remote and not mine and bool(j0.get("local_unnamed")) and dc_ok
-        if not (mine or dc_fallback or (remote and CFG.get("remote_ok", True))):
+        vague_near = None   # employer-places rule: no readable place on the posting, and everywhere the employer hires is nearby
+        if not (mine or remote or dc_fallback) and j0["company"] in places:
+            info = places[j0["company"]]
+            if j0["company"] not in emp_near:
+                emp_near[j0["company"]] = employer_all_near(info, homes)
+            if emp_near[j0["company"]] and all(vague_location(l, info["states"]) for l in (locs or [""])):
+                lab = info.get("label") or ""
+                vague_near = [(f"{l} (near {lab})" if lab else l) if l else (f"Near {lab}" if lab else "") for l in (locs or [""])][:3]
+        if not (mine or dc_fallback or vague_near is not None or (remote and CFG.get("remote_ok", True))):
             continue
         wp = "remote" if remote else (j0.get("workplace") or "")
         if wp and wp not in wps and not (wp == "remote" and mine):
             continue
         j = dict(j0)
         j["workplace"] = wp
-        j["dmv_locations"] = [f"{l} (DC area)" for l in locs if l][:3] if dc_fallback else mine
+        j["dmv_locations"] = [f"{l} (DC area)" for l in locs if l][:3] if dc_fallback else [x for x in (vague_near or []) if x] if vague_near is not None else mine
         j["tracks"] = (["current"] if cur_ok else []) + (["ai"] if ai_ok else [])
         out.append(j)
     return out
