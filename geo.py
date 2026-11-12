@@ -54,6 +54,72 @@ HARD_STOP = set("remote virtual home office hq headquarters corporate corp campu
 INSTITUTION = set("university college hospital mutual insurance bank health school medical clinic institute".split())
 FOREIGN_CODES = re.compile(r"(?<![A-Za-z])(BC|ON|QC|AB|NS|NB|MB|SK|NL|PE|PEI|NT|YT|GB|GBR|CAN|CRI|POL|MEX|BRA|DEU|FRA|ESP|AUS|JPN)(?![A-Za-z])")
 
+# ------------------------------------------------------------------ "is this place outside the US?"
+# Used by the fetch pipeline (jobfinder.is_foreign) and the directory builder. Whole words only, and a label that ends in
+# a US state or "United States" is never foreign: "Dublin, OH", "Paris, TX", "Indianapolis, Indiana", "New Mexico".
+# Two-letter state codes that are also country codes ("Hyderabad, TG, IN", "Toronto, ON, CA") are trusted only when the
+# place before them is a known town in that state ("Brazil, IN", "London, KY", "Berlin, MD").
+_CODE_CLASH = {"IN", "CA", "AL", "AR", "AZ", "CO", "DE", "GA", "ID", "IL", "KY", "LA", "MA", "MD", "ME", "MN", "MO", "MS",
+               "MT", "NC", "NE", "PA", "SC", "SD", "TN", "VA"}
+_US_TAIL = re.compile(r"(?:^|[\s,;(\-/|])(?:u\s?s\s?a?|united states(?: of america)?)\s*\)?\s*$")
+_US_HEAD = re.compile(r"^\s*(?:us|usa|united states(?: of america)?)\s*[-/,:]")
+_SEG = re.compile(r"\s*[,;/|()]\s*|\s+-\s+")
+_FOREIGN_EXTRA = ("vancouver", "emea", "apac", "europe", "latam", "korea", "taiwan", "united kingdom", "uk",
+                  "latin america", "south america", "asia pacific")
+
+@functools.lru_cache(maxsize=1)
+def _foreign_rx():
+    try:
+        words = json.load(open(os.path.join(GEO, "aliases.json"))).get("foreign", [])
+    except Exception:
+        words = []
+    words = sorted({_key(x) for x in list(words) + list(_FOREIGN_EXTRA)} - {""}, key=len, reverse=True)
+    return re.compile(r"(?<![a-z0-9])(" + "|".join(re.escape(x) for x in words) + r")(?![a-z0-9])")
+
+def _known_in_state(place, st):
+    try:
+        return any(r[0] == st for r in _load()["names"].get(_key(place), []))
+    except Exception:
+        return False
+
+def _us_tail(label):
+    """True when the label ends in a US state, a US ZIP or "United States" (or starts with "US-")."""
+    raw = re.sub(r"[\s.]*$", "", norm(label, keep_case=True))
+    raw = re.sub(r"\s*\(?\b\d{5}(?:-\d{4})?\)?$", "", raw).strip(" ,;-")
+    low = raw.lower().replace(".", "")
+    if _US_TAIL.search(low) or _US_HEAD.match(low):
+        return True
+    segs = [s for s in _SEG.split(raw) if s and s.strip()]
+    if not segs:
+        return False
+    last = segs[-1].strip()
+    words = _key(last).split()
+    for n in range(min(4, len(words)), 0, -1):          # "Indianapolis, Indiana", "Santa Fe New Mexico"
+        name = " ".join(words[-n:])
+        if name in STATE_WORDS and name != "georgia":
+            return True
+        if name == "georgia":                           # the US state, unless it's Tbilisi
+            return "tbilisi" not in low
+    code = last.split()[-1] if last.split() else ""
+    if len(code) == 2 and code.upper() in STATES and (code.isupper() or len(segs) > 1):
+        code = code.upper()
+        if code not in _CODE_CLASH:
+            return True
+        place = segs[-2] if len(segs) > 1 else " ".join(last.split()[:-1])
+        return _known_in_state(place, code)
+    return False
+
+def looks_foreign(label):
+    """Does this location label name a place outside the US? ("Dublin, Ireland" yes, "Dublin, OH" no, "Remote" no)"""
+    if not label or not str(label).strip():
+        return False
+    label = str(label)
+    flat = re.sub(r"\bnew (?:mexico|jersey|england)\b", " ", _key(label))
+    hit = bool(_foreign_rx().search(flat))
+    if not hit:
+        hit = any(FOREIGN_CODES.fullmatch(s.strip()) for s in _SEG.split(label) if s and s.strip())
+    return hit and not _us_tail(label)
+
 def norm(s, keep_case=False):
     s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode()
     s = re.sub(r"\b[dD]\.\s?[cC]\.?(?![A-Za-z])", "DC", s)

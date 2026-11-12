@@ -448,8 +448,9 @@ function render(){
 }
 
 function footer(o){
-  $("back").hidden = o.back === false;
-  $("skip").hidden = !o.skip; $("skip").textContent = o.skipLabel || "Skip";
+  // busy(true) disables all three buttons; every redraw re-enables Back and Skip (Next follows o.disabled).
+  $("back").hidden = o.back === false; $("back").disabled = false;
+  $("skip").hidden = !o.skip; $("skip").textContent = o.skipLabel || "Skip"; $("skip").disabled = false;
   $("next").hidden = o.next === false;
   $("next").innerHTML = esc(o.nextLabel || "Continue");
   $("next").disabled = !!o.disabled;
@@ -691,10 +692,15 @@ SCREENS.highlights = {
       return `<section class="hcard${wide ? " wide" : ""}" style="animation-delay:${i * 70}ms" aria-label="${esc(c.label)}">
         <div class="hhead"><i>${I[c.icon] || I.dot}</i>${esc(c.label)}</div>${body}</section>`;
     };
+    const manual = !!(S.resume && S.resume.manual);  // filled in by hand: there is no file to have "read"
+    const first = h.name ? `, ${esc(h.name.split(" ")[0])}` : "";
+    const lede = manual
+      ? (h.cards.length ? "Here’s the profile you filled in. This is what we’ll match jobs against." : "You filled in your profile yourself. You can carry on and add more later on My profile.")
+      : (h.cards.length ? "A quick look at what stood out. This is what we’ll match jobs against." : "We couldn’t pull much from that file. You can carry on and fix it later on My profile.");
     return `
-      <p class="eyebrow">Your resume</p>
-      <h1 class="q" tabindex="-1">Here’s what we read${h.name ? `, ${esc(h.name.split(" ")[0])}` : ""}.</h1>
-      <p class="lede">${h.cards.length ? "A quick look at what stood out. This is what we’ll match jobs against." : "We couldn’t pull much from that file. You can carry on and fix it later on My profile."}</p>
+      <p class="eyebrow">${manual ? "Your profile" : "Your resume"}</p>
+      <h1 class="q" tabindex="-1">${manual ? `Here’s your profile${first}.` : `Here’s what we read${first}.`}</h1>
+      <p class="lede">${lede}</p>
       <div class="hgrid">${h.cards.map(card).join("")}</div>
       <p class="fine">Something off? You can edit your profile any time on My profile (the person icon at the top of the board). ${errBox("_")}</p>`;
   },

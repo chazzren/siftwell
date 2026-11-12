@@ -296,7 +296,8 @@ function saveState(el, text, bad){
 ROUTER_JS = r"""// ---- categories: the URL hash picks one (/settings#display, /profile#search); at phone width no hash means "show the list"
 const CATS = [...document.querySelectorAll(".spane")].map(p => p.dataset.cat);
 function route(){
-  const h = location.hash.slice(1), sel = CATS.includes(h) ? h : "", shown = sel || "resume";  // the desktop default is the first real category
+  const firstCat = (document.querySelector(".scat") || {dataset: {}}).dataset.cat || CATS[0];
+  const h = location.hash.slice(1), sel = CATS.includes(h) ? h : "", shown = sel || firstCat;  // the desktop default is the first item in the list
   $("slayout").classList.toggle("atList", !sel);
   document.querySelectorAll(".scat").forEach(a => a.setAttribute("aria-current", a.dataset.cat === shown ? "page" : "false"));
   document.querySelectorAll(".spane").forEach(p => p.hidden = p.dataset.cat !== shown);

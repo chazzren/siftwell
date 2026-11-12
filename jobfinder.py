@@ -146,6 +146,13 @@ NON_US = ["canada", "toronto", "vancouver", "montreal", "united kingdom", " uk",
           "italy", "czech", "serbia", "ukraine", "new zealand", "south africa", "uae", "dubai", "saudi", "qatar"]
 REMOTE_WORDS = ["remote", "anywhere", "virtual", "telework", "work from home", "wfh"]
 
+def is_foreign(loc):
+    """Does this location label name a place outside the US? Whole words, and labels ending in a US state are US:
+    "Dublin, Ireland" yes; "Dublin, OH", "Indianapolis, IN", "Paris, TX", "New Mexico" no. (NON_US above is kept for
+    readers that import it; geo.looks_foreign holds the full list.)"""
+    import geo
+    return geo.looks_foreign(loc)
+
 def near(loc):
     """Is this location inside anyone's search area (the current CFG): a home radius, or the DC-area list."""
     if CFG.get("legacy_area", True) and is_close(loc):
@@ -166,7 +173,7 @@ def is_remote_us(loc):
     l = " " + loc.lower() + " "
     if not any(w in l for w in REMOTE_WORDS):
         return False
-    return not any(c in l for c in NON_US)
+    return not is_foreign(loc)
 
 US_STATES = ("alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|"
              "kentucky|louisiana|maine|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|"
@@ -177,7 +184,7 @@ ELSEWHERE = re.compile(r"\b(" + US_STATES + r")\b|,\s*(?!dc\b|va\b|md\b)[a-z]{2}
 def looks_local_unnamed(loc):
     """A location label that names no other state or country ("Main Campus", "125 E St NW 1st Floor")."""
     l = (loc or "").strip().lower()
-    return bool(l) and not ELSEWHERE.search(l) and not any(c in l for c in NON_US) and "remote" not in l
+    return bool(l) and not ELSEWHERE.search(l) and not is_foreign(l) and "remote" not in l
 
 def title_ok(title):
     t = " " + title.lower() + " "
@@ -658,7 +665,7 @@ def prepare_listing(j, c):
     outside the US (and not remote-US), which no one can use."""
     locs = j["locations"]
     base = j.get("workplace") or ""
-    nonus = lambda l: any(x in l.lower() for x in NON_US)
+    nonus = is_foreign
     strict = base == "remote" and not any(nonus(l) for l in locs if l) or any(is_remote_us(l) for l in locs)
     if base == "remote" and locs and all(nonus(l) for l in locs):
         strict = False
