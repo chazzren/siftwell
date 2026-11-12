@@ -312,8 +312,9 @@ check("no prompt text or personal data in the log", not any(x in raw for x in ("
 check("only the agreed fields are written", all(set(r) <= {"t", "feature", "model", "in", "out", "cache_read", "cache_write", "jobs", "stub"} for r in rows))
 sm = claude_usage.summary()
 tl = {f["feature"]: f for f in sm["today"]["features"]}
-check("summary: today and last 7 days, by feature", sm["today"]["calls"] == 3 and sm["week"]["calls"] == 3 and tl["Tailored resumes"]["tokens"] == 1560
-      and tl["Match ratings"]["jobs"] == 7 and tl["Search"]["calls"] == 1, str(sm["today"]))
+check("summary: today and last 7 days, by feature; the two test answers (stubs) are counted apart, not as requests",
+      sm["today"]["calls"] == 1 and sm["week"]["calls"] == 1 and sm["today"]["test"] == 2 and tl["Tailored resumes"]["tokens"] == 1560
+      and "Match ratings" not in tl and "Search" not in tl, str(sm["today"]))
 import datetime as dt
 with open(usage_file, "a", encoding="utf-8") as fh:
     fh.write(json.dumps({"t": (dt.datetime.now() - dt.timedelta(days=3)).isoformat(timespec="seconds"), "feature": "Match ratings",
@@ -323,7 +324,7 @@ with open(usage_file, "a", encoding="utf-8") as fh:
     fh.write("not json\n")
 sm = claude_usage.summary()
 check("older lines count toward 7 days only; lines past a week and junk are ignored",
-      sm["today"]["calls"] == 3 and sm["week"]["calls"] == 4 and sm["week"]["in"] == 1300, str(sm["week"]))
+      sm["today"]["calls"] == 1 and sm["week"]["calls"] == 2 and sm["week"]["in"] == 1300, str(sm["week"]))
 os.environ.pop("SIFTWELL_CLAUDE_STUB")
 blocked = os.path.join(DATA, claude_cli.FORBID_LOG)
 check("no real Claude call was attempted", not os.path.exists(blocked), open(blocked).read() if os.path.exists(blocked) else "")

@@ -120,6 +120,94 @@ def fresh(r, f):
     """Rating made from the same data under the current RATING_FORMAT (accepts the fingerprint older versions stored)."""
     return bool(r) and r.get("fmt", 1) == RATING_FORMAT and r.get("fp") in (f["pfp"], f["pfp_old"])
 
+LEDGER = "target_fp.json"   # people/<pid>/: which answers each fingerprint this person's ratings carry knew about
+
+
+class Freshness:
+    """Is a stored Target rating still current for a job?
+
+    A rating carries fp, the fingerprint of everything the person told us (profile, highlights, goals AND every answer).
+    Answering one question changes that fingerprint, and used to make every Target rating stale. Now it is narrowed
+    the way Match ratings are: when the only thing that changed is the answers, a rating stays current unless the job
+    mentions the topic of an answer that is new, edited or deleted since the rating was made (the answer's telling
+    words: ones fewer than 12% of the postings use).
+
+    How a rating's answers are known: new ratings store them ("tfp": the fingerprint without the answers, "facts": the
+    answers it knew). Ratings stored before this, with only fp, are looked up in a small per-person ledger
+    (people/<id>/target_fp.json) that remembers, for each fingerprint seen at a board build, which answers it stood
+    for. A fingerprint the ledger never saw is stale, as before. Nothing here touches cache_keys or fp itself."""
+
+    def __init__(self, f, jobs, pid=None):
+        import people
+        self.f = f
+        self.pid = pid or people.current()
+        self.keys = {k for k, _ in f.get("fact_keys") or []}
+        self.words = {}
+        self.seen = {}
+        self._texts = None
+        self._jobs = jobs
+        self._rare = {}
+        if self.pid and f.get("phash") != "no_profile":
+            self._ledger()
+
+    def _ledger(self):
+        import people
+        path = people.pdir(LEDGER, pid=self.pid)
+        try:
+            d = json.load(open(path, encoding="utf-8"))
+            d = d if isinstance(d, dict) else {}
+        except Exception:
+            d = {}
+        seen, words = d.get("seen") or {}, d.get("words") or {}
+        before = json.dumps([seen, words], sort_keys=True)
+        for k, w in self.f.get("fact_keys") or []:
+            words[k] = list(w)
+        for fp in (self.f["pfp"], self.f.get("pfp_old")):
+            if fp:
+                seen.pop(fp, None)
+                seen[fp] = {"tfp": self.f["tfp"], "keys": sorted(self.keys)}
+        for fp in list(seen)[:-60]:
+            seen.pop(fp)
+        used = set(self.keys).union(*(s.get("keys") or [] for s in seen.values()))
+        words = {k: w for k, w in words.items() if k in used}
+        self.seen, self.words = seen, words
+        if json.dumps([seen, words], sort_keys=True) != before:
+            try:
+                paths.write_atomic(path, json.dumps({"seen": seen, "words": words}))
+            except Exception as e:
+                print("target fingerprint ledger not saved:", e, flush=True)
+
+    def _hits(self, key, j):
+        ws = self.words.get(key)
+        if ws is None:
+            return True                      # an answer we know nothing about: assume it matters
+        if self._texts is None:
+            self._texts = {x["id"]: (x.get("title", "") + " " + (x.get("desc") or x.get("snippet") or "")).lower() for x in self._jobs}
+        n = max(1, len(self._texts))
+        for w in ws:
+            rare = self._rare.get(w)
+            if rare is None:
+                rare = self._rare[w] = sum(1 for t in self._texts.values() if w in t) / n < 0.12
+            if rare and w in (self._texts.get(j["id"]) or (j.get("title", "") + " " + (j.get("desc") or j.get("snippet") or "")).lower()):
+                return True
+        return False
+
+    def ok(self, r, j):
+        if not r or r.get("fmt", 1) != RATING_FORMAT:
+            return False
+        if r.get("fp") in (self.f["pfp"], self.f["pfp_old"]):
+            return True
+        tfp, keys = r.get("tfp"), r.get("facts")
+        if tfp is None or keys is None:
+            s = self.seen.get(r.get("fp"))
+            if not s:
+                return False
+            tfp, keys = s.get("tfp"), s.get("keys") or []
+        if tfp != self.f.get("tfp"):
+            return False                     # the profile, highlights or goals changed
+        return not any(self._hits(k, j) for k in set(keys) ^ self.keys)
+
+
 def _job_text(j):
     sal = f'${j["salary_min"]:,}-${j["salary_max"]:,}' if j.get("salary_max") else "not listed"
     return (f'<job id="{j["id"]}">\nTitle: {j["title"]}\nCompany: {j["company"]} ({"frontier AI lab" if j.get("ai_track") == "lab" else "AI company" if j.get("ai_track") else j.get("sector", "")})\n'
@@ -201,7 +289,8 @@ def score_jobs(jobs, cfg, log=print):
         if re.match(r"v1:", k):
             allc.pop(k)  # v1-era scores (an old prompt layout, long gone); v2 keys are never dropped by code
     fp = f["pfp"]
-    need = (lambda j: not fresh(cache.get(j["id"]), f)) if cfg.get("refresh_stale") else (lambda j: j["id"] not in cache)
+    fr = Freshness(f, jobs)
+    need = (lambda j: not fr.ok(cache.get(j["id"]), j)) if cfg.get("refresh_stale") else (lambda j: j["id"] not in cache)
     todo = sorted((j for j in jobs if need(j)), key=lambda j: -priority(j, st))[: max(0, min(ai_score.RUN_LIMITS["target"], int(cfg.get("max_new_per_run", 0) or 0)))]
     status = "ok"
     if todo and not claude_cli.claude_ready():
@@ -223,6 +312,7 @@ def score_jobs(jobs, cfg, log=print):
                         status, res = "partial", {}
                     for v in res.values():
                         v["fp"], v["fmt"] = fp, RATING_FORMAT
+                        v["tfp"], v["facts"] = f["tfp"], sorted(fr.keys)   # (for the narrow re-check: see Freshness)
                     if res:
                         with _lock:
                             cache.update(res)
@@ -243,6 +333,6 @@ def score_jobs(jobs, cfg, log=print):
     for j in jobs:
         if j["id"] in cache:
             apply(j, cache[j["id"]])
-            j["pv_stale"] = not fresh(cache[j["id"]], f)
+            j["pv_stale"] = not fr.ok(cache[j["id"]], j)
         combine(j)
     return status

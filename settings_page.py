@@ -68,13 +68,13 @@ CATEGORIES = [
         ]),
     ]),
     ("claude", "Claude usage", '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', [
-        ("How much Claude rates in one run", "A run is one automatic rating after Find new jobs, one overnight re-rate, or one press of "
-         "Rate more or Re-rate. The limits are per run and the same for all of them; they don't grow with the number of jobs in your "
-         "area. Jobs over a limit keep a — for Match until the next run. Which model does what: quick checks use Claude Haiku, second "
+        ("How much Claude rates in one run", "A run is one automatic rating after Find new jobs, one scheduled night (its update and "
+         "the re-rate after it count as one run together), or one press of Rate more or Re-rate. The limits are per run and the same "
+         "for all of them; they don't grow with the number of jobs in your area. Jobs over a limit keep a — for Match until the next run. Which model does what: quick checks use Claude Haiku, second "
          "looks Sonnet, the most careful rating Opus. Applies from the next run.", [
-            ("number", "claude.haiku_per_night", "Quick checks per run", "New jobs that get a first, quick Match rating, most appealing first. 0 to 500."),
+            ("number", "claude.haiku_per_night", "Quick checks per run", "New jobs that get a first, quick Match rating, the ones most relevant to your work first. 0 to 500."),
             ("number", "claude.sonnet_pct", "Second look: best % of rated jobs", "The best-scoring share of your rated jobs get a closer second rating, at most 100 per run. 0 to 50."),
-            ("number", "claude.opus_top", "Most careful rating: your top jobs", "How many of your best jobs get the most careful rating, at most 50 new per run, plus jobs you saved. 0 to 1,000."),
+            ("number", "claude.opus_top", "Most careful rating: your top jobs", "How many of your best jobs get the most careful rating, at most 50 new per run, plus up to 25 jobs you saved (the latest first). 0 to 1,000."),
             ("number", "claude.per_update", "Target-tab ratings per run", "Jobs rated for your Target tab in one run. 0 to 50."),
         ]),
         ("Automatic rating", "", [
@@ -82,9 +82,10 @@ CATEGORIES = [
             ("toggle", "claude.auto_rerate", "Re-rate overnight when my info changes", ""),
         ]),
         ("Company facts", "At the end of each update Claude (Haiku, with web search) looks up facts such as size, funding, "
-         "layoffs and Glassdoor rating for companies on your board, and looks each one up again after about six months. "
-         "Facts are shared by everyone in the household, so an update uses the highest number any profile sets here.", [
-            ("number", "claude.facts_per_update", "Company facts per update", "0 to 200 companies. 0 turns it off."),
+         "layoffs and Glassdoor rating for a few companies that are on someone's board, the ones with the best-ranked jobs "
+         "first, and looks each one up again after about six months. Companies that are on nobody's board are never looked "
+         "up. Facts are shared by everyone in the household, so an update uses the highest number any profile sets here.", [
+            ("number", "claude.facts_per_update", "Company facts per update", "0 to 200 companies (10 unless you change it). 0 turns it off."),
         ]),
     ]),
     ("display", "Display", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>', [
@@ -422,16 +423,17 @@ document.querySelectorAll("[data-reset]").forEach(b => {
 (() => {
   const box = $("usageBox"); if (!box) return;
   const n = x => (x || 0).toLocaleString();
-  const cell = f => f && f.calls ? `${n(f.tokens)} tokens<small>${n(f.calls)} request${f.calls === 1 ? "" : "s"}${f.jobs ? ` · ${n(f.jobs)} jobs` : ""}</small>` : "—";
-  const tot = s => ({tokens: (s.in || 0) + (s.out || 0) + (s.cache_read || 0) + (s.cache_write || 0), calls: s.calls || 0, jobs: s.jobs || 0});
+  const cell = f => f && f.calls ? `${n(f.tokens)} tokens<small>${n(f.calls)} request${f.calls === 1 ? "" : "s"}${f.jobs ? ` · ${n(f.jobs)} jobs` : ""}${f.failed ? ` · ${n(f.failed)} got no answer` : ""}</small>` : "—";
+  const tot = s => ({tokens: (s.in || 0) + (s.out || 0) + (s.cache_read || 0) + (s.cache_write || 0), calls: s.calls || 0, jobs: s.jobs || 0, failed: s.failed || 0});
   fetch("/api/claude-usage").then(r => r.json()).then(u => {
     const t = u.today || {}, w = u.week || {};
     const names = [...new Set([...(w.features || []), ...(t.features || [])].map(f => f.feature))];
-    if (!names.length) { box.innerHTML = '<span class="note">Nothing in the last 7 days. Each request Siftwell makes to Claude is counted here from now on.</span>'; return; }
+    if (!names.length && !w.test) { box.innerHTML = '<span class="note">Nothing in the last 7 days. Each request Siftwell makes to Claude is counted here from now on.</span>'; return; }
     const by = (s, k) => (s.features || []).find(f => f.feature === k);
     box.innerHTML = `<table class="utab"><thead><tr><th scope="col">Claude usage</th><th scope="col">Today</th><th scope="col">Last 7 days</th></tr></thead><tbody>` +
       names.map(k => `<tr><th scope="row">${esc(k)}</th><td>${cell(by(t, k))}</td><td>${cell(by(w, k))}</td></tr>`).join("") +
-      `<tr><th scope="row">All together</th><td>${cell(tot(t))}</td><td>${cell(tot(w))}</td></tr></tbody></table>`;
+      `<tr><th scope="row">All together</th><td>${cell(tot(t))}</td><td>${cell(tot(w))}</td></tr></tbody></table>` +
+      (w.test ? `<span class="note">${n(w.test)} test answer${w.test === 1 ? "" : "s"} in the last 7 days (stand-ins used in testing: no request to Claude, not counted above).</span>` : "");
   }).catch(() => { box.innerHTML = '<span class="note">Couldn’t load the usage numbers.</span>'; });
 })();
 

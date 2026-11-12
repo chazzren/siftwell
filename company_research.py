@@ -342,17 +342,18 @@ def per_update_cap():
     vals = []
     for pid in people.ids():
         try:
-            vals.append(int(people.prefs(pid).get(PREF, 40)))
+            vals.append(int(people.prefs(pid).get(PREF, 10)))
         except Exception:
             pass
     return max(vals) if vals else 0
 
 
 def board_weights():
-    """{company: weight} from everyone's boards: each job that passes the person's requirements counts its overall
-    score (0-100) / 100, plus a little for just being there."""
+    """{company: weight} from everyone's current boards, so the companies people actually see come first: the best
+    Best-bets score any of its jobs has on any board (0-100; jobs whose requirements the person doesn't meet are
+    hidden, so they don't count), plus a little for each further job. A company on nobody's board has no weight."""
     import people
-    w = {}
+    best, more = {}, {}
     for pid in people.ids():
         try:
             with open(people.pdir("jobs.json", pid=pid), encoding="utf-8") as f:
@@ -363,9 +364,11 @@ def board_weights():
             if j.get("req_status") == "unmet" or not j.get("company"):
                 continue
             s = j.get("score")
-            s = s if isinstance(s, (int, float)) and not isinstance(s, bool) else 0
-            w[j["company"]] = w.get(j["company"], 0) + 0.1 + max(0, min(100, s)) / 100
-    return w
+            s = max(0, min(100, s)) if isinstance(s, (int, float)) and not isinstance(s, bool) else 0
+            c = j["company"]
+            best[c] = max(best.get(c, 0), s)
+            more[c] = more.get(c, 0) + 1
+    return {c: 0.1 + best[c] + min(more[c], 50) / 100 for c in best}
 
 
 def catalog_open():
@@ -390,16 +393,16 @@ def is_due(name, auto, failed, hand):
 
 
 def queue(weights=None, open_counts=None, auto=None, failed=None, hand=None):
-    """Companies to look up, best first: on someone's board (by weight), then the rest with open listings (by count).
-    Companies with nothing open and on nobody's board are left out."""
+    """Companies to look up, best first: ONLY companies that are on someone's current board, the top-ranked first
+    (board_weights). Companies in the catalog that are on nobody's board are not looked up at all: with the employer
+    directory a catalog holds a thousand employers and more, most of them never shown to anyone, and every look-up is
+    a web search on the household's Claude plan. (open_counts is no longer used; kept so older callers still work.)"""
     weights = board_weights() if weights is None else weights
-    open_counts = catalog_open() if open_counts is None else open_counts
     auto = load_auto() if auto is None else auto
     failed = load_failed() if failed is None else failed
     hand = hand_names() if hand is None else hand
     seen = sorted((c for c in weights if weights[c] > 0), key=lambda c: (-weights[c], c.lower()))
-    rest = sorted((c for c, n in open_counts.items() if n > 0 and c not in weights), key=lambda c: (-open_counts[c], c.lower()))
-    return [c for c in seen + rest if is_due(c, auto, failed, hand)]
+    return [c for c in seen if is_due(c, auto, failed, hand)]
 
 
 def run(limit=None, log=print, progress=None, research=None):

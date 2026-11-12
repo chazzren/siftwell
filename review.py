@@ -45,9 +45,41 @@ def resume_text(t):
     parts += t.get("skills", []) + t.get("education", []) + t.get("clearance", []) + t.get("additional", [])
     return "\n".join(p for p in parts if p)
 
+_REQ_HEAD = re.compile(r"^\W{0,3}(?:basic |minimum |required |preferred |desired |key |core |job |position |your |the )*(?:requirements?|qualifications?|"
+                       r"skills?(?: (?:and|&) (?:experience|qualifications|abilities))?|experience(?: (?:and|&) skills)?|what you(?:'ll|’ll| will)? (?:need|bring)|"
+                       r"what we(?:'re|’re| are) looking for|who you are|you have|you should have|must[- ]haves?|nice[- ]to[- ]haves?|"
+                       r"knowledge,? skills,? (?:and|&) abilities|education (?:and|&) experience|about you)\b.{0,40}$", re.I)
+_OTHER_HEAD = re.compile(r"^\W{0,3}(?:benefits|perks|compensation|salary|pay(?: range| transparency)?|what we offer|why (?:join|work)|about (?:us|the company|the team|"
+                         r"[A-Z]\w+)|our (?:company|mission|values|culture|story)|equal (?:employment )?opportunity|eeo|diversity|accommodations?|"
+                         r"how to apply|application process|work(?:ing)? (?:environment|conditions)|physical (?:demands|requirements)|disclaimer|"
+                         r"location|travel|responsibilities|what you(?:'ll|’ll| will) do|the role|duties|job description|overview|summary)\b.{0,40}$", re.I)
+
+def requirements_part(desc):
+    """The part of a posting that says what the employer wants from the candidate (Requirements, Qualifications,
+    What you'll need, Preferred ...), cut out from its headings. Keyword coverage is measured on this part only: the
+    company's story, the benefits and the equal-opportunity text are not things a resume should echo. The whole text
+    when no such heading is found (or the part is too short to mean anything)."""
+    lines = (desc or "").replace("\r", "\n").split("\n")
+    if len(lines) < 4:      # one long paragraph: break at sentence ends so headings in running text are still seen
+        lines = re.split(r"(?<=[.:!?])\s+(?=[A-Z])", desc or "")
+    keep, on = [], False
+    for ln in lines:
+        s = ln.strip()
+        if len(s) <= 70 and _REQ_HEAD.match(s):
+            on = True
+            continue
+        if len(s) <= 70 and _OTHER_HEAD.match(s):
+            on = False
+            continue
+        if on:
+            keep.append(ln)
+    part = "\n".join(keep).strip()
+    return part if len(part) >= 120 else (desc or "")
+
 def key_phrases(desc, n=30):
     """Frequent 1-3 word phrases from the posting (rough keyword list for coverage)."""
     words = re.findall(r"[a-zA-Z][a-zA-Z+/#.-]{1,}", desc.lower())
+    floor = 3 if len(desc) >= 2500 else 2      # (a short requirements section rarely says anything three times)
     counts = {}
     for size in (1, 2, 3):
         for i in range(len(words) - size + 1):
@@ -59,7 +91,7 @@ def key_phrases(desc, n=30):
     ranked = sorted(counts.items(), key=lambda kv: -kv[1])
     out = []
     for k, c in ranked:
-        if c < 3:
+        if c < floor:
             break
         if not any(k in o or o in k for o in out):
             out.append(k)
@@ -106,13 +138,39 @@ def mechanical(t, pdf_pages, target_pages, desc):
             score -= min(15, 5 * len(echo))
     except Exception:
         pass
-    kws = key_phrases(desc)
+    # Keyword coverage: only the posting's requirements (not its company story or benefits), and not the phrases the
+    # resume is honestly missing: those are already listed as gaps / not claimed, and no rewording can add them.
+    gaps = " ".join(str(x) for x in (t.get("gaps") or []) + (t.get("unsupported_requests") or [])).lower()
+    kws = [k for k in key_phrases(requirements_part(desc)) if k not in gaps]
     text = resume_text(t).lower()
     hit = [k for k in kws if k in text]
     cov = round(100 * len(hit) / len(kws)) if kws else None
     if cov is not None and cov < 50:
         score -= 8
     return {"score": max(0, score), "issues": issues, "keyword_coverage": cov, "keywords_missing": [k for k in kws if k not in hit][:15]}
+
+_NEEDS_FACT = re.compile(r"quantif|metric|\bnumbers?\b|how (?:many|much)|percent|\b\d+ ?%|team size|budget|outcome|results? achieved|"
+                         r"certif|degree|clearance|years? of experience", re.I)
+
+def unfixable(issue, t):
+    """True when an honest rework cannot act on this reviewer issue: it asks for a fact the candidate doesn't have (a
+    number, a credential) or for something already listed under the resume's gaps / "asked for, not claimed". Wording,
+    order, length and layout issues are always fixable."""
+    if issue.get("area") in ("appearance", "grammar", "density"):
+        return False
+    text = f"{issue.get('problem', '')} {issue.get('fix', '')}".lower()
+    words = lambda s: {w for w in re.findall(r"[a-z0-9+#]{4,}", s.lower()) if w not in STOP}
+    tw = words(text)
+    for g in (t.get("gaps") or []) + (t.get("unsupported_requests") or []):
+        gw = words(str(g))
+        if gw and len(gw & tw) / len(gw) >= 0.5:
+            return True
+    return bool(_NEEDS_FACT.search(text)) and bool(re.search(r"\badd|\binclud|\bquantif|\bmention|\bstate\b|\bspecify|\bprovide|missing|lacks?\b", text))
+
+def only_unfixable_left(g, t):
+    """After a round: are the reviewer's remaining high and medium issues all things an honest rework can't change?"""
+    left = [i for i in g.get("issues") or [] if i.get("severity") in ("high", "medium")]
+    return bool(left) and all(unfixable(i, t) for i in left)
 
 # ------------------------------------------------------------------ Astra grade
 SCHEMA = {

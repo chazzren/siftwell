@@ -139,15 +139,21 @@ def _board_has_counts(pid):
     except OSError:
         return True  # no board at all: nothing to count
     i = head.find('"jobs":')
-    return i < 0 or '"rate_batch"' in head[:i]
+    if i < 0:
+        return True
+    import lookfor
+    # ...or before the free Relevance score, or with Relevance made the way an earlier version made it ("rel_v")
+    return '"rate_batch"' in head[:i] and f'"rel_v": {lookfor.BUILD}' in head[:i]
 
 def recount_old_boards():
-    """Once per server start: rebuild (no fetching, no Claude) any board that predates the Re-rate panel's counts, so its
-    jobs carry the rating freshness the panel needs. Until then the panel shows "Counting…"."""
+    """Once per server start: rebuild (no fetching, no Claude: stored ratings are applied as they are, and the automatic
+    quick check is not started) any board an older version wrote: one that predates the Re-rate panel's counts, or
+    has no Relevance yet (or Relevance made the earlier way), so "Most relevant" and the what-to-look-for sheet are
+    there right after an upgrade instead of after the next update. Until then the panel shows "Counting…"."""
     old = [p for p in people.ids() if not _board_has_counts(p)]
     if old:
-        print("recounting boards from an older version:", ", ".join(old), flush=True)
-        request_recompute(old)
+        print("rebuilding boards from an older version (no fetching, no Claude):", ", ".join(old), flush=True)
+        request_recompute(old, auto_rate=False)
 
 # ---- rebuilding boards from the catalog (seconds; no fetching, no Claude)
 _RECOMPUTE = {"running": False, "pending": set(), "all": False, "fails": 0, "quiet": False}
@@ -347,14 +353,37 @@ def bg_lookfor(pid, force=False):
         print("what-to-look-for suggestion failed:", e, flush=True)
     st["running"] = False
 
-def bg_highlights(pid):
+_HL_RUNNING = {}   # pid -> threading.Event, set when that person's highlights have been read
+
+def bg_highlights(pid, rebuild=True):
+    """Read the person's resume highlights (degrees, licenses, years, people managed) from their approved profile,
+    then rebuild their board. Started whenever a profile is approved, setup included: ratings use the highlights, so
+    they must exist BEFORE the first rating (ratings made without them go stale when they arrive, and the first runs
+    rate jobs the person can't hold). Rating runs wait for it (wait_highlights)."""
     import highlights, claude_cli
-    people.set_current(pid)
+    ev = threading.Event()
+    with lock:
+        _HL_RUNNING[pid] = ev
     try:
-        highlights.refresh(pid, use_claude=claude_cli.claude_ready())
-    except Exception as e:
-        print("highlights refresh failed:", e, flush=True)
-    request_recompute([pid])
+        people.set_current(pid)
+        try:
+            highlights.refresh(pid, use_claude=claude_cli.claude_ready())
+        except Exception as e:
+            print("highlights refresh failed:", e, flush=True)
+    finally:
+        ev.set()
+        with lock:
+            if _HL_RUNNING.get(pid) is ev:
+                _HL_RUNNING.pop(pid, None)
+    if rebuild:
+        request_recompute([pid])
+
+def wait_highlights(timeout=600):
+    """Before any rating run: let a highlights read that is under way finish (it takes a minute or two at most)."""
+    with lock:
+        evs = list(_HL_RUNNING.values())
+    for ev in evs:
+        ev.wait(timeout)
 
 def apply_rescore(job_id, desc):
     """Re-score one job with Claude and write the new numbers into jobs.json and the page (skipped mid-update)."""
@@ -374,7 +403,7 @@ def apply_rescore(job_id, desc):
         if not ai_score.rescore_one(job, desc, jobfinder.CFG["ai"]):
             return
         jobfinder.combine(job)
-        payload["jobs"].sort(key=lambda j: -j["score"])
+        payload["jobs"].sort(key=jobfinder.board_order)
         paths.dump_json_atomic(path, payload, indent=1)
         report.build(payload, people.pdir("report.html"))
 
@@ -425,8 +454,9 @@ def _rate_now(ids, mode):
     for j in sel:
         j.pop("desc", None)
     if status not in ("ok", ""):
-        raise ValueError({"cli_logged_out": "Claude Code is signed out on the Mac.", "partial": "Some ratings failed; try again."}.get(status, status))
-    payload["jobs"].sort(key=lambda j: -j["score"])
+        raise ValueError({"cli_logged_out": "Claude Code is signed out. Sign in again under Settings, then Get started.",
+                          "partial": "Some ratings failed; try again."}.get(status, status))
+    payload["jobs"].sort(key=jobfinder.board_order)
     payload["ai_scored"] = sum(1 for j in payload["jobs"] if j.get("ai_fit") is not None)
     paths.dump_json_atomic(path, payload, indent=1)
     report.build(payload, people.pdir("report.html"))
@@ -542,6 +572,16 @@ def review_loop(s, job, desc):
         reworks = rnd - 1
         if g["score"] >= rv["threshold"] or reworks >= pr["review.max_rounds"]:
             rv["status"] = "passed" if g["score"] >= rv["threshold"] else "below"
+            break
+        # Stop reworking when it no longer pays: the last rework moved the grade by less than 3 points, or everything
+        # the reviewer still wants needs facts the candidate doesn't have (numbers, credentials, listed gaps). Each
+        # rework is a full Opus call; a third one that can only reshuffle the same sentences is tokens for nothing.
+        prev = rv["rounds"][-2]["score"] if len(rv["rounds"]) >= 2 else None
+        if prev is not None and g["score"] - prev < 3:
+            rv["status"], rv["stopped"] = "below", f"Stopped after round {rnd}: the last rework changed the grade by {g['score'] - prev:+d}, so another would not help."
+            break
+        if review.only_unfixable_left(g, t) and not (t.get("checks") or {}).get("warnings"):
+            rv["status"], rv["stopped"] = "below", "Stopped: what the reviewer still asks for needs facts that are not in your resume or answers."
             break
         asked = {a.lower() for a in rv.get("asked", [])}
         new_q = [q for q in g.get("fact_requests", []) if q["requirement"].lower() not in asked]
@@ -693,6 +733,10 @@ def rate_label(o):
         return "Rating the next batch"
     if o.get("ids") is not None:
         n = len(o["ids"])
+        import ai_score
+        cap = ai_score.RUN_LIMITS["quick"]     # what one automatic check really rates
+        if n > cap:
+            return f"{'First quick' if o.get('first') else 'Quick'} check of the {cap} most relevant of {n:,} {'' if o.get('first') else 'new '}jobs"
         if o.get("first"):  # a new person's first board: every passing unrated job counts as new (the Haiku cap still applies)
             return f"First quick check of {n} job{'s' if n != 1 else ''}"
         return f"Quick check of {n} new job{'s' if n != 1 else ''}"
@@ -734,8 +778,11 @@ def _run_one(pid, n, o):
         with joblock.hold("rerate", on_wait=waiting) as token:
             if os.path.exists(_stop_file(pid)):
                 return None  # stopped while waiting for its turn
+            wait_highlights()
+            # the classic re-rate (o is None) is the scheduled night's second step: it gets what the update left of the budget
             p = osdeps.popen_hidden(_rate_cmd(pid, n, o), cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                 bufsize=1, env={**joblock.child_env(token), "SIFTWELL_STOP_FILE": _stop_file(pid)})
+                                 bufsize=1, env={**joblock.child_env(token), "SIFTWELL_STOP_FILE": _stop_file(pid),
+                                                 **(_night_env() if o is None else {})})
             with open(os.path.join(DATA, f"rerate-{pid}.log"), "w") as log:  # full output incl. per-tier TIMING lines
                 for line in p.stdout:
                     log.write(line); log.flush()
@@ -876,9 +923,13 @@ def claim_update():
         state["running"] = True
         return True
 def run_scheduled_update():
-    """The automatic update's work (after claim_update() said yes): fetch, then re-rate anyone whose info changed."""
+    """The automatic update's work (after claim_update() said yes): fetch, then re-rate anyone whose info changed.
+    The two steps are ONE rating run as far as the limits go (at most 500 quick checks, 100 second looks, 50 careful
+    ratings per person for the whole night, not per step): both get the same night id."""
+    import time
     state["trigger"] = "scheduled"
-    run_update()
+    NIGHT.update(id=dt.datetime.now().strftime("%Y%m%dT%H%M%S"), until=time.time() + 8 * 3600)
+    run_update(night=True)
     # separate step, after the listings are in: re-rate anyone whose info changed (cheap when nothing did)
     if state.get("exit") in (0, 3):
         for pid in people.ids():
@@ -916,12 +967,20 @@ def stop_update():
         return False
     return True
 
-def run_update(only=None, defer_running=False, flags=(), quiet=False):
+NIGHT = {"id": None, "until": 0.0}   # the scheduled night under way: its update and the re-rate after it share one rating budget
+
+def _night_env():
+    import time
+    return {"SIFTWELL_NIGHT": NIGHT["id"]} if NIGHT["id"] and time.time() < NIGHT["until"] else {}
+
+def run_update(only=None, defer_running=False, flags=(), quiet=False, night=False):
     """defer_running: the caller didn't mark the update as running; it counts as running only once it holds the job
     lock (Catalog's Fetch now / Add, so a fetch queued behind Find employers doesn't block Remove or Import).
     flags: extra jobfinder options (--no-rate, --no-boards: the staged first check, first_search._check); quiet: no
-    activity-log line per run (the staged check logs once for all its chunks)."""
+    activity-log line per run (the staged check logs once for all its chunks). night: the scheduled update (its
+    ratings count against the night's one budget, see jobfinder.night_budgets)."""
     cmd = frozen.command("jobfinder", *(["--only", only] if only else []), *flags)
+    wait_highlights()
     osdeps.keep_awake(True)
     fresh = dict(started=dt.datetime.now().isoformat(timespec="seconds"), finished=None, exit=None, phase="fetch", done=0, total=0, lines=[])
     with lock:
@@ -941,7 +1000,7 @@ def run_update(only=None, defer_running=False, flags=(), quiet=False):
                                                   "lines": state["lines"]})
             with open(LOG, "w") as log:
                 p = osdeps.popen_hidden(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
-                                     env=joblock.child_env(token))
+                                     env={**joblock.child_env(token), **(_night_env() if night else {})})
                 UPDATE_PROC["p"] = p
                 for line in p.stdout:
                     log.write(line); log.flush()
@@ -988,7 +1047,7 @@ class H(BaseHTTPRequestHandler):
         pass
 
     def _host_ok(self):
-        """Allowed if the request comes from this Mac via a loopback name, or carries the access key cookie."""
+        """Allowed if the request comes from this computer via a loopback name, or carries the access key cookie."""
         host = (self.headers.get("Host") or "").lower()
         if self.client_address[0] in ("127.0.0.1", "::1") and host in (f"127.0.0.1:{PORT}", f"localhost:{PORT}"):
             return True
@@ -1233,8 +1292,13 @@ class H(BaseHTTPRequestHandler):
                 live = cur.get("running")
                 status = "running" if live else ("interrupted" if rv.get("status") in ("reworking",) or (rv.get("rounds") and not rv.get("status")) else rv.get("status"))
                 rv = {**rv, "status": status}
+                ck = t.get("checks") if isinstance(t.get("checks"), dict) else {}
                 out.append({"slug": os.path.basename(f)[:-5], "job": t.get("job") or {}, "created": t.get("created"),
                             "headline": t.get("headline", ""), "gaps": len(t.get("gaps") or []), "state": "ready",
+                            # Siftwell's fact check of this resume against the person's own data (tailor.fact_check)
+                            "facts": {"warnings": [str(w.get("text") or "")[:260] for w in (ck.get("warnings") or [])[:8]],
+                                      "more": max(0, len(ck.get("warnings") or []) - 8), "fixed": len(ck.get("fixed") or []),
+                                      "checked": bool(ck)},
                             # a Re-tailor running (or failed) on a resume that already exists
                             "work": {"running": bool(live and cur.get("job")), "step": cur.get("step"), "error": cur.get("error") if cur.get("job") else None},
                             "review": {"status": rv.get("status"), "final": rv.get("final") or (rv.get("rounds") or [{}])[-1].get("score"),
@@ -1274,7 +1338,10 @@ class H(BaseHTTPRequestHandler):
             if not os.path.exists(base + ".json"):
                 return self._send(404, "Not found", "text/plain")
             if m.group(2):
-                b = open(base + ".docx", "rb").read()
+                try:      # built from the same sections and Resume settings as the PDF; rebuilt when either changed
+                    b = open(tailor.make_docx(m.group(1)), "rb").read()
+                except Exception as e:
+                    return self._send(500, f"<p style='font:16px system-ui;padding:24px'>{__import__("html").escape(str(e))}</p>", "text/html")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
                 self.send_header("Content-Disposition", 'attachment; filename="tailored-resume.docx"')
@@ -1418,9 +1485,15 @@ class H(BaseHTTPRequestHandler):
             threading.Thread(target=bg_highlights, args=(pid,), daemon=True).start()
             return self._send(202, {"ok": True})
         if path == "/api/setup/step":
-            import setup_flow
+            import setup_flow, resume
+            had_draft = resume.load_draft() is not None
             try:
-                return self._send(200, {"ok": True, "state": setup_flow.save_step(pid, str(body.get("step", "")), body.get("data") or {})})
+                out = setup_flow.save_step(pid, str(body.get("step", "")), body.get("data") or {})
+                if had_draft and resume.load_draft() is None and resume.load_active():
+                    # setup just approved the resume draft: read its highlights now, well before the first rating
+                    # (the board, if there is one, is rebuilt when they are in)
+                    threading.Thread(target=bg_highlights, args=(pid, os.path.exists(people.pdir("jobs.json", pid=pid))), daemon=True).start()
+                return self._send(200, {"ok": True, "state": out})
             except ValueError as e:
                 return self._send(400, {"error": str(e), "field": getattr(e, "field", None)})
         if path == "/api/setup/finish":
@@ -1465,7 +1538,10 @@ class H(BaseHTTPRequestHandler):
             self._act("job search paused", pid, "")
             return self._send(200, {"ok": True})
         if path == "/api/rate":
-            ids = [str(x) for x in (body.get("ids") or [])][:60]
+            import ai_score
+            # the per-card buttons rate with the most careful model: never more than a run's own limit for it
+            cap = ai_score.RUN_LIMITS["target" if body.get("mode") == "pivot" else "opus"]
+            ids = [str(x) for x in (body.get("ids") or [])][:cap]
             if not ids:
                 return self._send(400, {"error": "no jobs given"})
             if (ps().get("rate") or {}).get("running"):
@@ -1686,6 +1762,7 @@ class H(BaseHTTPRequestHandler):
             if not jid:
                 return self._send(400, {"error": "id required"})
             if st in ("saved", "applied", "hidden"):
+                marks.pop(jid, None)      # (goes to the end: the file keeps the order jobs were marked in, newest last)
                 marks[jid] = st
             else:
                 marks.pop(jid, None)
@@ -1792,7 +1869,7 @@ class H(BaseHTTPRequestHandler):
                 return self._send(409, {"error": "That resume is still being worked on. Try again when it finishes."})
             base = os.path.join(people.pdir("tailored"), slug_)
             removed = 0
-            for ext in (".json", ".docx", ".pdf", ".pdf.key", ".pdf.part"):
+            for ext in (".json", ".docx", ".docx.key", ".pdf", ".pdf.key", ".pdf.fit", ".pdf.part"):
                 if os.path.exists(base + ext):
                     os.remove(base + ext); removed += 1
             ps()["tailor"].pop(slug_, None)

@@ -1,7 +1,9 @@
 """What Siftwell actually asked Claude for: one line per Claude call in DATA/claude_usage.jsonl.
 
 Each line: {"t": ISO time, "feature": plain-language feature, "model": model id, "in": input tokens, "out": output
-tokens, "cache_read": n, "cache_write": n, "jobs": jobs in the batch or null} (plus "stub": true for test answers).
+tokens, "cache_read": n, "cache_write": n, "jobs": jobs in the batch or null}, plus "stub": true for a test answer (a
+stand-in, no Claude call: left out of the totals, counted as "test") and "error": why, for a call that brought nothing
+back (timed out, no readable answer: it is still listed, because it may have used tokens).
 No prompt text and nothing personal is written. Settings (Claude usage) shows today / the last 7 days by feature;
 showing it reads this file only and never calls Claude."""
 import datetime as dt
@@ -18,6 +20,7 @@ MAX_BYTES = 4_000_000
 FEATURES = {
     "ai_score": "Match ratings", "pivot": "Target ratings", "resume": "Reading your resume", "highlights": "Resume highlights",
     "tailor": "Tailored resumes", "interview": "Questions about your experience", "target": "Target suggestions",
+    "server": "Tailored resumes",
     "nlsearch": "Search", "employer_finder": "Finding employers", "company_research": "Company facts",
     "requirements": "Job requirements", "manual_profile": "Your profile", "lookfor": "What to look for",
 }
@@ -44,8 +47,9 @@ def _n(u, *keys):
     return 0
 
 
-def record(feature, model, usage, jobs=None, stub=False):
-    """Append one line. usage: the "usage" object from `claude -p --output-format json` (or the API's usage)."""
+def record(feature, model, usage, jobs=None, stub=False, error=None):
+    """Append one line. usage: the "usage" object from `claude -p --output-format json` (or the API's usage).
+    error: a short reason when the call failed (timed out, no readable answer)."""
     u = usage if isinstance(usage, dict) else {}
     row = {"t": dt.datetime.now().isoformat(timespec="seconds"), "feature": str(feature or "Other")[:60],
            "model": str(model or "")[:60], "in": _n(u, "input_tokens"), "out": _n(u, "output_tokens"),
@@ -53,6 +57,8 @@ def record(feature, model, usage, jobs=None, stub=False):
            "jobs": int(jobs) if isinstance(jobs, int) else None}
     if stub:
         row["stub"] = True
+    if error:
+        row["error"] = str(error)[:80]
     try:
         os.makedirs(os.path.dirname(path()), exist_ok=True)
         with _lock:
@@ -94,25 +100,31 @@ def _lines():
 
 def summary(now=None):
     """{"today": {...}, "week": {...}} where each is {"calls", "in", "out", "cache_read", "cache_write", "jobs",
-    "features": [{"feature", "calls", "tokens", "jobs"}, ...] (biggest first)}. Tokens = input + output + cache."""
+    "failed", "test", "features": [{"feature", "calls", "tokens", "jobs", "failed"}, ...] (biggest first)}.
+    Tokens = input + output + cache. Test answers (stub rows) are not calls: they are only counted under "test"."""
     now = now or dt.datetime.now()
     day0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week0 = day0 - dt.timedelta(days=6)
     out = {}
     for name, since in (("today", day0), ("week", week0)):
         s = since.isoformat(timespec="seconds")
-        tot = {"calls": 0, "in": 0, "out": 0, "cache_read": 0, "cache_write": 0, "jobs": 0}
+        tot = {"calls": 0, "in": 0, "out": 0, "cache_read": 0, "cache_write": 0, "jobs": 0, "failed": 0, "test": 0}
         feats = {}
         for d in _lines():
             if (d.get("t") or "") < s:
+                continue
+            if d.get("stub"):
+                tot["test"] += 1
                 continue
             tok = sum(int(d.get(k) or 0) for k in ("in", "out", "cache_read", "cache_write"))
             tot["calls"] += 1
             for k in ("in", "out", "cache_read", "cache_write"):
                 tot[k] += int(d.get(k) or 0)
             tot["jobs"] += int(d.get("jobs") or 0)
-            f = feats.setdefault(d.get("feature") or "Other", {"feature": d.get("feature") or "Other", "calls": 0, "tokens": 0, "jobs": 0})
+            f = feats.setdefault(d.get("feature") or "Other", {"feature": d.get("feature") or "Other", "calls": 0, "tokens": 0, "jobs": 0, "failed": 0})
             f["calls"] += 1; f["tokens"] += tok; f["jobs"] += int(d.get("jobs") or 0)
+            if d.get("error"):
+                f["failed"] += 1; tot["failed"] += 1
         tot["features"] = sorted(feats.values(), key=lambda f: (-f["tokens"], -f["calls"], f["feature"]))
         out[name] = tot
     return out

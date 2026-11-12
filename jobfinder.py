@@ -425,10 +425,23 @@ def combine(job):
 
 def unrated_match(job):
     """What stands in for Match in Best bets until Claude has rated a job: its free Relevance (lookfor.py), scaled to
-    20-70 so an unrated job never outranks a well-matched rated one on a guess, and one that has nothing to do with
-    the person's work sinks. No sheet yet (Relevance unknown): 50, as before."""
+    20-55 (UNRATED_MIN - UNRATED_MAX). The board still shows no Match for it: this number only places it.
+
+    The rule: a job nobody has rated never outranks a rated job that is both well matched (Match 70 or more) and
+    reasonably appealing (Appeal 80 or more). Best bets is sqrt(Appeal x Match), so the best an unrated job can do is
+    sqrt(100 x 55) = 74, and the weakest such rated job scores sqrt(80 x 70) = 75. Below that line a very relevant
+    unrated job may sit above a rated one that Claude found a poor match, which is the point of showing it. A job
+    that has nothing to do with the person's work sinks (20). No sheet yet (Relevance unknown): 50, as before."""
     rel = job.get("rel")
-    return 50 if rel is None else 20 + rel / 2
+    return 50 if rel is None else UNRATED_MIN + rel * (UNRATED_MAX - UNRATED_MIN) / 100
+
+UNRATED_MIN, UNRATED_MAX = 20, 55
+
+def board_order(j):
+    """Best bets order, the same in every version: the score, then the better Match (an unrated job after rated ones),
+    then the better Appeal, then the job id. Ties never depend on the order listings happened to arrive in."""
+    m = j.get("ai_fit")
+    return (-j["score"], -(m if m is not None else -1), -j.get("appeal", 0), str(j["id"]))
 
 # ---------------------------------------------------------------- salary bands
 WIDE_BAND_RATIO = 1.6   # top / bottom at or above this: the band spans several levels, so the top means little
@@ -1198,11 +1211,56 @@ def apply_requirements(pid, jobs):
             j["req_status"], j["req_chips"], j["req_soft"], j["req_reasons"] = "ok", [], [], []
 
 def saved_ids(pid=None):
+    """Ids of the jobs the person saved or applied to, the most recently marked first (marks.json keeps the order
+    they were marked in; a job marked again moves to the end)."""
     try:
         m = json.load(open(people.pdir("marks.json", pid=pid)))
-        return {k for k, v in m.items() if v in ("saved", "applied")}
+        return [k for k, v in reversed(list(m.items())) if v in ("saved", "applied")]
     except Exception:
-        return set()
+        return []
+
+NIGHT_ENV = "SIFTWELL_NIGHT"   # set (to one id) by the scheduled update for its fetch and for the re-rate that follows it
+
+def night_budgets(pid, budgets, target_n):
+    """One budget for a scheduled night. The night has two steps, each its own process: the update (which rates new
+    jobs) and the re-rate after it (which redoes ratings made with older info). Each used to get a full run's limits,
+    so a night could do 500 + 500 quick checks. With NIGHT_ENV set, the second step only gets what the first left:
+    returns (budgets, Target limit) minus what this night already used for this person (kept in the catalog's notes
+    under night:<pid>). Without NIGHT_ENV (every run a person starts): unchanged."""
+    nid = os.environ.get(NIGHT_ENV)
+    if not nid:
+        return budgets, target_n
+    import catalog
+    used = catalog.get_meta(f"night:{pid}") or {}
+    if used.get("id") != nid:
+        return budgets, target_n
+    import ai_score
+    L = ai_score.RUN_LIMITS
+    left = lambda key, limit, tier: max(0, min(L[limit], int(budgets.get(key, L[limit]) or 0)) - int(used.get(tier) or 0))
+    b = dict(budgets, haiku=left("haiku", "haiku", "haiku"), sonnet_max=left("sonnet_max", "sonnet", "sonnet"),
+             opus_max=left("opus_max", "opus", "opus"), saved_max=max(0, L["saved"] - int(used.get("saved") or 0)))
+    print(f"Tonight's rating budget, after the update's share: {b['haiku']} quick checks, {b['sonnet_max']} second looks, "
+          f"{b['opus_max']} careful ratings left", flush=True)
+    return b, max(0, int(target_n or 0) - int(used.get("target") or 0))
+
+def night_spent(pid, timings):
+    """Add what this step rated to the night's tally (only during a scheduled night)."""
+    nid = os.environ.get(NIGHT_ENV)
+    if not nid:
+        return
+    import catalog
+    used = catalog.get_meta(f"night:{pid}") or {}
+    if used.get("id") != nid:
+        used = {"id": nid}
+    for t in timings:
+        n = int(t.get("rated", t.get("jobs", 0)) or 0)
+        if t.get("tier") == "opus":      # the first 50 are the run's own, anything above came from the saved jobs
+            own = min(n, max(0, 50 - int(used.get("opus") or 0)))
+            used["opus"] = int(used.get("opus") or 0) + own
+            used["saved"] = int(used.get("saved") or 0) + n - own
+        elif t.get("tier") in ("haiku", "sonnet", "target"):
+            used[t["tier"]] = int(used.get(t["tier"]) or 0) + n
+    catalog.set_meta(f"night:{pid}", used)
 
 def eligible_for_claude(j):
     """Skip jobs the person can't or won't pursue: unmet hard requirements, or levels well outside their band."""
@@ -1223,8 +1281,13 @@ def score_person(jobs, prof, new_claude=True, refresh=False, opts=None):
     ok = [j for j in jobs if j.get("req_status") != "unmet"]
     unmet = [j for j in jobs if j.get("req_status") == "unmet"]
     pv_run, pv_thread = {"status": ""}, None
+    budgets = CFG.get("funnel") or {}
+    target_n = {**CFG["pivot"], **opts.get("pivot", {})}.get("max_new_per_run", 0)
+    automatic = new_claude and "budgets" not in opts     # an update or the classic re-rate (not a Re-rate panel run)
+    if automatic and prof:
+        budgets, target_n = night_budgets(people.current(), budgets, target_n)
     if CFG["pivot_enabled"] and prof and new_claude and opts.get("target", True):
-        cfg_pv = {**CFG["pivot"], **({"refresh_stale": True} if refresh else {}), **opts.get("pivot", {})}
+        cfg_pv = {**CFG["pivot"], **({"refresh_stale": True} if refresh else {}), **opts.get("pivot", {}), "max_new_per_run": target_n}
         copies = [dict(j) for j in ok if "ai" in j["tracks"]]
         pid = people.current()
         def run_pivot():
@@ -1240,7 +1303,6 @@ def score_person(jobs, prof, new_claude=True, refresh=False, opts=None):
         pv_thread.start()
     try:
         if prof:
-            budgets = CFG.get("funnel") or {}
             if not new_claude:
                 budgets = {"haiku": 0, "sonnet_pct": 0, "sonnet_max": 0, "opus_top": 0, "opus_max": 0}
             extra = {k: opts[k] for k in ("tiers", "force", "pick", "only_ids") if k in opts} if new_claude else {}
@@ -1255,6 +1317,11 @@ def score_person(jobs, prof, new_claude=True, refresh=False, opts=None):
     finally:
         if pv_thread:
             pv_thread.join()  # never leave the Target ratings running (and writing their cache) past an error here
+        if automatic and prof:
+            try:
+                night_spent(people.current(), ai_score.TIMINGS)
+            except Exception as e:
+                print(f"night budget not noted: {type(e).__name__}: {e}", flush=True)
     pv_status = ""
     if CFG["pivot_enabled"] and prof:
         applied = pivot.score_jobs([j for j in ok if "ai" in j["tracks"]], {**CFG["pivot"], "max_new_per_run": 0,
@@ -1329,13 +1396,14 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     for j in jobs:
         for k in BOARD_HIDDEN:  # catalog bookkeeping the page doesn't use
             j.pop(k, None)
-    jobs.sort(key=lambda j: -j["score"])
-    per_co = collections.Counter(j["company"] for j in jobs)
+    jobs.sort(key=board_order)
+    per_co =collections.Counter(j["company"] for j in jobs)
     watch, sets = people.company_sets(pid), company_sets_map()
     sums = [dict(s, matched=per_co.get(s["company"], 0)) for s in summaries if sets.get(s["company"], set()) & watch]
     payload = {"generated": dt.datetime.now().isoformat(timespec="minutes"), "salary_floor": CFG["salary_floor"],
                "ai_status": ai_status, "pivot_status": pv_status, "pivot_name": CFG["pivot"]["name"],
                "claude_ready": _claude_ready(), "ai_scope": st.get("target_scope") == "ai", "has_relevance": any(j.get("rel") is not None for j in jobs),
+               "rel_v": __import__("lookfor").BUILD,   # (the server rebuilds a board whose Relevance an earlier version made)
                "pivot_enabled": CFG["pivot_enabled"], "seniority": CFG["seniority"], "travel_max": st.get("travel_max") or "any",
                "target_name": st.get("target_name") or "Target", "target_summary": st.get("target_summary") or st.get("target_text", ""),
                "ai_scored": sum(1 for j in jobs if j.get("ai_fit") is not None),
@@ -1438,7 +1506,8 @@ def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
                 j["new"] = bool(since) and (j.get("first_seen") or "") >= since
             apply_requirements(pid, jobs)
             set_pay_spread(jobs)
-            relevance = lookfor.scorer(pid, prof)   # free, plain code: every job gets a Relevance (None with no sheet)
+            # free, plain code: every job gets a Relevance (None with no sheet); fit: skills most postings mention count less
+            relevance = lookfor.scorer(pid, prof).fit(jobs)
             for j in jobs:
                 relevance.score(j)
             if rate:
@@ -1523,7 +1592,10 @@ def rerate(pid, n=None, opts=None):
     if opts is None or len(opts["tiers"]) == 3:
         print(f"Rating {people.name(pid)}'s jobs: a quick check first, then a closer look at the best ones", flush=True)
     elif opts.get("only_ids") is not None:
-        print(f"Quick check of {len(opts['only_ids'])} new jobs on {people.name(pid)}'s board (Haiku)", flush=True)
+        import ai_score
+        n_new, n_run = len(opts["only_ids"]), min(len(opts["only_ids"]), ai_score.RUN_LIMITS["quick"], int(opts["budgets"]["haiku"]))
+        print(f"Quick check of {n_run} new jobs on {people.name(pid)}'s board (Haiku)" if n_run >= n_new else
+              f"Quick check of the {n_run} most relevant of {n_new:,} new jobs on {people.name(pid)}'s board (Haiku)", flush=True)
     else:
         print(f"{' + '.join(TIER_NAMES[t] for t in opts['tiers'])} for {people.name(pid)}"
               f"{' (fresh look at every pick)' if opts['force'] else ' (only ratings that need it)'}", flush=True)

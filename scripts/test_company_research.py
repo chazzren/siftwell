@@ -116,13 +116,14 @@ check("old auto entries not in auto.json are dropped", "Was Auto" not in m)
 # ---------------------------------------------------------------- queue order, refresh, backoff
 reset_facts()
 q = cr.queue(weights={"B": 2.0, "A": 5.0, "Z": 0}, open_counts={"A": 3, "B": 1, "C": 50, "D": 2, "E": 0}, auto={}, failed={}, hand=set())
-check("board companies first by weight, then the rest by open listings; nothing open + unseen left out", q == ["A", "B", "C", "D"])
+check("only companies on someone's board, top-ranked first; a catalog company on nobody's board is never looked up", q == ["A", "B"])
 auto = {"A": {"researched_at": ago(100)}, "B": {"researched_at": ago(200)}}
 failed = {"C": {"at": ago(5)}, "D": {"at": ago(20)}}
-q = cr.queue(weights={"A": 5, "B": 2}, open_counts={"C": 50, "D": 2, "H": 1}, auto=auto, failed=failed, hand={"H"})
+q = cr.queue(weights={"A": 5, "B": 2, "C": 1, "D": 1, "H": 9}, open_counts={"C": 50, "D": 2, "H": 1, "Unseen": 400}, auto=auto, failed=failed, hand={"H"})
 check("researched 100 days ago is skipped, 200 days ago is due", "A" not in q and "B" in q)
 check("failed 5 days ago waits, 20 days ago is retried", "C" not in q and "D" in q)
 check("hand-researched companies are never queued", "H" not in q)
+check("...and neither is one with 400 open listings that is on nobody's board", "Unseen" not in q)
 
 # board weights from everyone's boards
 people.save_index([{"id": "ann", "name": "Ann"}, {"id": "bob", "name": "Bob"}])
@@ -131,8 +132,10 @@ paths.dump_json_atomic(people.pdir("jobs.json", pid="ann"), {"jobs": [
     {"company": "Gamma", "score": 99, "req_status": "unmet"}]})
 paths.dump_json_atomic(people.pdir("jobs.json", pid="bob"), {"jobs": [{"company": "Beta", "score": 40}, {"company": "Delta", "score": 10}]})
 w = cr.board_weights()
-check("weights add up over people, unmet jobs ignored", "Gamma" not in w and abs(w["Alpha"] - 1.9) < 1e-9 and abs(w["Beta"] - 1.55) < 1e-9)
-check("queue from boards orders Alpha, Beta, Delta", cr.queue(open_counts={})[:3] == ["Alpha", "Beta", "Delta"])
+check("weight = the best-ranked job on anyone's board (plus a little per job); unmet jobs ignored",
+      "Gamma" not in w and w["Beta"] > w["Alpha"] > w["Delta"] and abs(w["Beta"] - 95.12) < 1e-9 and abs(w["Alpha"] - 90.12) < 1e-9)
+check("queue from boards: the top-ranked first (Beta, Alpha, Delta)", cr.queue(open_counts={"Elsewhere": 9})[:4] == ["Beta", "Alpha", "Delta"])
+check("the default is 10 companies per update", people.PREF_SCHEMA[cr.PREF][0] == 10 and cr.per_update_cap() == 10)
 
 # ---------------------------------------------------------------- cap
 people.save_prefs({cr.PREF: 5}, pid="ann")

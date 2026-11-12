@@ -25,12 +25,27 @@ FILE, LEARN_FILE = "lookfor.json", "lookfor_learn.json"
 ONET_FILE = os.path.join(paths.ASSETS, "onet", "onet.json.gz")
 VERSION = 1
 
-# Tier weights: how much a title match in each group counts (the most recent job counts most).
-TIERS = {"same": 1.0, "occ": 0.9, "wanted": 0.85, "up": 0.85, "related": 0.6, "past": 0.5, "keyword": 0.5}
-TIER_WORDS = {"same": "your job title", "occ": "another name for your job", "wanted": "a title you search for",
-              "up": "one step up", "related": "a related role", "past": "a job you held before", "keyword": "a title word from your profile"}
+# How high a job can score through each kind of entry on the sheet (0-100). The person's own titles come first: their
+# most recent title (and titles they added themselves), then titles they search for, Claude's other names for that same
+# job, the job they held before. Names from the occupation list (O*NET) always sit below those; related roles and loose
+# title phrases below that. Older jobs fade (PAST_CAPS: the job before this one, the one before that, ...).
+CAPS = {"same": 100, "wanted": 90, "same_claude": 86, "alt": 78, "up": 72, "related": 60, "keyword": 55, "occ": 50,
+        "relocc": 42}
+PAST_CAPS = (82, 66, 58, 52)
+TIER_WORDS = {"same": "your job title", "wanted": "a title you search for", "same_claude": "another name for your job",
+              "alt": "another name for your job", "up": "one step up", "related": "a related role",
+              "past": "a job you held before", "keyword": "a title phrase from your profile",
+              "occ": "the same kind of work", "relocc": "a related occupation"}
 NUDGE_UP, NUDGE_DOWN, LEARN_KEEP = 8, 10, 300
-MAX_TITLES, MAX_SKILLS = 60, 40
+MAX_TITLES, MAX_SKILLS = 60, 60
+# Skills found in the posting text. A title match is worth its full cap only when the posting also mentions the person's
+# skills: with none it gets (100 - SKILL_PART)% of it, so two postings with the same title are told apart by their
+# text and the caps stay true ceilings. With no title match at all, skills alone reach at most SKILL_ALONE.
+# Only the person's own skills count (see build).
+SKILL_PART, SKILL_ALONE = 12, 25
+# A title that is not on the sheet but shares telling words with the person's titles ("Program Manager, Field" for
+# someone looking for "Technical Program Manager") gets a little credit, at most this much: far below any real match.
+SHARED_MAX = 25
 
 # The 23 SOC major groups under plain names (the first two digits of an O*NET code).
 FIELDS = {"11": "Management", "13": "Business and finance", "15": "Computers and math", "17": "Architecture and engineering",
@@ -44,7 +59,9 @@ FIELDS = {"11": "Management", "13": "Business and finance", "15": "Computers and
 _SMALL = {"and", "of", "the", "for", "in", "at", "to", "a", "an", "or", "with", "on", "by", "per"}
 # level words carry no weight: "Senior Registered Nurse II" is the same job as "Registered Nurse"
 LEVEL = {"senior", "sr", "junior", "jr", "lead", "principal", "i", "ii", "iii", "iv", "v", "vi", "level", "entry", "mid",
-         "experienced", "trainee", "1", "2", "3", "4", "5", "6"}
+         "experienced", "trainee", "1", "2", "3", "4", "5", "6", "new", "grad", "graduate"}
+# words employers add to a title that say nothing about the job
+NOISE = {"remote", "hybrid", "prn", "temporary", "temp", "urgent", "hiring", "now"}
 _TOK = re.compile(r"[a-z0-9]+(?:[+#]+)?")
 
 
@@ -109,71 +126,264 @@ def _tw(toks):
     return sum(weight(t) for t in set(toks))
 
 
-def _head(seq):
-    """The main word of a title: the last word before any "of"/comma tail ("Director of Nursing" -> director)."""
-    return seq[-1] if seq else None
-
-
 GENERIC_W = 10.0   # a one-word name lighter than this (used by 40+ occupations: "Manager", "Technician") says little by itself
+HEAD_MIN = 40      # a word that ends this many names in the occupation list is a job word ("Manager", "Practitioner")
 
-_INDEX = {}
+# Short forms that mean exactly the same job, always (the occupation list adds more, see _lex). Kept tiny on purpose.
+ABBR = {"rn": "registered nurse", "lpn": "licensed practical nurse", "lvn": "licensed vocational nurse",
+        "np": "nurse practitioner", "cna": "certified nursing assistant", "emt": "emergency medical technician",
+        "cpa": "certified public accountant"}
+_LEX = {}
 
 
-def _name_index():
-    """{normalized title: [codes]} over every occupation title and other name (built once, ~0.5 s)."""
-    if not _INDEX:
-        idx = {}
-        for code, o in onet()["occ"].items():
-            for k, t in enumerate([o["t"]] + o["a"]):
-                key = " ".join(sorted(set(x for x in tokens(t) if x not in LEVEL)))
-                if key:
-                    idx.setdefault(key, []).append((0 if k == 0 else 1 if k <= o["n"] else 2, code))
-        _INDEX.update(idx)
-    return _INDEX
+def _lex():
+    """Built once from the extract (~0.5 s): heads = words that end many job names (a title that goes on with one of
+    them after the person's own title is a different job: "Nurse Practitioner", "Electrician Helper"); abbr = {long
+    form as a word tuple: short form} for short forms that are reliable, meaning the occupation list gives the short
+    form exactly one long form (RN = Registered Nurse; "RA" has seven, so it is left alone); index = {name as an
+    ordered word phrase: [(0 the occupation's title / 1 a commonly reported name / 2 another name, code)]}."""
+    if not _LEX:
+        occs = onet()["occ"]              # (loaded before taking the lock: onet() takes it too)
+        with _OLOCK:
+            if not _LEX:
+                heads, pairs, names = {}, {}, []
+                for code, o in occs.items():
+                    all_names = [o["t"]] + o["a"]
+                    shorts = [a for a in all_names if re.fullmatch(r"[A-Z]{3,5}", a)]
+                    for k, t in enumerate(all_names):
+                        seq = [x for x in tokens(t) if x not in LEVEL]
+                        if not seq:
+                            continue
+                        heads[seq[-1]] = heads.get(seq[-1], 0) + 1
+                        names.append((seq, 0 if k == 0 else 1 if k <= o["n"] else 2, code))
+                        ws = [w for w in re.findall(r"[A-Za-z]+", t) if w.lower() not in _SMALL]
+                        for a in shorts:
+                            if len(ws) == len(a) and "".join(w[0].upper() for w in ws) == a:
+                                pairs.setdefault(a.lower(), set()).add(tuple(tokens(t)))
+                abbr = {tuple(tokens(long)): short for short, long in ABBR.items()}
+                for short, longs in pairs.items():
+                    if len(longs) == 1 and short not in ABBR and heads.get(short, 0) < HEAD_MIN:
+                        abbr.setdefault(next(iter(longs)), short)
+                first = {}
+                for long in abbr:
+                    first.setdefault(long[0], []).append(long)
+                for v in first.values():
+                    v.sort(key=len, reverse=True)
+                lex = {"heads": {w for w, n in heads.items() if n >= HEAD_MIN}, "head_n": heads, "abbr": abbr, "abbr_first": first}
+                index = {}
+                for seq, rank, code in names:
+                    index.setdefault(" ".join(canon(seq, lex)), []).append((rank, code))
+                lex["index"] = index
+                _LEX.update(lex)
+    return _LEX
+
+
+def canon(seq, lex=None):
+    """A word list with long forms folded to their short form: [registered, nurse, icu] -> [rn, icu]."""
+    lex = lex or _lex()
+    first, abbr = lex["abbr_first"], lex["abbr"]
+    if not any(t in first for t in seq):
+        return list(seq)
+    out, i = [], 0
+    while i < len(seq):
+        for long in first.get(seq[i], ()):
+            if tuple(seq[i:i + len(long)]) == long:
+                out.append(abbr[long]); i += len(long)
+                break
+        else:
+            out.append(seq[i]); i += 1
+    return out
+
+
+def phrase(title):
+    """A title as the ordered words that are compared: level and filler words dropped, long forms folded."""
+    return tuple(canon([t for t in tokens(title) if t not in LEVEL and t not in NOISE]))
+
+
+_PAREN = re.compile(r"\(([^()]*)\)|\[([^\[\]]*)\]")
+_CODE = re.compile(r"(?:\b(?:req(?:uisition)?|job|id|ref|jr|r)\s*[#:-]?\s*\d{3,}\b)|#\s*\d+|\b[a-z]{0,4}-?\d{4,}\b", re.I)
+_SEPS = re.compile(r"\s+[-–—|:@•]+\s*|[-–—|:]+\s+|\s*[–—|•]\s*|--+")
+
+
+def title_parts(title):
+    """A posted title taken apart: (core phrases, side phrases). Employers add the site, unit, shift and requisition
+    number after the title ("Phlebotomist- Westerville Family Physicians", "Staff RN – PICU", "Program Manager (R5448)");
+    the core is what comes before that, and it is what gets compared with the sheet. "Manager, Sales Operations" is
+    also read as "Sales Operations Manager"; "Analyst/Consultant" as either. The side phrases (the parts after a dash
+    or in brackets: "New Grad Nurse – RN") only count when one of them IS a title on the sheet."""
+    t = " ".join(str(title or "").replace("’", "'").split())
+    side = []
+    def paren(m):
+        side.append(m.group(1) or m.group(2) or "")
+        return " "
+    t = _CODE.sub(" ", _PAREN.sub(paren, t))
+    segs = [s.strip(" ,;/") for s in _SEPS.split(t) if s and s.strip(" ,;/")]
+    if not segs:
+        return [], [p for p in (phrase(s) for s in side) if p]
+    main, side = segs[0], segs[1:] + side
+    cores = []
+    parts = [p.strip() for p in main.split(",") if p.strip()]
+    if len(parts) > 1:
+        left, right = parts[0], parts[1]
+        lp = phrase(left)
+        cores.append(left)
+        if 0 < len(lp) <= 3:
+            cores.append(right + " " + left)      # "Manager, Sales Operations" -> "Sales Operations Manager"
+        side = [right] + parts[2:] + side
+    else:
+        cores.append(main)
+    out = []
+    for c in cores:
+        if "/" in c:
+            bits = [b.strip() for b in c.split("/") if b.strip()]
+            if len(bits) > 1 and all(len(phrase(b)) >= 2 for b in bits):
+                out += bits[:3]                    # "Project Manager / Scrum Master": two titles
+                continue
+            m = re.search(r"(\S+)\s*/\s*(\S+)", c)  # "Analyst/Consultant": either word
+            if m:
+                out += [c[:m.start()] + m.group(1) + c[m.end():], c[:m.start()] + m.group(2) + c[m.end():]]
+                continue
+        out.append(c)
+    seen, res = set(), []
+    for c in out:
+        p = tuple(x for x in phrase(c) if not (len(x) >= 3 and x.isdigit()))
+        if p and p not in seen:
+            seen.add(p); res.append(p)
+    return res, [p for p in (phrase(s) for s in side) if p]
+
+
+CATCH_ALL = {"11-1021.00", "11-1011.00"}   # General and Operations Managers, Chief Executives: far too broad to widen by
+
+
+def _catch_all(code):
+    return code in CATCH_ALL or "All Other" in (onet()["occ"].get(code) or {}).get("t", "")
 
 
 def find_occupations(title, limit=2):
-    """O*NET occupations for a typed job title, best first: [(code, how sure 0-1)]. Exact names first ("RN",
-    "Staff Nurse"), then the closest names by shared words. [] when nothing is close enough."""
-    toks = [t for t in tokens(title) if t not in LEVEL]
-    if not toks:
+    """O*NET occupations for a typed job title, best first: [(code, how sure 0-1)]. Conservative on purpose: only an
+    occupation that lists the typed title as one of its names (1.0), or lists the main part of it ("Journeyman
+    Electrician" has "Electrician": 0.8). Never by loosely shared words, never a catch-all ("General and Operations
+    Managers", "... All Other") unless that is what was typed, and nothing at all when the name fits too many
+    occupations to choose from ("Teacher" alone names 20 kinds). [] when unsure: the sheet then simply uses the
+    person's own titles."""
+    seq = phrase(title)
+    if not seq:
         return []
-    idx = _name_index()
-    key = " ".join(sorted(set(toks)))
-    if key in idx:
-        seen, out = set(), []
-        for _, code in sorted(idx[key]):
-            if code not in seen:
-                seen.add(code); out.append((code, 1.0))
-        return out[:limit]
-    mine, mw = set(toks), _tw(toks)
-    if mw <= 0:
+    idx = _lex()["index"]
+    key = " ".join(seq)
+    hits, sure = idx.get(key), 1.0
+    if not hits:
+        subs = []
+        for n in range(len(seq) - 1, 0, -1):
+            for i in range(len(seq) - n, -1, -1):          # the end of the title first (its main word), then the rest
+                subs.append(seq[i:i + n])
+        for sub in subs:
+            if len(sub) == 1 and (weight(sub[0]) < GENERIC_W or sub[0] in LEVEL):
+                continue
+            hits = idx.get(" ".join(sub))
+            if hits:
+                sure = 0.8
+                break
+    if not hits:
         return []
-    best = {}
-    for k, lst in idx.items():
-        ks = set(k.split())
-        shared = mine & ks
-        if not shared:
+    return _choose(hits, seq, sure)[:limit]
+
+
+def _choose(hits, seq, sure):
+    """Which of the occupations that list a title to use. A plain title sits under many ("Project Manager", "Shift
+    Supervisor", "Teacher"): then none is chosen, because any pick would be a guess."""
+    occ, typed = onet()["occ"], set(seq)
+    def own(code):      # how much of the typed title is in the occupation's own title
+        return _tw(typed & set(phrase(occ[code]["t"])))
+    rank = {}
+    for r, code in hits:
+        rank[code] = min(r, rank.get(code, 9))
+    # 1. occupations named after the title itself ("Truck Driver": Heavy and Tractor-Trailer Truck Drivers, Light Truck Drivers)
+    exact = [c for c, r in rank.items() if r == 0]
+    if exact:
+        return [(c, sure) for c in sorted(exact)]
+    full = [c for c, r in rank.items() if r <= 1 and typed <= set(phrase(occ[c]["t"])) and not _catch_all(c)]
+    if full:
+        return [(c, sure) for c in sorted(full, key=lambda c: (rank[c], c))] if len(full) <= 3 else []
+    # 2. otherwise only a title that one or two occupations list at all
+    if len(rank) > 2:
+        return []
+    codes = [c for c in rank if not _catch_all(c)]
+    top = max((own(c) for c in codes), default=0)
+    return [(c, sure) for c in sorted(codes, key=lambda c: (rank[c], c)) if own(c) == top]
+
+
+def field_of(title):
+    """The field for a typed title: the major group of its occupation, or the one group every occupation that lists
+    the title (or its main words) belongs to, even when there are too many to pick one ("Teacher", "4th Grade
+    Teacher" -> Education). "" when they disagree."""
+    found = find_occupations(title)
+    if found:
+        return FIELDS.get(found[0][0][:2], "")
+    seq, idx = phrase(title), _lex()["index"]
+    for n in range(len(seq), 0, -1):
+        for i in range(len(seq) - n, -1, -1):
+            hits = idx.get(" ".join(seq[i:i + n]))
+            if hits:
+                groups = {code[:2] for _, code in hits if not _catch_all(code)}
+                return FIELDS.get(groups.pop(), "") if len(groups) == 1 else ""
+    return ""
+
+
+def related_occupations(code, limit=5):
+    """The occupation list's neighbours of an occupation, kept only when they are plainly the same line of work: the
+    same major group or a telling word in common ("Truck" drivers and "Truck" mechanics). Catch-alls are left out."""
+    o = onet()["occ"].get(code) or {}
+    heads = _lex()["heads"]
+    mine = {t for t in phrase(o.get("t", "")) if weight(t) >= GENERIC_W and t not in heads and t not in ("first", "line")}
+    fls = o.get("t", "").startswith("First-Line Supervisors")     # (their neighbours are supervisors of every other trade)
+    out = []
+    for r in o.get("r", []):
+        ro = onet()["occ"].get(r)
+        if not ro or _catch_all(r) or r == code:
             continue
-        sw = _tw(shared)
-        sim = sw / (0.5 * mw + 0.5 * _tw(ks))
-        if sim >= 0.72:
-            for rank, code in lst:
-                s = sim - 0.01 * rank
-                if s > best.get(code, 0):
-                    best[code] = s
-    if not best:
-        # nothing close: the nearest name that shares the title's main word ("5th Grade Teacher" -> a teacher), if any
-        head, top = toks[-1], (0.0, None)
-        for k, lst in idx.items():
-            ks = k.split()
-            if head in ks:
-                sim = _tw(mine & set(ks)) / (0.5 * mw + 0.5 * _tw(ks))
-                if sim > top[0]:
-                    top = (sim, min(lst)[1])
-        if top[1] and top[0] >= 0.45:
-            best[top[1]] = top[0]
-    return sorted(((c, round(s, 2)) for c, s in best.items()), key=lambda x: (-x[1], x[0]))[:limit]
+        if (r[:2] == code[:2] and not fls) or mine & set(phrase(ro["t"])):
+            out.append(r)
+    return out[:limit]
+
+
+_SUP = ("supervisor", "manager", "foreman", "charge", "head", "chief")
+_LADDER = (("supervisor", "manager"), ("manager", "director"), ("director", "vice president"), ("coordinator", "manager"))
+_UNDER = ("assistant", "associate", "deputy", "vice")
+
+
+def step_up(title, limit=4):
+    """Titles one step up from a job title, with no Claude: names in the occupation list that are the same title plus
+    a supervising word ("Registered Nurse" -> "Charge Nurse", "Nurse Manager"; "Electrician" -> "Electrician
+    Supervisor"), else the next rung of a short ladder ("Assistant Store Manager" -> "Store Manager"; supervisor ->
+    manager -> director). Few and plain; the person can remove them."""
+    seq = phrase(title)
+    if not seq:
+        return []
+    words = clean_title(title).split()
+    low = [stem(w.lower().strip(",")) for w in words]
+    if len(words) > 1 and low[0] in _UNDER and low[1] not in ("president",):
+        return [" ".join(words[1:])]
+    mine = set(seq) | {t for t in tokens(title) if t not in LEVEL}     # (both "rn" and "registered nurse")
+    if mine & set(_SUP) or any(a in mine for a, _ in _LADDER):
+        for a, b in _LADDER:
+            hit = [i for i, w in enumerate(low) if w == a]
+            if hit:
+                i = hit[-1]
+                return [" ".join(words[:i] + [b.title() + ("," if words[i].endswith(",") else "")] + words[i + 1:])]
+        return []
+    tells = {t for t in mine if weight(t) >= GENERIC_W}
+    out, seen = [], set()
+    for key, lst in _lex()["index"].items():
+        ks = key.split()
+        if not 2 <= len(ks) <= len(seq) + 1 or not tells & set(ks):
+            continue
+        sup = [k for k in ks if k in _SUP]
+        if len(sup) == 1 and set(ks) - set(sup) <= mine and key not in seen:
+            seen.add(key)
+            out.append((min(r for r, _ in lst), len(ks), key))
+    shorts = set(_lex()["abbr"].values()) | {"hvac", "cdl", "it", "hr"}
+    return [" ".join(w.upper() if w in shorts else w.capitalize() for w in k.split()) for _, _, k in sorted(out)][:limit]
 
 
 def occ_names(code, common_only=False):
@@ -241,14 +451,37 @@ def _auto_recent(prof):
     return recent_title(p) or clean_title(lf.get("recent_title")) or clean_title(next(iter(p.get("target_roles") or []), ""))
 
 
-def _basis(recent, prof):
+BUILD = 2   # the way the automatic part is made. A new number rebuilds every sheet once (own chips and removals kept, no Claude).
+
+
+def _facts(pid):
+    try:
+        d = json.load(open(people.pdir("facts.json", pid=pid), encoding="utf-8"))
+        return [f for f in d if isinstance(f, dict)] if isinstance(d, list) else []
+    except Exception:
+        return []
+
+
+def _licenses(pid):
+    """License / certification names the person confirmed (highlights.json), if any."""
+    try:
+        import highlights
+        h = highlights.get(pid) or {}
+        return [clean_title(x.get("name")) for x in h.get("licenses") or [] if isinstance(x, dict) and x.get("name")]
+    except Exception:
+        return []
+
+
+def _basis(recent, prof, pid=None):
     """What the automatic part was built from. A new basis rebuilds it (the person's own chips are kept)."""
     p = prof or {}
     lf = p.get("look_for") if isinstance(p.get("look_for"), dict) else {}
-    blob = json.dumps([recent.lower(), [clean_title(e.get("title")).lower() for e in p.get("experience") or []],
-                       [clean_title(x).lower() for x in p.get("target_roles") or []],
-                       [clean_title(x).lower() for x in p.get("title_keywords") or []],
-                       [clean_title(x).lower() for x in p.get("skills") or []], lf, onet().get("version")], sort_keys=True)
+    low = lambda xs: [clean_title(x).lower() for x in xs or []]
+    blob = json.dumps([BUILD, recent.lower(), low(e.get("title") for e in p.get("experience") or []), low(p.get("target_roles")),
+                       low(p.get("title_keywords")), low(p.get("skills")), low(p.get("certifications")), low(p.get("fit_keywords")),
+                       [low(r.get("target_titles")) for r in p.get("reframings") or [] if isinstance(r, dict)],
+                       [(f.get("requirement"), f.get("level")) for f in _facts(pid)] if pid else [], lf, onet().get("version")],
+                      sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:12]
 
 
@@ -273,10 +506,58 @@ def _skill_ok(s):
     return 2 <= len(s) <= 40 and len(s.split()) <= 4 and (len(s) >= 3 or bool(re.search(r"[+#0-9]", s)))
 
 
+def _skill_forms(s):
+    """A skill as postings write it: the whole phrase, what is in brackets and each side of a slash
+    ("Low-code workflow implementation (Pega)" -> also "Pega"; "Agile/Scrum" -> "Agile", "Scrum")."""
+    s = clean_title(s)
+    out = [s]
+    for m in re.findall(r"\(([^()]{2,30})\)", s):
+        out.append(m.strip())
+    bare = re.sub(r"\s*\([^()]*\)", "", s).strip()
+    if bare and bare != s:
+        out.append(bare)
+    if "/" in bare and len(bare) <= 40:
+        out += [b.strip() for b in bare.split("/") if b.strip()]
+    return [x for x in out if x]
+
+
+def _generic_word(t):
+    """One plain word that names hundreds of different jobs ("Engineer", "Manager", "Project"): too loose to rank by."""
+    p = phrase(t)
+    return len(p) <= 1 and (not p or weight(p[0]) < GENERIC_W or _lex()["head_n"].get(p[0], 0) >= 100)
+
+
+def _merge_look(first, second):
+    """Two sets of Claude's ideas as one: every list is the union, `first` (the newer one) in front; single values
+    come from `first` when it has them."""
+    first, second = clean_look(first), clean_look(second)
+    out = {}
+    for k, v in first.items():
+        if isinstance(v, list):
+            seen, out[k] = set(), []
+            for x in v + second[k]:
+                if x.lower() not in seen:
+                    seen.add(x.lower()); out[k].append(x)
+        else:
+            out[k] = v or second[k]
+    return out
+
+
 def build(pid=None, prof=None):
     """(Re)build the automatic part of the sheet from the person's data and the O*NET extract, keep their own chips and
     removals, and save it. No Claude call: Claude's ideas arrive inside the profile ("look_for", made by the resume
-    reader in its one call) or from suggest(), and are simply read here."""
+    reader in its one call) and from suggest() ("Ask Claude for more ideas"); both are kept and merged here, the newer
+    one first.
+
+    Titles, in the order they count (see CAPS): the most recent title; the titles the person searches for; Claude's
+    other names for the same job; one step up (Claude's, else step_up()); related roles (Claude's and the ones the
+    resume reader's reframings open); the jobs held before, newest first; whole title phrases from the profile. One-word
+    catch-alls ("Engineer", "Manager") carried over from older title-word lists are left out. Occupations: only the
+    one(s) that list the most recent title by name (find_occupations), and their plainly related neighbours.
+    Skills: only what the person has: their profile's skills and certifications, licenses they confirmed, answers they
+    gave (yes / some), Claude's reading of their resume, and the match words the resume reader noted. The occupation
+    list's typical tools and task words are NOT added: they describe the occupation, not the person (they put "mentions
+    python" on a thousand jobs for people who never used it, and words like "family" or "status" matched everything)."""
     pid = pid or people.current()
     prof = prof if prof is not None else _profile(pid)
     old = load(pid) or {}
@@ -287,43 +568,61 @@ def build(pid=None, prof=None):
     lf = p.get("look_for") if isinstance(p.get("look_for"), dict) else None
     if lf and not any(lf.get(k) for k in ("same_titles", "step_up_titles", "related_roles", "key_skills")):
         lf = None
+    asked = old.get("claude") if isinstance(old.get("claude"), dict) and any(old["claude"].values()) else None
     recent = mine_recent or _auto_recent(p)
-    cl = lf or old.get("claude") or {}
+    # Claude's ideas: the resume reader's (in the profile) and the answer to "Ask Claude for more ideas" (kept on the
+    # sheet). Both count; whichever was made later goes first.
+    asked_newer = bool(asked) and str(old.get("claude_at") or "") >= str(p.get("_created") or p.get("_approved") or "")
+    cl = _merge_look(asked, lf) if asked_newer else _merge_look(lf, asked)
     titles, occs, skills = [], [], []
-    add = lambda t, tier, src: titles.append({"t": clean_title(t), "tier": tier, "src": src}) if clean_title(t) else None
+    def add(t, tier, src):
+        t = clean_title(t)
+        if t and not (tier in ("wanted", "related", "keyword", "up") and _generic_word(t)):
+            titles.append({"t": t, "tier": tier, "src": src})
     if recent:
         add(recent, "same", "you" if mine_recent else "profile")
-    for t in cl.get("same_titles") or []:
+    for t in cl["same_titles"]:
         add(t, "same", "claude")
-    # the occupation behind the most recent title: its other names count as the same job, its neighbours as related
-    found = find_occupations(recent) if recent else []
-    for code, _ in found[:2]:
+    # the occupation that lists the most recent title by name: its other names widen the search, its neighbours are related
+    found = [c for c, _ in find_occupations(recent)] if recent else []
+    for code in found:
         occs.append({"code": code, "tier": "same", "src": "onet"})
-    rel = []
-    for code, _ in found[:2]:
-        for r in onet()["occ"].get(code, {}).get("r", []):
-            if r not in rel and r not in [c for c, _ in found[:2]]:
-                rel.append(r)
-    for r in rel[:8]:
-        occs.append({"code": r, "tier": "related", "src": "onet"})
+    for code in found[:1]:
+        for r in related_occupations(code):
+            if r not in found:
+                occs.append({"code": r, "tier": "related", "src": "onet"})
     for t in p.get("target_roles") or []:
         add(t, "wanted", "profile")
-    for t in cl.get("step_up_titles") or []:
+    for t in cl["step_up_titles"]:
         add(t, "up", "claude")
-    for t in cl.get("related_roles") or []:
+    if recent and not cl["step_up_titles"]:
+        for t in step_up(recent):
+            add(t, "up", "onet")
+    for t in cl["related_roles"]:
         add(t, "related", "claude")
+    for r in p.get("reframings") or []:           # roles the resume reader said this experience opens
+        for t in (r.get("target_titles") or [])[:4] if isinstance(r, dict) else []:
+            add(t, "related", "profile")
     for e in p.get("experience") or []:
         add(e.get("title"), "past", "profile")
+    heads = _lex()["heads"]
     for t in p.get("title_keywords") or []:
-        if len(str(t).split()) >= 2:      # whole phrases only: single words ("security") are too loose to rank by
+        ph = phrase(t)
+        # whole phrases, or one telling word ("pega", "salesforce"); never a loose single word ("security", "manager")
+        if len(ph) >= 2 or (len(ph) == 1 and len(ph[0]) >= 3 and ph[0] not in heads and weight(ph[0]) >= 2 * GENERIC_W):
             add(t, "keyword", "profile")
-    for s in p.get("skills") or []:
-        skills.append({"t": clean_title(s), "src": "profile"})
-    for s in cl.get("key_skills") or []:
-        skills.append({"t": clean_title(s), "src": "claude"})
-    for code, _ in found[:1]:
-        o = onet()["occ"].get(code, {})
-        skills += [{"t": s, "src": "onet"} for s in o.get("s", [])[:8]] + [{"t": s, "src": "onet", "w": 0.5} for s in o.get("k", [])[:8]]
+    def skill(s, src, w=None):
+        for form in _skill_forms(s):
+            skills.append({"t": form, "src": src, **({"w": w} if w else {})})
+    for s in (p.get("skills") or []) + (p.get("certifications") or []) + _licenses(pid):
+        skill(s, "profile")
+    for f in _facts(pid):
+        if f.get("level") in ("yes", "some") and f.get("requirement"):
+            skill(f["requirement"], "answers")
+    for s in cl["key_skills"]:
+        skill(s, "claude")
+    for s in p.get("fit_keywords") or []:
+        skill(s, "profile", 0.6)
     # the person's own chips come first and are never dropped; removed ones stay removed
     own_t = [x for x in old.get("titles") or [] if x.get("src") == "you" and not (x.get("tier") == "same" and mine_recent and x["t"].lower() == mine_recent.lower())]
     own_s = [x for x in old.get("skills") or [] if x.get("src") == "you"]
@@ -331,10 +630,10 @@ def build(pid=None, prof=None):
     titles = _dedupe(own_t + [x for x in titles if x["t"].lower() not in rm_t])[:MAX_TITLES]
     skills = _dedupe(own_s + [x for x in skills if _skill_ok(x["t"]) and x["t"].lower() not in rm_s])[:MAX_SKILLS]
     occs = _dedupe(own_o + [x for x in occs if x["code"] not in rm_o], key=lambda x: x["code"])
-    field = old.get("field") if old.get("field_by") == "you" else (clean_title(cl.get("field")) or (FIELDS.get(found[0][0][:2], "") if found else ""))
+    field = old.get("field") if old.get("field_by") == "you" else (cl["field"] or (field_of(recent) if recent else ""))
     sheet = {"v": VERSION, "recent": recent, "recent_by": "you" if mine_recent else "profile", "titles": titles, "occs": occs,
              "skills": skills, "field": field or "", "field_by": old.get("field_by") or "auto", "removed": removed,
-             "basis": _basis(recent, p), "claude": old.get("claude") or {},
+             "basis": _basis(recent, p, pid), "claude": asked or {}, "claude_at": old.get("claude_at") or "",
              # a Claude suggestion is only ever asked for titles it has not seen: a sheet first built for a profile that
              # already existed (an upgrade) starts as "seen", so upgrading never spends a call
              "claude_basis": old.get("claude_basis") or _claude_basis(recent, p)}
@@ -349,7 +648,7 @@ def ensure(pid=None, prof=None):
     prof = prof if prof is not None else _profile(pid)
     sheet = load(pid)
     recent = clean_title(sheet.get("recent")) if sheet and sheet.get("recent_by") == "you" else _auto_recent(prof)
-    if sheet and sheet.get("basis") == _basis(recent, prof):
+    if sheet and sheet.get("basis") == _basis(recent, prof, pid):
         return sheet
     try:
         return build(pid, prof)
@@ -449,7 +748,7 @@ def _drop_from_profile(pid, text):
             resume.edit_active(edits)
             sheet = load(pid)
             if sheet:      # same data minus the removed title: no need to rebuild
-                sheet["basis"] = _basis(sheet.get("recent", ""), resume.load_active())
+                sheet["basis"] = _basis(sheet.get("recent", ""), resume.load_active(), pid)
                 _save(sheet, pid)
     finally:
         people.set_current(prev)
@@ -498,10 +797,18 @@ def suggest(pid, force=False):
         lines.append("Skills they list: " + "; ".join(clean_title(s) for s in prof["skills"][:30]))
     if prof.get("summary"):
         lines.append("About them: " + str(prof["summary"])[:600])
+    have = [x["t"] for x in sheet.get("titles") or [] if x.get("tier") != "past"][:40]
+    if have:      # (so a second ask brings new ideas instead of the same list)
+        lines.append("Already on their list (suggest titles that are NOT here): " + "; ".join(have))
+    gone = (sheet.get("removed") or {}).get("titles") or []
+    if gone:
+        lines.append("They removed these, do not suggest them again: " + "; ".join(gone[:40]))
     out = claude_cli.run_json(LOOK_SYSTEM, "\n".join(lines), LOOK_SCHEMA, model=MODEL, effort="low", timeout=180,
                               feature="What to look for")
     sheet = load(pid) or sheet
-    sheet["claude"] = clean_look(out)
+    # kept next to the resume reader's ideas (build merges the two, the newer first); an earlier answer is kept too
+    sheet["claude"] = _merge_look(out, sheet.get("claude"))
+    sheet["claude_at"] = dt.datetime.now().isoformat(timespec="seconds")
     sheet["claude_basis"] = _claude_basis(sheet["recent"], prof)
     sheet["basis"] = ""          # (rebuild with the new ideas)
     _save(sheet, pid)
@@ -569,108 +876,263 @@ def reset_learning(pid=None):
 
 
 # ---------------------------------------------------------------- the Relevance score
+OWN_TIERS = ("same", "wanted", "same_claude", "past", "up")
+
+
 class Scorer:
-    """Relevance for one person's sheet. title_score() is cached per distinct title, so 10,000+ jobs take a second or
-    two. score(job) sets job["rel"] (0-100, or None when the sheet has no titles) and job["rel_why"] (plain words)."""
+    """Relevance for one person's sheet: plain code, explainable, no Claude.
+
+    The title decides. A posted title is first cut down to its core (title_parts: the site, unit and requisition number
+    after a dash, comma or bracket are not the job), then compared with every entry on the sheet as an ORDERED phrase,
+    never as a bag of words ("Nurse Practitioner - ICU" is not an "ICU Nurse"):
+      the same phrase                                    100% of the entry's cap (CAPS: own titles 100 ... related 42)
+      the entry at the end, words before it              93%  ("Pediatric Registered Nurse", "Staff RN")
+      the entry, then a specialty                        88%  ("Registered Nurse ICU")
+      the entry, then another job word                   50%  ("Nurse Practitioner" for "Nurse": a different job)
+      the entry's words in order with one or two between 72%  ("Business Process Improvement Manager")
+      a shorter title that is the end of the entry       50-80% ("Elementary Teacher" for "Elementary School Teacher")
+    A title that fits no entry but shares telling words with the person's titles gets a little (at most SHARED_MAX).
+    The best entry wins (the longer one on a tie), so the reason shown is always one line. A title the person removed
+    takes its own matches away with it. Skills the person really has, found in the posting text, add a little
+    (SKILL_PART / SKILL_ALONE); common ones that most postings mention count less (fit()). Saved / hidden jobs nudge by
+    the words of their titles that are NOT the person's own job titles, so hiding one "Registered Nurse" posting in
+    the wrong state never pushes Registered Nurse jobs down.
+
+    title_score() is cached per distinct title, so 10,000+ jobs take a second or two. score(job) sets job["rel"]
+    (0-100, or None when the sheet has no titles) and job["rel_why"] (plain words)."""
 
     def __init__(self, sheet, learn=None):
         self.sheet = sheet or {}
         self.empty = is_empty(self.sheet)
+        self.heads = _lex()["heads"]
         self.entries, self.index, self._cache = [], {}, {}
-        seen = set()
-        def put(title, tier, label):
-            seq = [t for t in tokens(title) if t not in LEVEL]
-            toks = frozenset(seq)
-            w = _tw(toks)
-            if not toks or w <= 0 or (toks, tier) in seen:
+        removed = self.sheet.get("removed") or {}
+        gone = {phrase(t) for t in removed.get("titles") or []}
+        blocked = set(gone)              # names the occupation list may not bring back
+        for code in removed.get("occs") or []:
+            gone.add(phrase(occ_title(code)))
+            blocked.update(phrase(n) for n in occ_names(code))
+        seen = {}
+
+        def put(title, tier, cap, loose=False):
+            p = phrase(title)
+            w = _tw(p)
+            if not p or w <= 0:
                 return
-            seen.add((toks, tier))
-            i = len(self.entries)
-            self.entries.append((toks, w, TIERS[tier], tier, label, _head(seq)))
-            for t in toks:
-                self.index.setdefault(t, []).append(i)
+            if tier in ("alt", "occ", "relocc") and (p in blocked or any(self._inside(g, p) for g in gone)):
+                return                   # the person removed this (or the title inside it): the occupation list can't bring it back
+            k = seen.get(p)
+            if k is not None:
+                if self.entries[k][2] < cap:
+                    self.entries[k] = (p, w, cap, tier, clean_title(title), loose)
+                return
+            seen[p] = len(self.entries)
+            self.entries.append((p, w, cap, tier, clean_title(title), loose))
+
+        recent = phrase(self.sheet.get("recent") or "")
+        past_n = 0
         for x in self.sheet.get("titles") or []:
-            put(x["t"], x.get("tier") if x.get("tier") in TIERS else "related", x["t"])
+            tier = x.get("tier")
+            if tier == "same":
+                tier = "same" if x.get("src") != "claude" else "same_claude"
+            elif tier == "past":
+                p = phrase(x["t"])
+                if p == recent or p in seen and self.entries[seen[p]][3] == "past":
+                    continue
+                put(x["t"], "past", PAST_CAPS[min(past_n, len(PAST_CAPS) - 1)])
+                past_n += 1
+                continue
+            elif tier not in CAPS:
+                tier = "related"
+            put(x["t"], tier, CAPS[tier], loose=tier == "keyword")
+        own = set(recent) | {t for t in tokens(self.sheet.get("recent") or "") if t not in LEVEL}
+        longs = {short: long for long, short in _lex()["abbr"].items()}
+        for t in recent:                 # "RN" also has the words of "Registered Nurse"
+            own.update(longs.get(t, ()))
+        own_w = _tw(recent)
         for x in self.sheet.get("occs") or []:
-            tier = "occ" if x.get("tier") == "same" else "related"
+            same = x.get("tier") == "same"
             for n in occ_names(x["code"]):
-                put(n, tier, n)
+                p = phrase(n)
+                if same:
+                    # a name that shares the telling words of the person's own title is another name for their job
+                    # ("Staff Nurse" for an RN); the occupation's other names are only the same kind of work
+                    # ("Accounting Manager" is in the same occupation as "Office Manager", and is not the same job)
+                    close = own_w > 0 and _tw(set(p) & own) >= 0.5 * own_w
+                    put(n, "alt" if close else "occ", CAPS["alt" if close else "occ"])
+                else:
+                    put(n, "relocc", CAPS["relocc"])
+        for i, e in enumerate(self.entries):
+            for t in set(e[0]):
+                self.index.setdefault(t, []).append(i)
+        have = {e[0] for e in self.entries if e[3] in OWN_TIERS}
+        self.gone = [g for g in gone if g and g not in have]
+        self.own_toks = set()
+        for e in self.entries:
+            if e[3] in OWN_TIERS:
+                self.own_toks.update(e[0])
+        self.own_toks |= own
+        self.word_w = {}                 # word -> the best cap (0-1) of a title on the sheet that has it
+        for e in self.entries:
+            if e[3] not in ("alt", "occ", "relocc"):
+                for t in e[0]:
+                    self.word_w[t] = max(self.word_w.get(t, 0.0), e[2] / 100)
         self.skills = []
         for x in self.sheet.get("skills") or []:
             s = x["t"].lower()
-            self.skills.append((s, re.compile(r"(?<![a-z0-9])" + re.escape(s) + r"(?:e?s)?(?![a-z0-9+#])"), float(x.get("w") or (0.8 if x.get("src") == "onet" else 1.0))))
+            self.skills.append([s, re.compile(r"(?<![a-z0-9])" + re.escape(s) + r"(?:e?s)?(?![a-z0-9+#])"), float(x.get("w") or 1.0)])
+        self.has_skills = bool(self.skills)
         self.field = [t for t in tokens(self.sheet.get("field") or "") if weight(t) > 12]
         self.up, self.down = [], []
         for v in (learn or {}).values():
-            toks = frozenset(t for t in tokens(v.get("t", "")) if t not in LEVEL)
-            if toks and _tw(toks) > 0:
-                (self.down if v.get("d") == "down" else self.up).append((toks, _tw(toks)))
+            toks = self._other_words(v.get("t", ""))
+            w = _tw(toks)
+            if toks and w >= GENERIC_W:
+                (self.down if v.get("d") == "down" else self.up).append((toks, w))
+
+    def _other_words(self, title):
+        """The words of a posted title that are not the person's own job titles (the unit, place, specialty ...)."""
+        return frozenset(t for t in canon([t for t in tokens(title) if t not in LEVEL and t not in NOISE])
+                         if t not in self.own_toks and not t.isdigit())
+
+    def fit(self, jobs):
+        """Weigh each skill by how telling it is on THIS board: one that a third of the postings mention ("team
+        leadership") counts for nothing, one that few mention ("Epic", "conduit") counts in full. Optional; without it
+        every skill counts the same."""
+        if not self.skills or not jobs:
+            return self
+        texts = [(j.get("desc") or j.get("snippet") or "")[:8000].lower() for j in jobs]
+        n = len(texts)
+        for sk in self.skills:
+            df = sum(1 for t in texts if sk[0] in t) / n
+            rare = 1.0 if df <= 0.03 else 0.0 if df >= 0.35 else math.log(0.35 / df) / math.log(0.35 / 0.03)
+            sk[2] = round(sk[2] * rare, 3)
+        return self
+
+    def _factor(self, C, e):
+        """How well the core of a posted title (word tuple C) fits one entry: 0-1 (see the class note)."""
+        E, w, _, _, _, loose = e
+        n, m = len(C), len(E)
+        if C == E:
+            return 1.0
+        if m < n:
+            for i in range(n - m + 1):
+                if C[i:i + m] == E:
+                    if loose:
+                        return 1.0
+                    after = C[i + m:]
+                    if any(t in self.heads for t in after):
+                        f = 0.5
+                    elif after:
+                        f = 0.88 - 0.04 * i - 0.02 * (len(after) - 1)
+                    else:
+                        f = 0.93 - 0.04 * (i - 1)
+                    if m == 1:          # a one-word name inside a longer title: "Manager" says little, "Phlebotomist" a lot
+                        f *= min(1.0, (w / GENERIC_W) ** 2)
+                    return max(0.4, f) if m > 1 else f
+            if m >= 2 and not loose:
+                pos, k = [], 0
+                for i, t in enumerate(C):
+                    if k < m and t == E[k]:
+                        pos.append(i); k += 1
+                if k == m and not any(t in self.heads for t in C[pos[-1] + 1:]):
+                    gaps = pos[-1] - pos[0] + 1 - m
+                    if 1 <= gaps <= 2:
+                        return 0.72 - 0.06 * (gaps - 1)
+        elif n < m and C[-1] == E[-1] and not loose:
+            k = 0
+            for t in E:
+                if k < n and t == C[k]:
+                    k += 1
+            if k == n:
+                f = 0.5 + 0.3 * _tw(C) / w
+                return f * (min(1.0, (weight(C[0]) / GENERIC_W) ** 2) if n == 1 else 1.0)
+        return 0.0
+
+    def _shared(self, C):
+        """(points, the shared words) for a core title that fits no entry: the share of its telling words that are
+        words of the person's own titles."""
+        den = _tw(C)
+        if den <= 0:
+            return 0.0, []
+        got = sorted(((weight(t) * self.word_w[t], t) for t in set(C) if t in self.word_w), reverse=True)
+        return SHARED_MAX * sum(x for x, _ in got) / den, [t for x, t in got if x > 0][:2]
 
     @staticmethod
-    def _sim(jt, jw, toks, w, head=None):
-        """How alike a job title (words jt, weight jw) and a sheet entry are, 0-1. The whole entry inside the title
-        ("Registered Nurse" in "Registered Nurse - ICU") is strong; sharing only some words is weak, and nearly
-        nothing unless the shared words include the entry's main word ("School Nurse" vs "School Principal")."""
-        shared = jt & toks
-        if not shared:
-            return 0.0
-        sw = sum(weight(t) for t in shared)
-        ecover, jcover = sw / w, sw / jw
-        if ecover >= 0.999:
-            if len(toks) == 1 and jcover < 0.999:
-                # a one-word name inside a longer title: "Nurse" in "Nurse Practitioner" is a fair sign, "Manager" in
-                # "Product Manager" says little
-                return (0.45 + 0.55 * jcover) * min(1.0, (w / GENERIC_W) ** 2)
-            return 0.85 + 0.15 * jcover
-        s = 0.7 * ecover ** 1.5 * (0.6 + 0.4 * jcover)
-        return s if head is None or head in shared else 0.25 * s
+    def _inside(E, N):
+        """Is phrase E a run of words inside phrase N (or N itself)?"""
+        m = len(E)
+        return any(N[i:i + m] == E for i in range(len(N) - m + 1))
 
     def title_score(self, title):
-        """(0-100, tier, the sheet entry that matched) for a job title."""
+        """(0-100, tier, the sheet entry that matched, nudge, how close 0-1, that entry's cap) for a job title."""
         hit = self._cache.get(title)
         if hit is not None:
             return hit
-        jt = frozenset(t for t in tokens(title) if t not in LEVEL)
-        jw = _tw(jt)
-        best = (0.0, "", "")
-        if jt and jw > 0:
+        cores, side = title_parts(title)
+        best = (0.0, 0, "", "", 0.0, SHARED_MAX + SKILL_ALONE)          # score, entry length, tier, label, factor, cap
+        for C in cores:
             cand = set()
-            for t in jt:
+            for t in C:
                 cand.update(self.index.get(t, ()))
+            gone = [g for g in self.gone if self._inside(g, C)]
             for i in cand:
-                toks, w, tw_, tier, label, head = self.entries[i]
-                s = tw_ * self._sim(jt, jw, toks, w, head)
-                if s > best[0]:
-                    best = (s, tier, label)
+                e = self.entries[i]
+                if gone and any(self._inside(e[0], g) for g in gone):
+                    continue             # the person removed this title: it takes its matches with it
+                f = self._factor(C, e)
+                if f > 0:
+                    key = (e[2] * f, len(e[0]))
+                    if key > best[:2]:
+                        best = (key[0], key[1], e[3], e[4], f, e[2])
+            if not gone:
+                pts, words = self._shared(C)
+                if pts > best[0]:
+                    best = (pts, 0, "shared", ", ".join(words), 0.0, SHARED_MAX + SKILL_ALONE)
+        for S in side:                   # "New Grad Nurse – RN", "Registered Nurse (RN)": only a whole title counts
+            for i in self.index.get(S[-1], ()):
+                e = self.entries[i]
+                if e[0] == S and not e[5] and (e[2] * 0.92, len(S)) > best[:2]:
+                    best = (e[2] * 0.92, len(S), e[3], e[4], 0.92, e[2])
         nudge = 0.0
-        if jt and jw > 0 and (self.up or self.down):
-            u = max((self._sim(jt, jw, toks, w) for toks, w in self.up), default=0.0)
-            d = max((self._sim(jt, jw, toks, w) for toks, w in self.down), default=0.0)
-            nudge = NUDGE_UP * (u if u >= 0.5 else 0) - NUDGE_DOWN * (d if d >= 0.5 else 0)
-        out = self._cache[title] = (round(100 * best[0]), best[1], best[2], round(nudge))
+        if self.up or self.down:
+            jt = self._other_words(title)
+            if jt:
+                u = max((_tw(jt & toks) / w for toks, w in self.up), default=0.0)
+                d = max((_tw(jt & toks) / w for toks, w in self.down), default=0.0)
+                nudge = NUDGE_UP * (u if u >= 0.6 else 0) - NUDGE_DOWN * (d if d >= 0.6 else 0)
+        out = self._cache[title] = (round(best[0]), best[2], best[3], round(nudge), best[4], best[5])
         return out
 
     def skill_hits(self, text):
         low = (text or "")[:8000].lower()
-        return [s for s, rx, w in self.skills if s in low and rx.search(low)], sum(w for s, rx, w in self.skills if s in low and rx.search(low))
+        hits = [(s, w) for s, rx, w in self.skills if s in low and rx.search(low)]
+        hits.sort(key=lambda x: -x[1])
+        return [s for s, w in hits if w > 0], sum(w for _, w in hits)
 
     def score(self, job):
         if self.empty:
             job["rel"], job["rel_why"] = None, ""
             return None
-        T, tier, label, nudge = self.title_score(job.get("title") or "")
+        T, tier, label, nudge, f, cap = self.title_score(job.get("title") or "")
         hits, hw = self.skill_hits(job.get("desc") or job.get("snippet") or "") if self.skills else ([], 0.0)
-        S = min(100.0, 22.0 * hw)
-        # the title decides; skills found in the text close up to 30% of what's left, and by themselves reach 35
-        rel = max(T + (100 - T) * 0.3 * S / 100, 0.35 * S)
+        S = 1 - math.exp(-hw / 1.5)
+        if not self.has_skills:          # no skills on the sheet: nothing to tell postings apart by, the title counts in full
+            S = 1.0 if T else 0.0
+        # the title decides: its points count in full when the posting text also mentions the person's skills, a little
+        # less (SKILL_PART) when it mentions none; skills with no title match reach SKILL_ALONE
+        # (never above the cap of the entry that matched: skills cannot lift "another name" over the person's own title)
+        rel = min(cap, T * (1 - SKILL_PART / 100 * (1 - S)) + (1 - T / 100) * SKILL_ALONE * (S if self.has_skills else 0))
         if self.field and rel > 0:
             ctx = set(tokens((job.get("dept") or "") + " " + (job.get("sector") or "")))
             if any(t in ctx for t in self.field):
                 rel += 3
         rel = max(0, min(100, round(rel + nudge)))
         why = []
-        if T >= 25 and label:
-            why.append(f"{'Matches' if T >= 80 * TIERS.get(tier, 1) else 'Close to'} “{label}” ({TIER_WORDS.get(tier, 'on your list')})")
+        if T >= 12 and tier == "shared":
+            why.append(f"Shares words with titles on your list ({label})")
+        elif T >= 12 and label:
+            why.append(f"{'Matches' if f >= 0.85 else 'Close to'} “{label}” ({TIER_WORDS.get(tier, 'on your list')})")
         if hits:
             why.append("mentions " + ", ".join(hits[:4]))
         if nudge:
@@ -689,6 +1151,8 @@ def title_phrases(sheet, own_only=False):
     """Whole-word title phrases for the title filter (jobfinder.title_ok). own_only: just the chips the person added
     (profiles on the earlier built-in word list keep exactly the filter they had, plus what they add themselves)."""
     out = []
+    removed = (sheet or {}).get("removed") or {}
+    gone = {phrase(t) for t in removed.get("titles") or []} | {phrase(n) for c in removed.get("occs") or [] for n in occ_names(c)}
     for x in (sheet or {}).get("titles") or []:
         if x.get("tier") == "past" or (own_only and x.get("src") != "you"):
             continue
@@ -697,7 +1161,8 @@ def title_phrases(sheet, own_only=False):
         for x in (sheet or {}).get("occs") or []:
             for n in occ_names(x["code"], common_only=x.get("tier") != "same"):
                 toks = [t for t in tokens(n) if t not in LEVEL]
-                if len(toks) > 1 or _tw(toks) >= GENERIC_W:   # not the one-word catch-alls ("Manager", "Technician")
+                # not the one-word catch-alls ("Manager", "Technician"), and nothing the person removed
+                if (len(toks) > 1 or _tw(toks) >= GENERIC_W) and phrase(n) not in gone:
                     out.append(n)
     seen, res = set(), []
     for t in out:
@@ -720,7 +1185,8 @@ def phrase_regex(phrases):
 
 
 # ---------------------------------------------------------------- plain-language view for the pages
-SRC_WORDS = {"you": "added by you", "profile": "from your profile", "claude": "suggested by Claude", "onet": "from the occupation list"}
+SRC_WORDS = {"you": "added by you", "profile": "from your profile", "claude": "suggested by Claude", "onet": "from the occupation list",
+             "answers": "from your answers"}
 
 
 def view(pid=None):

@@ -281,6 +281,8 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
 .tlwork{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--accent)}
 .tlwork .spin{width:11px;height:11px;border:2px solid var(--accent);border-right-color:transparent;border-radius:50%;animation:nlspin .8s linear infinite}
 .tlfail{color:var(--bad);font-size:12.5px;margin-top:4px;max-width:75ch;overflow-wrap:anywhere}
+.tlwarn{font-size:12.5px;margin-top:6px;max-width:75ch;overflow-wrap:anywhere;border-left:3px solid var(--warn);padding:2px 0 2px 10px}
+.tlwarn ul{margin:3px 0 0;padding-left:16px}.tlwarn li{margin:1px 0}.tlwarn span{color:var(--muted)}
 .tlcard.working .scores,.tlcard.failed .scores{display:grid;place-items:center}
 .tlcard .tlicon{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-weight:700}
 .tlcard.failed .tlicon{background:var(--bad-soft);color:var(--bad)}
@@ -716,7 +718,7 @@ const NOMATCH_SORT = () => HASREL ? "relevant" : "appeal";   // the order when t
 // Claude is optional: when it isn't connected the board says so once (banner) and shows "-" where Match would be.
 let NOAI = D.claude_ready === false;
 const NOAI_MSG = "Connect Claude to get Match ratings and tailoring";
-const RLIM = Object.assign({haiku: 500, sonnet: 100, opus: 50, saved: 100, target: 50, quick: 200}, D.rate_limits || {});  // per-run rating limits (ai_score.RUN_LIMITS)
+const RLIM = Object.assign({haiku: 500, sonnet: 100, opus: 50, saved: 25, target: 50, quick: 200}, D.rate_limits || {});  // per-run rating limits (ai_score.RUN_LIMITS)
 const NOAI_LINK = `<a href="/settings#get-started">Settings → Get started</a>`;
 const hasMatch = jobs.some(j => j.ai_fit != null || j.pv_now != null);  // ratings made earlier still show and sort
 const noClaude = what => `<span class="nocl">${what} needs Claude. ${NOAI_LINK}</span>`;
@@ -920,6 +922,15 @@ function reviewBadge(r){
   const pass = r.status === "passed";
   return `<span class="gd ${pass ? "hi" : "lo"}">Astra ${r.final} · ${pass ? "passed" : `below ${r.threshold}`} · ${r.rounds} round${r.rounds === 1 ? "" : "s"}</span>`;
 }
+// Under a tailored resume's card: what Siftwell's fact check found (lines with nothing in the person's resume, profile or
+// answers behind them), so they are seen before the resume is sent.
+function factNotes(f){
+  if (!f || !f.checked) return "";
+  const w = f.warnings || [];
+  if (!w.length) return f.fixed ? `<div class="tl2"><b>Fact check:</b> every line traced to your resume or answers; ${f.fixed} detail${f.fixed === 1 ? "" : "s"} set back to match your profile.</div>` : "";
+  return `<div class="tlwarn" role="note"><b>Check before you send (${w.length + (f.more || 0)}):</b><ul>${w.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` +
+    (f.more ? `<span>and ${f.more} more on the Review page.</span>` : "") + `</div>`;
+}
 // Under a tailored resume's card: why Astra didn't review it (or why its review failed), and Siftwell's own free checks.
 function reviewNotes(r){
   if (!r) return "";
@@ -958,6 +969,7 @@ function drawTailored(){
         ${safeUrl(x.job.url) ? `<a class="title" href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">${esc(x.job.title || "")}</a>` : `<span class="title">${esc(x.job.title || "")}</span>`}
         <div class="meta"><span class="coname">${esc(x.job.company || "")}</span><span>Tailored ${esc(when)}</span><span>${j ? "Still open" : "No longer on your board"}</span>${x.gaps ? `<span>${x.gaps} gaps flagged</span>` : ""}${w.running ? `<span class="tlwork" role="status"><span class="spin"></span>Re-tailoring: ${esc(TL_STEP[w.step] || "working…")}</span>` : reviewBadge(x.review)}</div>
         ${x.headline ? `<div class="tl2">${esc(x.headline)}</div>` : ""}
+        ${w.running ? "" : factNotes(x.facts)}
         ${w.running ? "" : reviewNotes(x.review)}
         ${w.error && !w.running ? `<div class="tlfail">Re-tailoring failed: ${esc(w.error)} <button class="btn ghost sm" type="button" data-dismiss="${esc(x.slug)}">Dismiss</button></div>` : ""}
         <div class="acts">${x.review && x.review.status === "interrupted" ? `<button class="pri" data-resume="${esc(x.job.id)}" data-slug="${x.slug}">Resume review</button>` : ""}${x.review && x.review.status === "needs_answers" ? `<button class="pri" data-astra="${esc(x.job.id)}" data-slug="${x.slug}">Answer Astra's questions</button>` : ""}<a class="pri" href="/tailored/${x.slug}.pdf">Download PDF</a><a href="/tailored/${x.slug}" target="_blank" rel="noopener">Review</a><a href="/tailored/${x.slug}.docx">Word</a>${safeUrl(x.job.url) ? `<a href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">Posting</a>` : ""}<button class="danger" data-del="${x.slug}">Remove</button></div>
@@ -1198,15 +1210,17 @@ function render(){
   const base = mode === "pivot" ? pvJobs().length : jobs.length;
   // jobs Claude would rate that have no rating yet (whole board, not just this filtered list)
   const notRated = !D.profile ? 0 : mode === "pivot" ? pvJobs().filter(j => j.pv_label == null && j.req_status !== "unmet").length : jobs.filter(j => j.ai_rs && j.ai_fit == null).length;
+  // ratings made with older info, for the tab being shown (the Target tab has its own ratings, so its own count)
+  const staleN = mode === "pivot" ? pvJobs().filter(j => j.pv_label != null && j.pv_stale).length : (D.ratings && D.ratings.stale_all) || 0;
   $("count").innerHTML = `${r.length.toLocaleString()} of ${base.toLocaleString()} jobs` + (r.length > shown ? ` · showing ${shown}` : "") +
     (notRated ? ` · <span title="Claude rates a limited number of jobs in one go, the ones most relevant to your work first. The rest show a dash for Match until they are rated.">${notRated.toLocaleString()} job${notRated === 1 ? "" : "s"} not rated yet</span>` : "") +
-    (!NOAI && D.ratings && D.ratings.stale_all ? ` · <span title="Rated before your latest resume, answers or goals. Rate more (or the Re-rate icon at the top) brings them up to date.">${D.ratings.stale_all.toLocaleString()} rated with older info</span>` : "") +
+    (!NOAI && staleN ? ` · <span title="Rated before your latest resume, answers or goals. Rate more (or the Re-rate icon at the top) brings them up to date.">${staleN.toLocaleString()} rated with older info</span>` : "") +
     (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "");
   drawChips();
-  const moreN = notRated + (NOAI || !D.ratings ? 0 : D.ratings.stale_all || 0);
+  const moreN = notRated + (NOAI ? 0 : staleN);
   $("rateMore").hidden = !SERVED || !D.profile || !moreN;
   if (!$("rateMore").disabled) $("rateMore").textContent = "Rate more" + (NOAI ? " (needs Claude)" : "");
-  $("rateMore").title = "Claude rates the next batch: up to " + RLIM.haiku + " jobs get a quick check (most appealing first), then a closer look at the best of them. Uses your Claude plan.";
+  $("rateMore").title = "Claude rates the next batch: up to " + RLIM.haiku + " jobs get a quick check (the ones most relevant to your work first), then a closer look at the best of them. Uses your Claude plan.";
   const page = r.slice(0, shown);
   window.__shownIds = page.map(j => j.id);
   if (!page.some(j => j.id === SEL)) { SEL = !window.matchMedia("(max-width:900px)").matches && page[0] ? page[0].id : null; if (!SEL) OPENED = false; }
@@ -2007,7 +2021,7 @@ if (SERVED) {
     const oPick = oTop.concat(oSaved);
     const sNeed = sTop.filter(j => stale(j, 1)).length, oNeed = oPick.filter(j => stale(j, 2)).length;
     const oRun = need => Math.min(RLIM.opus, oTop.filter(j => !need || stale(j, 2)).length) + Math.min(RLIM.saved, oSaved.filter(j => !need || stale(j, 2)).length);
-    $("rrHAll").textContent = `${plural(ratePool.length, "job")} on your board that Claude would rate. One run checks up to ${nf(RLIM.haiku)}, most appealing first.`;
+    $("rrHAll").textContent = `${plural(ratePool.length, "job")} on your board that Claude would rate. One run checks up to ${nf(RLIM.haiku)}, the ones most relevant to your work first.`;
     $("rrHN").textContent = nf(hNeed);
     $("rrSN").textContent = pct ? `= ${plural(sTop.length, "job")}` : "(1 to 100)";
     $("rrSNn").textContent = nf(sNeed);
@@ -2022,7 +2036,8 @@ if (SERVED) {
     const full = reqs(hb, "haiku") + reqs(Math.min(sNeed, RLIM.sonnet), "sonnet") + reqs(oRun(true), "opus");
     $("rrEstFull").textContent = full ? `About ${plural(full, "Claude request")} (fewer if the quick check finds little has changed).` : "Everything is current: nothing to do.";
     $("rrEst").textContent = `Claude requests: Quick check ${nf(reqs(h, "haiku"))} · Careful look ${pct ? nf(reqs(s, "sonnet")) : "?"} · Best judgment ${top ? nf(reqs(o, "opus")) : "?"} (${RB.haiku} Haiku or ${RB.sonnet} Sonnet/Opus jobs per request). Uses your Claude plan.`;
-    document.querySelectorAll("#rrPanel [data-rr]").forEach(b => b.disabled = (b.dataset.rr !== "haiku" && !(pct && top)));
+    // without Claude nothing here can run: the buttons are off and the panel says how to connect it
+    document.querySelectorAll("#rrPanel [data-rr]").forEach(b => { b.disabled = NOAI || (b.dataset.rr !== "haiku" && !(pct && top)); b.title = NOAI ? "Needs Claude" : ""; });
     return {pct, top, n: {haiku: h, sonnet: s, opus: o}, all: ratePool.length};
   }
   function rrPlace(){
@@ -2037,8 +2052,9 @@ if (SERVED) {
     if ($("rrTop").value === "") $("rrTop").value = PREFS["claude.opus_top"] || 50;
     document.querySelectorAll(".rrTgt").forEach(e => e.hidden = !D.pivot_enabled);
     $("rrMsg").textContent = ""; $("rrMsg").classList.remove("bad");
+    if (NOAI) $("rrMsg").innerHTML = noClaude("Re-rating");
     rrCalc(); rrPlace(); $("rrPanel").hidden = false; $("rerateBtn").setAttribute("aria-expanded", "true");
-    $("rrPanel").querySelector("[data-rr=full]").focus();
+    (NOAI ? $("rrClose") : $("rrPanel").querySelector("[data-rr=full]")).focus();
   }
   function rrClose(){ $("rrPanel").hidden = true; $("rerateBtn").setAttribute("aria-expanded", "false"); }
   ["rrPct", "rrTop", "rrHNeed", "rrSNeed", "rrONeed"].forEach(id => $(id).addEventListener("input", rrCalc));

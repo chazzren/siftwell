@@ -46,9 +46,30 @@ names = {n.lower() for n in lookfor.occ_names(rn)}
 check("Registered Nurses is also called Staff Nurse, RN, Charge Nurse", {"staff nurse", "rn", "charge nurse"} <= names)
 check("...and has related occupations", any("Licensed Practical" in lookfor.occ_title(c) for c in o["occ"][rn]["r"]))
 for typed, want in (("Journeyman Electrician", "Electricians"), ("CDL Truck Driver", "Heavy and Tractor-Trailer Truck Drivers"),
-                    ("Senior Software Engineer", "Software Developers"), ("5th Grade Teacher", "Elementary School Teachers")):
+                    ("Senior Software Engineer", "Software Developers"), ("Elementary School Teacher", "Elementary School Teachers"),
+                    ("Office Manager", "First-Line Supervisors of Office and Administrative Support Workers"), ("Registered Nurse", "Registered Nurses")):
     check(f"'{typed}' -> {want}", any(want in x for x in occ(typed)), str(occ(typed)))
 check("a made-up title finds nothing (no guessing)", occ("Zxqv Blorptang") == [], str(occ("Zxqv Blorptang")))
+check("a typed title never maps to a catch-all (Office Manager is not 'General and Operations Managers')",
+      not any("General and Operations" in x or "All Other" in x for t in ("Office Manager", "Program Manager", "Operations Supervisor", "Phlebotomist") for x in occ(t)))
+check("...unless the catch-all is what was typed", occ("General and Operations Managers") == ["General and Operations Managers"])
+check("a plain title that many occupations list picks none (Teacher, Project Manager, Shift Supervisor, 5th Grade Teacher)",
+      all(occ(t) == [] for t in ("Teacher", "Project Manager", "Shift Supervisor", "5th Grade Teacher", "Sales Associate")),
+      str({t: occ(t) for t in ("Teacher", "Project Manager", "Shift Supervisor", "5th Grade Teacher", "Sales Associate")}))
+check("...but the field is still known when they all agree (Teacher, 5th Grade Teacher -> Education)",
+      lookfor.field_of("Teacher") == "Education" and lookfor.field_of("5th Grade Teacher") == "Education" and lookfor.field_of("Project Manager") == "")
+check("one step up without Claude (occupation list, else a short ladder)",
+      "Charge Nurse" in lookfor.step_up("Registered Nurse") and lookfor.step_up("Office Manager") == ["Office Director"]
+      and lookfor.step_up("Front Desk Supervisor") == ["Front Desk Manager"] and lookfor.step_up("Assistant Store Manager") == ["Store Manager"],
+      str([lookfor.step_up(t) for t in ("Registered Nurse", "Office Manager", "Front Desk Supervisor", "Assistant Store Manager")]))
+P_ = lookfor.title_parts
+check("a posted title is cut to its core (site, unit, requisition number and brackets are not the job)",
+      P_("Phlebotomist- Westerville Family Physicians")[0] == [("phlebotomist",)] and P_("Staff RN – PICU")[0] == [("staff", "rn")]
+      and P_("Program Manager (R5448)")[0] == [("program", "manager")] and P_("Registered Nurse (RN) - Med Surg")[0] == [("rn",)]
+      and ("sale", "operation", "manager") in P_("Manager, Sales Operations")[0] and P_("Analyst/Consultant")[0] == [("analyst",), ("consultant",)],
+      str([P_(t) for t in ("Phlebotomist- Westerville Family Physicians", "Staff RN – PICU", "Program Manager (R5448)", "Manager, Sales Operations")]))
+check("short forms are the same title (RN = Registered Nurse, LPN, NP, CNA)", lookfor.phrase("Registered Nurse") == lookfor.phrase("RN") == ("rn",)
+      and lookfor.phrase("Licensed Practical Nurse") == ("lpn",) and lookfor.phrase("Nurse Practitioner") == ("np",) and lookfor.phrase("Certified Nursing Assistant") == ("cna",))
 
 # ------------------------------------------------------------------ 2. sheets and Relevance without Claude
 JOBS = ["Registered Nurse - ICU", "RN, Emergency Department (Nights)", "Staff Nurse II", "Charge Nurse", "Nurse Practitioner",
@@ -57,49 +78,117 @@ JOBS = ["Registered Nurse - ICU", "RN, Emergency Department (Nights)", "Staff Nu
         "Journeyman Electrician", "Electrician Apprentice", "Maintenance Technician", "Electrical Engineer",
         "Elementary Teacher", "4th Grade Teacher", "Substitute Teacher", "School Principal", "Internal Auditor",
         "Marketing Intern", "Warehouse Associate", "Diesel Mechanic", "DevOps Engineer", "Data Scientist", "Line Cook"]
+# key: (typed title, skills, their own title as posted (85+), other names / close kin (40-84), obvious mismatches (25 or less))
 PROFILES = {
-    "nurse": ("RN", ["patient care", "IV therapy", "Epic"], ["Registered Nurse - ICU", "RN, Emergency Department (Nights)", "Staff Nurse II", "Charge Nurse"],
-              ["Software Engineer", "Truck Driver CDL-A", "Office Manager", "Line Cook", "Internal Auditor"]),
-    "electrician": ("Electrician", ["conduit", "wiring", "NEC"], ["Journeyman Electrician", "Electrician Apprentice"],
-                    ["Registered Nurse - ICU", "Product Manager", "Elementary Teacher", "Electrical Engineer"]),
-    "office": ("Office Manager", ["scheduling", "QuickBooks"], ["Office Manager", "Front Office Manager"],
-               ["Product Manager", "Truck Driver CDL-A", "Data Scientist", "Charge Nurse"]),
-    "teacher": ("Elementary School Teacher", ["lesson planning", "classroom management"], ["Elementary Teacher", "Elementary School Teacher"],
-                ["Software Engineer", "Diesel Mechanic", "Office Manager"]),
-    "trucker": ("Truck Driver", ["CDL", "DOT regulations"], ["Truck Driver CDL-A", "Delivery Driver"],
-                ["Registered Nurse - ICU", "Software Engineer", "School Principal"]),
-    "dev": ("Software Engineer", ["Python", "Kubernetes"], ["Software Engineer", "Senior Software Engineer", "DevOps Engineer"],
-            ["Charge Nurse", "Truck Driver CDL-A", "Line Cook", "Office Manager"]),
+    "nurse": ("RN", ["patient care", "IV therapy", "Epic"], ["Registered Nurse - ICU", "RN, Emergency Department (Nights)", "Staff RN – PICU", "Ambulatory RN – Cardiology Clinic", "New Grad Nurse – RN"],
+              ["Staff Nurse II", "Charge Nurse"], ["Software Engineer", "Truck Driver CDL-A", "Office Manager", "Line Cook", "Internal Auditor", "Phlebotomist"]),
+    "electrician": ("Electrician", ["conduit", "wiring", "NEC"], ["Journeyman Electrician", "Electrician Apprentice", "Electrician - Industrial (2nd shift)"],
+                    ["Electrician Helper", "Electrician Supervisor"], ["Registered Nurse - ICU", "Product Manager", "Elementary Teacher", "Electrical Engineer"]),
+    "office": ("Office Manager", ["scheduling", "QuickBooks"], ["Office Manager", "Front Office Manager", "Office Manager - Dental Practice"],
+               ["Office Administrator", "Office Supervisor"], ["Product Manager", "Truck Driver CDL-A", "Data Scientist", "Charge Nurse", "Shift Supervisor", "Principal Program Manager", "Housekeeping Supervisor"]),
+    "teacher": ("Elementary School Teacher", ["lesson planning", "classroom management"], ["Elementary School Teacher", "Elementary School Teacher (2026-27)"],
+                ["Elementary Teacher", "Teacher - Elementary"], ["Software Engineer", "Diesel Mechanic", "Office Manager"]),
+    "trucker": ("Truck Driver", ["CDL", "DOT regulations"], ["Truck Driver CDL-A", "CDL-A Truck Driver - Home Daily", "Local Truck Driver"],
+                ["Delivery Driver", "CDL Driver"], ["Registered Nurse - ICU", "Software Engineer", "School Principal", "Dispatcher"]),
+    "dev": ("Software Engineer", ["Python", "Kubernetes"], ["Software Engineer", "Senior Software Engineer", "Software Engineer II, Payments"],
+            ["DevOps Engineer", "Software Developer"], ["Charge Nurse", "Truck Driver CDL-A", "Line Cook", "Office Manager"]),
 }
 pids = {}
-for key, (title, skills, good, bad) in PROFILES.items():
+for key, (title, skills, own, near, bad) in PROFILES.items():
     pid = pids[key] = people.add(key)
     people.set_current(pid)
     resume.save_manual({"name": key, "current_title": title, "skills": skills, "experience": []})
     sheet = lookfor.build(pid)
     sc = lookfor.Scorer(sheet, {})
-    s = {t: sc.title_score(t)[0] for t in JOBS + good + bad}
-    lo_good, hi_bad = min(s[t] for t in good), max(s[t] for t in bad)
+    s = {t: sc.title_score(t)[0] for t in JOBS + own + near + bad}
     check(f"{key}: sheet built with no Claude (recent '{sheet['recent']}', {len(sheet['occs'])} occupations, {len(sheet['skills'])} skills)",
           sheet["recent"] == title and any(x["tier"] == "same" for x in sheet["occs"]) and sheet["field"])
-    check(f"{key}: jobs like theirs score high ({lo_good}+), obvious mismatches low (at most {hi_bad})", lo_good >= 70 and hi_bad <= 25,
-          str({t: s[t] for t in good + bad}))
+    check(f"{key}: their own title as employers post it scores {min(s[t] for t in own)}+, other names for it {min(s[t] for t in near)}-{max(s[t] for t in near)}, "
+          f"mismatches at most {max(s[t] for t in bad)}",
+          min(s[t] for t in own) >= 85 and 40 <= min(s[t] for t in near) and max(s[t] for t in near) < min(s[t] for t in own) and max(s[t] for t in bad) <= 25,
+          str({t: s[t] for t in own + near + bad}))
+    check(f"{key}: only skills they typed are on the sheet (no occupation-list tools or task words)",
+          {x["t"].lower() for x in sheet["skills"]} == {x.lower() for x in skills} and not any(x["src"] == "onet" for x in sheet["skills"]), str(sheet["skills"]))
+    check(f"{key}: 80+ is rare (only their own title): {sum(1 for t in JOBS if s[t] >= 80)} of {len(JOBS)} sample titles",
+          sum(1 for t in JOBS if s[t] >= 80) <= 3)
+nurse = lookfor.Scorer(lookfor.load(pids["nurse"]), {})
+T = lambda sc, t: sc.title_score(t)[0]
+check("nurse: site and unit suffixes don't matter (Staff RN – PICU = Ambulatory RN – Cardiology Clinic; New Grad Nurse – RN close behind)",
+      T(nurse, "Staff RN – PICU") == T(nurse, "Ambulatory RN – Cardiology Clinic") >= 90 and T(nurse, "New Grad Nurse – RN") >= 85,
+      str([T(nurse, t) for t in ("Staff RN – PICU", "Ambulatory RN – Cardiology Clinic", "New Grad Nurse – RN")]))
+check("nurse: a Nurse Practitioner is not an RN (related occupation, far below; 'Field Nurse Practitioner' too)",
+      T(nurse, "Nurse Practitioner - ICU") <= 45 and T(nurse, "Field Nurse Practitioner") <= 45 and nurse.title_score("Nurse Practitioner")[1] == "relocc",
+      str([nurse.title_score(t) for t in ("Nurse Practitioner - ICU", "Field Nurse Practitioner")]))
+check("nurse: related roles sit in between (LPN)", 30 <= T(nurse, "Licensed Practical Nurse") <= 45 and T(nurse, "LPN") == T(nurse, "Licensed Practical Nurse"))
+check("nurse: 'Your job title' always outranks another name for it, which outranks a related occupation",
+      T(nurse, "Registered Nurse") > T(nurse, "Staff Nurse") > T(nurse, "Nurse Practitioner") > 0)
+lookfor.edit(pids["nurse"], {"add": "title", "text": "ICU Nurse"})
+chip = lookfor.Scorer(lookfor.load(pids["nurse"]), {})
+check("an 'ICU Nurse' chip matches ICU Nurse postings, not 'Nurse Practitioner - ICU' (ordered phrases, not word sets)",
+      T(chip, "ICU Nurse") == 100 and T(chip, "Nurse Practitioner - ICU") <= 45, str((T(chip, "ICU Nurse"), T(chip, "Nurse Practitioner - ICU"))))
+lookfor.edit(pids["nurse"], {"remove": "title", "text": "ICU Nurse"})
+phleb = people.add("phleb"); people.set_current(phleb)
+resume.save_manual({"name": "phleb", "current_title": "Phlebotomist", "skills": [], "experience": []})
+ph = lookfor.Scorer(lookfor.build(phleb), {})
+check("'Phlebotomist- Westerville Family Physicians' scores the same as 'Phlebotomist'", T(ph, "Phlebotomist- Westerville Family Physicians") == T(ph, "Phlebotomist") == 100)
+office = lookfor.Scorer(lookfor.load(pids["office"]), {})
+check("office manager: the exact title is on top; Accounting Manager is only 'the same kind of work'; nothing unrelated is 'another name'",
+      T(office, "Office Manager") == 100 and 25 < T(office, "Accounting Manager") <= 50 and office.title_score("Accounting Manager")[1] == "occ"
+      and T(office, "Shift Supervisor") <= 25 and T(office, "Principal Program Manager") <= 25,
+      str([office.title_score(t)[:3] for t in ("Accounting Manager", "Shift Supervisor", "Principal Program Manager")]))
+check("office manager: related occupations are not other trades' supervisors (mechanics, housekeeping)",
+      not any("Mechanics" in lookfor.occ_title(x["code"]) or "Housekeeping" in lookfor.occ_title(x["code"]) for x in lookfor.load(pids["office"])["occs"]),
+      str([lookfor.occ_title(x["code"]) for x in lookfor.load(pids["office"])["occs"]]))
 check("looser relatives sit in between (4th Grade Teacher for a teacher, Backend Developer for a developer)",
-      25 <= lookfor.Scorer(lookfor.load(pids["teacher"]), {}).title_score("4th Grade Teacher")[0] < 90
-      and 25 <= lookfor.Scorer(lookfor.load(pids["dev"]), {}).title_score("Senior Backend Developer")[0] < 90)
-check("nurse: related roles sit between (Nurse Practitioner, LPN)", 35 <= lookfor.Scorer(lookfor.load(pids["nurse"]), {}).title_score("Licensed Practical Nurse")[0] < 90)
+      10 <= T(lookfor.Scorer(lookfor.load(pids["teacher"]), {}), "4th Grade Teacher") < 60
+      and 10 <= T(lookfor.Scorer(lookfor.load(pids["dev"]), {}), "Senior Backend Developer") < 60)
+# legacy title words: single catch-all words are not titles; reframing titles become related roles
+leg = people.add("legacy"); people.set_current(leg)
+json.dump({"name": "L", "summary": "s", "location": "", "years_experience": 5, "clearances": [], "education": [], "certifications": ["Certified Scrum Master"],
+           "skills": ["Low-code workflow implementation (Pega)", "Agile/Scrum"], "languages": [],
+           "experience": [{"employer": "A", "title": "Management Consultant", "dates": "2023 - Present", "highlights": []},
+                          {"employer": "B", "title": "Operations Manager", "dates": "2019 - 2023", "highlights": []},
+                          {"employer": "C", "title": "Front Desk Supervisor", "dates": "2017 - 2019", "highlights": []}],
+           "reframings": [{"angle": "x", "target_titles": ["Solutions Consultant"], "evidence": []}], "hard_limits": [],
+           "target_roles": ["Technical Program Manager", "Engineer", "Architect", "Manager", "Project"],
+           "title_keywords": ["program manager", "security", "pega", "manager"], "fit_keywords": ["case management"], "notes": ""},
+          open(people.pdir("profile.json", pid=leg), "w"))
+ls = lookfor.build(leg)
+lt = {x["t"]: x["tier"] for x in ls["titles"]}
+check("single catch-all words carried over from old title words are dropped (Engineer, Architect, Manager, Project, security)",
+      not {"Engineer", "Architect", "Manager", "Project", "security", "manager"} & set(lt) and lt.get("Technical Program Manager") == "wanted" and lt.get("pega") == "keyword", str(lt))
+check("roles the resume reader's reframings open are related roles", lt.get("Solutions Consultant") == "related", str(lt))
+check("skills are the person's own, written the way postings write them ('(Pega)' -> Pega, 'Agile/Scrum' -> Agile, Scrum, certifications)",
+      {"pega", "agile", "scrum", "certified scrum master", "case management"} <= {x["t"].lower() for x in ls["skills"]}, str([x["t"] for x in ls["skills"]]))
+lsc = lookfor.Scorer(ls, {})
+check("own titles in order: most recent 100, a title they search for 90, the job before 82, the one before that 66; a bare 'Architect' is nothing",
+      [T(lsc, t) for t in ("Management Consultant", "Technical Program Manager", "Operations Manager", "Front Desk Supervisor")] == [100, 90, 82, 66]
+      and T(lsc, "Senior Architect") <= 10 and T(lsc, "Software Engineer") <= 10,
+      str([T(lsc, t) for t in ("Management Consultant", "Technical Program Manager", "Operations Manager", "Front Desk Supervisor", "Senior Architect", "Software Engineer")]))
+check("a longer posted title keeps most of it; a title that only shares words gets a little, and says so",
+      80 <= T(lsc, "Federal Management Consultant") < 100 and 40 <= T(lsc, "Program Manager, Field") <= 70 and 0 < T(lsc, "Events Program Planner") <= lookfor.SHARED_MAX,
+      str([lsc.title_score(x) for x in ("Federal Management Consultant", "Program Manager, Field", "Events Program Planner")]))
+j = {"title": "Program Coordinator", "desc": ""}
+lsc.score(j)
+check("...in plain words", j["rel"] <= lookfor.SHARED_MAX and ("Shares words" in j["rel_why"] or j["rel_why"].startswith("Nothing")), j["rel_why"])
+
 sc = lookfor.scorer(pids["nurse"])
 a = {"title": "Staff Nurse", "desc": "Provide patient care, IV therapy and charting in Epic."}
 b = {"title": "Staff Nurse", "desc": "Join our team."}
 c = {"title": "Clinical Coordinator", "desc": "Patient care and IV therapy experience needed; Epic a plus."}
 d = {"title": "Forklift Operator", "desc": "Move pallets."}
-for j in (a, b, c, d):
+e = {"title": "Registered Nurse", "desc": "Join our team."}
+for j in (a, b, c, d, e):
     sc.score(j)
-check("skills found in the posting add; a good skills match lifts an odd title; a mismatch stays low",
-      a["rel"] > b["rel"] >= 70 and 15 <= c["rel"] <= 45 and d["rel"] <= 10, str([x["rel"] for x in (a, b, c, d)]))
+check("skills found in the posting add; a good skills match lifts an odd title a little; a mismatch stays low; the caps hold",
+      78 >= a["rel"] > b["rel"] >= 60 and e["rel"] > a["rel"] and 10 <= c["rel"] <= lookfor.SKILL_ALONE and d["rel"] <= 5, str([x["rel"] for x in (a, b, c, d, e)]))
 check("every score says why in plain words", "Staff Nurse" in a["rel_why"] and "mentions" in a["rel_why"] and d["rel_why"].startswith("Nothing"), a["rel_why"])
 check("whole words only: 'RN' does not match Intern / Journeyman", sc.title_score("Marketing Intern")[0] <= 10 and sc.title_score("Journeyman Electrician")[0] <= 10)
 check("level words don't matter: Senior Registered Nurse II = Registered Nurse", sc.title_score("Senior Registered Nurse II")[0] == sc.title_score("Registered Nurse")[0] >= 90)
+many = [{"title": "Staff Nurse", "desc": "patient care"} for _ in range(60)] + [{"title": "Staff Nurse", "desc": "Epic"}] + [{"title": "X", "desc": ""} for _ in range(40)]
+fit = lookfor.scorer(pids["nurse"]).fit(many)
+w = {s_: w_ for s_, _, w_ in fit.skills}
+check("a skill most postings on the board mention counts for nothing, a rare one in full", w["patient care"] == 0 and w["epic"] == 1.0, str(w))
 
 bare = people.add("bare")
 people.set_current(bare)
@@ -134,6 +223,17 @@ sheet = lookfor.build(pid)       # a rebuild keeps the person's chips and remova
 check("added chips survive a rebuild", {"school nurse", "case manager"} <= {x["t"].lower() for x in sheet["titles"]} and "telemetry" in {x["t"].lower() for x in sheet["skills"]})
 gone = sheet["removed"]["occs"][0]
 check("a removed occupation stays removed", gone not in {x["code"] for x in sheet["occs"]})
+np_code = next(c for c, v in o["occ"].items() if v["t"] == "Nurse Practitioners")
+before_np = lookfor.Scorer(lookfor.load(pid), {}).title_score("Nurse Practitioner")[0]
+lookfor.edit(pid, {"remove": "occ", "code": np_code})
+after_np = lookfor.Scorer(lookfor.build(pid), {}).title_score("Nurse Practitioner")
+check("removing 'Nurse Practitioners' really removes it: no other occupation's names bring it back", before_np > 0 and after_np[0] == 0, str((before_np, after_np)))
+lookfor.edit(pid, {"add": "related", "text": "Case Manager"})
+lookfor.edit(pid, {"remove": "title", "text": "Case Manager"})
+check("a removed title chip stops counting, and stays gone after a rebuild",
+      lookfor.Scorer(lookfor.build(pid), {}).title_score("Case Manager")[0] == 0 and "case manager" in lookfor.load(pid)["removed"]["titles"],
+      str((lookfor.Scorer(lookfor.build(pid), {}).title_score("Case Manager"), lookfor.load(pid)["removed"])))
+lookfor.edit(pid, {"add": "related", "text": "Case Manager"})
 lookfor.edit(pid, {"recent": "Charge Nurse"})
 check("the most recent title can be changed by hand and counts most", lookfor.load(pid)["recent"] == "Charge Nurse"
       and lookfor.scorer(pid).title_score("Charge Nurse")[0] == 100)
@@ -159,28 +259,27 @@ check("'Start this list over' rebuilds from the profile", "school nurse" not in 
 # ------------------------------------------------------------------ 4. learning from saved / hidden jobs
 pid = pids["office"]
 people.set_current(pid)
-base = lookfor.scorer(pid).title_score("Clinic Receptionist")[0]
-j1, j2 = {"title": "Clinic Receptionist", "desc": ""}, {"title": "Payroll Clerk", "desc": ""}
-lookfor.scorer(pid).score(j1); lookfor.scorer(pid).score(j2)
-r1, r2 = j1["rel"], j2["rel"]
+def rel_of(title):
+    j = {"title": title, "desc": ""}
+    lookfor.scorer(pid).score(j)
+    return j
+r1, r0 = rel_of("Clinic Receptionist")["rel"], rel_of("Office Manager")["rel"]
 lookfor.note_mark(pid, "A::1", "saved", "Clinic Receptionist")
 lookfor.note_mark(pid, "A::2", "hidden", "Payroll Clerk")
-lookfor.note_mark(pid, "A::3", "hidden", "Office Manager")
-j1, j2, j3 = {"title": "Clinic Receptionist", "desc": ""}, {"title": "Payroll Clerk", "desc": ""}, {"title": "Office Manager", "desc": ""}
-s = lookfor.scorer(pid)
-for j in (j1, j2, j3):
-    s.score(j)
-check("saving a job nudges similar titles up, hiding nudges down, within bounds",
-      r1 < j1["rel"] <= r1 + lookfor.NUDGE_UP and j3["rel"] >= 100 - lookfor.NUDGE_DOWN and j3["rel"] < 100, str((r1, j1["rel"], r2, j2["rel"], j3["rel"])))
-check("the nudge is explained", "saved" in j1["rel_why"] and "hid" in j3["rel_why"])
+lookfor.note_mark(pid, "A::3", "hidden", "Office Manager")                      # their own title, hidden (wrong state, say)
+lookfor.note_mark(pid, "A::4", "hidden", "Office Manager - Dallas TX")
+j1, j2, j3, j4, j5 = (rel_of(t) for t in ("Clinic Receptionist", "Payroll Clerk", "Office Manager", "Office Manager - Dallas TX", "Front Office Manager"))
+check("saving a job nudges similar titles up, hiding nudges them down, within bounds",
+      r1 < j1["rel"] <= r1 + lookfor.NUDGE_UP and "saved" in j1["rel_why"] and "hid" in j2["rel_why"], str((r1, j1["rel"], j2["rel"], j2["rel_why"])))
+check("hiding a posting with their own title never pushes that title down (Office Manager, Front Office Manager unchanged)",
+      j3["rel"] == r0 and "hid" not in j3["rel_why"] and "hid" not in j5["rel_why"], str((r0, j3["rel"], j3["rel_why"], j5["rel_why"])))
+check("...only the part that is not their title is learned (the place: 'Dallas')", r0 - lookfor.NUDGE_DOWN <= j4["rel"] < r0 and "hid" in j4["rel_why"], str((r0, j4["rel"], j4["rel_why"])))
 v = lookfor.view(pid)
-check("what was learned is listed for the profile page", v["learned"]["n_up"] == 1 and v["learned"]["n_down"] == 2)
+check("what was learned is listed for the profile page", v["learned"]["n_up"] == 1 and v["learned"]["n_down"] == 3)
 lookfor.note_mark(pid, "A::1", "", "")
 check("un-marking forgets it", "A::1" not in lookfor.learned(pid))
 lookfor.edit(pid, {"reset": "learning"})
-j3 = {"title": "Office Manager", "desc": ""}
-lookfor.scorer(pid).score(j3)
-check("reset forgets everything learned", lookfor.learned(pid) == {} and j3["rel"] == 100)
+check("reset forgets everything learned", lookfor.learned(pid) == {} and rel_of("Office Manager - Dallas TX")["rel"] == r0)
 
 # ------------------------------------------------------------------ 5. the title filter
 def titles_pass(pid, titles):
@@ -275,6 +374,24 @@ for x in (hi, lo, unk):
     jobfinder.combine(x)
 check("unrated jobs: ordered by Relevance instead of a flat Match 50 (no sheet: 50 as before)",
       hi["score"] > unk["score"] > lo["score"] and unk["score"] == round(math.sqrt(64 * 50)) and hi["score"] < round(math.sqrt(64 * 81)), str((hi["score"], unk["score"], lo["score"])))
+top_unrated = {"id": "u", "appeal": 100, "rel": 100}
+rated = [{"id": f"r{a}{m}", "appeal": a, "ai_fit": m, "rel": 0} for a in (80, 90, 100) for m in (70, 85, 91, 100)]
+for x in [top_unrated] + rated:
+    jobfinder.combine(x)
+check("the rule: no unrated job, however relevant and appealing, outranks a rated job with Match 70+ and Appeal 80+",
+      jobfinder.unrated_match(top_unrated) == jobfinder.UNRATED_MAX == 55 and all(x["score"] > top_unrated["score"] for x in rated),
+      str((top_unrated["score"], min(x["score"] for x in rated))))
+weak = {"id": "w", "appeal": 90, "ai_fit": 20, "rel": 0}
+jobfinder.combine(weak)
+check("...while a very relevant unrated job still sits above one Claude found a poor match", top_unrated["score"] > weak["score"])
+tie = [{"id": "b", "score": 70, "ai_fit": 60, "appeal": 80}, {"id": "a", "score": 70, "ai_fit": 60, "appeal": 80}, {"id": "c", "score": 70, "appeal": 90},
+       {"id": "d", "score": 70, "ai_fit": 91, "appeal": 54}, {"id": "e", "score": 70, "ai_fit": 60, "appeal": 82}, {"id": "f", "score": 71, "appeal": 1}]
+import random as _r
+orders = set()
+for seed in range(5):
+    _r.Random(seed).shuffle(tie)
+    orders.add("".join(x["id"] for x in sorted(tie, key=jobfinder.board_order)))
+check("Best bets ties are broken the same way every time: better Match, then better Appeal, then the id; unrated last", orders == {"fdeabc"}, str(orders))
 
 claude_cli.claude_ready = lambda *a, **k: True
 sent = []
@@ -351,6 +468,22 @@ out = lookfor.suggest(pids["trucker"])
 rows = usage()[n1:]
 check("...made with the cheap model and logged for Settings", out is not None and len(rows) == 1 and rows[0]["feature"] == "What to look for" and "haiku" in rows[0]["model"], str(rows))
 check("...and folded into the sheet", "Shift Nurse" in {x["t"] for x in out["titles"]} and "Triage Nurse" in {x["t"] for x in out["titles"]})
+# "Ask Claude for more ideas" on a profile that came from a resume: the answer is merged with the resume reader's, not lost
+people.set_current(cl)
+n2 = len(usage())
+before_titles = {x["t"] for x in lookfor.load(cl)["titles"]}
+out2 = lookfor.suggest(cl, force=True)
+t2 = {x["t"]: (x["tier"], x["src"]) for x in out2["titles"]}
+check("asking Claude for more on a resume-made profile changes the sheet (one call; new titles added, the resume reader's kept)",
+      len(usage()) == n2 + 1 and "Shift Nurse" not in before_titles and t2.get("Shift Nurse") == ("same", "claude") and "Triage Nurse" in t2
+      and "Bedside Nurse" in t2 and "Case Manager" in t2, str(sorted(t2)))
+check("...the newer answer goes first", [x["t"] for x in out2["titles"] if x["src"] == "claude" and x["tier"] == "same"][0] == "Shift Nurse")
+check("...and it survives a rebuild", "Shift Nurse" in {x["t"] for x in lookfor.build(cl)["titles"]})
+lookfor.edit(cl, {"remove": "title", "text": "Shift Nurse"})
+out3 = lookfor.suggest(cl, force=True)
+check("a title the person removed is not brought back by asking again", "Shift Nurse" not in {x["t"] for x in out3["titles"]})
+people.set_current(pids["trucker"])
+n1 = len(usage()) - 1          # (the checks below count from here)
 check("...then never again for the same titles", lookfor.suggest(pids["trucker"]) is None and len(usage()) == n1 + 1)
 claude_cli.claude_ready = lambda *a, **k: False
 lookfor.edit(pids["trucker"], {"recent": "Truck Driver"})

@@ -71,10 +71,10 @@ Return:
 
 def interpret(target_text, scope):
     prof = resume.load_active()
-    background = resume.profile_text(prof)[:6000] if prof else "(no resume yet)"
+    background = resume.profile_text(prof, with_facts=False)[:4000] if prof else "(no resume yet)"
     out = claude_cli.run_json(ISYSTEM, f"TARGET (their words): {target_text}\nCompanies in scope: "
                               f"{'AI companies only' if scope == 'ai' else 'all companies the tool tracks'}\n\nBACKGROUND\n{background}",
-                              ISCHEMA, effort="low", timeout=300)
+                              ISCHEMA, model=claude_cli.HAIKU, effort="low", timeout=300, feature="Target setup")
     kws = sorted({k.lower().strip() for k in out.get("title_keywords", []) if 2 <= len(k.strip()) <= 40})
     return {"target_name": (out.get("tab_name") or "Target")[:24], "target_any_title": bool(out.get("any_title")),
             "target_keywords": kws, "target_summary": out.get("summary", "")[:300]}

@@ -74,7 +74,7 @@ def polish(facts_list):
         return 0
     msg = "\n\n".join(f'<answer id="{f["id"]}">\nQuestion: {f.get("question","")}\nTopic: {f["requirement"]}\n'
                        f'Level: {LEVELS.get(f["level"], f["level"])}\nAnswer: {f["answer"]}\n</answer>' for f in todo)
-    out = claude_cli.run_json(POLISH_SYSTEM, msg, POLISH_SCHEMA, effort="low", timeout=300)
+    out = claude_cli.run_json(POLISH_SYSTEM, msg, POLISH_SCHEMA, model=claude_cli.SONNET, effort="low", timeout=300)
     got = {x["id"]: x["polished"].strip() for x in out.get("items", [])}
     for f in todo:
         if got.get(f["id"]):
@@ -113,14 +113,13 @@ def facts_text(facts=None):
     lack = [f for f in facts if f["level"] == "no"]
     lines = []
     if have:
-        lines.append("Facts the candidate confirmed in Q&A (not on the resume). Each has a polished statement to work from and the "
-                     "candidate's raw note for nuance. Treat raw notes as facts, never as copy: write resume text in professional "
-                     "language. Use facts only as strongly as stated: 'Some / a little' means familiarity or limited use, never "
+        lines.append("Facts the candidate confirmed in Q&A (not on the resume). Each is given once: the polished statement "
+                     "where there is one, else the candidate's own note (a fact, never copy: write resume text in professional "
+                     "language). Use facts only as strongly as stated: 'Some / a little' means familiarity or limited use, never "
                      "expertise; never add numbers, dates, tools or outcomes the answer doesn't contain.")
-        for f in have:
+        for f in have:      # (once each: the raw note used to ride along with its polished form, doubling every answer)
             body = f.get("polished") or f["answer"] or "(no details given)"
-            raw = f" (raw note: {f['answer']})" if f.get("polished") and f.get("answer") else ""
-            lines.append(f"- {f['requirement']} [{LEVELS[f['level']]}]: {body}{raw}")
+            lines.append(f"- {f['requirement']} [{LEVELS[f['level']]}]: {body}")
     if lack:
         lines.append("The candidate confirmed they do NOT have (never claim): " + "; ".join(f["requirement"] for f in lack))
     return "\n".join(lines)
@@ -176,9 +175,10 @@ def generate(job=None, description=""):
                   "\n\nAsk about the skills, tools and experiences that postings for these roles most often require "
                   "and the resume doesn't show.")
         n = 10
+    # (the answers go in once, under ALREADY ANSWERED, with their ids; the profile text is sent without them)
     prompt = (f"{target}\n\nORIGINAL RESUME\n{prof.get('_resume_text', '')[:20000]}\n\n"
-              f"CANDIDATE PROFILE\n{resume.profile_text(prof)}\n\nALREADY ANSWERED\n{answered}")
-    out = claude_cli.run_json(QSYSTEM.replace("{n}", str(n)), prompt, QSCHEMA, effort="medium", timeout=600)
+              f"CANDIDATE PROFILE\n{resume.profile_text(prof, with_facts=False)}\n\nALREADY ANSWERED\n{answered}")
+    out = claude_cli.run_json(QSYSTEM.replace("{n}", str(n)), prompt, QSCHEMA, model=claude_cli.SONNET, effort="medium", timeout=600)
     qs = out.get("questions", [])[:n]
     return dedupe(qs, known)
 
@@ -216,7 +216,7 @@ def dedupe(questions, facts=None):
     try:
         qtext = "\n".join(f"{i}. [{q.get('requirement','')}] {q.get('question','')}" for i, q in enumerate(questions))
         out = claude_cli.run_json(DEDUPE_SYSTEM, f"CANDIDATE QUESTIONS\n{qtext}\n\nALREADY ANSWERED\n{answered_block(facts)}",
-                                  DEDUPE_SCHEMA, model="claude-haiku-5-5", effort="low", timeout=180)
+                                  DEDUPE_SCHEMA, model=claude_cli.HAIKU, effort="low", timeout=180)
         by_i = {r["i"]: r for r in out.get("results", [])}
     except Exception as e:
         print("question de-dupe fell back to labels:", e, flush=True)

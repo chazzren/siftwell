@@ -87,10 +87,11 @@ PREF_SCHEMA = {
     "claude.per_update": (50, (0, 50)),          # Target-tab ratings per run
     "claude.opus_top": (50, (0, 1000)),          # how many of the best jobs get the most careful rating (50 new per run)
     "claude.sonnet_pct": (15, (0, 50)),          # share of quick-checked jobs that get a second look (100 per run)
-    "claude.haiku_per_night": (500, (0, 500)),   # quick checks per run
+    "claude.haiku_per_night": (500, (0, 500)),   # quick checks per RUN (the key's name is from an earlier version and is
+                                                 # kept so nobody's setting is lost; a scheduled night counts as one run)
     "claude.auto_rerate": (True, [True, False]),
     "claude.auto_rate": (True, [True, False]),
-    "claude.facts_per_update": (40, (0, 200)),   # shared facts: an update uses the highest value any profile sets
+    "claude.facts_per_update": (10, (0, 200)),   # shared facts: an update uses the highest value any profile sets
     "display.start_tab": ("jobs", ["jobs", "pivot", "tailored", "companies"]),
     "display.sort": ("score", ["score", "relevant", "appeal", "odds", "odds_later", "pay", "gd", "new"]),
     # (display.level, the board's old Seniority filter default, is gone: "Your level" in the board's My search decides it.)
@@ -231,9 +232,10 @@ def add(name):
     except Exception:
         pass
     # New profiles start with no clearance filter (the "secret" default in PREF_SCHEMA is kept only so existing
-    # profiles that never saved this preference don't change behaviour).
+    # profiles that never saved this preference don't change behaviour). The same goes for questions before tailoring:
+    # a new profile is asked only when the posting has real gaps ("gaps"); existing profiles keep what they had.
     try:
-        save_prefs({"display.clearance": "all"}, pid=pid)
+        save_prefs({"display.clearance": "all", "tailor.questions": "gaps"}, pid=pid)
     except Exception:
         pass
     return pid

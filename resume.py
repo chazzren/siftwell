@@ -86,7 +86,12 @@ def extract_text(path):
             except Exception:
                 raise ValueError("Couldn't open that iPhone photo. Send it as a JPEG or PDF instead.")
         path, ext = tmp, ".jpg"
-    # PDF or image: let Claude read the file directly (handles scans and odd layouts).
+    if ext == ".pdf":
+        text = pdf_text(path)
+        if text:
+            return text       # an ordinary PDF: its text is read right here, no Claude call
+    # A scan, a photo or a PDF with no text layer: Claude reads the file itself. This is the one costly way in (the
+    # whole file goes to Claude as pictures: tens of thousands of tokens), so it is only used when nothing else works.
     with tempfile.TemporaryDirectory(dir=DATA) as d:
         local = os.path.join(d, "resume" + ext)
         shutil.copy(path, local)
@@ -95,10 +100,33 @@ def extract_text(path):
             "order, headings, dates and bullet text. Do not summarize, correct or add anything.",
             f"Read the file {local} and return its complete text.",
             {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"], "additionalProperties": False},
-            read_dir=d, effort="low")
+            read_dir=d, effort="low", model=claude_cli.SONNET, feature="Reading a scanned resume")
     text = (out.get("text") or "").strip()
     if len(text) < 200:
         raise ValueError("Couldn't find resume text in that file.")
+    return text
+
+def pdf_text(path):
+    """The text of a PDF that has a text layer (what Word, Google Docs and resume builders save), read locally with
+    pypdf: free and instant. "" for a scan or anything that doesn't read as plain words (then Claude transcribes it)."""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(path)
+        if getattr(reader, "is_encrypted", False):
+            try:
+                reader.decrypt("")
+            except Exception:
+                return ""
+        pages = [(p.extract_text() or "") for p in reader.pages[:12]]
+    except Exception:
+        return ""
+    text = "\n".join(t.strip() for t in pages if t.strip())
+    text = re.sub(r"[ \t]+\n", "\n", re.sub(r"\n{3,}", "\n\n", text)).strip()
+    words = re.findall(r"[A-Za-z]{2,}", text)
+    letters = sum(ch.isalpha() or ch.isspace() for ch in text)
+    # enough real words, mostly letters, and not one letter per line (a broken text layer)
+    if len(text) < 300 or len(words) < 60 or letters < 0.7 * len(text) or len(text) / max(1, text.count("\n") + 1) < 8:
+        return ""
     return text
 
 # ------------------------------------------------------------------ profile
@@ -190,18 +218,20 @@ def profile_hash_v1(prof):
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:12]
 
 def hash_aliases(before, after):
-    """Older rating keys of this same person to remember when a profile is saved. If only things that are not part of the
-    rating key changed (job titles), the keys the profile had before (its stored _hash, and the older formulas applied to
-    the old data) still point at this person's ratings, so they are kept as _hash_aliases and adopted by
-    ai_score.profile_keys. If the resume content changed, the ratings were made from different data: no aliases."""
-    if not before or profile_hash(before) != profile_hash(after):
+    """Older rating keys of this same person to remember when their profile is saved: the keys the profile had before
+    (its stored _hash and aliases, and the older formulas applied to the old data). ai_score.profile_keys adopts
+    ratings stored under them, so NO rating is lost when the person edits their notes, summary, skills or
+    certifications, or approves a new resume. When the content changed, those ratings carry the fingerprint of the old
+    content, so the board shows them as rated "with older info" (stale) until they are re-rated: exactly what a goals
+    edit does. (Before, a content change dropped the aliases and every rating vanished from the board.)"""
+    if not before:
         return []
     new = profile_hash(after)
     out = []
-    for h in [*(before.get("_hash_aliases") or []), before.get("_hash"), profile_hash_v1(before), profile_hash_legacy(before)]:
+    for h in [before.get("_hash"), profile_hash(before), *(before.get("_hash_aliases") or []), profile_hash_v1(before), profile_hash_legacy(before)]:
         if h and h != new and h not in out:
             out.append(h)
-    return out
+    return out[:24]
 
 def ingest(path, progress=None):
     """Full pipeline for one uploaded file; writes the draft profile for review. progress(stage) is called as it goes."""
@@ -338,6 +368,9 @@ def save_manual(f):
     now = dt.datetime.now().isoformat(timespec="minutes")
     prof["_created"] = prof["_approved"] = now
     prof["_hash"] = profile_hash(prof)
+    al = hash_aliases(load_active(), prof)        # ratings made for the profile this one replaces are kept (as older info)
+    if al:
+        prof["_hash_aliases"] = al
     paths.write_atomic(ACTIVE(), json.dumps(prof, indent=1))
     if os.path.exists(DRAFT()):
         os.remove(DRAFT())
@@ -496,8 +529,9 @@ def discard_draft():
     if os.path.exists(DRAFT()):
         os.remove(DRAFT())
 
-def profile_text(prof, goals=""):
-    """Plain-text profile handed to Claude for scoring and tailoring."""
+def profile_text(prof, goals="", with_facts=True):
+    """Plain-text profile handed to Claude for scoring and tailoring. with_facts=False leaves the person's answers out
+    (for a prompt that lists them itself, so they are not sent twice)."""
     if not prof:
         return ""
     lines = [f"CANDIDATE PROFILE ({prof.get('location','')}, ~{prof.get('years_experience','?')} years experience)",
@@ -518,7 +552,7 @@ def profile_text(prof, goals=""):
         lines += ["", "Additional facts confirmed by the candidate (not on the resume): " + prof["notes"]]
     try:
         import interview
-        ft = interview.facts_text()
+        ft = interview.facts_text() if with_facts else ""
         if ft:
             lines += ["", ft]
     except Exception:

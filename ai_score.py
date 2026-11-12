@@ -85,7 +85,8 @@ class CLIAuthError(Exception):
 
 def cli_logged_in(path):
     try:
-        r = osdeps.run_hidden([*osdeps.cmd(path), "auth", "status"], capture_output=True, text=True, timeout=30)
+        import claude_cli as _cc
+        r = osdeps.run_hidden([*osdeps.cmd(path), "auth", "status"], capture_output=True, text=True, timeout=30, env=_cc.child_env())
         return bool(json.loads(r.stdout).get("loggedIn"))
     except Exception:
         return False
@@ -113,15 +114,30 @@ def _score_batch_cli(path, cfg, profile, batch):
     _cc.forbid_check(f"ai_score CLI {cfg['model']} x{len(batch)}")
     work = paths.data("claude_work")  # empty dir so no project files/CLAUDE.md are picked up
     os.makedirs(work, exist_ok=True)
-    cmd = [*osdeps.cmd(path), "-p", "--model", cfg["model"], "--effort", cfg.get("effort", "low"), "--tools", "",
-           "--system-prompt", SYSTEM + "\n\n" + profile, "--json-schema", json.dumps(SCHEMA),
-           "--output-format", "json", "--no-session-persistence"]
-    r = osdeps.run_hidden(cmd, input=msg, capture_output=True, text=True, timeout=600, cwd=work)
+    # the same lean command line as every other Siftwell call (no tools, skills, MCP or CLAUDE.md: claude_cli.command)
+    cmd = _cc.command(path, cfg["model"], cfg.get("effort", "low"), SYSTEM + "\n\n" + profile, SCHEMA)
+    def failed(why):     # a batch that brought nothing back is still listed in Settings
+        try:
+            import claude_usage
+            claude_usage.record("Match ratings", cfg.get("model"), {}, len(batch), error=why)
+        except Exception:
+            pass
+    try:
+        r = osdeps.run_hidden(cmd, input=msg, capture_output=True, text=True, timeout=600, cwd=work, env=_cc.child_env(),
+                              encoding="utf-8", errors="replace")
+    except subprocess.TimeoutExpired:
+        failed("timed out")
+        raise
     try:
         out = json.loads(r.stdout)
+        if not isinstance(out, dict):
+            raise ValueError("not an object")
     except Exception:
+        if _cc._lean_refused(path, r.stdout, r.stderr):
+            return _score_batch_cli(path, cfg, profile, batch)
+        failed("no readable answer")
         raise RuntimeError((r.stderr or r.stdout)[:200])
-    if isinstance(out, dict) and isinstance(out.get("usage"), dict):
+    if isinstance(out.get("usage"), dict):
         _usage(cfg, out["usage"], batch)   # what this batch really used, for Settings
     if out.get("is_error"):
         txt = str(out.get("result", ""))
@@ -189,8 +205,10 @@ TIER_RUN = {"haiku": {"batch_size": 25, "cli_concurrency": 6, "concurrency": 8},
 # They are fixed numbers on purpose: what a run costs follows what a person can look at, not how many jobs their area
 # has. Settings can lower them, never raise them. haiku: quick checks, most relevant first (pick_order). sonnet: second looks, only
 # for jobs that already have a rating. opus: new most-careful ratings (jobs the person saved come on top, up to
-# "saved"). target: Target-tab ratings. quick: the automatic quick check after a settings change or board rebuild.
-RUN_LIMITS = {"haiku": 500, "sonnet": 100, "opus": 50, "saved": 100, "target": 50, "quick": 200}
+# "saved", the most recently saved first). target: Target-tab ratings. quick: the automatic quick check after a
+# settings change or board rebuild. A scheduled night (the update, then the re-rate after it) shares ONE such budget
+# (jobfinder.night_budgets), so it never does 500 + 500 quick checks.
+RUN_LIMITS = {"haiku": 500, "sonnet": 100, "opus": 50, "saved": 25, "target": 50, "quick": 200}
 
 STOP = set("""a an and are as at be by for from has have in into is it of on or that the their this to was with will you your
 experience years year skills ability knowledge working work strong including able using use etc""".split())
@@ -386,14 +404,16 @@ def fingerprints(prof=None):
       fp                 core info: resume profile, notes, goals (whitespace-normalized)
       hl / hl_old        the confirmed-highlights line (normalized / as stored by older versions)
       pfp / pfp_old      Target tab: core + answers + highlights + goals (normalized / as stored by older versions)
-      facts              [(answer id, its keywords)] for the cheap 'maybe' re-check"""
+      facts              [(answer id, its keywords)] for the cheap 'maybe' re-check
+      tfp / fact_keys    Target tab: pfp without the answers, and [(answer id:content, its keywords)] (see pivot.Freshness)"""
     import re
     if prof is None:
         import resume
         prof = resume.load_active()
     if not prof:
         e = info_fp("")
-        return {"phash": "no_profile", "phash_old": [], "fp": e, "hl": e, "hl_old": e, "pfp": e, "pfp_old": e, "facts": []}
+        return {"phash": "no_profile", "phash_old": [], "fp": e, "hl": e, "hl_old": e, "pfp": e, "pfp_old": e, "facts": [],
+                "tfp": e, "fact_keys": []}
     goals = user_goals()
     facts = _person_facts()
     core = _fp_core_lines(prof)
@@ -409,13 +429,20 @@ def fingerprints(prof=None):
         full += ["", goals]
     full_text = "\n".join(full)
     phash, old = profile_keys(prof)
-    kw = []
+    kw, fkeys = [], []
     for f in facts:
         words = [w for w in re.findall(r"[a-z0-9+#./-]{3,}", (f.get("requirement") or "").lower()) if w not in STOP]
         kw.append((f.get("id"), words))
+        # one answer as the Target tab tracks it: its id plus what it says now (so an edited answer counts as changed)
+        fkeys.append((f"{f.get('id')}:" + info_fp(_ws(_fp_facts_text([f])))[:8], words))
+    # tfp: everything in pfp EXCEPT the answers (core + highlights + goals). With fact_keys it lets the Target tab see
+    # that only an answer changed, and re-check just the jobs that mention that answer's topic (pivot.Freshness).
+    # Additive: fp / hl / pfp and the cache keys above are computed exactly as before.
+    rest = list(_fp_core_lines(prof)) + (["", hl_line] if hl_line else []) + (["", goals] if goals else [])
     return {"phash": phash, "phash_old": old, "fp": info_fp(_ws("\n".join(core))),
             "hl": info_fp(_ws(hl_line)), "hl_old": info_fp(hl_line),
-            "pfp": info_fp(_ws(full_text)), "pfp_old": info_fp(full_text), "facts": kw}
+            "pfp": info_fp(_ws(full_text)), "pfp_old": info_fp(full_text), "facts": kw,
+            "tfp": info_fp(_ws("\n".join(rest))), "fact_keys": fkeys}
 
 
 def info():
@@ -612,7 +639,8 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
                only_ids=None, prepare=None):
     """One rating run, within RUN_LIMITS: Haiku on up to 500 eligible jobs (most relevant first, then best Appeal:
     pick_order; prepare(jobs), if given, is called with the picked jobs first, to fetch any posting text still missing), Sonnet on up to 100
-    of the best jobs that already have a rating, Opus on up to 50 of the top ones (+ saved jobs).
+    of the best jobs that already have a rating, Opus on up to 50 of the top ones (+ up to 25 saved jobs, the most
+    recently saved first: `saved` is an ordered list).
     budgets: {"haiku": n, "sonnet_pct": share of the rated jobs Sonnet may look at, "sonnet_max": n, "opus_top": how far
     down the ranking Opus may look, "opus_max": n}; anything above RUN_LIMITS is cut to it. A job nobody has rated yet
     (the board shows it with no Match) is never sent to Sonnet or Opus on a guessed score: it waits for its Haiku check.
@@ -627,7 +655,8 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
     tiers = list(tiers or TIERS)
     inf, allc, cache, pool = _prepare(jobs, eligible)
     status = "ok"
-    saved = set(saved)
+    saved_order = list(dict.fromkeys(saved)) if isinstance(saved, (list, tuple)) else sorted(saved)
+    saved = set(saved_order)
     cap = lambda key, limit: max(0, min(RUN_LIMITS[limit], int(budgets.get(key, RUN_LIMITS[limit]) or 0)))
     n_haiku = max(0, min(RUN_LIMITS["quick" if only_ids is not None else "haiku"], int(budgets.get("haiku", 0) or 0)))
     n_sonnet = cap("sonnet_max", "sonnet") if budgets.get("sonnet_pct", 15) else 0
@@ -706,7 +735,9 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
             ranked = rank(["sonnet", "haiku"] if pick == "funnel" else BEST_AVAILABLE)
             todo = [j for j in ranked[: max(0, int(budgets.get("opus_top", 50)))] if need(j, "opus")][:n_opus]
             seen = {j["id"] for j in todo}
-            todo += [j for j in pool if j["id"] in saved and j["id"] not in seen and need(j, "opus")][: RUN_LIMITS["saved"]]
+            by_id = {j["id"]: j for j in pool}
+            n_saved = max(0, min(RUN_LIMITS["saved"], int(budgets.get("saved_max", RUN_LIMITS["saved"]))))
+            todo += [by_id[i] for i in saved_order if i in by_id and i not in seen and need(by_id[i], "opus")][:n_saved]
             _rate(todo, "opus", inf, log, on_batch=keep("opus"))
     except CLIAuthError:
         status = "cli_logged_out"

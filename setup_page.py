@@ -1097,7 +1097,7 @@ SCREENS.board = {
     const found = d.possible || (f.possible && this.findOn);
     steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just added" : "") : found ? "the employers it just added" : lists}, the ones with the most openings near you first. The first jobs reach your board within a few minutes and it keeps filling in; checking every employer near a big city can take a few hours.`]);
     steps.push(["Keep the jobs that fit", `Jobs ${where}${v.salary_floor ? `, paying at least ${fmtK(v.salary_floor)}` : ""}${v.seniority_mine ? ", around your level" : ""}, minus your dealbreakers.`]);
-    if (cl) steps.push(["Rate the best matches", "Claude reads the most appealing jobs against your resume and gives each a Match rating, using your Claude plan: up to 500 jobs in one go. The rest show — until you press Rate more on your board."]);
+    if (cl) steps.push(["Rate the best matches", "Claude reads the jobs most relevant to your work against your resume and gives each a Match rating, using your Claude plan: up to 500 jobs in one go. The rest show — until you press Rate more on your board."]);
     const none = !this.canStart();
     $("bBody").innerHTML = `
       <p class="eyebrow">Last step</p>

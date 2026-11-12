@@ -94,8 +94,11 @@ def run_here():
     osdeps.keep_awake(True)
     note("started (Siftwell isn't open; running the update here)")
     try:
+        import datetime as _dt
+        # the update and the re-rate after it are one rating run as far as the limits go (jobfinder.night_budgets)
+        env = {**os.environ, "SIFTWELL_NIGHT": _dt.datetime.now().strftime("%Y%m%dT%H%M%S")}
         with open(log_path, "w", encoding="utf-8") as log:
-            rc = subprocess.call([py, "-X", "utf8", jf], cwd=APP, stdout=log, stderr=subprocess.STDOUT, creationflags=NOWIN)
+            rc = subprocess.call([py, "-X", "utf8", jf], cwd=APP, stdout=log, stderr=subprocess.STDOUT, creationflags=NOWIN, env=env)
         note("update finished" if rc in (0, 3) else "update stopped", f"exit {rc}")
         if rc not in (0, 3):
             return rc
@@ -113,7 +116,7 @@ def run_here():
         for pid, n in todo:
             with open(os.path.join(paths.DATA, f"rerate-{pid}.log"), "w", encoding="utf-8") as log:
                 rr = subprocess.call([py, "-X", "utf8", jf, "--rerate", pid, "--n", str(n)], cwd=APP, stdout=log,
-                                     stderr=subprocess.STDOUT, creationflags=NOWIN)
+                                     stderr=subprocess.STDOUT, creationflags=NOWIN, env=env)
             note("re-rate finished" if rr == 0 else "re-rate failed", f"{pid}, exit {rr}")
         return 0
     except Exception as e:
