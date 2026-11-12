@@ -472,7 +472,7 @@ def apply(pid, limit=MAX_ADD, weekly=False):
             if co:
                 if want not in (co.get("sets") or []):
                     entry = {kk: v for kk, v in co.items() if not kk.startswith("_")}
-                    entry["sets"] = sorted(set(co.get("sets") or ["tech"]) | {want})
+                    entry["sets"] = sorted(set(co.get("sets") or []) | {want})
                     catalog.save_company(entry)
                     linked.append(co["name"])
                     if e.get("starter"):
@@ -737,7 +737,7 @@ PANE_HTML = """<section class="sgsec"><h3 class="sgtitle">Employers near you</h3
 from public sources (web crawl indexes, certificate logs and public employer lists). It needs no key, no account and no Claude.
 Siftwell downloads only whole-state files for the states around your home (and a remote-jobs file if you only want remote work), so
 your exact location never leaves this computer. Once a week it checks for newly listed employers near you and adds them; employers
-you take off your Near me list stay off. <span id="dirSources"></span></p></section>"""
+you stop watching stay off. <span id="dirSources"></span></p></section>"""
 
 PANE_JS = r"""(function(){
 const $ = id => document.getElementById(id);
@@ -749,7 +749,7 @@ function load(){
   fetch("/api/directory").then(r => r.json()).then(d => {
     let t = d.possible ? (d.remote_only ? "Remote-friendly employers anywhere in the US." : `Employers with openings within ${d.radius} miles of ${esc(d.label)}.`)
                        : "Add your home ZIP (Filters, then My search on the board) so Siftwell knows where to look.";
-    if (d.applied) t += ` Last added ${day(d.applied)}; ${Number(d.near_list || 0).toLocaleString()} employers are on your Near me list.`;
+    if (d.applied) t += ` Last added ${day(d.applied)}; ${Number(d.near_list || 0).toLocaleString()} of your employers come from it.`;
     if (d.built) t += ` Directory updated ${day(d.built)}.`;
     $("dirState").innerHTML = t;
     $("dirApply").disabled = !d.possible;
@@ -764,7 +764,7 @@ $("dirApply").addEventListener("click", () => {
       $("dirApply").disabled = false;
       if (!ok) { $("dirMsg").textContent = d.error || "That didn't work."; return; }
       const k = (d.added || []).length + (d.linked || []).length;
-      $("dirMsg").textContent = k ? `Added ${k.toLocaleString()} employers to your Near me list.` + (d.fetching ? " Siftwell is checking their openings now; your board fills in when it's done." : " Their jobs show up after the next Find new jobs.")
+      $("dirMsg").textContent = k ? `Added ${k.toLocaleString()} to your employers.` + (d.fetching ? " Siftwell is checking their openings now; your board fills in when it's done." : " Their jobs show up after the next Find new jobs.")
                                   : "No new employers near you in the directory right now. Employers you took off your list stay off.";
       load();
     }).catch(() => { $("dirApply").disabled = false; $("dirMsg").textContent = "Couldn't reach Siftwell. Is it still running?"; });

@@ -26,7 +26,7 @@ DB = os.path.join(paths.DATA, "catalog.db")
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS companies(
-  name TEXT PRIMARY KEY, ats TEXT NOT NULL, cfg TEXT NOT NULL, sets TEXT NOT NULL DEFAULT '["tech"]',
+  name TEXT PRIMARY KEY, ats TEXT NOT NULL, cfg TEXT NOT NULL, sets TEXT NOT NULL DEFAULT '[]',
   tier TEXT DEFAULT '', sector TEXT DEFAULT '', ai_track TEXT DEFAULT '', paused INTEGER NOT NULL DEFAULT 0,
   added_by TEXT, added_at TEXT, last_fetch_at TEXT, last_status TEXT, last_error TEXT,
   raw_count INTEGER, open_count INTEGER, fetch_secs REAL);
@@ -57,7 +57,7 @@ _columns_ok = set()
 
 # Board fields that depend on the person looking (never stored on a listing).
 PERSON_KEYS = {"score", "appeal", "appeal_parts", "fit_score", "comp_score", "qol_score", "req_status", "req_chips",
-               "req_soft", "req_reasons", "dmv_locations", "tracks", "new", "desc"}
+               "req_soft", "req_reasons", "dmv_locations", "tracks", "new", "desc", "rel", "rel_why"}
 COLUMNS = ("company", "title", "url", "workplace", "salary_min", "salary_max", "salary_mid", "dept", "posted")
 
 
@@ -143,7 +143,7 @@ def save_company(entry, con=None):
                    VALUES(?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(name) DO UPDATE SET ats=excluded.ats, cfg=excluded.cfg, sets=excluded.sets, tier=excluded.tier,
                      sector=excluded.sector, ai_track=excluded.ai_track, added_by=COALESCE(excluded.added_by, companies.added_by)""",
-                (cfg["name"], cfg["ats"], json.dumps(cfg), json.dumps(cfg.get("sets") or ["tech"]), cfg.get("tier", ""),
+                (cfg["name"], cfg["ats"], json.dumps(cfg), json.dumps(cfg.get("sets") or []), cfg.get("tier", ""),
                  cfg.get("sector", ""), cfg.get("ai_track", ""), cfg.get("added_by"), now()))
 
 
@@ -272,13 +272,22 @@ def put_listing(con, j, first_seen, last_seen, partial=False, closed_at=None):
                  first_seen, last_seen, closed_at, 1 if partial else 0, json.dumps(data), desc[:DESC_MAX], listing_hash(j.get("title"), desc)))
 
 
-def open_listings():
-    """Every open, complete listing as a dict (parsed fields + first_seen), with the company's current tier/sector."""
+def open_listings(lazy=False):
+    """Every open, complete listing as a dict (parsed fields + first_seen), with the company's current tier/sector.
+    lazy=True (boards): also the rows a fetcher stored on purpose without their text ("lazy": title, place and link
+    only, because nobody's titles named them; jobfinder.lazy_text fetches the text when someone wants it)."""
     with db() as con:
         cos = {r["name"]: r for r in con.execute("SELECT name, tier, sector, ai_track, paused FROM companies")}
         out = []
-        for r in con.execute("SELECT data, first_seen, last_seen FROM listings WHERE closed_at IS NULL AND partial=0"):
+        q = "SELECT data, first_seen, last_seen, partial FROM listings WHERE closed_at IS NULL"
+        for r in con.execute(q + ("" if lazy else " AND partial=0")):
+            if r["partial"] and '"lazy"' not in r["data"]:
+                continue
             j = json.loads(r["data"])
+            if r["partial"] and not j.get("lazy"):
+                continue
+            if not r["partial"]:
+                j.pop("lazy", None)
             c = cos.get(j["company"])
             if c is None or c["paused"]:
                 continue
@@ -417,7 +426,66 @@ def find_listings(q="", state="open", company="", page=1, per=50, sort="last_see
 
 
 # ---------------------------------------------------------------- one-time migration from the file-based layout
+def move_lists(log=print):
+    """One-time, in DATA only: the shared category lists of earlier versions ("tech" / "ops" / "nonprofit") go away.
+    Every company a profile watched through one of them moves onto that profile's own list (own-<id>), so each
+    profile keeps watching exactly the employers it watched before; companies nobody watched stay in the catalog,
+    watched by nobody. The old list names are then taken off every company and the old "company_sets" setting off
+    every profile. Safe to run again (it finds nothing left to move); a restored older backup is moved again because
+    the marker lives in the catalog it replaces. Returns True when it moved anything."""
+    if get_meta("lists_moved"):
+        return False
+    import people
+    legacy = set(people.LEGACY_COMPANY_SETS)
+    watch, raws = {}, {}
+    for pid in people.ids():
+        try:
+            raw = people.read_saved_strict(pid)
+        except Exception as e:   # never guess from a file that can't be read right now: try again at the next start
+            log(f"company lists not moved yet: {pid}'s settings can't be read ({type(e).__name__})")
+            return False
+        raws[pid] = raw
+        # a settings file from before the key existed (or no file at all) watched the first list
+        had = raw.get("company_sets") if isinstance(raw, dict) and "company_sets" in raw else ["tech"]
+        watch[pid] = legacy & set(had or [])
+    moved = dropped = 0
+    with db() as con:
+        for r in con.execute("SELECT name, sets FROM companies").fetchall():
+            try:
+                sets = [s for s in json.loads(r["sets"]) if isinstance(s, str)]
+            except ValueError:
+                sets = []
+            new = [s for s in sets if s not in legacy]
+            for pid, w in watch.items():
+                if w & set(sets) and f"own-{pid}" not in new:
+                    new.append(f"own-{pid}")
+                    moved += 1
+            if sorted(new) != sorted(sets):
+                dropped += 1
+                con.execute("UPDATE companies SET sets=? WHERE name=?", (json.dumps(sorted(new)), r["name"]))
+        set_meta("lists_moved", today(), con)
+    for pid, raw in raws.items():
+        if isinstance(raw, dict) and "company_sets" in raw:
+            raw = dict(raw)
+            raw.pop("company_sets")
+            people._write_settings(raw, pid)
+    if dropped:
+        log(f"catalog: the earlier shared company lists are gone; {moved} watched employer(s) moved onto profiles' own lists")
+    return bool(dropped)
+
+
 def migrate(log=print):
+    """Everything that brings an older data folder up to date (each step runs once): the file-based catalog into
+    catalog.db, then the earlier shared company lists onto each profile's own list."""
+    done = _migrate_files(log)
+    try:
+        move_lists(log)
+    except Exception as e:
+        log(f"company lists not moved yet: {type(e).__name__}: {e}")
+    return done
+
+
+def _migrate_files(log=print):
     """Build the catalog from DATA/companies.json, people/*/jobs.json, descriptions.json, seen.json and market.json.
     Idempotent: runs only while meta 'migrated_at' is unset. Old files are left in place here; retire_old_files() moves
     them away on a later start."""

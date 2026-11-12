@@ -375,6 +375,8 @@ ol.rows{gap:0;background:var(--surface);border:1px solid var(--line);border-radi
 .rsc b{display:block;font:500 17px/1.15 var(--mono)}
 .rsc b.m{color:var(--muted);font-size:15px}
 .rsc b.m.hi{color:var(--good)}
+.rsc b.rv{color:var(--muted);font-size:15px}
+.rsc b.rv.hi{color:var(--ink)}
 .rsc small{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .vpill{font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:999px;white-space:nowrap;background:var(--bg);color:var(--muted)}
 .vpill.v-apply_now,.vpill.v-after_prep{background:var(--good-soft);color:var(--good)}
@@ -579,7 +581,7 @@ BODY = """<div class="wrap">
     <div class="frow">
       <input type="search" id="q" enterkeyhint="search" placeholder="Describe a job, industry, company or role, then press Enter" aria-label="Describe what you're looking for">
       <select id="sort" aria-label="Sort">
-        <option value="rel" id="sortRel" hidden>Best match to search</option><option value="score">Best bets (Appeal × Match)</option><option value="appeal">Highest Appeal</option><option value="odds">Highest Match</option><option value="odds_later" id="sortLater">Match as written</option><option value="pay">Highest pay</option><option value="gd">Best Glassdoor (review-weighted)</option><option value="new">Newest</option>
+        <option value="rel" id="sortRel" hidden>Closest to my search</option><option value="score">Best bets (good job and good fit)</option><option value="relevant" id="sortRelevant">Most relevant to my work</option><option value="appeal">Most appealing (pay, place, level)</option><option value="odds" id="sortOdds">Best fit (Claude’s Match)</option><option value="odds_later" id="sortLater">Best fit with my resume as it is</option><option value="pay">Highest pay</option><option value="gd">Best employee reviews</option><option value="new">Newest</option>
       </select>
       <button class="btn" type="button" id="filtersBtn" aria-expanded="false" aria-controls="fPanel">Filters<span class="badge" id="fCount" hidden></span></button>
     </div>
@@ -622,13 +624,11 @@ BODY = """<div class="wrap">
           <label class="chk"><input type="checkbox" id="newonly"> New</label>
           <label class="chk"><input type="checkbox" id="reqall"> Jobs I don't meet requirements for</label></div></div>
       </div>
-      <div class="fgroup">Company</div>
-      <div class="fgrid">
-        <label class="field" id="cListField"><span class="flabel">List</span><select id="cList">
-          <option value="all">All my lists</option></select></label>
+      <div class="fgroup" id="cfGroup">Employer</div>
+      <div class="fgrid" id="cfGrid">
         <label class="field"><span class="flabel">Type</span><select id="cType">
-          <option value="all">Any type</option><option value="public">Public</option><option value="private">Private</option>
-          <option value="lab">Frontier AI lab</option><option value="ai">AI company</option><option value="np">Nonprofit / gov-sponsored</option></select></label>
+          <option value="all">Any type</option><option value="public">Publicly traded</option><option value="private">Privately owned</option>
+          <option value="np">Nonprofit / public sector</option></select></label>
         <label class="field"><span class="flabel">Size</span><select id="cSize">
           <option value="all">Any size</option><option value="s">Under 200 people</option><option value="m">200 – 1,000</option>
           <option value="l">1,000 – 10,000</option><option value="xl">10,000+</option><option value="nsxl">Under 10,000</option></select></label>
@@ -636,15 +636,15 @@ BODY = """<div class="wrap">
           <option value="all">Any value</option><option value="v1">Under $1B</option><option value="v10">$1B – $10B</option>
           <option value="v100">$10B – $100B</option><option value="vbig">$100B+</option><option value="v10p">$10B+</option></select></label>
         <label class="field"><span class="flabel">Age</span><select id="cAge">
-          <option value="all">Any age</option><option value="a5">Startup (under 5 yrs)</option><option value="a15">Growth (5 – 15 yrs)</option>
-          <option value="aold">Established (15+ yrs)</option><option value="a15m">Under 15 yrs</option></select></label>
-        <label class="field"><span class="flabel">Glassdoor</span><select id="cGd">
+          <option value="all">Any age</option><option value="a5">Under 5 years old</option><option value="a15">5 – 15 years old</option>
+          <option value="aold">Over 15 years old</option><option value="a15m">Under 15 years old</option></select></label>
+        <label class="field"><span class="flabel">Employee reviews (Glassdoor)</span><select id="cGd">
           <option value="all">Any rating</option><option value="g40">4.0+</option><option value="g35">3.5+</option>
           <option value="g35u">3.5+ or unrated</option><option value="g40r">4.0+ with 100+ reviews</option></select></label>
         <label class="field"><span class="flabel">Layoffs</span><select id="cLay">
           <option value="all">Any</option><option value="none">None reported (18 mo)</option><option value="noknown">Hide known layoffs</option></select></label>
-        <label class="field"><span class="flabel">Equity</span><select id="cEq">
-          <option value="all">Any equity</option><option value="liquid">Public stock (sellable RSUs)</option><option value="private">Private shares / options</option></select></label>
+        <label class="field"><span class="flabel">Stock for employees</span><select id="cEq">
+          <option value="all">Any</option><option value="liquid">Public stock (can be sold)</option><option value="private">Private shares / options</option></select></label>
       </div>
       <div class="row"><button class="btn ghost sm" type="button" id="fReset">Reset to defaults</button><button class="btn sm" type="button" id="fDone">Done</button></div>
     </div>
@@ -710,6 +710,8 @@ const LBL_HELP = {apply_now: "Apply with your resume as it is.", tailor: "A good
 const TIER = {dmv_hq:"HQ near you", dmv_office:"Office near you", remote_first:"Remote-first", remote_friendly:"Remote-friendly"};
 
 const jobs = D.jobs;
+const HASREL = !!D.has_relevance;   // the profile has a what-to-look-for sheet, so every job has a Relevance
+const NOMATCH_SORT = () => HASREL ? "relevant" : "appeal";   // the order when there is no Match to rank by
 // Claude is optional: when it isn't connected the board says so once (banner) and shows "-" where Match would be.
 let NOAI = D.claude_ready === false;
 const NOAI_MSG = "Connect Claude to get Match ratings and tailoring";
@@ -729,9 +731,6 @@ $("stats").innerHTML = [
   [nNew, "new this run"], [D.companies.length, "companies"]
 ].map(([n,l]) => `<div class="stat"><b>${n.toLocaleString()}</b><span>${l}</span></div>`).join("");
 
-const LISTS = D.lists || {options: [], by_company: {}};
-$("cList").insertAdjacentHTML("beforeend", LISTS.options.map(o => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join(""));
-$("cListField").hidden = LISTS.options.length < 2;
 const cos = [...new Set(jobs.map(j=>j.company))].sort();
 $("co").insertAdjacentHTML("beforeend", cos.map(c => `<option>${esc(c)}</option>`).join(""));
 
@@ -768,7 +767,7 @@ function drawPivotPanel(){
 }
 $("pvCounts").addEventListener("click", e => { const b = e.target.closest("button[data-lbl]"); if (!b) return; $("lbl").value = b.dataset.lbl; gapSel = ""; shown = 100; drawPivotPanel(); render(); });
 $("pvGaps").addEventListener("click", e => { const b = e.target.closest("button[data-gap]"); if (!b) return; gapSel = gapSel === b.dataset.gap ? "" : b.dataset.gap; if (gapSel) $("lbl").value = "noskip"; shown = 100; drawPivotPanel(); render(); });
-["q","clr","co","st","sort","paidonly","newonly","reqall","lbl","nowide","cList","cType","cSize","cVal","cAge","cGd","cLay","cEq"].forEach(id => $(id).addEventListener("input", () => { shown = 100; render(); }));
+["q","clr","co","st","sort","paidonly","newonly","reqall","lbl","nowide","cType","cSize","cVal","cAge","cGd","cLay","cEq"].forEach(id => $(id).addEventListener("input", () => { shown = 100; render(); }));
 $("more").addEventListener("click", () => { shown += 100; render(); });
 $("count").addEventListener("click", e => { if (e.target.id === "reqShow") { $("reqall").checked = true; shown = 100; render(); } });
 // ---- My search (top of the Filters panel): this profile's saved search settings, the same ones /setup asks for.
@@ -879,7 +878,7 @@ function applyDisplayDefaults(){
   applyTheme();
   if (!RESTORED) {
     $("clr").value = PREFS["display.clearance"]; $("sort").value = PREFS["display.sort"];
-    if (!jobs.some(j => j.ai_fit != null) && ["score", "odds", "odds_later"].includes($("sort").value)) $("sort").value = "appeal";  // nothing to rank by Match yet
+    if (!jobs.some(j => j.ai_fit != null) && ["score", "odds", "odds_later"].includes($("sort").value)) $("sort").value = NOMATCH_SORT();  // nothing to rank by Match yet
     if (!location.hash && PREFS["display.start_tab"] && PREFS["display.start_tab"] !== "jobs") { location.hash = "#" + PREFS["display.start_tab"]; return; }
   }
   render();
@@ -1023,7 +1022,7 @@ function card(j){
   const sc = pvm ? (j.pv_score ?? j.score) : j.score, m = pvm ? j.pv_now : j.ai_fit, v = verdict(j);
   return `<li class="jrow ${s==="hidden"?"hidden-by-user":""}" role="option" tabindex="0" data-id="${esc(j.id)}" aria-selected="${SEL === j.id}">
     <div class="rtitle">${j.new ? '<span class="ndot" title="New this week"></span>' : ""}${esc(j.title)}</div>
-    <div class="rsc"><div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}${m == null && NOAI ? " na" : ""}" title="${m == null ? (NOAI ? "Match ratings need Claude" : "Not rated yet") : pvm ? "" : tierName(j)}">${m ?? "—"}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
+    <div class="rsc">${!pvm && HASREL ? `<div title="${esc(j.rel_why || "How close this job is to the work you do")}"><b class="rv${j.rel >= 70 ? " hi" : ""}">${j.rel ?? "–"}</b><small>Relevant</small></div>` : ""}<div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}${m == null && NOAI ? " na" : ""}" title="${m == null ? (NOAI ? "Match ratings need Claude" : "Not rated yet") : pvm ? "" : tierName(j)}">${m ?? "—"}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
     <div class="rco">${esc(j.company)} · ${esc(whereTxt(j))}</div>
     <div class="rmeta">${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : NOAI ? "" : `<span class="vpill">Not rated yet</span>`}<span class="amt">${payTxt(j)}</span>${j.posted ? `<span>${ago(j.posted)}</span>` : ""}${(pvm ? j.pv_stale : j.ai_stale) ? '<span class="old" title="Rated before your latest info">Older info</span>' : ""}${j.req_status === "unmet" ? '<span class="rq un">Requirement not met</span>' : j.req_status === "flag" ? '<span class="rq">Check requirements</span>' : ""}${TAILORED[j.id] ? "<span>Resume ready</span>" : WORK[j.id] && WORK[j.id].state === "running" ? "<span>Tailoring…</span>" : ""}${s === "applied" ? "<span>Applied</span>" : s === "saved" ? "<span>★ Saved</span>" : ""}</div>
     <div class="racts"><button type="button" data-k="saved" aria-pressed="${s==="saved"}" title="Save" aria-label="Save">★</button><button type="button" data-k="hidden" aria-pressed="${s==="hidden"}" title="Not for me" aria-label="Hide">✕</button></div>
@@ -1059,6 +1058,7 @@ function detail(j){
     <section class="dsec"><h3>How you stack up</h3><div class="dscores">
       ${pvm ? `<div class="dsc"><div class="ring" style="--p:${sc}"><b>${sc}</b></div><p><strong>Overall</strong>Odds, pay and quality of life combined.</p></div>`
         : `<div class="dsc"><div class="ring" style="--p:${j.appeal ?? 0}"><b>${j.appeal ?? "–"}</b></div><p><strong>Appeal</strong>How well this job gives you what you want.${j.appeal_parts ? `<br>Pay ${j.appeal_parts.pay} · Place ${j.appeal_parts.place} · Level ${j.appeal_parts.level} · Company ${j.appeal_parts.company} · Travel ${j.appeal_parts.burden}` : ""}</p></div>`}
+      ${!pvm && HASREL ? `<div class="dsc"><div class="ring" style="--p:${j.rel ?? 0}"><b>${j.rel ?? "–"}</b></div><p><strong>Relevance</strong>How close this job is to the work you do. ${esc(j.rel_why || "")}${j.rel_why ? "." : ""}<br><a href="/profile#search">Change what Siftwell looks for</a></p></div>` : ""}
       <div class="dsc"><div class="ring" style="--p:${m ?? 0}"><b>${m ?? "–"}</b></div><p><strong>Match</strong>${m == null ? (NOAI ? "Needs Claude." : "Not rated yet.") : pvm ? `Your shot today with an honest tailored resume (after prep: ${j.pv_later}).` : `How well your resume matches what they want${asis != null && asis !== m ? ` (${asis} as written today)` : ""}.<br><span class="tiertag t-${j.ai_tier}">${esc(tierName(j))}</span>`}</p></div>
     </div></section>
     <section class="dsec dread"><h3>Claude's read</h3>${!unrated && (pvm ? j.pv_stale : j.ai_stale) && SERVED ? `<div class="ratefresh"><span class="old">Rated before your latest info</span><button class="btn sm" type="button" data-rate="1">Re-rate this job</button></div>` : ""}${unrated && NOAI ? `<p>${noClaude("Claude's read")}</p>` : unrated ? `<p>Claude hasn't read this one yet.</p>${SERVED && D.profile ? `<button class="btn" type="button" data-rate="1">Get Claude's take (about 30 seconds)</button>` : ""}` : read}</section>
@@ -1066,7 +1066,7 @@ function detail(j){
     <section class="dsec"><h3>Pay</h3>${payBar(j)}</section>
     <section class="dsec"><h3>Details</h3><div class="chips">${levelChip(j)}${wpChip}${locs}${clr}${j.scif ? `<span class="chip onsite">SCIF</span>` : ""}${travelChip(j)}</div></section>
     <section class="dsec"><h3>About ${esc(j.company)}</h3>${coPanel(j)}</section>
-    <section class="dsec"><h3>From the posting</h3><p class="snipp" id="dDesc">${esc(j.snippet || "")}${j.snippet ? "…" : ""}</p>${SERVED ? `<button class="btn ghost sm" type="button" id="dFull" style="margin-top:6px">Show the full posting</button>` : ""}</section>
+    <section class="dsec"><h3>From the posting</h3><p class="snipp" id="dDesc">${esc(j.snippet || "")}${j.snippet ? "…" : j.lazy ? "Siftwell has this job’s title and place so far. Its full text is fetched when you ask for it." : ""}</p>${SERVED ? `<button class="btn ghost sm" type="button" id="dFull" style="margin-top:6px">Show the full posting</button>` : ""}</section>
   </div>`;
 }
 function reqSection(j){
@@ -1185,7 +1185,8 @@ function render(){
   });
   const key = $("sort").value;
   const by = {rel: j => -((nlOn() ? NL.rank.get(j.id) || 0 : 0) * 1e3 + (mode === "pivot" ? (j.pv_score ?? 0) : j.score)),
-    score: j => -(mode === "pivot" ? (j.pv_score ?? 0) : j.score), appeal: j => -((j.appeal ?? 0) * 1e3 + (j.ai_fit ?? 0)),
+    score: j => -(mode === "pivot" ? (j.pv_score ?? 0) : j.score),
+    relevant: j => -(mode === "pivot" ? (j.pv_score ?? 0) : (j.rel ?? -1) * 1e3 + (j.appeal ?? 0)), appeal: j => -((j.appeal ?? 0) * 1e3 + (j.ai_fit ?? 0)),
     gd: j => -(gdWeighted(CI[j.company] || {}) * 1e6 + (j.salary_mid || 0) / 1e3), pay: j => -(j.salary_mid ?? 0), odds: j => -(((mode === "pivot" ? j.pv_now : j.ai_fit) ?? -1) * 1e6 + ((mode === "pivot" ? j.pv_later : j.ai_asis) ?? 0) * 1e3 + (j.salary_mid || 0) / 1e3),
     odds_later: j => -(((mode === "pivot" ? j.pv_later : j.ai_asis) ?? -1) * 1e6 + ((mode === "pivot" ? j.pv_now : j.ai_fit) ?? 0) * 1e3 + (j.salary_mid || 0) / 1e3), new: j => -(Date.parse(j.first_seen + "T00:00") || 0) - (Date.parse(j.posted) || 0)/1e6};
   r.sort((a,b) => by[key](a) - by[key](b));
@@ -1193,7 +1194,7 @@ function render(){
   // jobs Claude would rate that have no rating yet (whole board, not just this filtered list)
   const notRated = !D.profile ? 0 : mode === "pivot" ? pvJobs().filter(j => j.pv_label == null && j.req_status !== "unmet").length : jobs.filter(j => j.ai_rs && j.ai_fit == null).length;
   $("count").innerHTML = `${r.length.toLocaleString()} of ${base.toLocaleString()} jobs` + (r.length > shown ? ` · showing ${shown}` : "") +
-    (notRated ? ` · <span title="Claude rates a limited number of jobs in one go, the most appealing first. The rest show a dash for Match until they are rated.">${notRated.toLocaleString()} job${notRated === 1 ? "" : "s"} not rated yet</span>` : "") +
+    (notRated ? ` · <span title="Claude rates a limited number of jobs in one go, the ones most relevant to your work first. The rest show a dash for Match until they are rated.">${notRated.toLocaleString()} job${notRated === 1 ? "" : "s"} not rated yet</span>` : "") +
     (!NOAI && D.ratings && D.ratings.stale_all ? ` · <span title="Rated before your latest resume, answers or goals. Rate more (or the Re-rate icon at the top) brings them up to date.">${D.ratings.stale_all.toLocaleString()} rated with older info</span>` : "") +
     (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "");
   drawChips();
@@ -1338,25 +1339,22 @@ if (SERVED) {
     $("gsOff").addEventListener("click", () => { b.hidden = true; try { localStorage.setItem("jb.gsOff", miss); } catch(e) {} });
   }).catch(() => {});
 }
-const QUICK = [["good", "Strong & worth tailoring"], ["remote", "Remote"], ["nonprofit", "Nonprofit"], ["paid", "Pay listed"], ["new", "New"]];
+const QUICK = [["good", "Strong & worth tailoring"], ["remote", "Remote"], ["paid", "Pay listed"], ["new", "New"]];
 function quickOn(k){
   if (k === "good") return $("lbl").value === "good";
   if (k === "remote") return wp === "remote";
-  if (k === "nonprofit") return $("cList").value === "nonprofit";
   if (k === "paid") return $("paidonly").checked;
   if (k === "new") return $("newonly").checked;
 }
 function drawQuick(){
-  const hasNP = LISTS.options.some(o => o.id === "nonprofit");
   $("lbl").closest(".field").hidden = NOAI && !hasMatch;  // the Fit filter is about Claude's verdicts
-  $("quick").innerHTML = QUICK.filter(([k]) => (k !== "nonprofit" || hasNP) && (k !== "good" || (mode !== "pivot" && !(NOAI && !hasMatch)))).map(([k, l]) => `<button type="button" class="qc" data-qk="${k}" aria-pressed="${!!quickOn(k)}">${l}</button>`).join("");
+  $("quick").innerHTML = QUICK.filter(([k]) => (k !== "good" || (mode !== "pivot" && !(NOAI && !hasMatch)))).map(([k, l]) => `<button type="button" class="qc" data-qk="${k}" aria-pressed="${!!quickOn(k)}">${l}</button>`).join("");
 }
 $("quick").addEventListener("click", e => {
   const b = e.target.closest("button[data-qk]"); if (!b) return;
   const k = b.dataset.qk, on = !quickOn(k);
   if (k === "good") $("lbl").value = on ? "good" : "all";
   if (k === "remote") wp = on ? "remote" : "all";
-  if (k === "nonprofit") $("cList").value = on ? "nonprofit" : "all";
   if (k === "paid") $("paidonly").checked = on;
   if (k === "new") $("newonly").checked = on;
   shown = 100; render();
@@ -1433,7 +1431,7 @@ if (SERVED && !jobs.length) (function(){
         .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
           if (!ok) { $("scDir").disabled = false; $("scDirMsg").textContent = " " + (d.error || "That didn’t work."); return; }
           const k = (d.added || []).length + (d.linked || []).length;
-          $("scDirMsg").textContent = k ? ` Added ${n(k)} to your Near me list${d.fetching ? "; checking their openings now" : ""}.` : " No new employers near you in the directory right now.";
+          $("scDirMsg").textContent = k ? ` Added ${n(k)} to your employers${d.fetching ? "; checking their openings now" : ""}.` : " No new employers near you in the directory right now.";
           if (d.fetching) setTimeout(load, 1500);
         }).catch(() => { $("scDir").disabled = false; $("scDirMsg").textContent = " Couldn’t reach Siftwell. Try again."; });
     });
@@ -1456,21 +1454,37 @@ function route(){
   const m = v === "pivot" ? "pivot" : "current";
   if (m !== mode || !$("lbl").options.length) { mode = m; gapSel = ""; setLabelOptions(); shown = 100; }
   $("pvPanel").hidden = mode !== "pivot";
-  $("sortLater").textContent = mode === "pivot" ? "Best match after prep" : "Best match as written";
+  $("sortLater").textContent = mode === "pivot" ? "Best fit after I prepare" : "Best fit with my resume as it is";
+  $("sortOdds").textContent = mode === "pivot" ? "Best fit today" : "Best fit (Claude’s Match)";
+  $("sortRelevant").hidden = $("sortRelevant").disabled = mode === "pivot" || !HASREL;
+  if ($("sortRelevant").disabled && $("sort").value === "relevant") $("sort").value = "score";
   $("legend").hidden = mode === "pivot"; $("pvLegend").hidden = mode !== "pivot";
   $("legend2").innerHTML = mode === "pivot"
     ? "<b>Overall</b> = how worth pursuing a job is: 50% odds (60% today, 40% after prep) + 30% pay + 20% quality of life. <b>Match</b> = your shot today with an honest tailored resume (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability). Hover it for the after-prep number."
-    : "<b>Appeal</b> = how well a job gives you what you want, worked out from the posting and company facts: 40% pay against your floor, 20% workplace and distance, 15% level, 15% company (Glassdoor, layoffs), 10% travel and clearance burden. <b>Match</b> = how well your resume, honestly tailored, meets what they ask for (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability). Every job gets a quick Haiku rating, the best ~15% a Sonnet rating, and your top 300 a careful Opus rating; a hollow dot means quick, a filled dot Sonnet, no dot Opus. <b>Best bets</b> (the default order) ranks jobs high on both.";
+    : (HASREL ? "<b>Relevant</b> = how close a job is to the work you do: its title against your job titles, other names for them, one step up and related roles, plus your skills found in the posting. Worked out by Siftwell itself for every job (no Claude); see and change the list under My profile, Job search. " : "") + "<b>Appeal</b> = how well a job gives you what you want, worked out from the posting and company facts: 40% pay (against your floor, or against the other jobs on your board when you have no floor), 20% workplace and distance, 15% level, 15% company (employee reviews, layoffs), 10% travel and clearance burden. <b>Match</b> = how well your resume, honestly tailored, meets what they ask for (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability). Claude rates a limited number of jobs each run, the most relevant first: a quick Haiku rating, then a Sonnet rating for the best of those, then a careful Opus rating for the top ones; a hollow dot means quick, a filled dot Sonnet, no dot Opus. <b>Best bets</b> (the default order) ranks jobs high on both Appeal and Match; a job Claude hasn't rated yet is placed by its Relevance instead.";
   if (mode === "pivot") drawPivotPanel();
   render();
 }
 // ---- company filters (researched facts; unknown values are excluded once a filter is set, except "or unrated")
-const CF_IDS = ["cList", "cType", "cSize", "cVal", "cAge", "cGd", "cLay", "cEq"];
-const CF_LABEL = {cList: "", cType: "", cSize: "Size: ", cVal: "Value: ", cAge: "", cGd: "Glassdoor ", cLay: "Layoffs: ", cEq: ""};
+const CF_IDS = ["cType", "cSize", "cVal", "cAge", "cGd", "cLay", "cEq"];
+const CF_LABEL = {cType: "", cSize: "Size: ", cVal: "Value: ", cAge: "", cGd: "Reviews ", cLay: "Layoffs: ", cEq: ""};
+// A filter is offered only when the catalog has that fact for at least one employer on this board, and the whole
+// Employer group goes when none is. The "AI company" choices exist only for a profile whose target is still limited
+// to AI companies (an earlier version's option).
+(function(){
+  const cs = Object.values(CI), any = f => cs.some(f);
+  const has = {cType: any(c => c.ownership), cSize: any(c => c.employees != null), cVal: any(c => c.value_usd != null), cAge: any(c => c.founded),
+    cGd: any(c => c.gd_rating != null), cLay: any(c => c.layoffs), cEq: any(c => c.ownership === "public" || c.ownership === "private" || c.equity)};
+  if (D.ai_scope && jobs.some(j => j.ai_track)) {
+    has.cType = true;
+    $("cType").insertAdjacentHTML("beforeend", (jobs.some(j => j.ai_track === "lab") ? `<option value="lab">Frontier AI lab</option>` : "") + `<option value="ai">AI company</option>`);
+  }
+  let n = 0;
+  for (const id of CF_IDS) { $(id).closest(".field").hidden = !has[id]; n += has[id] ? 1 : 0; }
+  $("cfGroup").hidden = $("cfGrid").hidden = !n;
+})();
 function companyOk(j){
   const c = CI[j.company] || {}, v = id => $(id).value;
-  const li = v("cList");
-  if (li !== "all" && !((LISTS.by_company || {})[j.company] || []).includes(li)) return false;
   const t = v("cType");
   if (t === "public" && c.ownership !== "public") return false;
   if (t === "private" && c.ownership !== "private") return false;
@@ -1554,7 +1568,7 @@ $("fReset").addEventListener("click", () => {
   shown = 100; if (mode === "pivot") drawPivotPanel(); render();
 });
 
-const FILTER_IDS = ["q","clr","co","st","sort","paidonly","newonly","reqall","nowide","cList","cType","cSize","cVal","cAge","cGd","cLay","cEq"];
+const FILTER_IDS = ["q","clr","co","st","sort","paidonly","newonly","reqall","nowide","cType","cSize","cVal","cAge","cGd","cLay","cEq"];
 function saveFilters(){
   try { sessionStorage.setItem("jb.filters", JSON.stringify({f: Object.fromEntries(FILTER_IDS.map(id => [id, $(id).type === "checkbox" ? $(id).checked : $(id).value])), lbl: $("lbl").value, wp, y: scrollY, nl: nlOn() ? NL.raw : null, fp: !$("fPanel").hidden})); } catch(e) {}
 }
@@ -1576,7 +1590,7 @@ try {
     sessionStorage.removeItem("jb.filters"); RESTORED = true;
     FILTER_IDS.forEach(id => { if (id in sv.f) { if ($(id).type === "checkbox") $(id).checked = sv.f[id]; else $(id).value = sv.f[id]; } });
     if (sv.nl && $("q").value.trim() === sv.nl.q) nlSet(sv.nl);
-    if (!(NL ? ["rel"] : []).concat(["score","appeal","odds","odds_later","pay","gd","new"]).includes($("sort").value)) $("sort").value = "score";
+    if (!(NL ? ["rel"] : []).concat(["score","relevant","appeal","odds","odds_later","pay","gd","new"]).includes($("sort").value) || [...$("sort").options].some(o => o.value === $("sort").value && o.disabled)) $("sort").value = "score";
     $("lbl").value = sv.lbl; wp = sv.wp === "remote" ? "remote" : "all";  // an older "Near me" (dmv) value is ignored
     if (sv.fp) { $("fPanel").hidden = false; $("filtersBtn").setAttribute("aria-expanded", "true"); syncFbar(); }
     render(); setTimeout(() => scrollTo(0, sv.y || 0), 60);
@@ -1587,13 +1601,13 @@ if (!jobs.length && !D.profile) { $("aiBanner").hidden = false; $("aiBanner").in
 function noClaudeBanner(signIn){
   if (!jobs.length && !D.profile) return;  // the "New profile" prompt is more useful until there is a profile
   const b = $("aiBanner"); b.hidden = false;
-  b.innerHTML = `<span><b>${NOAI_MSG}</b> → ${NOAI_LINK}. Siftwell still finds and filters jobs and ranks them by Appeal.</span>` +
+  b.innerHTML = `<span><b>${NOAI_MSG}</b> → ${NOAI_LINK}. Siftwell still finds and filters jobs and ranks them by ${HASREL ? "how relevant they are to your work, then by Appeal" : "Appeal"}.</span>` +
     (signIn && SERVED ? ` <button class="btn sm primary" type="button" data-cl="start">Sign in to Claude</button>` : "");
 }
 // Re-applies everything that depends on whether Claude is connected (also when the live check disagrees with the board).
 function applyNoAI(signIn){
   ["odds", "odds_later"].forEach(v => { const o = $("sort").querySelector(`option[value=${v}]`); o.hidden = o.disabled = NOAI && !hasMatch; });
-  if (NOAI && !hasMatch && ["odds", "odds_later"].includes($("sort").value)) $("sort").value = "appeal";
+  if (NOAI && !hasMatch && ["score", "odds", "odds_later"].includes($("sort").value)) $("sort").value = NOMATCH_SORT();
   if (NOAI) noClaudeBanner(signIn);
   const panel = $("rrPanel");
   [...panel.children].forEach(c => {

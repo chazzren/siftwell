@@ -187,7 +187,7 @@ TIER_RUN = {"haiku": {"batch_size": 25, "cli_concurrency": 6, "concurrency": 8},
             "opus": {"batch_size": 15, "cli_concurrency": 3, "concurrency": 5}}
 # The most one rating run may do, whoever asked (automatic runs, the nightly re-rate, the Re-rate panel, "Rate more").
 # They are fixed numbers on purpose: what a run costs follows what a person can look at, not how many jobs their area
-# has. Settings can lower them, never raise them. haiku: quick checks, best Appeal first. sonnet: second looks, only
+# has. Settings can lower them, never raise them. haiku: quick checks, most relevant first (pick_order). sonnet: second looks, only
 # for jobs that already have a rating. opus: new most-careful ratings (jobs the person saved come on top, up to
 # "saved"). target: Target-tab ratings. quick: the automatic quick check after a settings change or board rebuild.
 RUN_LIMITS = {"haiku": 500, "sonnet": 100, "opus": 50, "saved": 100, "target": 50, "quick": 200}
@@ -556,6 +556,14 @@ def bestbets(appeal, match):
     import math
     return round(math.sqrt(max(0, appeal) * max(0, match if match is not None else 50)))
 
+def pick_order(j):
+    """Which unrated jobs get this run's quick checks: the most relevant to the person's own work first (the free
+    Relevance score from their what-to-look-for sheet, lookfor.py), then the highest Appeal. Jobs with no Relevance
+    (no sheet yet) simply go by Appeal, as before. Only the ORDER of rating depends on the sheet: fingerprints and
+    cache keys don't, so changing the sheet never makes a stored rating stale."""
+    rel = j.get("rel")
+    return (-(rel if rel is not None else 0), -j.get("appeal", 0), j["id"])
+
 def _prepare(jobs, eligible):
     """Shared set-up for a rating run: info + fingerprints, this profile's cache, the eligible pool, and answers
     narrowed to their distinctive words."""
@@ -601,8 +609,9 @@ def mark_state(jobs, pool, cache, inf):
         j["ai_bb"] = bestbets(j.get("appeal", 0), rank_match(e, BEST_AVAILABLE))
 
 def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print, tiers=None, force=False, pick="funnel",
-               only_ids=None):
-    """One rating run, within RUN_LIMITS: Haiku on up to 500 eligible jobs (best Appeal first), Sonnet on up to 100
+               only_ids=None, prepare=None):
+    """One rating run, within RUN_LIMITS: Haiku on up to 500 eligible jobs (most relevant first, then best Appeal:
+    pick_order; prepare(jobs), if given, is called with the picked jobs first, to fetch any posting text still missing), Sonnet on up to 100
     of the best jobs that already have a rating, Opus on up to 50 of the top ones (+ saved jobs).
     budgets: {"haiku": n, "sonnet_pct": share of the rated jobs Sonnet may look at, "sonnet_max": n, "opus_top": how far
     down the ranking Opus may look, "opus_max": n}; anything above RUN_LIMITS is cut to it. A job nobody has rated yet
@@ -653,10 +662,16 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
         rated = [j for j in pool if rank_match(cache.get(j["id"]), tiers_) is not None]
         return sorted(rated, key=lambda j: (-bestbets(j.get("appeal", 0), rank_match(cache.get(j["id"]), tiers_)), j["id"]))
     try:
-        # 1. Haiku: best Appeal first, up to this run's limit (the rest wait for the next run or "Rate more")
+        # 1. Haiku: the most relevant first, then best Appeal, up to this run's limit (the rest wait for the next run
+        #    or "Rate more")
         if "haiku" in tiers:
             hpool = pool if only_ids is None else [j for j in pool if j["id"] in only_ids]
-            todo = sorted((j for j in hpool if need(j, "haiku")), key=lambda j: (-j.get("appeal", 0), j["id"]))[:n_haiku]
+            todo = sorted((j for j in hpool if need(j, "haiku")), key=pick_order)[:n_haiku]
+            if prepare and todo:
+                try:
+                    prepare(todo, log)
+                except Exception as e:
+                    log(f"Couldn't fetch missing posting text: {type(e).__name__}: {str(e)[:120]}")
             old = {j["id"]: dict((cache.get(j["id"]) or {}).get("haiku") or {}) for j in todo}
             was = {j["id"]: freshness((cache.get(j["id"]) or {}).get("haiku"), j, inf) for j in todo}
             def put_haiku(res):

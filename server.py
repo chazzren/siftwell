@@ -63,7 +63,7 @@ NEEDS_CLAUDE = {
     "/api/rate": "Rating jobs", "/api/rerate": "Re-rating", "/api/tailor": "Tailoring a resume",
     "/api/tailor/resume": "The Astra review", "/api/tailor/continue": "Tailoring a resume", "/api/questions": "Asking tailoring questions",
     "/api/target/suggest": "Suggesting targets", "/api/resume": "Reading a resume with Claude",
-    "/api/catalog/facts": "Looking up company facts",
+    "/api/catalog/facts": "Looking up company facts", "/api/lookfor/suggest": "Asking Claude for more job titles",
 }
 
 _NO_CLAUDE_NOTE = {"logged": False}
@@ -330,6 +330,22 @@ def bg_questions(key, job_id):
     except Exception as e:
         ps()["questions"][key] = {"running": False, "error": str(e)[:400]}
 
+
+def bg_lookfor(pid, force=False):
+    """One small Claude call for the what-to-look-for sheet (other names for the person's job, a step up, related
+    roles), only when their job titles changed since it was last asked, or they pressed the button. Then the board is
+    rebuilt so Relevance uses it."""
+    import lookfor
+    people.set_current(pid)
+    st = ps(pid).setdefault("lookfor", {})
+    st.update(running=True, error=None)
+    try:
+        if lookfor.suggest(pid, force=force) is not None:
+            request_recompute([pid])
+    except Exception as e:
+        st["error"] = str(e)[:200]
+        print("what-to-look-for suggestion failed:", e, flush=True)
+    st["running"] = False
 
 def bg_highlights(pid):
     import highlights, claude_cli
@@ -1126,7 +1142,23 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/desc":
             from urllib.parse import parse_qs
             jid = (parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "").get("id") or [""])[0]
-            return self._send(200, {"desc": catalog.description(jid)})
+            desc = catalog.description(jid)
+            if not desc.strip():
+                # a posting stored from its title only (nobody's titles named it at fetch time): get its text now
+                try:
+                    import jobfinder
+                    desc = jobfinder.lazy_text(jid)
+                    if desc:
+                        request_recompute([pid], auto_rate=False)   # its pay, level and requirements reach the board
+                except Exception as e:
+                    print("couldn't fetch that posting's text:", e, flush=True)
+            return self._send(200, {"desc": desc})
+        if path == "/api/lookfor":
+            import lookfor
+            self._page_person(_qarg(self.path, "person"))
+            out = lookfor.view(people.current())
+            out["job"] = dict(ps().get("lookfor") or {"running": False})
+            return self._send(200, out)
         if path == "/api/marks":
             self._page_person(_qarg(self.path, "person"))
             return self._send(200, read_json(people.pdir("marks.json"), {}))
@@ -1233,12 +1265,9 @@ class H(BaseHTTPRequestHandler):
                                     "target_job": ps().get("target") or {"running": False}})
         if path == "/api/companies/mine":
             import company_add
-            cos = catalog.companies(include_paused=False)
-            counts = {k: sum(1 for c in cos if k in (c.get("sets") or ["tech"])) for k in people.COMPANY_SETS}
-            watching = sorted(people.settings().get("company_sets") or [])
-            # only the earlier shared lists this profile already watches are shown (to keep or drop), under plain names
-            return self._send(200, {"sets": [{"id": k, "label": v, "count": counts[k]} for k, v in people.COMPANY_SETS.items() if k in watching],
-                                    "watching": watching, "own": company_add.own()})
+            watch = people.company_sets()
+            mine = sum(1 for c in catalog.companies() if set(c.get("sets") or []) & watch)
+            return self._send(200, {"watched": mine, "own": company_add.own()})
         if path == "/api/facts":
             import interview
             return self._send(200, {"facts": interview.load_facts()})
@@ -1292,6 +1321,13 @@ class H(BaseHTTPRequestHandler):
                 return self._send(400, {"error": str(e)[:300]})
             self._act("profile filled in by hand", pid)
             threading.Thread(target=bg_highlights, args=(pid,), daemon=True).start()  # also rebuilds the board
+            try:
+                import lookfor
+                lookfor.build(pid)
+                if _claude_ready() and lookfor.needs_suggest(pid):   # a new job title: one small call for other names for it
+                    threading.Thread(target=bg_lookfor, args=(pid,), daemon=True).start()
+            except Exception as e:
+                print("what-to-look-for sheet:", e, flush=True)
             return self._send(200, {"ok": True, "hash": prof.get("_hash")})
         if path == "/api/resume/prefill":  # fill the form from a .docx / .txt by plain text extraction (no AI)
             import resume
@@ -1452,10 +1488,6 @@ class H(BaseHTTPRequestHandler):
                 if st["travel_max"] not in ("none", "light", "moderate", "any"):
                     return self._send(400, {"error": "Pick how much travel is OK."})
                 clean["travel_max"] = st["travel_max"]
-            if "company_sets" in st and isinstance(st["company_sets"], list):
-                # earlier shared lists can be kept or dropped, never newly added: nobody is offered them any more
-                had = set(people.settings().get("company_sets") or [])
-                clean["company_sets"] = [x for x in st["company_sets"] if x in people.COMPANY_SETS and x in had]
             if body.get("name"): people.rename(pid, str(body["name"]))
             before = people.settings()
             saved = people.save_settings(clean)
@@ -1609,7 +1641,33 @@ class H(BaseHTTPRequestHandler):
             else:
                 marks.pop(jid, None)
             json.dump(marks, open(people.pdir("marks.json"), "w"))
+            try:   # saved / applied jobs nudge similar titles up, hidden ones down (lookfor.py; shown on the profile page)
+                import lookfor
+                with catalog.db() as con:
+                    row = con.execute("SELECT title FROM listings WHERE id=?", (jid,)).fetchone()
+                lookfor.note_mark(people.current(), jid, st, row["title"] if row else "")
+            except Exception as e:
+                print("couldn't note that mark for Relevance:", e, flush=True)
             return self._send(200, {"ok": True})
+        if path == "/api/lookfor":   # one change to the what-to-look-for sheet (profile page, /setup); the board re-checks itself
+            import lookfor
+            self._page_person(body.get("person"))
+            me = people.current()
+            try:
+                lookfor.edit(me, body.get("op") or {})
+            except ValueError as e:
+                return self._send(400, {"error": str(e)[:300]})
+            if "recent" in (body.get("op") or {}) and _claude_ready() and lookfor.needs_suggest(me):
+                threading.Thread(target=bg_lookfor, args=(me,), daemon=True).start()
+            self._act("settings saved", me, "what Siftwell looks for")
+            request_recompute([me])
+            out = lookfor.view(me)
+            out["job"] = dict(ps().get("lookfor") or {"running": False})
+            return self._send(200, {"ok": True, "sheet": out})
+        if path == "/api/lookfor/suggest":   # "Ask Claude for more ideas": one small call (the 409 above covers no Claude)
+            if not (ps().get("lookfor") or {}).get("running"):
+                threading.Thread(target=bg_lookfor, args=(pid, True), daemon=True).start()
+            return self._send(202, {"ok": True})
         if path == "/api/resume":
             if ps()["resume"]["running"]:
                 return self._send(409, {"error": "Already reading a resume."})

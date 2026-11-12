@@ -32,7 +32,6 @@ DEFAULT_SETTINGS = {
     "target_any_title": False,  # derived: target open to any role
     "target_keywords": [],      # derived: title filter
     "target_summary": "",       # derived: one-line restatement
-    "company_sets": [],         # earlier shared company lists this profile still watches (see COMPANY_SETS)
     "title_rule": "own",        # which job titles pass: "own" = only the person's own job titles (none given: every
                                 # title); "builtin" = profiles from before that rule keep the old built-in word list
 }
@@ -40,8 +39,7 @@ DEFAULT_SETTINGS = {
 # Profiles made before these defaults changed keep what they had. A settings file always held every default of its
 # day, so a key that is missing from the file (or a file that is missing) means "the old default", never the new one.
 # New profiles get today's defaults written out by add().
-LEGACY_MISSING = {"salary_floor": 150000, "seniority_mine": 4, "seniority_band": [3, 5], "company_sets": ["tech"],
-                  "title_rule": "builtin"}
+LEGACY_MISSING = {"salary_floor": 150000, "seniority_mine": 4, "seniority_band": [3, 5], "title_rule": "builtin"}
 
 def _with_defaults(saved):
     s = dict(DEFAULT_SETTINGS)
@@ -49,16 +47,16 @@ def _with_defaults(saved):
     s.update(saved)
     return s
 
-# Shared company lists from earlier versions. Nobody is offered these any more: a new profile's employers come from the
-# employer directory near them ("Near me"), their own additions and what Claude finds. Profiles and catalogs that
-# already use a list keep it (and its companies) under a plain name.
-COMPANY_SETS = {"tech": "Earlier list 1", "ops": "Earlier list 2", "nonprofit": "Earlier list 3"}
+# The shared category lists of earlier versions ("tech" / "ops" / "nonprofit") are gone. catalog.move_lists() moved
+# every company a profile watched through one onto that profile's own list, once; only that migration still reads
+# these names (and a profile's old "company_sets" setting). People see one thing: "Your employers".
+LEGACY_COMPANY_SETS = ("tech", "ops", "nonprofit")
 
 def company_sets(pid=None):
-    """Lists this profile watches: its own additions, its "Near me" list (Catalog page), anything added for everyone,
-    and any earlier shared list it already watched."""
+    """The employers this profile watches ("Your employers"), as the catalog's list ids: the ones it added or was
+    given (own-<id>), the ones found near it (near-<id>), and the ones added for everyone in the household (all)."""
     pid = pid or current()
-    return set(settings(pid).get("company_sets") or []) | {f"own-{pid}", f"near-{pid}", "all"}
+    return {f"own-{pid}", f"near-{pid}", "all"}
 
 # ---- app preferences (per profile). Each entry: default value and the allowed values (or a (min, max) range).
 PREF_SCHEMA = {
@@ -94,7 +92,7 @@ PREF_SCHEMA = {
     "claude.auto_rate": (True, [True, False]),
     "claude.facts_per_update": (40, (0, 200)),   # shared facts: an update uses the highest value any profile sets
     "display.start_tab": ("jobs", ["jobs", "pivot", "tailored", "companies"]),
-    "display.sort": ("score", ["score", "odds", "odds_later", "pay", "gd", "new"]),
+    "display.sort": ("score", ["score", "relevant", "appeal", "odds", "odds_later", "pay", "gd", "new"]),
     # (display.level, the board's old Seniority filter default, is gone: "Your level" in the board's My search decides it.)
     "display.clearance": ("secret", ["all", "none", "nopoly", "secret"]),
     "display.theme": ("system", ["system", "light", "dark"]),
@@ -225,8 +223,8 @@ def add(name):
     people = load_index() + [{"id": pid, "name": name}]
     save_index(people)
     pdir(pid=pid)
-    # A new profile starts from today's defaults, written out in full: no pay floor, no level chosen, no shared
-    # company lists, titles filtered only by the person's own job titles (see LEGACY_MISSING).
+    # A new profile starts from today's defaults, written out in full: no pay floor, no level chosen, titles filtered
+    # only by the person's own job titles (see LEGACY_MISSING).
     try:
         if not os.path.exists(pdir("settings.json", pid=pid)):
             _write_settings(json.loads(json.dumps(DEFAULT_SETTINGS)), pid)
@@ -284,4 +282,4 @@ def ensure_migrated(base_cfg=None):
     sen = cfg.get("seniority", {})
     save_settings({"salary_floor": cfg.get("salary_floor") or LEGACY_MISSING["salary_floor"],
                    "seniority_mine": sen.get("mine", 4), "seniority_band": sen.get("band", [3, 5]),
-                   "goals": cfg.get("goals", ""), "company_sets": ["tech"], "title_rule": "builtin"}, pid=pid)
+                   "goals": cfg.get("goals", ""), "title_rule": "builtin"}, pid=pid)

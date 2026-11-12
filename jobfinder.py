@@ -95,6 +95,17 @@ def person_cfg(pid):
         c["title_include"] = sorted(inc)
         for k in prof.get("fit_keywords", []):
             c["fit_keywords"].setdefault(k.lower().strip(), 8)
+    # The what-to-look-for sheet (lookfor.py) feeds the title filter the way the person's own titles do, as whole
+    # words: other names for their job and related roles pass too. A profile still on the earlier built-in word list
+    # keeps exactly the filter it had; only titles the person adds to the sheet themselves are added to it.
+    c["title_words"] = []
+    try:
+        import lookfor
+        sheet = lookfor.ensure(pid, prof)
+        c["title_words"] = [w for w in lookfor.title_phrases(sheet, own_only=st.get("title_rule") == "builtin")
+                            if not excluded_words(w, c["title_exclude"])]
+    except Exception as e:
+        print(f"what-to-look-for sheet skipped for {pid}: {type(e).__name__}: {e}", flush=True)
     return c, prof, st
 
 def use_cfg(c):
@@ -105,7 +116,13 @@ def fetch_cfg(cfgs):
     c = copy.deepcopy(BASE_CFG)
     if cfgs:
         # someone with no title words takes every title, so the shared fetch must too (an empty list passes everything)
-        c["title_include"] = [] if any(not x["title_include"] for x in cfgs) else sorted(set().union(*(x["title_include"] for x in cfgs)))
+        named = sorted(set().union(*(x["title_include"] for x in cfgs)))
+        words = sorted(set().union(*(x.get("title_words") or [] for x in cfgs)))
+        open_any = any(not x["title_include"] and not x.get("title_words") for x in cfgs)
+        c["title_include"], c["title_words"] = ([], []) if open_any else (named, words)
+        # The titles somebody actually names (their own title words or their what-to-look-for sheet), whether or not
+        # someone else takes every title: Workday full text is fetched up front only for these (fetch_wanted).
+        c["fetch_include"], c["fetch_words"] = named, words
         c["title_exclude"] = [w for w in cfgs[0]["title_exclude"] if all(w in x["title_exclude"] for x in cfgs)]
         c["salary_floor"] = min(x["salary_floor"] for x in cfgs)
         c["pivot_enabled"] = any(x.get("pivot_enabled") for x in cfgs)
@@ -271,7 +288,26 @@ def title_ok(title):
         return False
     if any(re.search(rx, title.lower().strip()) for rx in CFG["title_exclude_regex"]):
         return False
-    return not CFG["title_include"] or any(x in t for x in CFG["title_include"])
+    return _named(t, CFG["title_include"], CFG.get("title_words"), open_ok=True)
+
+_TW = {"src": None, "rx": None}
+
+def _words_rx(words):
+    """The whole-word pattern for the sheet's title phrases (compiled once per list)."""
+    if _TW["src"] is not words:
+        import lookfor
+        _TW["src"], _TW["rx"] = words, lookfor.phrase_regex(words or [])
+    return _TW["rx"]
+
+def _named(padded_title, include, words, open_ok=False):
+    """Is this title (lower case, padded with spaces) named by the title words (anywhere in the title, as always) or
+    the sheet's phrases (whole words)? With neither list: open_ok (no titles given = every title passes)."""
+    if not include and not words:
+        return open_ok
+    if any(x in padded_title for x in include):
+        return True
+    rx = _words_rx(words) if words else None
+    return bool(rx and rx.search(padded_title))
 
 def pivot_title_ok(title):
     """Wider title filter for AI companies: adds go-to-market, policy, threat intel and trust & safety titles."""
@@ -282,7 +318,8 @@ def pivot_title_ok(title):
         return False
     if any(re.search(rx, title.lower().strip()) for rx in CFG["title_exclude_regex"]):
         return False
-    return not CFG["title_include"] or any(x in t for x in CFG["title_include"] + pv.get("title_extra", []))
+    return _named(t, CFG["title_include"] + (pv.get("title_extra", []) if CFG["title_include"] or CFG.get("title_words") else []),
+                  CFG.get("title_words"), open_ok=True)
 
 MONEY = r"\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{2,3}(?:\.\d+)?\s?[kK]|\d{2,3})"
 RANGE_RE = re.compile(MONEY + r"\s*(?:USD|usd)?\s*(?:-|–|—|to)\s*" + MONEY + r"(\s*(?:/|per)\s*(?:hr|hour))?")
@@ -343,8 +380,15 @@ def combine(job):
     import math
     if "appeal" not in job:
         appeal(job)
-    m = job["ai_fit"] if job.get("ai_fit") is not None else 50
+    m = job["ai_fit"] if job.get("ai_fit") is not None else unrated_match(job)
     job["score"] = round(math.sqrt(max(0, job["appeal"]) * max(0, m)))
+
+def unrated_match(job):
+    """What stands in for Match in Best bets until Claude has rated a job: its free Relevance (lookfor.py), scaled to
+    20-70 so an unrated job never outranks a well-matched rated one on a guess, and one that has nothing to do with
+    the person's work sinks. No sheet yet (Relevance unknown): 50, as before."""
+    rel = job.get("rel")
+    return 50 if rel is None else 20 + rel / 2
 
 # ---------------------------------------------------------------- salary bands
 WIDE_BAND_RATIO = 1.6   # top / bottom at or above this: the band spans several levels, so the top means little
@@ -509,7 +553,10 @@ def appeal(job):
     if mid is None:
         pay = 50
     else:
-        pay = 50 + (mid - floor) / 2000
+        # With a pay floor: every $2,000 above it is a point (unchanged). With no floor that rule tops out near
+        # $100k and calls every hourly job poor, so pay is placed within the spread of pay on this person's own
+        # board instead: the middle of their board is 50, the best-paid jobs they see are near 100.
+        pay = 50 + (mid - floor) / 2000 if floor > 0 else pay_rank(mid)
         if target and mid >= target:
             pay += 10
     if job.get("wide_band"):
@@ -539,6 +586,21 @@ def appeal(job):
     parts = {"pay": round(clip(pay)), "place": round(clip(wp)), "level": round(clip(lvl)), "company": round(clip(comp)), "burden": round(clip(burden))}
     job["appeal_parts"] = parts
     job["appeal"] = round(0.40 * parts["pay"] + 0.20 * parts["place"] + 0.15 * parts["level"] + 0.15 * parts["company"] + 0.10 * parts["burden"])
+
+# Used when a board lists pay on too few jobs to have a spread of its own: rough US full-time pay, 10th to 95th percentile.
+US_PAY_SPREAD = [30000, 36000, 42000, 48000, 55000, 62000, 72000, 85000, 105000, 135000, 170000]
+MIN_SPREAD = 12   # jobs with pay listed before a board's own spread is used
+
+def set_pay_spread(jobs):
+    """Remember the spread of pay on the current person's board (CFG is theirs) for the Appeal pay part."""
+    mids = sorted(j["salary_mid"] for j in jobs if j.get("salary_mid"))
+    CFG["pay_spread"] = mids if len(mids) >= MIN_SPREAD else list(US_PAY_SPREAD)
+
+def pay_rank(mid):
+    """0-100: where this pay sits in the spread (the share of jobs paying less, ties counted half)."""
+    import bisect
+    sp = CFG.get("pay_spread") or US_PAY_SPREAD
+    return 100 * (bisect.bisect_left(sp, mid) + bisect.bisect_right(sp, mid)) / (2 * len(sp))
 
 # ---------------------------------------------------------------- fetchers (each yields normalized dicts)
 def J(company, title, url, locations, workplace="", salary=None, desc="", posted="", dept="", jid=""):
@@ -645,12 +707,83 @@ def _wd_location_facets(facets):
 WD_CAP = 2000  # Workday's job search stops paging here
 
 def fetch_wanted(c, title):
-    """Could anyone's filters want this title? (CFG is the union of everyone's during a fetch.) Only used to decide
-    which postings are worth a per-posting detail request; every posting is stored either way."""
+    """Does anyone's list name this title: their own title words, their what-to-look-for sheet, or their target?
+    (CFG is the union of everyone's during a fetch.) Only used to decide which Workday postings get a per-posting
+    detail request up front; every posting is stored either way. A profile with no titles at all (every title passes
+    its filter) no longer makes the fetch ask for the full text of every posting: those are stored as "lazy" rows
+    (title, place, link) and get their text when someone opens the job or it is about to be rated (lazy_text)."""
     try:
-        return title_ok(title) or any(target_ok(st, c.get("ai_track"), title) for st in CFG.get("targets", []))
+        if "fetch_include" not in CFG:
+            ok = title_ok(title)
+        else:
+            low = title.lower()
+            ok = (_named(" " + low + " ", CFG["fetch_include"], CFG.get("fetch_words")) and not excluded_words(title)
+                  and not any(re.search(rx, low.strip()) for rx in CFG["title_exclude_regex"]))
+        return ok or any(target_ok(st, c.get("ai_track"), title) for st in CFG.get("targets", []))
     except Exception:
         return True
+
+def _wd_api(c):
+    base = f'https://{c["host"]}' if c.get("host") else f'https://{c["tenant"]}.{c["wd"]}.myworkdayjobs.com'
+    return base, f'{base}/wday/cxs/{c["tenant"]}/{c["site"]}'
+
+def lazy_text(jid):
+    """The full text of one posting. A "lazy" Workday row (stored at fetch time without its text because nobody's
+    titles named it) is fetched now, parsed like any other posting and stored complete, so the next board rebuild has
+    its pay, level and requirements too. Returns the text ("" if it can't be had)."""
+    import catalog
+    with catalog.db() as con:
+        r = con.execute("SELECT company, data, desc, first_seen, last_seen, partial FROM listings WHERE id=?", (jid,)).fetchone()
+    if not r:
+        return ""
+    if not r["partial"] or (r["desc"] or "").strip():
+        return r["desc"] or ""
+    old = json.loads(r["data"])
+    if old.get("lazy") != "workday":
+        return ""
+    c = next((x for x in catalog.companies() if x["name"] == r["company"] and x.get("ats") == "workday"), None)
+    path = jid.split("::", 1)[1] if "::" in jid else ""
+    if not c or not path.startswith("/"):
+        return ""
+    try:
+        import netsafe
+        netsafe.check_config(c)
+        base, api = _wd_api(c)
+        d = http_json(api + path, tries=2).get("jobPostingInfo", {})
+    except Exception:
+        return ""
+    desc = strip_html(d.get("jobDescription", ""))
+    if not desc:
+        return ""
+    locs = [d.get("location") or ""] + (d.get("additionalLocations") or [])
+    if not any(locs):
+        locs = old.get("locations") or []
+    rt = (d.get("remoteType") or "").lower()
+    wp = "remote" if "remote" in rt else "hybrid" if "hybrid" in rt else "onsite" if ("site" in rt or "office" in rt) else (old.get("base_wp") or "")
+    j = J(c, old.get("title") or d.get("title"), old.get("url") or f'{base}/en-US/{c["site"]}{path}', locs, wp, None, desc,
+          d.get("startDate", "") or old.get("posted", ""), "", path)
+    p = prepare_listing(j, c)
+    if p is None:   # (the full posting names only places outside the US: keep the row as it was)
+        return desc
+    with catalog.db() as con:
+        catalog.put_listing(con, p, first_seen=r["first_seen"], last_seen=r["last_seen"], partial=False)
+    return desc
+
+def ensure_text(jobs, log=None):
+    """Before rating: fetch the text of any lazy rows among these jobs (a few at a time) and put it on the job."""
+    lazy = [j for j in jobs if j.get("lazy") and not (j.get("desc") or "").strip()]
+    if not lazy:
+        return 0
+    if log:
+        log(f"Fetching the full text of {len(lazy)} posting(s) before rating them...")
+    def one(j):
+        try:
+            j["desc"] = lazy_text(j["id"]) or j.get("desc") or ""
+        except Exception:
+            pass
+        return bool(j.get("desc"))
+    with cf.ThreadPoolExecutor(4) as ex:
+        return sum(ex.map(one, lazy))
 
 def f_workday(c):
     base = f'https://{c["host"]}' if c.get("host") else f'https://{c["tenant"]}.{c["wd"]}.myworkdayjobs.com'
@@ -708,6 +841,8 @@ def f_workday(c):
               d.get("startDate", "") or "", "", p["externalPath"])
         if not want or failed:
             j["_partial"] = True  # no full text this time (process() keeps any text stored earlier)
+        if not want:
+            j["lazy"] = "workday"  # nobody's titles name it: shown from its title, text fetched when wanted (lazy_text)
         return j
     with cf.ThreadPoolExecutor(6) as ex:
         yield from ex.map(detail, postings)
@@ -784,6 +919,7 @@ def process(c):
                 # the fetcher skipped or failed the full text this time: keep the text stored earlier
                 j["desc"] = catalog.description(j["id"])
                 j.pop("_partial", None)
+                j.pop("lazy", None)
             if k and not k[1] and k[0] == catalog.listing_hash(j["title"], j.get("desc")):
                 out.append({"id": j["id"], "_unchanged": True})
                 continue
@@ -869,7 +1005,7 @@ def fetch(args):
                 print(f"PROGRESS fetch {n}/{len(futs)}", flush=True)
         if not args.only:
             catalog.set_meta("last_full_fetch", dt.date.today().isoformat())
-        pool = catalog.open_listings()
+        pool = catalog.open_listings(lazy=True)
         if not args.only:
             import target
             target.write_market(pool)
@@ -895,19 +1031,6 @@ CSV_COLS = ["req_status", "score", "pv_score", "pv_label", "pv_now", "pv_later",
             "salary_min", "salary_max", "salary_mid", "wide_band", "travel", "travel_pct", "clearance", "scif", "posted",
             "first_seen", "sector", "url"]
 
-LIST_SHORT = dict(people.COMPANY_SETS)   # shared lists from earlier versions, under plain names (only where still used)
-
-def company_lists_payload(pid, jobs, sets, watch):
-    """Which of this person's company lists each company on the board belongs to (for the Company list filter)."""
-    own = f"own-{pid}"
-    names = {j["company"] for j in jobs}
-    by_co = {}
-    for n in names:
-        s = sets.get(n, {"tech"}) & watch
-        by_co[n] = sorted({"own" if x in (own, "all") else "near" if x == f"near-{pid}" else x for x in s})
-    used = sorted({x for v in by_co.values() for x in v}, key=lambda x: list(LIST_SHORT).index(x) if x in LIST_SHORT else 99)
-    return {"options": [{"id": x, "label": LIST_SHORT.get(x, "Near me" if x == "near" else "Added by you")} for x in used], "by_company": by_co}
-
 def company_sets_map():
     import catalog
     try:
@@ -916,7 +1039,7 @@ def company_sets_map():
         return {}
 
 def select_for_person(pool, sets=None):
-    """The current person's filters (CFG is theirs) over catalog listings: company lists, title, pay floor, area/remote
+    """The current person's filters (CFG is theirs) over catalog listings: their employers, title, pay floor, area/remote
     and workplace. Returns copies with this person's view of workplace, nearby locations and tracks."""
     out = []
     watch, sets = people.company_sets(), sets if sets is not None else company_sets_map()
@@ -925,7 +1048,7 @@ def select_for_person(pool, sets=None):
     dc_ok = CFG.get("legacy_area", True) or (bool(homes) and any(__import__("geo").within(["Washington, DC"], h, r + 10)[0] for h, r in homes))
     targets = CFG.get("targets", [])
     for j0 in pool:
-        if not (sets.get(j0["company"], {"tech"}) & watch):
+        if not (sets.get(j0["company"], set()) & watch):
             continue
         cur_ok = title_ok(j0["title"])
         ai_ok = any(target_ok(st, j0.get("ai_track"), j0["title"]) for st in targets)
@@ -1022,7 +1145,7 @@ def score_person(jobs, prof, new_claude=True, refresh=False, opts=None):
             if new_claude and "budgets" in opts:
                 budgets = opts["budgets"]
             ai_status = ai_score.run_funnel(jobs, budgets, refresh=refresh, saved=saved_ids(), eligible=eligible_for_claude,
-                                            log=lambda m: print(m, flush=True), **extra)
+                                            log=lambda m: print(m, flush=True), prepare=ensure_text, **extra)
         else:
             ai_status = "no_profile"
         for j in jobs:
@@ -1107,10 +1230,10 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     jobs.sort(key=lambda j: -j["score"])
     per_co = collections.Counter(j["company"] for j in jobs)
     watch, sets = people.company_sets(pid), company_sets_map()
-    sums = [dict(s, matched=per_co.get(s["company"], 0)) for s in summaries if sets.get(s["company"], {"tech"}) & watch]
+    sums = [dict(s, matched=per_co.get(s["company"], 0)) for s in summaries if sets.get(s["company"], set()) & watch]
     payload = {"generated": dt.datetime.now().isoformat(timespec="minutes"), "salary_floor": CFG["salary_floor"],
                "ai_status": ai_status, "pivot_status": pv_status, "pivot_name": CFG["pivot"]["name"],
-               "claude_ready": _claude_ready(),
+               "claude_ready": _claude_ready(), "ai_scope": st.get("target_scope") == "ai", "has_relevance": any(j.get("rel") is not None for j in jobs),
                "pivot_enabled": CFG["pivot_enabled"], "seniority": CFG["seniority"], "travel_max": st.get("travel_max") or "any",
                "target_name": st.get("target_name") or "Target", "target_summary": st.get("target_summary") or st.get("target_text", ""),
                "ai_scored": sum(1 for j in jobs if j.get("ai_fit") is not None),
@@ -1118,7 +1241,7 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
                "current": {"base": st.get("current_base"), "label": st.get("current_label") or ""},
                "profile": {"name": prof.get("name"), "file": prof.get("_source_file"), "approved": prof.get("_approved")} if prof else None,
                "companies": sorted(sums, key=lambda s: s["company"]), "company_info": company_info(jobs),
-               "lists": company_lists_payload(pid, jobs, sets, watch), "ratings": ratings_summary(jobs),
+               "ratings": ratings_summary(jobs),
                "rate_batch": {t: v["batch_size"] for t, v in ai_score.TIER_RUN.items()},
                "rate_limits": dict(ai_score.RUN_LIMITS), "jobs": jobs}
     import io
@@ -1191,8 +1314,9 @@ def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
     Returns {pid: {"jobs": n, "unrated": n, "secs": s} or {"error": "..."}}."""
     import catalog, ai_score, traceback
     pids = [p for p in (pids or people.ids()) if p]
-    pool = pool if pool is not None else catalog.open_listings()
+    pool = pool if pool is not None else catalog.open_listings(lazy=True)
     since = catalog.get_meta("last_full_fetch") or ""
+    import lookfor
     sets = company_sets_map()
     summaries = company_summaries()
     out = {}
@@ -1211,6 +1335,10 @@ def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
                 j["desc"] = descs.get(j["id"]) or j.get("snippet", "")
                 j["new"] = bool(since) and (j.get("first_seen") or "") >= since
             apply_requirements(pid, jobs)
+            set_pay_spread(jobs)
+            relevance = lookfor.scorer(pid, prof)   # free, plain code: every job gets a Relevance (None with no sheet)
+            for j in jobs:
+                relevance.score(j)
             if rate:
                 print(f"--- {people.name(pid)}: {len(jobs)} listings pass their filters", flush=True)
             ai_status, pv_status = score_person(jobs, prof, new_claude=rate, refresh=refresh, opts=opts)

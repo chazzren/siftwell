@@ -16,7 +16,6 @@ import setup_flow
 
 def render_setup_html() -> str:
     boot = {"levels": {str(k): v for k, v in setup_flow._levels().items()},
-            "sets": [{"id": k, "label": v} for k, v in people.COMPANY_SETS.items()],
             "radii": setup_flow.RADII, "industries": setup_flow.INDUSTRY_IDEAS, "steps": setup_flow.STEPS}
     boot["claude_ready"] = claude_cli.claude_ready()
     return (PAGE.replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
@@ -796,8 +795,13 @@ SCREENS.level = {
     const band = V.band;
     const nm = n => L[String(n)] || "";
     return `
-      <p class="eyebrow">Level</p>
-      <h1 class="q" tabindex="-1">What level are you at?</h1>
+      <p class="eyebrow">Your work</p>
+      <h1 class="q" tabindex="-1">What do you do, and at what level?</h1>
+      <label class="field"><span class="flabel">Your most recent job title</span>
+        <input class="big" id="recentTitle" data-field="recent_title" value="${esc(local.title != null ? local.title : (V.recent_title || ""))}" maxlength="80" autocomplete="organization-title" placeholder="e.g. Registered Nurse, Electrician, Office Manager" aria-describedby="err-recent_title recentHelp">
+        <span class="fine" id="recentHelp" style="display:block;margin-top:8px">Siftwell puts jobs like this first, under every name employers use for it, and looks at related roles too. ${V.recent_title ? "We took it from your profile; change it if it’s off. " : ""}You can add more titles later on My profile.</span>
+        ${errBox("recent_title")}</label>
+      <div class="sect">What level are you at?</div>
       <p class="lede">We use it to skip jobs that are far too junior or too senior for you. Not sure, or open to anything? Choose every level.</p>
       ${g ? `<div class="hint">${I.info}<div>Going by ${esc(g.why)}, <b>${esc(g.name)}</b> might be closest. Pick whichever fits you.</div></div>` : ""}
       <div class="levels" role="radiogroup" aria-label="Your level" data-field="seniority_mine">
@@ -811,12 +815,21 @@ SCREENS.level = {
   mount(){
     document.querySelectorAll('input[name="lv"]').forEach(i => i.addEventListener("change", () => {
       const v = radio("lv"), band = checked("band").map(Number);
-      local.anyLevel = v === "any";
+      local.anyLevel = v === "any"; local.title = $("recentTitle").value;
       $("bandWrap").hidden = v === "any";
       if (v !== "any") $("band").innerHTML = this_band(+v, band.length ? band : [-1, 0, 1]);
     }));
   },
-  collect: () => { const v = radio("lv"); return v === "any" ? {seniority_mine: "any", band: []} : {seniority_mine: v ? +v : null, band: checked("band").map(Number)}; },
+  collect: () => { const v = radio("lv"), t = {recent_title: $("recentTitle").value.trim()}; return v === "any" ? {...t, seniority_mine: "any", band: []} : {...t, seniority_mine: v ? +v : null, band: checked("band").map(Number)}; },
+  // A gentle nudge, once: without a job title Siftwell can't tell which jobs are close to the person's work.
+  next(){
+    if (!$("recentTitle").value.trim() && !local.nudged) {
+      local.nudged = true;
+      showErr("recent_title", "Add a job title so Siftwell can put the most relevant jobs first. Or press Continue again to carry on without one.");
+      return;
+    }
+    saveAndNext("level", this.collect());
+  },
 };
 function this_band(m, band){
   const L = S.levels, nm = n => L[String(n)] || "";
@@ -934,25 +947,19 @@ SCREENS.dealbreakers = {
 SCREENS.companies = {
   title: "Employers",
   html: () => {
-    // No ready-made industry lists: employers come from where the person lives, what they add and what Claude finds.
-    // S.company_sets only holds shared lists from an earlier version that this profile already watches (keep or drop).
-    const sets = S.company_sets || [];
+    // No ready-made lists: employers come from where the person lives, what they add and what Claude finds.
     return `
       <p class="eyebrow">Employers</p>
       <h1 class="q" tabindex="-1">Where your employers come from</h1>
       <p class="lede">Siftwell reads the job pages on employers’ own career sites. It checks them when you press Find new jobs, or on a schedule if you turn on automatic updates in Settings (they are off to begin with).</p>
       <ol class="plan">
-        <li><b>Employers near you</b><small>On the last screen, Siftwell adds employers that hire near you (or remotely) from its free employer directory. They go on your Near me list.</small></li>
+        <li><b>Employers near you</b><small>On the last screen, Siftwell adds employers that hire near you (or remotely) from its free employer directory. They become your employers.</small></li>
         <li><b>Employers you add</b><small>Paste any employer’s careers link on the Catalog page, any time, and Siftwell watches it too.</small></li>
         <li><b>Employers Claude finds</b><small>Optional. With Claude connected, it can search the web for more employers near you.</small></li>
       </ol>
-      ${sets.length ? `<div class="sect" style="margin-top:24px">Lists you already watch</div>
-      <div class="choices" role="group" aria-label="Company lists you already watch" data-field="company_sets">
-        ${sets.map(c => radioCard("sets", c.id, V.company_sets.includes(c.id), esc(c.label), c.count ? `${c.count} companies` : "", {type: "checkbox"})).join("")}
-      </div><p class="fine">These shared lists come from an earlier version of Siftwell. Untick one to stop watching its companies.</p>` : ""}
-      ${errBox("company_sets")}`;
+      ${errBox("_")}`;
   },
-  collect: () => ({company_sets: checked("sets")}),
+  collect: () => ({}),
 };
 
 SCREENS.questions = {
@@ -1070,8 +1077,8 @@ SCREENS.board = {
     const d = p.directory || {};
     const findTitle = f.remote_only ? "Find more remote-friendly employers with Claude" : "Find more employers with Claude";
     const findText = f.remote_only
-      ? `Claude also searches the web for about ${f.size} employers anywhere in the US that hire remotely for your kind of work, using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your Near me list. Takes ${esc(f.estimate)}.`
-      : `Claude also searches the web for about ${f.size} employers within ${f.radius} miles that the directory may not have (big employers, hospitals, universities, government, nonprofits, startups and more), using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your Near me list. Takes ${esc(f.estimate)}.`;
+      ? `Claude also searches the web for about ${f.size} employers anywhere in the US that hire remotely for your kind of work, using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your employers. Takes ${esc(f.estimate)}.`
+      : `Claude also searches the web for about ${f.size} employers within ${f.radius} miles that the directory may not have (big employers, hospitals, universities, government, nonprofits, startups and more), using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your employers. Takes ${esc(f.estimate)}.`;
     const lists = p.companies ? `the ${p.companies.toLocaleString()} ${p.companies === 1 ? "company" : "companies"} in your lists` : "your companies";
     let findBox = "";
     if (f.possible) {
@@ -1084,8 +1091,8 @@ SCREENS.board = {
     }
     const steps = [];
     if (d.possible) steps.push([d.remote_only ? "Add remote-friendly employers from the Siftwell directory" : `Add employers near ${esc(d.label)} from the Siftwell directory`,
-      d.remote_only ? "Siftwell’s free employer directory lists employers whose job pages it can read. The ones with the most remote jobs in the US go on your Near me list. Takes a few seconds; no Claude needed."
-                    : `Siftwell’s free employer directory lists employers whose job pages it can read, and where they hire. The ones with the most openings within ${d.radius} miles (up to 400) go on your Near me list. Takes a few seconds; no Claude needed.`]);
+      d.remote_only ? "Siftwell’s free employer directory lists employers whose job pages it can read. The ones with the most remote jobs in the US are added to your employers. Takes a few seconds; no Claude needed."
+                    : `Siftwell’s free employer directory lists employers whose job pages it can read, and where they hire. The ones with the most openings within ${d.radius} miles (up to 400) are added to your employers. Takes a few seconds; no Claude needed.`]);
     if (f.possible && this.findOn) steps.push([findTitle, findText]);
     const found = d.possible || (f.possible && this.findOn);
     steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just added" : "") : found ? "the employers it just added" : lists}. About ${p.fetch_minutes} minutes the first time.`]);
@@ -1173,7 +1180,7 @@ SCREENS.board = {
       st.save = "done";
       if (job.dir) {
         st.dir = job.phase === "directory" ? "run" : "done";
-        if (job.phase !== "directory") sub.dir = job.dir_added ? `${job.dir_added.toLocaleString()} added to your Near me list` : "No new employers to add";
+        if (job.phase !== "directory") sub.dir = job.dir_added ? `${job.dir_added.toLocaleString()} added to your employers` : "No new employers to add";
       }
       if (s.find) {
         const f = s.find;
@@ -1181,7 +1188,7 @@ SCREENS.board = {
         sub.find_frac = f.kinds ? f.kinds_done / f.kinds : 0;
       }
       if (job.find) st.find = job.phase === "find" ? "run" : "done";
-      if (job.find && job.phase !== "find" && job.added != null && s.find) sub.find = `${job.added} added to your Near me list` + (s.find.found ? ` (out of ${s.find.found} found)` : "");
+      if (job.find && job.phase !== "find" && job.added != null && s.find) sub.find = `${job.added} added to your employers` + (s.find.found ? ` (out of ${s.find.found} found)` : "");
       if (up.running && up.phase !== "facts") {
         sawRun = true;
         if (job.find) st.find = "done";
@@ -1232,10 +1239,10 @@ const Mock = {
       inferred: {level: null, current_employer: ""},
       market: null,
       levels: BOOT.levels,
-      company_sets: [], suggested_sets: [], industry_ideas: BOOT.industries,
+      industry_ideas: BOOT.industries,
       values: {name: "", home_zip: "", radius_miles: 35, workplaces: ["onsite", "hybrid", "remote"], remote_us: true, current_base: null,
                salary_floor: null, salary_target: null, seniority_mine: null, band: [-1, 0, 1], direction: "", target_text: "", target_scope: "all",
-               clearance: "all", travel_max: "any", skip_employers: [], skip_industries: [], company_sets: [], company_sets_saved: false},
+               clearance: "all", travel_max: "any", skip_employers: [], skip_industries: [], recent_title: ""},
       _t: {},
     };
   },
@@ -1281,7 +1288,7 @@ const Mock = {
     if (step === "level") {
       if (d.seniority_mine === "any") Object.assign(v, {seniority_mine: null, band: [-1, 0, 1]});
       else { if (!d.seniority_mine) this.err("Pick your level, or choose to see every level.", "seniority_mine"); if (!d.band.length) this.err("Pick at least one band of jobs to see.", "band"); Object.assign(v, d); }
-      v.level_saved = true;
+      v.recent_title = d.recent_title || ""; v.level_saved = true;
     }
     if (step === "direction") {
       if (!d.direction) this.err("Choose one of the options.", "direction");
@@ -1289,7 +1296,6 @@ const Mock = {
       Object.assign(v, d);
     }
     if (step === "dealbreakers") { Object.assign(v, d); s._saved_emp = true; }
-    if (step === "companies") { v.company_sets = d.company_sets; v.company_sets_saved = true; }
     if (step === "highlights" && s.resume.status === "draft") s.resume.status = "active";
     const i = STEPS.indexOf(step) + 1;
     if (i > STEPS.indexOf(s.step)) s.step = STEPS[i];

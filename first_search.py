@@ -8,7 +8,7 @@ What it runs, in order, in one background thread:
   2. Only when the person asks for it ("Find more with Claude", never by default): Claude's Find employers near the
      person's home (employer_finder, the standard Medium search; remote-only people get the "Remote-friendly employers
      in my field" kind instead). It runs through catalog_api's Find employers thread, so it uses the same job lock,
-     progress and Stop as the Catalog page. Every employer Siftwell can read is then added to the Near me list too.
+     progress and Stop as the Catalog page. Every employer Siftwell can read is then added to their employers too.
      Not possible when Claude isn't connected or the person has no home ZIP (and isn't remote-only).
   3. The first job fetch: exactly what the board's Find new jobs (Update) button runs (server.run_update). When the
      catalog was already fully fetched today, only the newly added employers are fetched.
@@ -91,7 +91,7 @@ def watched_companies(pid):
     """(companies this person watches, every company that gets checked): paused companies aren't checked."""
     watch = people.company_sets(pid)
     cos = catalog.companies(include_paused=False)
-    mine = sum(1 for c in cos if set(c.get("sets") or ["tech"]) & watch)
+    mine = sum(1 for c in cos if set(c.get("sets") or []) & watch)
     return mine, len(cos)
 
 
@@ -234,7 +234,7 @@ def _link_known(pid, cands):
     for co in catalog.companies():
         if co["name"] in names and want not in (co.get("sets") or []):
             entry = {k: v for k, v in co.items() if not k.startswith("_")}
-            entry["sets"] = sorted(set(co.get("sets") or ["tech"]) | {want})
+            entry["sets"] = sorted(set(co.get("sets") or []) | {want})
             catalog.save_company(entry)
             out.append(co["name"])
     return out

@@ -90,7 +90,7 @@ CATEGORIES = [
     ("display", "Display", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>', [
         ("Board", "", [
             ("select", "display.start_tab", "Start on", [("jobs", "Jobs"), ("pivot", "Target tab"), ("tailored", "Resumes"), ("companies", "Companies")], ""),
-            ("select", "display.sort", "Default sort", [("score", "Best overall"), ("odds", "Best match"), ("odds_later", "Best match (alt)"), ("pay", "Highest pay"), ("gd", "Best Glassdoor"), ("new", "Newest")], ""),
+            ("select", "display.sort", "Default sort", [("score", "Best bets (good job and good fit)"), ("relevant", "Most relevant to my work"), ("appeal", "Most appealing (pay, place, level)"), ("odds", "Best fit (Claude’s Match)"), ("odds_later", "Best fit with my resume as it is"), ("pay", "Highest pay"), ("gd", "Best employee reviews"), ("new", "Newest")], ""),
             ("select", "display.clearance", "Default clearance", [("secret", "Secret or less"), ("nopoly", "No TS/SCI + poly"), ("none", "No clearance mentioned"), ("all", "Any clearance")], ""),
         ]),
         ("Appearance", "", [

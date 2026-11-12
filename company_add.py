@@ -225,7 +225,7 @@ def save_found(c, nm, set_id, pid, sector="Added by you"):
         cos = catalog.companies()
         same = next((x for x in cos if x["ats"] == c["ats"] and all(x.get(k) == v for k, v in c.items())), None)
         if same:
-            sets = set(same.get("sets") or ["tech"])
+            sets = set(same.get("sets") or [])
             sets.add(set_id)
             same["sets"] = sorted(sets)
             entry = same

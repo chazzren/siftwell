@@ -6,7 +6,7 @@ The page (setup_page.py) talks to three routes the server wires to these functio
   POST /api/setup/finish  -> finish(pid)
 
 Answers are written straight into the profile's settings.json. Existing keys are reused where they exist
-(salary_floor, current_base, seniority_mine, seniority_band, target_text, target_scope, company_sets, and the
+(salary_floor, current_base, seniority_mine, seniority_band, target_text, target_scope, and the
 display.clearance pref); the new keys live in SETUP_DEFAULTS. people.save_settings() only writes keys listed in
 people.DEFAULT_SETTINGS, so this module writes settings.json itself (people.settings() keeps unknown keys, so
 later saves from the My profile page preserve them)."""
@@ -192,10 +192,13 @@ def market_hint(prof, level=None, market_path=None):
     return {"median": rnd(statistics.median(mids)), "p25": rnd(_pct(mids, .25)), "p75": rnd(_pct(mids, .75)),
             "n": len(pool), "basis": f"{len(pool)} openings with pay listed, roles like yours {basis}"}
 
-def watched_sets(s):
-    """Earlier shared company lists this profile already watches (older households only). Nobody is offered a list
-    they don't have: a new profile's employers come from the directory near them, their own additions and Claude."""
-    return [x for x in (s.get("company_sets") or []) if x in people.COMPANY_SETS]
+def recent_title(pid):
+    """The person's most recent job title as their what-to-look-for sheet has it (from the resume or typed)."""
+    try:
+        import lookfor
+        return lookfor.ensure(pid).get("recent") or ""
+    except Exception:
+        return ""
 
 
 # ------------------------------------------------------------------ state
@@ -232,12 +235,6 @@ def get_state(pid, ingest=None):
     step = s.get("setup_step") if s.get("setup_step") in STEPS else "welcome"
     emp = current_employer(prof)
     direction = s.get("direction") or ("specific" if (s.get("target_text") or "").strip() else "")
-    try:
-        cos = catalog.companies()
-        counts = {k: sum(1 for c in cos if k in (c.get("sets") or ["tech"])) for k in people.COMPANY_SETS}
-    except Exception:
-        counts = {}
-    watched = watched_sets(s)
     return {
         "pid": pid,
         "name": people.name(pid),
@@ -253,8 +250,6 @@ def get_state(pid, ingest=None):
         "inferred": {"level": guess, "current_employer": emp},
         "market": market_hint(prof, mine or (guess or {}).get("level")),
         "levels": {str(k): v for k, v in _levels().items()},
-        "company_sets": [{"id": k, "label": v, "count": counts.get(k)} for k, v in people.COMPANY_SETS.items() if k in watched],
-        "suggested_sets": [],
         "industry_ideas": INDUSTRY_IDEAS,
         "values": {
             "name": people.name(pid),
@@ -274,8 +269,7 @@ def get_state(pid, ingest=None):
             "travel_max": s.get("travel_max") or "any",
             "skip_employers": raw["skip_employers"] if "skip_employers" in raw else ([emp] if emp else []),
             "skip_industries": s.get("skip_industries") or [],
-            "company_sets": watched,
-            "company_sets_saved": STEPS.index(step) > STEPS.index("companies") or bool(s.get("setup_done")),
+            "recent_title": recent_title(pid),
             "level_saved": STEPS.index(step) > STEPS.index("level") or bool(s.get("setup_done")),
         },
     }
@@ -366,6 +360,8 @@ def validate(step, data):
             raise SetupError("Your target should be at or above your floor.", "salary_target")
         up = {"current_base": cur, "salary_floor": floor, "salary_target": tgt}
     elif step == "level":
+        if "recent_title" in d:   # asked on the same screen: the most recent job title (the what-to-look-for sheet)
+            extra["recent_title"] = re.sub(r"\s+", " ", str(d.get("recent_title") or "")).strip()[:80]
         if d.get("seniority_mine") in ("any", None, "", 0, "0"):   # "Show me every level"
             return {"seniority_mine": None, "seniority_band": [1, 7]}, extra
         try:
@@ -401,12 +397,7 @@ def validate(step, data):
               "skip_industries": _strlist(d.get("skip_industries") or [], "skip_industries")}
         extra["prefs"] = {"display.clearance": clr}
     elif step == "companies":
-        # earlier shared lists can be kept or dropped here, never newly picked (see watched_sets)
-        try:
-            had = set(watched_sets(_settings(people.current())))
-        except Exception:
-            had = set()
-        up = {"company_sets": [x for x in (d.get("company_sets") or []) if x in had]}
+        pass  # nothing to choose: employers come from the directory near the person, their own additions and Claude
     elif step in ("questions", "board"):
         pass  # answers go through /api/answers
     return up, extra
@@ -429,6 +420,9 @@ def save_step(pid, step, data):
         if draft:
             import resume
             resume.approve({})
+    if "recent_title" in extra and extra["recent_title"] != recent_title(pid):
+        import lookfor
+        lookfor.edit(pid, {"recent": extra["recent_title"]})
     s = _settings(pid)
     # Don't move the resume point backwards when someone goes Back and re-saves an earlier screen.
     nxt = next_step(step)

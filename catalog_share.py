@@ -278,7 +278,7 @@ def apply(raw, set_id, pid):
             else:
                 e = cur.get(local)
                 if e is not None and set_id not in (e.get("sets") or []):
-                    e["sets"] = sorted(set(e.get("sets") or ["tech"]) | {set_id})
+                    e["sets"] = sorted(set(e.get("sets") or []) | {set_id})
                     con.execute("UPDATE companies SET sets=? WHERE name=?", (json.dumps(e["sets"]), local))
                 out["known_companies"] += 1
         touched = set()
