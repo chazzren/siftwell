@@ -60,6 +60,54 @@ bad = [(s, pay(s)) for s in NOT_PAY if pay(s) is not None]
 check(f"{len(NOT_PAY)} dollar amounts that are not base pay are left alone (bonus, 401k, revenue, differential)", not bad, str(bad))
 check("the real pay wins over a bonus in the same posting",
       pay("Benefits: 401k match. $7,500 sign-on bonus!\nPay: $34.10 - $51.15 per hour based on experience.") == (34.10, 51.15, "hour"))
+# (found on a household's real board: each of these hid jobs behind the pay floor, lost the pay, or showed a wrong one)
+MORE = [("For this role the base salary range is $110,000 - 225,000. Compensation may vary", (110000, 225000, "year")),
+        ("***Competitive Salary $94K-115K*** ***$10,000 Sign-On Bonus***", (94000, 115000, "year")),
+        ("Pay Range: $150k-160k USD.", (150000, 160000, "year")), ("$18-22/hr", (18, 22, "hour")),
+        ("Target Pay Range: $141,000.00 – 184,000.00 a year", (141000, 184000, "year")),
+        ("Compensation will be paid in the range of up to $285,000-$335,000 + Bonus. Restricted Stock Units", (285000, 335000, "year")),
+        ("The estimated base salary range for new hires into this role is $119,000- $155,000 annually + bonus depending on skills", (119000, 155000, "year")),
+        ("This includes a base salary range of $120,000-$155,000 plus target commission.", (120000, 155000, "year")),
+        ("Minimum Rate $85,000 Annually Maximum Rate $165,000 Annually", (85000, 165000, "year")),
+        ("Pay Band Min USD $87,320.00/Yr. Pay Band Max USD $135,160.00/Yr.", (87320, 135160, "year")),
+        ("Salary minimum: $115,000; Salary maximum: $150,000 This position", (115000, 150000, "year")),
+        ("Minimum Pay: $122,500 Maximum Pay: $177,500 Compensation Disclosure", (122500, 177500, "year")),
+        ("Shift Differential Eligible: Yes Pay Range: $37.00 - $55.00 If the salary range", (37.0, 55.0, "hour")),
+        ("This position pays a flat rate of $6,250 per month ($75,000 annualized).", (6250, 6250, "month"))]
+bad = [(s, pay(s)) for s, want in MORE if pay(s) != want]
+check(f"{len(MORE)} more ways of writing pay: a second amount without '$', '+ bonus' after the salary, minimum ... maximum", not bad, str(bad))
+SEVERAL = [  # several figures in one posting: the highest described range, never a lone total / goal / revenue figure
+    ("Primary Location Base Pay Range: $117,000 USD - $175,400 USD Additional US Location(s) Base Pay Range: $111,000 USD - $197,300 USD Additional Considerations", (111000, 197300, "year")),
+    ("regularly worked. McLean, VA: $164,800 - $188,100 for Manager, Compensation Richmond, VA: $149,800 - $171,000 for Manager, Compensation Candidates", (164800, 188100, "year")),
+    ("The starting salary range posted for this position is $120,200.00 to $152,300.00 and reflects new hires. New York City Metro Area: $145,200.00 - $212,100.00 "
+     "Non-Metro New York state & Washington state: $129,100.00 - $188,300.00 * For quota-based sales roles", (145200, 212100, "year")),
+    ("the current salary ranges are as follows: Associate Product Manager: $90,000–$125,000 Product Manager I: $120,000–$140,000 "
+     "Staff Product Manager: $170,000–$203,000 Principal Product Manager: $180,000–$230,000 Benefits", (180000, 230000, "year")),
+    ("Pay range: Level I: $100,000.00 - $117,500.00/per year Level II: $115,000.00 - $140,000.00/per year Your actual level", (115000, 140000, "year")),
+    ("The base salary range is $120,000 to $130,000, and the total compensation range is up to $260,000.", (120000, 130000, "year")),
+    ("Responsible for raising a minimum of $1,500,000 each fiscal year. The salary range is $87,700 to $124,560.", (87700, 124560, "year")),
+    ("Salary: $80,000 - $100,000. You will manage customers with ARR of $500,000 - $2,000,000.", (80000, 100000, "year")),
+    ("The salary range for this position is: In Canada, $140,700 - $173, 100.00 cad. In USA, $114,900.00 - $183,500.00 usd.", (114900, 183500, "year")),
+    ("Regular Base Rate is $22/hr. There is an additional $1/hr. shift differential. $500.00 Sign-On Bonus\nPay Out Structure: $250 – First Day; $250 – after three months", (22, 22, "hour"))]
+bad = [(s[:50], pay(s)) for s, want in SEVERAL if pay(s) != want]
+check("several figures in one posting: the highest pay range wins (levels, locations); a lone total, goal or revenue figure never does", not bad, str(bad))
+NOT_PAY2 = ["between $20 - 30 hours per week", "$2,000 - 3,000 employees", "$50,000 - 10% bonus", "$5,000+ sign-on bonus",
+            "an annual fundraising expectation of $500,000.", "contracts worth $2,000,000 - $5,000,000 per year",
+            "Pay per-visit ranges between $60-$200", "Pay Range Per Project $50 — $150 USD", "CAN Pay Range $90 — $109 CAD"]
+bad = [(s, pay(s)) for s in NOT_PAY2 if pay(s) is not None]
+check(f"{len(NOT_PAY2)} more amounts that are not base pay (hours, head counts, fundraising goals, contract values)", not bad, str(bad))
+check("on-target earnings are shown when the posting gives nothing else, and lose to a base range when it does",
+      pay("The standard OTE range for this position is $140,000-$200,000 annually.") == (140000, 200000, "year")
+      and pay("On-target earnings for this role are $200,000-$258,000. This includes a base salary range of $120,000-$155,000 plus target commission.") == (120000, 155000, "year"))
+WORDS = [("Pay range: Global Relocation Program Manager: $110,000.00 - $145,000.00/per year Your actual level", (110000, 145000, "year")),
+         ("The hourly salary range for this contract position in San Francisco, CA is $60 to $85/hr.", (60, 85, "hour")),
+         ("Basic Compensation: Jobs on this contract range from $133,900 - $200,800. The offered rate", (133900, 200800, "year")),
+         ("Base Salary: $143,000 - $185,000\nBonus program and equity in a fast-growing startup", (143000, 185000, "year")),
+         ("paid in the range of up to $188,000 -$235,000+ Bonus. Restricted Stock Units", (188000, 235000, "year")),
+         ("The pay rate for this position is $16.00/per hour.", (16, 16, "hour")),
+         ("Base salary range is $108K - $172,900K, plus differential pay.", (108000, 172900, "year"))]
+bad = [(s[:50], pay(s)) for s, want in WORDS if pay(s) != want]
+check("a bonus-like word that belongs to the job title, the contract or the next line doesn't hide the pay ('Relocation Program Manager', 'contract position')", not bad, str(bad))
 p = P("$36.90/hr")
 check("hourly pay is annualised at 2,080 hours for comparisons", p["annual_lo"] == round(36.90 * 2080) and p["annual_hi"] == round(36.90 * 2080))
 check("hourly pay reads as hourly, yearly in thousands",
@@ -83,6 +131,8 @@ j = jobfinder.prepare_listing(listing(title="Line Cook - $17/hour", desc="Busy k
 check("pay in the title is read when the text has none", j["pay_unit"] == "hour" and j["pay_min"] == 17)
 j = jobfinder.prepare_listing(listing(desc="Salary $45,000 - $52,000 per year"), {"name": "X"})
 check("yearly pay: unit year, salary fields as before", j["pay_unit"] == "year" and (j["salary_min"], j["salary_max"]) == (45000, 52000))
+j = jobfinder.prepare_listing(listing(desc="For this role the base salary range is $110,000 - 225,000. Great benefits."), {"name": "X"})
+check("'$110,000 - 225,000': the top of the range is what a pay floor is compared with", j["salary_max"] == 225000 and j["salary_min"] == 110000, str(j["salary_max"]))
 
 # ------------------------------------------------------------------ 4. levels
 TL = jobtext.title_level
@@ -136,6 +186,17 @@ check("location labels: 'Not Remote', 'Remote: No', 'Virtual Care Center' are no
 check("foreign remote labels are not US-remote",
       not any(jobfinder.is_remote_us(x) for x in ("Remote, Poland", "Remote - Belfast, UK", "Remote (Denmark)", "Remote, PL", "UK - Remote", "Remote, GB")))
 check("'Remote, GA' / 'Remote - IN' (US states) stay US-remote", jobfinder.is_remote_us("Remote, GA") and jobfinder.is_remote_us("Remote, PA"))
+check("'Remote_United States', 'IL Home Based', 'Work at Home' are remote labels",
+      all(jobfinder.is_remote_us(x) for x in ("Remote_United States", "IL Home Based", "Work at Home", "Home-Based - TX")))
+US_LABELS = ["Washington, DC", "Arlington, VA", "Alexandria, Virginia", "Reston, VA", "Bethesda, MD", "Rockville, MD", "Silver Spring, MD",
+             "McLean, VA", "Falls Church, VA", "Vienna, VA", "Springfield, VA", "Fairfax, Virginia", "Herndon, VA", "Chantilly, Virginia",
+             "Columbia, MD", "Arlington", "Alexandria", "Vienna, Virginia", "Athens, GA", "Paris, TX", "Dublin, OH", "Georgia", "New Mexico",
+             "US-VA-Reston", "United States", "Tysons Corner, Virginia; Fredericton, Canada", "London (GB80); New York, NY"]
+bad = [l for l in US_LABELS if jobfinder.is_foreign(l)]
+check(f"{len(US_LABELS)} US labels are never judged foreign (DC-area towns with and without a state; a label that also names a foreign office)", not bad, str(bad))
+check("...and labels with only foreign places still are", all(jobfinder.is_foreign(l) for l in ("Fredericton, Canada", "Toronto, Canada; London, UK", "Vienna, Austria", "Warsaw; Krakow, Poland", "Tbilisi, Ponichala; Georgia")))
+check("a posting at 'Tysons Corner, Virginia; Fredericton, Canada' is kept",
+      jobfinder.prepare_listing(listing("Site Reliability Engineer", "Tysons Corner, Virginia; Fredericton, Canada"), {"name": "X"}) is not None)
 icims = {"jobLocationType": "TELECOMMUTE", "jobLocation": [{"address": {"streetAddress": "1125 Fulton Street", "addressLocality": "Brooklyn", "addressRegion": "NY"}}]}
 check("iCIMS: TELECOMMUTE on a posting with a street address is not remote", not jobtext.telecommute(icims))
 check("...a real remote posting (no street, or applicant location rules) is",
@@ -154,6 +215,17 @@ j = jobfinder.prepare_listing(listing("Support Engineer - Remote", "Remote", "re
 check("a plain US remote posting is still remote", j is not None and j["remote_strict"] and j["workplace"] == "remote")
 j = jobfinder.prepare_listing(listing("Account Manager - Dublin, OH", "Remote", "remote"), C)
 check("a US town in the title doesn't stop a remote job", j is not None and j["remote_strict"])
+MARKET = [("Area Director of Sales - Asia", ["United States"], ""), ("Full Stack Engineer (Greater China Support)", ["US"], ""),
+          ("Director of Portfolio Development – Americas, EMEA", ["Remote-US"], "remote"),
+          ("Inside Sales Customer Success Manager (Canada Territory)", ["Remote, Minnesota, USA", "Remote, New York, USA"], "remote"),
+          ("Sensor Support Engineer (Ramstein AFB, Germany)", ["US-VA-REMOTE"], "remote"),
+          ("Senior Supply Planning Manager - Canada", ["Remote - Canada", "Remote - WI"], "remote")]
+bad = [t for t, locs, wp in MARKET if jobfinder.prepare_listing(listing(t, locs, wp), C) is None]
+check("a foreign word in the title names the market, not the workplace, when a location label names the US", not bad, str(bad))
+ABROAD = [("Director, Strategic Accounts - Toronto", ["Remote"], "remote"), ("Machine Learning Fellow - Frontier Collective (UK)", ["United Kingdom", "Remote (Growth only)"], "remote"),
+          ("Senior Principal, Entrepreneur-in-Residence (India)", ["Remote - International"], "remote"), ("Key Account Manager - Finland", ["Remote"], "remote")]
+bad = [t for t, locs, wp in ABROAD if jobfinder.prepare_listing(listing(t, locs, wp), C) is not None]
+check("...and without one the title still decides: 'Remote' + '- Toronto' / '(UK)' / '(India)' is not a US job", not bad, str(bad))
 
 # ------------------------------------------------------------------ 8. blank lines; titles
 t = "Line one\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nLine two\n \n\t\n\nLine three\nLine four"
@@ -224,6 +296,11 @@ store("Kidney Care National", [("k1", "Staff RN", ["01054 - Piedmont Columbus Mi
                                ("k4", "PCT", ["Columbus, OH"], "", "x"), ("k5", "PCT", ["Columbus, GA"], "", "x")])
 store("Buckeye Clinics", [("b1", "RN", ["Columbus"], "", "Great team."), ("b2", "RN", ["Dayton, OH"], "", "x"), ("b3", "RN", ["Dublin, OH"], "", "x")])
 store("Nowhere Named", [("n1", "RN", ["Columbus"], "", "Great team.")])
+company("Sunshine Health")       # its other postings are in a state that has no Columbus: nothing points at another namesake
+store("Sunshine Health", [("s1", "RN", ["Columbus"], "", "Great team."), ("s2", "RN", ["Tampa, FL"], "", "x")])
+company("Peach State Health")    # only the directory says where it hires: Georgia
+catalog.save_company(dict(next(x for x in catalog.companies() if x["name"] == "Peach State Health"), dir={"st": ["GA"]}))
+store("Peach State Health", [("h1", "RN", ["Columbus"], "", "Great team.")])
 store("Georgia-Pacific", [("p1", "Electrician", ["Columbus"], "", "Georgia-Pacific is hiring. Georgia-Pacific makes paper."), ("p2", "Electrician", ["Columbus, OH"], "", "x")])
 store("The Ohio State University", [("u1", "Outpatient RN", ["Columbus Campus"], "", "The Ohio State University Wexner Medical Center. Requires a current Ohio RN license. Columbus, OH 43210.")])
 store("Local Health", [("l1", "RN", ["Columbus"], "", "Great team."), ("l2", "RN", ["Main Campus"], "", "x")])
@@ -237,11 +314,45 @@ check("'Columbus Healthcare Center' + a posting that says Ohio: near", "k2" in g
 check("an employer in both Columbus, OH and Columbus, GA with nothing in the text: unplaced, so not shown", "k3" not in got)
 check("labelled places are untouched: 'Columbus, OH' in, 'Columbus, GA' out", "k4" in got and "k5" not in got)
 check("an employer that only hires in Ohio: its bare 'Columbus' is Columbus, OH", "b1" in got and "b3" in got)
-check("no support at all: unplaced", "n1" not in got)
+check("nothing says where the employer is: the namesake inside the person's own area counts", "n1" in got and got["n1"]["dmv_locations"] == ["Columbus"])
+check("...also when the employer is only known in a state that has no town of that name", "s1" in got and "s2" not in got)
+check("...but never against evidence: a Georgia employer's 'Columbus' (directory only) is not on an Ohio board", "h1" not in got)
 check("a state in the company's name is not support ('Georgia-Pacific'): its other postings decide", "p1" in got)
 check("'Columbus Campus' at The Ohio State University, whose posting names Ohio: near", "u1" in got)
 check("an all-nearby employer still shows a posting that names no place", "l2" in got and "l1" in got)
 check("the stored listing remembers the states its text names", next(j for j in pool if j["id"].endswith("::g1"))["loc_st"] == ["GA"])
+people.add("Ga Nurse")
+GA = people.ids()[-1]
+people.save_settings({"home_zip": "31901", "radius_miles": 35}, GA)   # Columbus, Georgia
+for nm in ("Team Georgia", "Nowhere Named", "Buckeye Clinics", "Peach State Health"):
+    c_ = next(x for x in catalog.companies() if x["name"] == nm)
+    catalog.save_company(dict(c_, sets=sorted(set(c_.get("sets") or []) | {f"own-{GA}"})))
+pc_ga = jobfinder.person_cfg(GA)[0]
+jobfinder.use_cfg(pc_ga)
+people.set_current(GA, process_wide=True)
+ga = {j["id"].split("::")[1] for j in jobfinder.select_for_person(catalog.open_listings(lazy=True))}
+check("the other way round: near Columbus, GA the Georgia 'Columbus' postings show and the Ohio employer's doesn't",
+      {"g1", "h1", "n1"} <= ga and "b1" not in ga, str(sorted(ga)))
+
+# the older fixed area (no home ZIP; the household's own list of place names): names on the list are local with or without a
+# state, exactly as before; the bare-city rule and what is known about the employer play no part
+people.add("Dana")
+DANA = people.ids()[-1]
+company("Beltway Systems", sets=[f"own-{DANA}"])
+store("Beltway Systems", [("d1", "Engineer", ["Reston"], "", "x"), ("d2", "Engineer", ["Bethesda"], "", "x"), ("d3", "Engineer", ["McLean"], "", "x"),
+                          ("d4", "Engineer", ["Arlington, VA"], "", "x"), ("d5", "Engineer", ["Arlington"], "", "x"), ("d6", "Engineer", ["Austin, TX"], "", "x"),
+                          ("d7", "Engineer", ["Silver Spring"], "", "Our Texas team."), ("d8", "Engineer", ["Springfield, Virginia"], "", "x"),
+                          ("d9", "Engineer", ["Washington DC"], "", "x"), ("d10", "Engineer", ["Falls Church"], "", "x")])
+pc_d = jobfinder.person_cfg(DANA)[0]
+pc_d["close_places"] = ["washington, dc", "washington dc", "bethesda", "silver spring", "mclean", "falls church", "reston", "herndon"]
+pc_d["close_places_need_va"] = ["arlington", "alexandria", "vienna", "fairfax", "springfield"]
+jobfinder.use_cfg(pc_d)
+people.set_current(DANA, process_wide=True)
+dn = {j["id"].split("::")[1] for j in jobfinder.select_for_person(catalog.open_listings(lazy=True))}
+check("the older fixed area: listed names are local without a state; 'Arlington' still needs its Virginia; Texas stays out",
+      pc_d["legacy_area"] and not pc_d["homes"] and dn == {"d1", "d2", "d3", "d4", "d7", "d8", "d9", "d10"}, str(sorted(dn)))
+jobfinder.use_cfg(pc)
+people.set_current(PID, process_wide=True)
 
 # ------------------------------------------------------------------ 6. requirements: higher covers lower, alternatives
 RN = {"degrees": [{"level": "bachelor", "field": "Nursing", "field_group": "nursing", "completed": True}],
@@ -356,7 +467,16 @@ company("Old Workday", ats="workday", tenant="oldco", wd="wd1", site="Ext")
 OLD = [("o1", "Retail Sales Consultant", ["Dallas, TX"], "remote", "Sell phones in our store.\n\n\n\n\n\n\n\nPay: $18.50 - $22.75 per hour"),
        ("o2", "Support Engineer", ["Remote"], "remote", "This role is remote. $95,000 - $120,000"),
        ("o3", "Staff RN", ["Columbus, OH"], "", "Hospital nursing. 2 years of experience required."),
-       ("o4", "Support Engineer", ["Remote, Poland"], "remote", "Remote in Poland.")]
+       ("o4", "Support Engineer", ["Remote, Poland"], "remote", "Remote in Poland."),
+       ("o5", "Security Engineer", ["Houston, TX"], "remote", "Great team.\nLocation: Remote –Houston, TX\nIf this job description resonates with you, apply."),
+       ("o6", "Investment Consultant", ["Baltimore, MD"], "remote", "Work Flexibility: This role is eligible for full time remote work. Benefits: hybrid work schedule."),
+       ("o7", "Solutions Architect", ["Chantilly, Virginia"], "remote", "This is a full-time onsite role based in the location(s) posted. #LI-Remote"),
+       ("o8", "Program Manager", ["Home, TX"], "remote", "Lead programs for our customers."),
+       ("o9", "DevSecOps Engineer", ["UNAVAILABLE, UNAVAILABLE"], "remote", "Build pipelines."),
+       ("o10", "Account Manager", ["Remote_United States"], "remote", "Sell things."),
+       ("o11", "Site Reliability Engineer", ["Tysons Corner, Virginia; Fredericton, Canada"], "", "Keep it running."),
+       ("o12", "Area Director of Sales - Asia", ["United States"], "", "Sell hotel rooms to travel agencies in Asia, from the US."),
+       ("o13", "Director of Engineering", ["Washington, DC"], "", "Competitive base salary $185,000.00-247,512.00, based on experience")]
 with catalog.db() as con:
     for jid, t, locs, wp, desc in OLD:   # rows as an earlier version stored them: old flags, old level, no pay, no "pv"
         d = {"id": f"Old Workday::{jid}", "company": "Old Workday", "title": t, "url": "https://example.com/" + jid, "locations": locs,
@@ -378,7 +498,15 @@ check("hourly pay is found in the stored text", rows["o1"][0]["pay_unit"] == "ho
 check("blank lines in the stored text are collapsed", "\n\n\n" not in rows["o1"][1])
 check("'Staff RN' is no longer Lead / Manager: level from its 2 years", rows["o3"][0]["level"] == 2 and rows["o3"][0]["level_src"] == "years")
 check("a foreign remote posting is closed", rows["o4"][3] is not None)
-check("ids and first-seen dates are untouched", set(rows) == {"o1", "o2", "o3", "o4"} and all(v[2] == "2026-01-05" for v in rows.values()))
+keeps = {k: (rows[k][0]["remote_strict"], rows[k][0]["workplace"]) for k in ("o5", "o6", "o8", "o9", "o10")}
+check("a real remote job is not demoted by the re-read ('Location: Remote - Houston, TX', 'eligible for full time remote work', "
+      "'Home, TX', no place named, 'Remote_United States')", all(v == (True, "remote") for v in keeps.values()), str(keeps))
+check("...the ones kept on such softer evidence are still asked for again at the next fetch", rows["o5"][4] == "" and rows["o8"][4] == "" and rows["o10"][4] != "")
+check("...and one that says on-site in so many words is not kept", rows["o7"][0]["remote_strict"] is False and rows["o7"][4] == "")
+check("a US posting is never closed as foreign by the re-read (a label that also names a foreign office; a market in the title)",
+      rows["o11"][3] is None and rows["o12"][3] is None)
+check("'$185,000.00-247,512.00' is read to its top by the re-read", rows["o13"][0]["salary_max"] == 247512, str(rows["o13"][0]["salary_max"]))
+check("ids and first-seen dates are untouched", set(rows) == {"o%d" % i for i in range(1, 14)} and all(v[2] == "2026-01-05" for v in rows.values()))
 check("it runs once", jobfinder.reparse_stored(log=lambda m: None) == 0)
 
 # ------------------------------------------------------------------ 7. per-employer fetch budget

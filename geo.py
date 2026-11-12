@@ -127,7 +127,12 @@ def looks_foreign(label):
     hit = bool(_foreign_rx().search(flat))
     if not hit:
         hit = any(FOREIGN_CODES.fullmatch(s.strip()) for s in _SEG.split(label) if s and s.strip())
-    return hit and not _us_tail(label)
+    if not hit or _us_tail(label):
+        return False
+    # several places in one label ("Tysons Corner, Virginia; Fredericton, Canada"): foreign only when none is in the US
+    # (a part that is just "Georgia" settles nothing: "Tbilisi, Ponichala; Georgia" is the country)
+    parts = [x for x in re.split(r"\s*[;|\n]\s*", label) if x.strip()]
+    return not (len(parts) > 1 and any(_us_tail(x) and _key(x) != "georgia" for x in parts))
 
 def norm(s, keep_case=False):
     s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode()

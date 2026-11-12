@@ -266,9 +266,14 @@ def bare_support(loc, job, emp):
     """The states a location label's bare city names may be placed in, or None when the label has none (then nothing
     changes). A bare name ("Columbus" exists in Ohio, Georgia, Indiana...) is accepted only with support, in order:
     one state the posting itself names (its text or its other location labels), one state where this employer's
-    other postings (or the directory) put a town of that name, one state the employer is known to hire in. With no
-    support, or support for several states at once, the name stays unplaced (an empty set) and the posting is then
-    treated like any other posting that names no place."""
+    other postings (or the directory) put a town of that name, one state the employer is known to hire in.
+    When nothing points at any of the namesakes (no state that has a town of this name is named by the posting, by
+    the employer's other postings or by the directory), every namesake is allowed: the caller only looks inside the
+    person's own area, so the name counts when a town of that name is there ("Bowie" at an employer otherwise seen
+    in Florida and Pennsylvania, for someone near Bowie, MD) and does nothing otherwise.
+    With evidence for a namesake elsewhere, or for several namesakes at once, the name is placed there or stays
+    unplaced (an empty set; the posting is then treated like any other posting that names no place): "Columbus" at
+    an employer known in Georgia never lands on an Ohio board."""
     import geo
     names_ = _BARE.get(loc)
     if names_ is None:
@@ -295,6 +300,8 @@ def bare_support(loc, job, emp):
             out |= same
         elif not same and len(sts & pool_) == 1:
             out |= sts & pool_
+        elif not (own | sts) & cand:
+            out |= cand
     return out
 
 def is_close(loc):
@@ -974,6 +981,29 @@ def load_extra():
 BARE_US = re.compile(r"\s*(us|usa|u\.s\.|united states( of america)?|dragos usa)\s*")
 REMOTE_DESC = re.compile(r"fully remote|remote[- ]first|100% remote|remote position|remote role|work remotely|remote within the (us|united states)|remote \(us\)|this role is remote|remote, us")
 
+# More ways a posting says it is remote, and ways it says it is not. Only used when stored listings are read again
+# (reparse_one), to decide whether a "remote" flag from a job system that earlier versions misread is kept.
+REMOTE_SAID = re.compile(r"#li-?remote|location\s*:\s*remote|full[- ]time remote|eligible for (?:full[- ]time |100% )?remote|remote[- ]eligible|"
+                         r"remote (?:position|role|job|opportunity)|open to (?:considering )?(?:u\.?s\.?[- ])?remote|home[- ]based|work(?:ing|s)? from home|"
+                         r"work[- ]at[- ]home")
+ONSITE_SAID = re.compile(r"#li-?(?:onsite|on-site|hybrid)|(?:full[- ]time|fully|100%) on-?site|\ban? on-?site (?:position|role|job)|not (?:a )?remote|"
+                         r"no remote|(?:position|role|job) is (?:hybrid|on-?site)|\ba? hybrid (?:position|role|job)\b")
+_NO_PLACE = re.compile(r"(?:[\s,;/|-]*(?:unavailable|n/?a|tbd|none))*[\s,;/|-]*", re.I)
+_HOME_LABEL = re.compile(r"\s*(?:home|home office)\s*(?:,\s*[A-Za-z]{2})?\s*", re.I)   # iCIMS "Home, TX": works from home in Texas
+
+
+def names_us(l):
+    """Does a location label name the US, a US state or a US place ("United States", "Remote - US", "US-VA-REMOTE",
+    "Remote, Minnesota, USA", "Remote - WI", "Reston, VA")? Plain "Remote" and foreign labels don't."""
+    if not l or is_foreign(l) or jobtext.foreign_remote(l):
+        return False
+    if BARE_US.fullmatch(l.lower()) or re.search(r"(?<![A-Za-z])(?:US|USA|U\.S\.A?\.?)(?![A-Za-z])", l.replace("_", " ")) \
+            or re.search(r"united states", l, re.I):
+        return True
+    import geo
+    return any(h.kind != "bare" for h in geo.locate_all(l))
+
+
 def set_pay(j, sal):
     """Store a posting's pay. sal: (low per year, high per year, words[, unit, low in that unit, high in that unit])
     or None. salary_min / salary_max / salary_mid are always per year (hourly at 2,080 hours), so the pay floor, the
@@ -999,9 +1029,11 @@ def prepare_listing(j, c):
     strict = base == "remote" and not any(nonus(l) for l in locs if l) or any(is_remote_us(l) for l in locs)
     if base == "remote" and locs and all(nonus(l) for l in locs):
         strict = False
-    # "Customer Success Manager - Belfast, UK" listed at "Remote": the title says where the job really is
+    # "Customer Success Manager - Belfast, UK" listed at "Remote": the title says where the job really is. Not when a
+    # location label names the US ("Area Director of Sales - Asia" at "United States", "(Canada Territory)" at "Remote,
+    # Minnesota, USA", "... - Americas, EMEA" at "Remote-US"): then the title names the market, not the workplace.
     tp = jobtext.title_place(j.get("title"))
-    if tp and nonus(tp) and not any(l and not nonus(l) and not jobtext.remote_label(l) and not BARE_US.fullmatch(l.lower()) for l in locs):
+    if tp and nonus(tp) and not any(l and not nonus(l) and (names_us(l) or not jobtext.remote_label(l)) for l in locs):
         return None
     text = j.get("desc") or ""
     bare = any(BARE_US.fullmatch(l.lower()) for l in locs) and (c.get("tier") == "remote_first" or bool(REMOTE_DESC.search(text.lower())))
@@ -1766,12 +1798,22 @@ def reparse_one(old, text, c):
     locs = old.get("locations") or []
     base, recheck = old.get("base_wp", old.get("workplace", "")) or "", False
     if base == "remote":
+        low = text.lower()
         said = (any(jobtext.remote_label(l) for l in locs) or jobtext.workplace_label(j["title"]) == "remote"
-                or bool(REMOTE_DESC.search(text.lower())))
+                or bool(REMOTE_DESC.search(low)))
         if any(l and jobtext.workplace_label(l) == "onsite" and not jobtext.remote_label(l) and "remote" in l.lower() for l in locs):
             base = "onsite"          # "Not Remote", "Remote: No"
         elif (c.get("ats") or "") in UNSURE_REMOTE_ATS and not said and int(old.get("pv") or 1) < 2:
-            base, recheck = "", True     # (only rows stored before the fix: later ones were read correctly)
+            # (only rows stored before the fix: later ones were read correctly)
+            # A real remote job must not leave the board while it waits for the next fetch: the flag is kept when the
+            # posting says remote in other words ("Location: Remote - Houston, TX", "#LI-Remote", "eligible for full
+            # time remote work", a "Home, TX" label) or names no place at all (the misread flags were all on jobs at a
+            # named site), unless it also says on-site or hybrid in so many words. Either way the board is asked again.
+            recheck = True
+            weak = (bool(REMOTE_SAID.search(low)) or any(_HOME_LABEL.fullmatch(l or "") for l in locs)
+                    or all(_NO_PLACE.fullmatch(l or "") for l in locs))
+            if not weak or ONSITE_SAID.search(low):
+                base = ""
     j["workplace"] = base
     # pay the board itself listed (not words from the text) is kept as it is; everything else is read again
     flat = lambda x: " ".join(str(x or "").split())

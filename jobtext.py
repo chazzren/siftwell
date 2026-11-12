@@ -14,7 +14,7 @@ title. No network, no Claude, nothing about who is looking: jobfinder.prepare_li
 """
 import re
 
-PARSE_VERSION = 2   # bump when stored listings must be parsed again from their saved text (jobfinder.reparse_stored)
+PARSE_VERSION = 3   # bump when stored listings must be parsed again from their saved text (jobfinder.reparse_stored)
 
 # ---------------------------------------------------------------- text and titles
 _BLANKS = re.compile(r"\n(?:[ \t\xa0​]*\n){2,}")
@@ -63,29 +63,48 @@ UNIT_RANGE = {"hour": (7.25, 500), "day": (60, 4000), "week": (300, 20000), "mon
 _AMT = r"\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s?([kK](?![A-Za-z]))?"
 _UNIT_WORDS = (r"(?P<hour>h(?:ou)?rs?|hourly|hr\.)|(?P<day>day|daily|diem)|(?P<week>w(?:ee)?k|weekly)|(?P<month>mo(?:nth)?|monthly)"
                r"|(?P<year>y(?:ea)?r|annum|annually|annual|yearly)")
-_UNIT_AFTER = re.compile(r"^\s*(?:usd|us dollars?)?\s*(?:\.00)?\s*(?:/|per|an?|each|every)\s*(?:" + _UNIT_WORDS + r")\b\.?|"
+_UNIT_AFTER = re.compile(r"^\s*(?:usd|us dollars?)?\s*(?:\.00)?\s*(?:/\s*per|/|per|an?|each|every)\s*(?:" + _UNIT_WORDS + r")\b\.?|"
                          r"^\s*(?:usd)?\s*(?:" + r"(?P<hour2>hourly)|(?P<year2>annually|annual|yearly|per annum)|(?P<week2>weekly)|(?P<month2>monthly)" + r")\b", re.I)
 _UNIT_BEFORE = re.compile(r"(?:(?P<hour>hourly|per hour|an hour|/\s?h(?:ou)?r)|(?P<year>annual(?:ly|ized)?|yearly|per year|salary|salaried|/\s?y(?:ea)?r)"
                           r"|(?P<week>weekly|per week)|(?P<month>monthly|per month))", re.I)
 _SEP = re.compile(r"^\s*(?:usd|us dollars?)?\s*(?:(?:/|per|an?)\s*(?:" + _UNIT_WORDS + r")\b\.?\s*)?(?:-|–|—|to|through|and|up to)\s*(?:usd\s*)?$", re.I)
-_MINMAX = re.compile(r"^\W*(?:usd)?\s*(?:/|per)?\s*(?:" + _UNIT_WORDS + r")?\W*\s*max(?:imum)?\W*\s*(?:usd\s*)?$", re.I)
+# what stands between a minimum and its maximum: "Min: $70,123 Max: $121,931", "Minimum Rate $85,000 Annually Maximum Rate
+# $165,000", "Pay Band Min USD $87,320.00/Yr. Pay Band Max USD $135,160.00/Yr.", "Salary minimum: $115,000; Salary maximum: $150,000"
+_MINMAX = re.compile(r"^\W*(?:usd)?\s*(?:/|per)?\s*(?:" + _UNIT_WORDS + r")?\W*(?:[A-Za-z]+\s+){0,2}max(?:imum)?\b(?:\s+[A-Za-z]+){0,2}\W*(?:usd\s*)?$", re.I)
 # words that say a dollar amount is NOT base pay
 _NOT_PAY_BEFORE = re.compile(r"additional|extra\b|increase|\+\s*$|plus\s*$|bonus|sign[- ]?on|signing|referral|retention|tuition|reimburs|stipend|allowance|relocation|401|match|"
                              r"revenue|sales of|budget|portfolio|assets|funding|grant|quota|savings?|discount|gift|deductible|coverage|"
                              r"insurance|loan|award|scholarship|differential|incentive|commission|fee\b|cost|worth|valued at|"
                              r"invest|raised|raise of|fund\b|purchase|over \$?$|more than \$?$|in sales|book of business|premium|"
-                             r"contribution|hsa\b|fsa\b|credit|prize|donat|per diem of|company of|business of|deals?\b|contracts?\b", re.I)
+                             r"contribution|hsa\b|fsa\b|credit|prize|donat|per diem of|company of|business of|deals?\b|"
+                             r"contracts? (?:worth|valued|values?|of|totall?ing)|fundrais|\braising\b|\bgoals?\b|pipeline", re.I)
+# on-target / total earnings: pay, but not base pay. Shown when the posting gives nothing else; a base figure wins.
+_OTE = re.compile(r"on[- ]target|\bote\b|total (?:target |estimated |annual )?(?:compensation|cash|rewards|earnings)|"
+                  r"target (?:total )?(?:compensation|earnings)", re.I)
 _NOT_PAY_AFTER = re.compile(r"^\s*(?:\+|plus)?\s*(?:usd\s*)?(?:million|billion|mm\b|bn\b|[mb]\b|sign[- ]?on|signing|bonus|referral|retention|"
                             r"stipend|allowance|differential|incentive|in (?:sales|revenue|assets|funding|tuition|benefits|bonus)|"
                             r"(?:shift|night|weekend) diff|tuition|reimburs|match|off\b|discount|gift|deductible|credit|"
                             r"(?:annual |yearly )?(?:revenue|budget|portfolio))", re.I)
+# words that say base pay after all, when they come after a not-pay word in the same clause: "Additional US Location(s)
+# Base Pay Range: $111,000 - $197,300", "Shift Differential Eligible: Yes Pay Range: $37.00 - $55.00"
+_PAY_PHRASE = re.compile(r"(?:pay|salary|wage|compensation|hiring|hourly)\s+(?:range|rate|band|scale)|base\s+(?:pay|salary|compensation)|"
+                         r"(?:pay|salary|salaries|wages?)\s*(?:is|are|:)", re.I)
+# the second amount of a range written without its dollar sign: "$85,000 - 140,000", "$87K-115K", "$18-22/hr"
+_BARE_HI = re.compile(r"^\s*(?:usd\s*)?(?:-|–|—|to)\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s?([kK](?![A-Za-z]))?(?![\d,]*\d|\s*%)")
+_MIN_BEFORE = re.compile(r"\bmin(?:imum)?\b(?:\s+[A-Za-z]+){0,2}\W*(?:usd\s*)?$", re.I)
+# pay per something that is not time ("$60-$200 per visit", "Pay Range Per Project $50 - $150"), or in another currency:
+# nothing a year's pay can be worked out from
+_PER_OTHER_AFTER = re.compile(r"^\s*(?:usd\s*)?(?:(?:/|per|an?|each)[\s-]*(?:visit|article|project|session|class|piece|unit|word|mile|shift|"
+                              r"student|lesson|game|event|trip|load|call|case|patient|item|page|post|story)\b|(?:cad|eur|gbp|aud|mxn|inr)\b)", re.I)
+_PER_OTHER_BEFORE = re.compile(r"per[\s-]*(?:visit|article|project|session|class|piece|unit|word|mile|student|lesson|game|event|trip|load|call|"
+                               r"case|patient|item|page|post|story)\b[^$\n]{0,30}$", re.I)
 _PAY_WORD = re.compile(r"pay\b|pays\b|paid\b|salary|wage|rate\b|compensation|range|starting|starts|base\b|earn|hourly|"
                        r"per hour|annual|\bmin\b|minimum|\bmax\b|up to|from\b", re.I)
 
 
 def _num(s, k):
     v = float(s.replace(",", ""))
-    return v * 1000 if k else v
+    return v * 1000 if k and v < 10000 else v      # ("$172,900K" is a slip for $172,900)
 
 
 def _unit_of(m):
@@ -95,7 +114,13 @@ def _unit_of(m):
 def _guess_unit(lo, hi, cents, ctx_before):
     """The unit of a pay figure that names none: by the words before it, else by its size."""
     b = None
-    for m in _UNIT_BEFORE.finditer(ctx_before[-60:]):
+    seg = ctx_before[-60:]
+    k = seg.rfind("$")
+    if k >= 0:      # "$6,250 per month ($75,000 annualized)": "per month" belongs to the amount before it
+        seg = re.sub(r"^\$\s?[\d,.]*\d\s?[kK]?", "", seg[k:])
+        um = _UNIT_AFTER.match(seg)
+        seg = seg[um.end():] if um else seg
+    for m in _UNIT_BEFORE.finditer(seg):
         b = _unit_of(m)
     if b and UNIT_RANGE[b][0] <= lo <= hi <= UNIT_RANGE[b][1]:
         return b, True
@@ -128,7 +153,7 @@ def pay_candidates(text):
             sep = len(gap) <= 40 and _SEP.match(gap)
             if sep and re.search(r"\band\s*(?:usd\s*)?$", gap, re.I) and not re.search(r"between\s*(?:usd\s*)?$", before, re.I):
                 sep = None                          # "$20 and $25" is a range only after "between"
-            joined = sep or (len(gap) <= 40 and _MINMAX.match(gap) and re.search(r"min(?:imum)?\W*(?:usd\s*)?$", before, re.I)) \
+            joined = sep or (len(gap) <= 40 and _MINMAX.match(gap) and _MIN_BEFORE.search(before)) \
                 or (len(gap) <= 90 and "$" not in gap and re.search(r"from\s*(?:usd\s*)?$", before, re.I)
                     and re.search(r"\bto\s*(?:usd\s*)?$", gap, re.I))
             if joined:
@@ -140,14 +165,48 @@ def pay_candidates(text):
                     cents = cents or "." in n.group(1)
                     end, is_range, k_one = n.end(), True, k_one or bool(n.group(2))
                     used.add(i + 1)
-        after = text[end: end + 60]
+        if not is_range:
+            # "$85,000 - 140,000", "$87K-115K": the second amount has no dollar sign. It must look like money (thousands
+            # written out, a k, cents like the first, or a unit right after it) and be no more than 10x the first.
+            bm = _BARE_HI.match(text[m.end(): m.end() + 30])
+            if bm:
+                hi2, lo2 = _num(bm.group(1), bm.group(2)), lo
+                if bm.group(2) and not m.group(2) and lo2 < 1000:
+                    lo2 *= 1000
+                moneyish = "," in bm.group(1) or bool(bm.group(2)) or ("." in bm.group(1) and cents) \
+                    or bool(_UNIT_AFTER.match(text[m.end() + bm.end(): m.end() + bm.end() + 20]))
+                if moneyish and lo2 <= hi2 <= 10 * lo2:
+                    lo, hi = lo2, hi2
+                    cents = cents or "." in bm.group(1)
+                    end, is_range, k_one = m.end() + bm.end(), True, k_one or bool(bm.group(2))
+        e0 = end - 1 if text[end - 1: end].isspace() else end      # (the amount's own match takes one blank after it)
+        after = text[e0: e0 + 60]
         clause = re.split(r"[.;!?]\s|\n|•|\|", before)[-1]
+        # A new line after the amount starts something else ("Base Salary: $143,000 - $185,000" / "Bonus program and
+        # equity", "... $238,830" / "Monthly cell phone stipend"); a unit on the next line counts only when it is alone there.
+        line = after.split("\n", 1)[0]
         um = _UNIT_AFTER.match(after)
-        if _NOT_PAY_AFTER.match(after) or (um and _NOT_PAY_AFTER.match(after[um.end():])) or _NOT_PAY_BEFORE.search(clause[-45:]):
-            continue
+        if um and "\n" in after[:um.end()] and after[um.end():].split("\n", 1)[0].strip(" .:;,)*"):
+            um = None
+        nb = None
+        for nb in _NOT_PAY_BEFORE.finditer(clause[-45:]):
+            pass
+        # "$95,000 - $120,000 + bonus", "$120,000 annually plus commission": the amount is the base, the rest comes on
+        # top ("$5,000+ sign-on bonus", with the plus right on the number, is still a bonus)
+        tail = after[um.end():].split("\n", 1)[0] if um else line
+        on_top = tail.lstrip().lower().startswith(("+", "plus ")) and (is_range or bool(um) or after[:1].isspace())
         unit = _unit_of(um)
+        # A not-pay word before the amount doesn't count when words that say base pay follow it, or when the figure is a
+        # range with its unit in a line that says pay ("Pay range: Global Relocation Program Manager: $110,000.00 -
+        # $145,000.00/per year", "The hourly salary range for this contract position is $60 to $85/hr").
+        if nb and (_PAY_PHRASE.search(clause[-45:][nb.end():]) or (is_range and unit and _PAY_PHRASE.search(before))):
+            nb = None
+        if (not on_top and (_NOT_PAY_AFTER.match(line) or _NOT_PAY_AFTER.match(tail))) or nb:
+            continue
+        if _PER_OTHER_AFTER.match(tail) or _PER_OTHER_BEFORE.search(clause):
+            continue
         if not unit and is_range:               # "$18.50/hr - $22.75": the unit sits between the two amounts
-            unit = _unit_of(re.search(r"(?:/|per|an?)\s*(?:" + _UNIT_WORDS + r")\b", text[m.end(): ms[i + 1].start()], re.I))
+            unit = _unit_of(re.search(r"(?:/|per|an?)\s*(?:" + _UNIT_WORDS + r")\b", text[m.end(): end], re.I))
         explicit, worded = bool(unit), False
         if not unit:
             if is_range and not k_one and 100 < hi < 1000 and lo >= 30 and not cents and not re.search(r"hour|/\s?hr", before[-40:], re.I):
@@ -162,18 +221,34 @@ def pay_candidates(text):
         if not (a <= lo <= hi <= b):
             continue
         per = PER_YEAR[unit]
-        phrase = re.sub(r"\s+", " ", text[m.start(): end + (um.end() if um else 0)]).strip()[:80]
+        phrase = re.sub(r"\s+", " ", text[m.start(): e0 + (um.end() if um else 0)]).strip()[:80]
         score = 2 * explicit + 2 * pay_word + is_range
         out.append((score, hi * per, {"lo": lo, "hi": hi, "unit": unit, "annual_lo": round(lo * per), "annual_hi": round(hi * per),
-                                      "text": phrase}))
+                                      "text": phrase, "range": is_range, "ote": bool(_OTE.search(clause[-70:]))}))
     return out
 
 
 def parse_pay(text):
-    """The posting's base pay, or None. Among several figures the best-described wins (a unit and pay wording beat a
-    bare range), then the highest."""
+    """The posting's base pay, or None. Among several figures:
+    - a range beats a lone value ("base salary $120,000 to $130,000 ... total compensation up to $260,000", "raise
+      $1,500,000 a year"): a lone figure is the pay only when the posting gives no described range;
+    - among ranges the highest wins, as it always did ("Level I: ... Level II: ...", "McLean: ... Richmond: ...", "New
+      York City Metro Area: ..."): the pay floor hides a job for good, so it must go by the most the posting offers.
+      Ranges the posting describes as pay (a unit or pay wording) are trusted; a bare range counts next to them only
+      when it is of the same size (half their lowest to twice their highest), so a revenue figure can't win;
+    - with no described figure at all, a range beats a lone value, then the highest;
+    - on-target or total earnings are shown only when the posting gives no other figure."""
     c = pay_candidates(text)
-    return max(c, key=lambda x: (x[0] >= 2, x[1], x[0]))[2] if c else None
+    c = [x for x in c if not x[2]["ote"]] or c
+    if not c:
+        return None
+    good = [x for x in c if x[0] >= 2]
+    if not good:
+        return max(c, key=lambda x: (x[2]["range"], x[1], x[0]))[2]
+    ranges = [x for x in good if x[2]["range"]] or good       # (only lone described values: they set the size)
+    top, bottom = max(x[1] for x in ranges), min(x[2]["annual_lo"] for x in ranges)
+    pool = [x for x in ranges if x[2]["range"]] + [x for x in c if x[0] < 2 and x[2]["range"] and bottom / 2 <= x[2]["annual_lo"] and x[1] <= 2 * top]
+    return max(pool or good, key=lambda x: (x[1], x[0]))[2]
 
 
 def _money(v, unit):
@@ -355,11 +430,12 @@ def workplace_label(s, typed=False):
     return ""
 
 
-_REMOTE_LOC = re.compile(r"\bremote\b|\banywhere\b|\bvirtual\b|\btelework\w*|\btelecommut\w*|\bwork[- ]from[- ]home\b|\bwfh\b", re.I)
+_REMOTE_LOC = re.compile(r"\bremote\b|\banywhere\b|\bvirtual\b|\btelework\w*|\btelecommut\w*|\bwork[- ](?:from|at)[- ]home\b|\bwfh\b|"
+                         r"\bhome[- ]based\b", re.I)
 def remote_label(loc):
-    """Does a location label say the job is remote? "Remote", "US - Remote", "Virtual", "Work from home": yes.
+    """Does a location label say the job is remote? "Remote", "US - Remote", "Virtual", "Work from home", "IL Home Based": yes.
     "Not Remote", "Non-Remote", "Remote: No", "Virtual Care Center": no."""
-    s = str(loc or "")
+    s = str(loc or "").replace("_", " ")      # "Remote_United States"
     if not _REMOTE_LOC.search(s):
         return False
     return not _NOT_REMOTE.search(s) and not _REMOTE_LOC_NOT.search(s)
