@@ -76,7 +76,7 @@ window.ManualProfile = (function(){
       <div><button type="button" class="mp-b" data-act="addrole">+ Add a role</button></div>
       <div class="mp-grid">${f("skills", "Skills", ta("skills", 4), "One per line, or separated by commas.")}
         ${f("education", "Education", ta("education", 4, "e.g. Associate degree in Business, Lakeside Community College"), "One per line.")}</div>
-      <div class="mp-grid">${f("certifications", "Certifications and licenses", ta("certifications", 3, "e.g. PMP; RN license"), "One per line.")}
+      <div class="mp-grid">${f("certifications", "Certifications and licenses", ta("certifications", 3, "e.g. PMP; RN license"), "One per line, or separated by semicolons.")}
         ${f("clearance", "Security clearance", `<select data-mp="clearance">${CLR.map(([v, t]) => `<option value="${esc(v)}"${D.clearance === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>`, "Only what you hold today.")}</div>
       ${opts.button ? `<div class="mp-btns"><button type="button" class="mp-b primary" data-act="save">Save my profile</button></div>` : ""}
       <div class="mp-msg ${msg.cls}" data-msg role="status">${esc(msg.t)}</div></div>`;
@@ -117,11 +117,13 @@ window.ManualProfile = (function(){
   }
   const split = s => String(s || "").split(/\n+/).map(x => x.trim()).filter(Boolean);
   const splitList = s => String(s || "").split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
+  // credentials: one per line or per semicolon ("RN license; BLS; ACLS" is three); a comma stays ("RN license, Ohio")
+  const splitCreds = s => String(s || "").split(/[\n;]+/).map(x => x.trim()).filter(Boolean);
   function payload(){
     return {name: D.name, location: D.location, current_title: D.current_title, summary: D.summary,
       years_experience: D.years_experience === "" ? null : D.years_experience,
       experience: D.experience.map(r => ({title: r.title, employer: r.employer, dates: r.dates, highlights: split(r.highlights)})),
-      skills: splitList(D.skills), education: split(D.education), certifications: split(D.certifications), clearance: D.clearance};
+      skills: splitList(D.skills), education: split(D.education), certifications: splitCreds(D.certifications), clearance: D.clearance};
   }
   function submit(){
     return fetch("/api/profile/manual", {method: "POST", headers: {"Content-Type": "application/json", "X-Jobboard": "1"}, body: JSON.stringify({profile: payload()})})

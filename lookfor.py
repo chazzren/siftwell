@@ -443,12 +443,24 @@ def recent_title(prof):
     return best
 
 
+def _typed_title(p):
+    """The "Current job title" typed on the fill-in-myself form (a profile made without Claude). The form's save
+    (resume.build_manual_profile) puts it first in the job titles to search for; when that first title is simply one
+    of the roles in the work history, nothing else was typed."""
+    if not p.get("_manual"):
+        return ""
+    t = clean_title(next(iter(p.get("target_roles") or []), ""))
+    return "" if t.lower() in {clean_title(e.get("title")).lower() for e in p.get("experience") or []} else t
+
+
 def _auto_recent(prof):
-    """The most recent job title when the person hasn't typed one: from their experience, else what Claude read off
-    the resume, else the first job title they search for."""
+    """The most recent job title when the person hasn't typed one on the sheet: the "Current job title" of a profile they
+    filled in themselves ("Registered Nurse", not the role line "Staff RN, Medical-Surgical" under it), else from their
+    experience, else what Claude read off the resume, else the first job title they search for."""
     p = prof or {}
     lf = p.get("look_for") if isinstance(p.get("look_for"), dict) else {}
-    return recent_title(p) or clean_title(lf.get("recent_title")) or clean_title(next(iter(p.get("target_roles") or []), ""))
+    return (_typed_title(p) or recent_title(p) or clean_title(lf.get("recent_title"))
+            or clean_title(next(iter(p.get("target_roles") or []), "")))
 
 
 BUILD = 2   # the way the automatic part is made. A new number rebuilds every sheet once (own chips and removals kept, no Claude).
@@ -521,6 +533,38 @@ def _skill_forms(s):
     return [x for x in out if x]
 
 
+_NOT_SPECIALTY = re.compile(r"^(?:(?:part|full)[- ]time|per diem|prn|nights?|days?|evenings?|weekends?|remote|hybrid|"
+                            r"on-?site|contract(?:or)?|temp(?:orary)?|seasonal|interim|\d.*)$", re.I)
+
+
+def _title_core(t):
+    """("Staff RN", "Medical-Surgical") for "Staff RN, Medical-Surgical": the job title, and the specialty or unit a
+    resume writes after a comma (a skill at most, never part of the title). A title whose first part is only a rank or
+    a catch-all job word keeps its comma: "Manager, Sales Operations" and "Director, Nursing" are whole titles, read as
+    "Sales Operations Manager" (title_parts)."""
+    t = clean_title(t)
+    left, sep, right = t.partition(",")
+    left, right = left.strip(), right.strip()
+    if not sep or not left or not right or len(right.split()) > 4 or _generic_word(left):
+        return t, ""
+    try:
+        import jobtext
+        if (jobtext.title_level(left) or 0) >= 4:
+            return t, ""
+    except Exception:
+        pass
+    return left, ("" if _NOT_SPECIALTY.match(right) else right)
+
+
+def _items(s, home=""):
+    """One skill line as separate items ("RN license; BLS; ACLS" is three), without the ones that are just a place."""
+    try:
+        import highlights
+        return highlights.split_items(s, home)
+    except Exception:
+        return [str(s)]
+
+
 def _generic_word(t):
     """One plain word that names hundreds of different jobs ("Engineer", "Manager", "Project"): too loose to rank by."""
     p = phrase(t)
@@ -554,6 +598,8 @@ def build(pid=None, prof=None):
     resume reader's reframings open); the jobs held before, newest first; whole title phrases from the profile. One-word
     catch-alls ("Engineer", "Manager") carried over from older title-word lists are left out. Occupations: only the
     one(s) that list the most recent title by name (find_occupations), and their plainly related neighbours.
+    A title from the profile with a specialty after a comma ("Staff RN, Medical-Surgical") goes on as the title alone;
+    the specialty of a job they held becomes a skill (_title_core).
     Skills: only what the person has: their profile's skills and certifications, licenses they confirmed, answers they
     gave (yes / some), Claude's reading of their resume, and the match words the resume reader noted. The occupation
     list's typical tools and task words are NOT added: they describe the occupation, not the person (they put "mentions
@@ -574,9 +620,16 @@ def build(pid=None, prof=None):
     # sheet). Both count; whichever was made later goes first.
     asked_newer = bool(asked) and str(old.get("claude_at") or "") >= str(p.get("_created") or p.get("_approved") or "")
     cl = _merge_look(asked, lf) if asked_newer else _merge_look(lf, asked)
-    titles, occs, skills = [], [], []
+    titles, occs, skills, specialties = [], [], [], []
     def add(t, tier, src):
         t = clean_title(t)
+        if src == "profile" and tier in ("wanted", "past", "keyword"):
+            # "Staff RN, Medical-Surgical" is the title "Staff RN"; the specialty of a job held counts as a skill
+            t, spec = _title_core(t)
+            if spec and tier == "past":
+                specialties.append(spec)
+        if tier == "keyword" and phrase(t) in {phrase(x["t"]) for x in titles}:
+            return                # a title already on the sheet under another spelling ("rn" for Registered Nurse)
         if t and not (tier in ("wanted", "related", "keyword", "up") and _generic_word(t)):
             titles.append({"t": t, "tier": tier, "src": src})
     if recent:
@@ -611,10 +664,12 @@ def build(pid=None, prof=None):
         # whole phrases, or one telling word ("pega", "salesforce"); never a loose single word ("security", "manager")
         if len(ph) >= 2 or (len(ph) == 1 and len(ph[0]) >= 3 and ph[0] not in heads and weight(ph[0]) >= 2 * GENERIC_W):
             add(t, "keyword", "profile")
+    home = str(p.get("location") or "")
     def skill(s, src, w=None):
-        for form in _skill_forms(s):
-            skills.append({"t": form, "src": src, **({"w": w} if w else {})})
-    for s in (p.get("skills") or []) + (p.get("certifications") or []) + _licenses(pid):
+        for item in _items(s, home):      # typed with commas or semicolons: one chip each; "Ohio" alone is no skill
+            for form in _skill_forms(item):
+                skills.append({"t": form, "src": src, **({"w": w} if w else {})})
+    for s in (p.get("skills") or []) + (p.get("certifications") or []) + _licenses(pid) + specialties:
         skill(s, "profile")
     for f in _facts(pid):
         if f.get("level") in ("yes", "some") and f.get("requirement"):

@@ -18,6 +18,7 @@ import people
 STEPS = ["welcome", "resume", "highlights", "where", "pay", "level", "direction", "dealbreakers", "companies",
          "questions", "board"]
 OPTIONAL = {"questions"}           # page shows Skip; resume can also be skipped but later steps get thinner
+NEEDS_CLAUDE = {"questions"}       # left out altogether while Claude isn't connected (the screen could only say so)
 
 RADII = [10, 25, 35, 50, 75]
 WORKPLACES = ["onsite", "hybrid", "remote"]
@@ -101,37 +102,31 @@ def _levels():
         return {1: "Entry level", 2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"}
 
 def infer_level(prof):
-    """A guess at the person's level (1-7) from their most recent title and years of experience. The Level screen
-    shows it as a hint only: nothing is pre-selected from it."""
+    """The level (1-7) the person's own job title states, for the hint on the Level screen: "Senior Accountant",
+    "Nurse Manager", "Apprentice Electrician". None when the title states no level: years of experience alone are not
+    enough to suggest one (six years as a staff nurse is not "Senior"), so then there is no hint at all.
+    Nothing is pre-selected from it."""
     if not prof:
         return None
     try:
         import jobfinder
-        tl, yl = jobfinder.title_level, jobfinder.years_level
+        tl = jobfinder.title_level
     except Exception:
         return None
+    titles = []
+    try:
+        import lookfor
+        titles.append(lookfor._auto_recent(prof))     # the title they typed, else their most recent job
+    except Exception:
+        pass
     exp = prof.get("experience") or []
-    title = exp[0].get("title", "") if exp else ""
-    years = prof.get("years_experience")
-    by_title = tl(title) if title else None
-    by_years = yl(years) if isinstance(years, int) and years > 0 else None
-    if by_years and years <= 1 and not by_title:
-        by_years = 1  # a first job: entry level
-    if by_title and by_years:
-        # the title says more than the years; a title that names a lead, manager or higher rung is taken as it is
-        # (years alone only ever say entry, mid or senior: "Staff RN" with 8 years is Senior, not Lead / Manager)
-        level = by_title if by_title >= 4 else round((2 * by_title + by_years) / 3)
-    else:
-        level = by_title or by_years
-    if not level:
-        return None
-    level = max(1, min(7, level))
-    why = []
-    if title and by_title:
-        why.append(f"your most recent title, “{title}”")
-    if by_years:
-        why.append(f"about {years} years of experience")
-    return {"level": level, "name": _levels()[level], "why": " and ".join(why)}
+    titles.append(exp[0].get("title", "") if exp else "")
+    for title in titles:
+        level = tl(title) if title else None
+        if level:
+            level = max(1, min(7, level))
+            return {"level": level, "name": _levels()[level], "why": f"your most recent title, “{title}”"}
+    return None
 
 def current_employer(prof):
     exp = (prof or {}).get("experience") or []
@@ -235,6 +230,9 @@ def get_state(pid, ingest=None):
     guess = infer_level(prof)
     mine = int(s["seniority_mine"]) if s.get("seniority_mine") else None   # None: not chosen (every level shows)
     step = s.get("setup_step") if s.get("setup_step") in STEPS else "welcome"
+    ready = _claude_ready()
+    if step not in steps_for(ready):       # stopped on a step that is left out now: carry on at the one after it
+        step = next_step(step, ready)
     emp = current_employer(prof)
     direction = s.get("direction") or ("specific" if (s.get("target_text") or "").strip() else "")
     return {
@@ -243,11 +241,12 @@ def get_state(pid, ingest=None):
         "step": step,
         "done": bool(s.get("setup_done")),
         "steps": STEPS,
+        "active_steps": steps_for(ready),
         "optional": sorted(OPTIONAL),
         "theme": pr.get("display.theme", "system"),
         "resume": {"status": rstatus, "error": ingest.get("error"),
                    "file": (prof or {}).get("_source_file", ""), "manual": bool((prof or {}).get("_manual"))},
-        "claude": {"ready": _claude_ready()},
+        "claude": {"ready": ready},
         "highlights": highlights(prof),
         "inferred": {"level": guess, "current_employer": emp},
         "market": market_hint(prof, mine or (guess or {}).get("level")),
@@ -337,6 +336,8 @@ def validate(step, data):
     elif step == "highlights":
         extra["approve_draft"] = True
     elif step == "where":
+        if d.get("skipped"):
+            return {}, extra   # Skip for now: nothing is saved (the last screen asks for the ZIP if it is still missing)
         z = str(d.get("home_zip") or "").strip()
         if z and not re.fullmatch(r"\d{5}", z):
             raise SetupError("ZIP codes are five digits.", "home_zip")
@@ -404,9 +405,13 @@ def validate(step, data):
         pass  # answers go through /api/answers
     return up, extra
 
-def next_step(step):
-    i = STEPS.index(step)
-    return STEPS[min(i + 1, len(STEPS) - 1)]
+def steps_for(claude_ready):
+    """The steps this person goes through: every step, minus the ones that need Claude while it isn't connected."""
+    return [s for s in STEPS if claude_ready or s not in NEEDS_CLAUDE]
+
+def next_step(step, claude_ready=None):
+    live = steps_for(_claude_ready() if claude_ready is None else claude_ready)
+    return next((s for s in STEPS[STEPS.index(step) + 1:] if s in live), STEPS[-1])
 
 def save_step(pid, step, data):
     """Validate and save one step; moves the resume point to the following step. Returns the fresh state.

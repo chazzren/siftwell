@@ -20,19 +20,19 @@ _LV = [
     ("doctorate", r"ph\.?\s?d\b\.?s?|doctor(?:ate|al degree)|doctor of philosophy|\bd\.?sc\b|\bed\.d\b|\bpsy\.?d\b|\bdnp\b|\bpharm\.?\s?d\b"),
     ("md", r"\bm\.d\.|\bmd\s*/\s*do\b|\bmd or do\b|\bmd degree|doctor of medicine|medical degree|\bd\.o\.(?=\s)"),
     ("jd", r"\bj\.d\.|\bjd\b(?!\s+edwards)|juris doctor(?:ate)?|law degree"),
-    ("master", r"master'?s\b|master’s|masters\b|master of\b|master degree|\bm\.s\.|\bm\.a\.|\bmsc\b|\bmba\b|\bm\.?eng\b|\bmpa\b|"
+    ("master", r"master'?s\b|master’s|masters\b|master of\b|master degree|\bm\.s\.n\b\.?|\bm\.s\.|\bm\.a\.|\bmsc\b|\bmba\b|\bm\.?eng\b|\bmpa\b|"
                r"\bmpp\b|\bmph\b|\bmsw\b|\bmsn\b|\bmfa\b(?=\s+(?:in|degree))|\bms(?:ee|me|cs|ce)\b|\bms\b(?=\s*(?:/|or\b|in\b|degree|,\s*ph))|"
                r"\bma\b(?=\s*(?:/|in\b|degree))|(?<!under)graduate degree|advanced degree|post-?graduate degree"),
-    ("bachelor", r"bachelor'?s?\b|bachelor’s|baccalaureate|\bb\.s\.|\bb\.a\.|\bbsc\b|\bb\.?eng\b|\bbba\b|\bbsn\b|"
+    ("bachelor", r"bachelor'?s?\b|bachelor’s|baccalaureate|\bb\.s\.n\b\.?|\bb\.s\.|\bb\.a\.|\bbsc\b|\bb\.?eng\b|\bbba\b|\bbsn\b|"
                  r"\bbs(?:ee|me|ce|cs|ie)\b|\bbs\b(?=\s*(?:/|or\b|in\b|degree|,))|\bba\b(?=\s*(?:/|or\b|in\b|degree))|"
                  r"undergraduate degree|college degree|university degree|(?:4|four)[- ]year (?:college |university )?degree"),
     ("associate", r"associate'?s? degree|associate’s degree|associates degree|\ba\.a\.(?=\s)|\ba\.s\. degree|"
-                  r"associate(?:'s|’s)(?=\s+(?:of|in)\s)|associates?(?=\s+(?:of|in)\s+(?:nursing|science|arts|applied))|\badn\b|\basn\b"),
+                  r"associate(?:'s|’s)(?=\s+(?:of|in)\s)|associates?(?=\s+(?:of|in)\s+(?:nursing|science|arts|applied))|\badn\b|\basn\b|\ba\.d\.n\b\.?|\ba\.s\.n\b\.?"),
 ]
 LV_RX = re.compile("|".join(f"(?P<{n}>{p})" for n, p in _LV), I)
 # A level token only counts when it reads like a credential (not "PhD researchers", "MS Office").
 CRED_AFTER = re.compile(r"^(?:'s|’s|s)?\.?\s*(?:\(\w+\)\s*)?(?:$|degree|diploma|in\b|of\b|from|required|preferred|or\b|and\b|/|,|;|:|\.|\+|"
-                        r"with\b|plus\b|\(|-|–|level|program|holder|candidate|student|completed|obtained)", I)
+                        r"with\b|plus\b|\(|\)|-|–|level|program|holder|candidate|student|completed|obtained)", I)
 SPECIFIC_FIELD = {"bsee": "engineering-electrical", "msee": "engineering-electrical", "bsme": "engineering-mechanical",
                   "msme": "engineering-mechanical", "bsce": "engineering-civil", "msce": "engineering-civil",
                   "bscs": "computer-science", "mscs": "computer-science", "bsie": "engineering-other",
@@ -89,7 +89,7 @@ PAREN_PREF = re.compile(r"\([^)]*(?:prefer|plus|desired)[^)]*\)", I)
 LICENSES = [  # key, label, pattern (case-sensitive acronyms are wrapped in (?-i:...))
     ("RN", "RN license", r"registered nurse|(?-i:\bRN\b)|(?-i:\bR\.N\.)|nursing licen[sc]e"),
     ("LPN", "LPN license", r"(?-i:\bLPN\b)|licensed practical nurse"),
-    ("NP", "Nurse Practitioner license", r"nurse practitioner|(?-i:\bA?PRN\b)|(?-i:\bCRNP\b)|(?-i:\bFNP\b)"),
+    ("NP", "Nurse Practitioner license", r"nurse practitioner|(?-i:\bAPRN\b)|(?-i:\bCRNP\b)|(?-i:\bFNP\b)"),   # (not "PRN": that is an as-needed shift)
     ("PA", "PA license", r"physician assistant|(?-i:\bPA-C\b)"),
     ("MDLIC", "medical license", r"medical licen[sc]e|licensed physician|licensed to practice medicine|board[- ]certified in|"
                                  r"board certification in|board[- ]eligible"),
@@ -116,8 +116,9 @@ CERTS = [
     ("CISM", "CISM", r"(?-i:\bCISM\b)"),
     ("CISA", "CISA", r"(?-i:\bCISA\b)(?!\s*\()|certified information systems auditor"),
     ("CIA", "CIA (internal auditor)", r"certified internal auditor"),
-    ("SECPLUS", "Security+", r"security\+|(?-i:\bIAT (?:level )?I{1,3}\b)|8570|8140"),
-    ("CCNA", "Cisco cert", r"(?-i:\bCC[NI][AEP]\b)"),
+    ("SECPLUS", "Security+", r"security\+|(?-i:\bIAT (?:level )?I{1,3}\b)|(?<![\w$.,])(?:8570|8140)(?![\d,])"),
+    # exact names only: "CCNE" is the Commission on Collegiate Nursing Education, not a Cisco certification
+    ("CCNA", "Cisco cert", r"(?-i:\b(?:CCNA|CCNP|CCIE|CCDA|CCDP|CCIP)\b)|cisco certified"),
     ("AWS", "AWS certification", r"aws certifi|aws certified|aws (?:solutions architect|developer|sysops)[- ](?:associate|professional)"),
     ("AZURE", "Azure certification", r"azure certifi|microsoft certified"),
     ("GCP", "Google Cloud certification", r"google cloud certifi|gcp certifi|professional cloud architect"),
@@ -168,6 +169,12 @@ LIC_FAMILY = [{"RN", "LPN", "NP"}]
 # "Associate's in Nursing"): level, field group.
 LIC_IMPLIES_DEGREE = {"RN": ("associate", "nursing"), "NP": ("master", "nursing"), "PE": ("bachelor", "engineering-other"),
                       "CPA": ("bachelor", "accounting"), "BAR": ("jd", "law"), "MDLIC": ("md", "medicine")}
+# Short forms with a second, commoner meaning (CSM = Customer Success Manager, PSM = Process Safety Management, PHR =
+# personal health record) only count in a clause that also says what they are.
+CERT_NEEDS = {"SCRUM": (re.compile(r"(?-i:\b(?:CSM|PSM)\b)"), re.compile(r"scrum|agile|certif", I)),
+              "SHRM": (re.compile(r"(?-i:\bPHR\b)"), re.compile(r"\bhr\b|human resources|shrm|hrci|certif|(?-i:\bSPHR\b)", I))}
+# "Board certified in Medical-Surgical Nursing" is a nursing certification, not a physician's license.
+NOT_MD_BOARD = re.compile(r"nurs|(?-i:\bRN\b)|\bANCC\b|pharmac|chaplain|counsel|social work|behavior analyst|dietit|therap", I)
 JURIS = re.compile(r"\b(DC|D\.C\.|District of Columbia|Maryland|Virginia|New York|California|Texas|Illinois|Massachusetts|"
                    r"Pennsylvania|New Jersey|Florida|Washington|Georgia|Colorado|[A-Z][a-z]+) (?:state )?bar\b|\bbar (?:of|in) (?:the )?(?:state of )?([A-Z][\w.]+(?: [A-Z][a-z]+)?)")
 
@@ -347,6 +354,8 @@ def _degree_stmt(clause, section, next_clause):
         sf = SPECIFIC_FIELD.get(re.sub(r"[^a-z]", "", word.lower()))
         if sf and sf not in groups:
             groups.append(sf)
+        if implied and "nursing" in groups:
+            lv = "associate"   # "a nursing degree" names no level: an Associate's in Nursing (ADN) is one
         alt = {"level": lv, "fields": groups, "generic": generic, "related": related, "field_text": ftxt,
                "_short": len(clause[e:seg_end].strip(" ,/-")) <= 22}
         if cur and (st is None or st == cur["_st"] or cur["_st"] is None):
@@ -391,7 +400,7 @@ def _find(rx_list, clause):
 # Checked with plain `in`, which is far cheaper than running dozens of case-insensitive regexes over every posting.
 ANCHORS = {
     "RN": (["registered nurse", "nursing licen"], ["RN", "R.N."]), "LPN": (["licensed practical"], ["LPN"]),
-    "NP": (["nurse practitioner"], ["PRN", "CRNP", "FNP"]), "PA": (["physician assistant"], ["PA-C"]),
+    "NP": (["nurse practitioner"], ["APRN", "CRNP", "FNP"]), "PA": (["physician assistant"], ["PA-C"]),
     "MDLIC": (["medical licen", "licensed physician", "practice medicine", "board"], []),
     "PHARM": (["pharmacist"], ["RPh"]), "PE": (["professional engineer"], ["P.E.", "PE "]),
     "CPA": (["certified public"], ["CPA"]), "BAR": (["bar", "practice law", "licensed attorney"], []),
@@ -401,7 +410,7 @@ ANCHORS = {
     "ARCH": (["architect"], []),
     "PMP": (["project management professional"], ["PMP"]), "CISSP": ([], ["CISSP"]), "CISM": ([], ["CISM"]),
     "CISA": (["information systems auditor"], ["CISA"]), "CIA": (["internal auditor"], []),
-    "SECPLUS": (["security+", "8570", "8140"], ["IAT"]), "CCNA": ([], ["CCN", "CCI"]), "AWS": (["aws"], []),
+    "SECPLUS": (["security+", "8570", "8140"], ["IAT"]), "CCNA": (["cisco certified"], ["CCNA", "CCNP", "CCIE", "CCDA", "CCDP", "CCIP"]), "AWS": (["aws"], []),
     "AZURE": (["azure certifi", "microsoft certified"], []), "GCP": (["google cloud certifi", "gcp certifi", "professional cloud architect"], []),
     "SFDC": (["salesforce"], []), "SCRUM": (["scrum"], ["CSM", "PSM", "SAFe", "CSPO"]), "ITIL": ([], ["ITIL"]),
     "CFA": (["chartered financial"], ["CFA"]), "CFP": (["financial planner"], ["CFP"]), "FRM": ([], ["FRM"]),
@@ -410,7 +419,7 @@ ANCHORS = {
 }
 DEG_CI = ("associate's", "associate’s", "associate of", "associates of", "associate in", "associates in", "bachelor", "master", "degree", "ph.d", "phd", "doctor", "baccalaureate", "b.s.", "b.a.", "m.s.", "m.a.", "mba",
           "juris", "j.d.", "bsc", "msc", "m.eng", "meng", "b.eng", "bba", "bsn", "msn", "mph", "mpa", "mpp", "msw", "dnp",
-          "pharm", "a.a.", "m.d.", "d.o.", "psy.d", "ed.d", "d.sc", "dsc")
+          "pharm", "a.a.", "a.d.n", "a.s.n", "m.d.", "d.o.", "psy.d", "ed.d", "d.sc", "dsc")
 DEG_CS = ("BS", "BA", "MS", "MA", "JD", "MD", "ADN", "ASN")
 
 def _active(text, low, entries):
@@ -455,6 +464,8 @@ def parse(desc, title=""):
                     continue
                 if k == "BAR" and re.search(r"\bbar\b", m.group(0), I) and not re.search(r"admit|admission|member|licen|good standing|active|practice", c, I):
                     continue
+                if k == "MDLIC" and m.group(0).lower().startswith("board") and NOT_MD_BOARD.search(c):
+                    continue
                 item = {"key": k, "label": lab, "strength": _strength(c, section), "escape": bool(LIC_ESCAPE.search(c)),
                         "text": c[:220]}
                 others = [x for x in keys_here if x != k]
@@ -473,6 +484,9 @@ def parse(desc, title=""):
         if cert_c:
             for k, lab, m in _find(cert_c, c):
                 rest = c[:m.start()] + " " + c[m.end():]
+                need = CERT_NEEDS.get(k)
+                if need and need[0].fullmatch(m.group(0)) and not need[1].search(rest):
+                    continue
                 if not CRED_WORD.search(rest + " " + m.group(0)) and section not in ("req", "pref"):
                     continue
                 item = {"key": k, "label": lab, "strength": _strength(c, section), "escape": bool(LIC_ESCAPE.search(c)),

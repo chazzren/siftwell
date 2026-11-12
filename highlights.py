@@ -44,7 +44,7 @@ FIELD_PATTERNS = [
      r"agricultural|naval|general) engineering|engineering|naval architecture", "engineering-other"),
     (r"statistic|mathemat|\bmath\b|operations research|actuar|analytics|quantitative|biostatistic|econometric", "math-stats"),
     (r"physics|chemistry|geolog|earth science|astronom|materials science|atmospheric|meteorolog|oceanograph|physical science", "physical-sciences"),
-    (r"nursing|\bbsn\b|\bmsn\b|\bdnp\b", "nursing"),
+    (r"nursing|\bb\.?s\.?n\b|\bm\.?s\.?n\b|\bd\.?n\.?p\b|\ba\.?[ds]\.?n\b", "nursing"),
     (r"medicine|medical degree|\bm\.?d\.?\b|pharmac|osteopath|clinical", "medicine"),
     (r"biolog|biochem|life science|neuroscience|genetic|microbio|molecular|ecology|environmental science|public health|"
      r"epidemiolog|kinesiolog|nutrition|health science|biotech", "life-sciences"),
@@ -225,31 +225,196 @@ def extract(profile, model="claude-opus-5-5"):
     out = claude_cli.run_json(SYSTEM, _profile_prompt(profile), SCHEMA, model=model, effort="medium", timeout=600)
     return normalize(out)
 
-# Cheap, offline fallback from the profile's free-text education/certifications (no Claude). Used when Claude
-# isn't available; good enough for degree level + field.
-_DEG_RX = [
-    (re.compile(r"\b(ph\.?\s?d|doctor of philosophy|doctorate|ed\.?d\.?|d\.sc)\b", re.I), "doctorate"),
-    (re.compile(r"\b(j\.?d\.?|juris doctor)\b", re.I), "jd"),
-    (re.compile(r"\b(m\.d\.|doctor of medicine|d\.o\.)", re.I), "md"),
-    (re.compile(r"\b(master|m\.?s\.?c?|m\.a\.|mba|m\.eng|mpa|mph|mfa|msn)\b", re.I), "master"),
-    (re.compile(r"\b(bachelor|b\.?s\.?c?|b\.a\.|ba|bba|b\.eng|bsn)\b", re.I), "bachelor"),
-    (re.compile(r"\b(associate|a\.a\.|a\.s\.)\b", re.I), "associate"),
+# Cheap, offline reading of the profile's free-text education / certifications (no Claude). Used for a profile the
+# person filled in themselves and whenever Claude isn't available; good for degree level + field.
+#
+# Degree short forms, without dots, lower case -> (level, the field the short form itself names or "").
+DEGREE_ABBR = {
+    "phd": ("doctorate", ""), "dphil": ("doctorate", ""), "dsc": ("doctorate", ""), "edd": ("doctorate", "Education"),
+    "dnp": ("doctorate", "Nursing"), "psyd": ("doctorate", "Psychology"), "pharmd": ("doctorate", "Pharmacy"),
+    "dpt": ("doctorate", "Physical Therapy"), "dba": ("doctorate", "Business Administration"),
+    "jd": ("jd", "Law"), "md": ("md", "Medicine"), "do": ("md", "Medicine"),
+    "ma": ("master", ""), "ms": ("master", ""), "msc": ("master", ""), "mba": ("master", "Business Administration"),
+    "msn": ("master", "Nursing"), "msw": ("master", "Social Work"), "med": ("master", "Education"),
+    "mph": ("master", "Public Health"), "mpa": ("master", "Public Administration"), "mpp": ("master", "Public Policy"),
+    "mfa": ("master", "Fine Arts"), "meng": ("master", "Engineering"), "macc": ("master", "Accounting"),
+    "llm": ("master", "Law"),
+    "ba": ("bachelor", ""), "bs": ("bachelor", ""), "bsc": ("bachelor", ""), "bba": ("bachelor", "Business Administration"),
+    "bsn": ("bachelor", "Nursing"), "bsw": ("bachelor", "Social Work"), "bfa": ("bachelor", "Fine Arts"),
+    "beng": ("bachelor", "Engineering"), "bed": ("bachelor", "Education"),
+    "aa": ("associate", ""), "as": ("associate", ""), "aas": ("associate", ""), "adn": ("associate", "Nursing"),
+    "asn": ("associate", "Nursing"),
+}
+# Short forms that are no English word and no state code: read in any case ("bsn"). Every other one must be written in
+# capitals ("BA", "MS"), and "MEd" / "BEd" exactly so ("Med-Surg" is not a Master of Education).
+_ABBR_ANYCASE = {"phd", "dphil", "edd", "dnp", "psyd", "pharmd", "mba", "msn", "msw", "mph", "mpa", "mfa", "meng", "macc",
+                 "llm", "msc", "bsc", "bba", "bsn", "bsw", "bfa", "beng", "aas", "adn", "asn"}
+_ABBR_CASED = {"med": ("MEd",), "bed": ("BEd",)}
+# Also state codes or plain words ("Boston, MA", "Oxford, MS"): a degree only at the start of the line or with a field.
+_ABBR_WEAK = {"ma", "ms", "md", "as", "do"}
+_ABBR_TOKEN = re.compile(r"(?<![A-Za-z0-9.])(?:(?:[A-Za-z]{1,5}\.){1,4}[A-Za-z]{0,3}|[A-Za-z]{2,7})(?![A-Za-z0-9])")
+_DEG_WORDS = [
+    ("doctorate", re.compile(r"\bdoctor(?:ate|al)\b|\bdoctor(?=\s+of\s+(?!medicine|osteopath|jurisprudence|law\b))", re.I)),
+    ("jd", re.compile(r"\bjuris doctor(?:ate)?\b|\bdoctor of (?:jurisprudence|law)\b", re.I)),
+    ("md", re.compile(r"\bdoctor of (?:medicine|osteopath\w*(?: medicine)?)\b|\bmedical degree\b", re.I)),
+    ("master", re.compile(r"\bmaster(?:'s|s)?(?![A-Za-z])", re.I)),
+    ("bachelor", re.compile(r"\bbachelor(?:'s|s)?(?![A-Za-z])|\bbaccalaureate\b", re.I)),
+    ("associate", re.compile(r"\bassociate(?:'s|s)?(?![A-Za-z])", re.I)),
 ]
+_DEG_ORDER = ["doctorate", "jd", "md", "master", "bachelor", "associate"]   # a line names one degree: the highest
+_SCHOOLISH = re.compile(r"universit|college|\bschool\b|institute|academy|polytechnic|\bcampus\b|seminary|conservatory", re.I)
+_DEG_LEAD = re.compile(r"^\.?\s*(?:\(\s*[A-Za-z.]{2,8}\s*\)\s*)?(?:degree\b\s*)?"
+                       r"(?:of\s+(?:applied\s+)?(?:science|arts|philosophy)s?\b\s*)?(?:degree\b\s*)?", re.I)
+_FIELD_END = re.compile(r"\s*(?:,|;|\(|\)|\||\s[-\u2013\u2014]\s|\bfrom\b|\bat\b|\b(?:19|20)\d\d\b|\bgraduat|\bgpa\b|\bminor\b|"
+                        r"\bcum laude\b|\bwith honou?rs\b)", re.I)
+_DASHES = " ,:-\u2013\u2014/"
+
+
+def _field_cut(s):
+    s = _FIELD_END.split(s or "", maxsplit=1)[0]
+    s = re.sub(r"\s+degree$", "", s.strip(" ." + _DASHES), flags=re.I)
+    return " ".join(s.split())[:80]
+
+
+def _named_field(s):
+    """`s` when it reads as a field of study we know and not as a school ("Computer Science", not "Ohio State")."""
+    s = _field_cut(s)
+    return s if s and len(s.split()) <= 6 and not _SCHOOLISH.search(s) and field_group(s) != "other" else ""
+
+
+def parse_degree(text):
+    """One education line as the person typed it -> {"level", "field", "field_group"}, or None when it names no degree.
+    "BSN", "B.S.N." and "Bachelor of Science in Nursing" are all a Bachelor's in Nursing; "ADN" / "A.D.N." an
+    Associate's in Nursing; "BS Computer Science", "B.A., English", "MS in Accounting", "MBA", "MEd", "JD", "PhD" too."""
+    t = " ".join(str(text or "").replace("\u2019", "'").split())
+    t = re.sub(r"^[\s\-\u2013\u2014*\u2022\u00b7]+", "", t)
+    if not t:
+        return None
+    found = []      # (order, start, end, level, the field the short form names)
+    for lv, rx in _DEG_WORDS:
+        for m in rx.finditer(t):
+            found.append((_DEG_ORDER.index(lv), m.start(), m.end(), lv, ""))
+    for m in _ABBR_TOKEN.finditer(t):
+        tok = m.group(0)
+        low = tok.replace(".", "").lower()
+        if low not in DEGREE_ABBR:
+            continue
+        if "." in tok:
+            if len([x for x in tok.split(".") if x]) < 2:
+                continue                      # "do." at the end of a sentence
+        else:
+            if low in _ABBR_CASED:
+                if tok not in _ABBR_CASED[low]:
+                    continue
+            elif low not in _ABBR_ANYCASE and not tok.isupper():
+                continue
+            if low in _ABBR_WEAK and m.start() > 0:
+                after = t[m.end():]
+                if not (re.match(r"\s*,?\s*(?:in|of|degree)\b", after, re.I) or (re.match(r"\s+[A-Za-z]", after) and _named_field(after))):
+                    continue
+            if low == "ms" and re.match(r"\s+(?:office|word|excel|access|windows|project|teams|sql|dynamics|outlook|365)\b", t[m.end():], re.I):
+                continue                      # Microsoft, not a Master's
+        lv, fld = DEGREE_ABBR[low]
+        found.append((_DEG_ORDER.index(lv), m.start(), m.end(), lv, fld))
+    if not found:
+        return None
+    _, start, end, level, implied = min(found)
+    rest = _DEG_LEAD.sub("", t[end:], count=1)
+    field = ""
+    m = re.match(r"\s*[,:\-\u2013\u2014]?\s*(?:in|of|with a (?:major|concentration) in|major(?:ing)? in)\s+(.+)", rest, re.I)
+    if m:                                     # "... in Nursing", "Master of Business Administration"
+        field = _field_cut(m.group(1))
+        if _SCHOOLISH.search(field):
+            field = ""
+    if not field and not implied:             # "BS Computer Science", "B.A., English"
+        field = _named_field(rest.lstrip(_DASHES))
+    if not field and not implied:             # "Bachelor's degree, Ohio University, in Accounting"
+        field = next((f for f in (_named_field(x.group(1)) for x in re.finditer(r"\b(?:in|major:?)\s+([^,(;]+)", rest, re.I)) if f), "")
+    if not field and not implied:             # "Accounting, B.S."
+        before = [x for x in re.split(r"[,;(|]", t[:start]) if x.strip(_DASHES)]
+        field = _named_field(before[-1]) if before else ""
+    field = field or implied or {"jd": "Law", "md": "Medicine"}.get(level, "")
+    return {"level": level, "field": field, "field_group": field_group(field)}
+
+
+# A status, a year or a place after a credential says something about it and is no credential of its own.
+_QUALIFIER = re.compile(r"^(?:active|current|inactive|expired|lapsed|pending|in progress|multi-?state|compact|unencumbered|"
+                        r"unrestricted|state of .+|(?:exp(?:ires|ired|iration)?\.?|since|issued|renewed|valid (?:through|until))\b.*|"
+                        r"(?:\d{1,2}/)?(?:19|20)\d\d(?:\s*[-\u2013]\s*(?:(?:19|20)\d\d|present))?|#?\s*[A-Z]{0,3}\d{4,})$", re.I)
+# City names that are also things people list as skills (software, methods): never dropped as "just a place".
+_PLACE_OR_SKILL = {"phoenix", "mobile", "aurora", "mesa", "orange", "enterprise", "paradise", "independence", "providence",
+                   "surprise", "corona", "temple", "vista", "tyler", "meridian", "concord", "reading", "oracle", "jupiter",
+                   "commerce", "industry", "snowflake", "sterling", "hope", "liberty", "normal", "mission", "summit", "victoria",
+                   "beaumont", "gary", "troy", "union", "spring", "sandy", "mercury", "eureka", "apex", "jira", "java", "excel"}
+
+
+def just_place(s, home=""):
+    """True when the text is only a place: a US state ("Ohio"), "City, ST" / "City, State", or one city name that is the
+    person's own town (`home`, their profile's location) or a large city. A skill that merely contains a place word
+    ("Ohio RN license", "Phoenix framework") is not one, and neither is a short code ("OR", "PA", "CT": those are skills)."""
+    try:
+        import geo
+        raw = " ".join(str(s or "").split()).strip(" .")
+        k = geo._key(raw)
+        if not k or re.search(r"\d", k):
+            return False
+        if k in set(geo.STATES.values()) or k in ("district of columbia", "washington dc"):
+            return True
+        m = re.fullmatch(r"(.+?)\s*,?\s+([A-Z]{2})\.?", raw)
+        if m and m.group(2) in geo.STATES and geo._known_in_state(m.group(1), m.group(2)):
+            return True
+        for code, name in geo.STATES.items():
+            if k.endswith(" " + name) and geo._known_in_state(k[:-len(name) - 1], code):
+                return True                   # "Columbus Ohio"
+        if k in _PLACE_OR_SKILL:
+            return False
+        hits = [h for h in geo._load()["names"].get(k, []) if h[4] != "a"]
+        if not hits:
+            return False
+        return k == geo._key(str(home or "").split(",")[0]) or max(h[3] for h in hits) >= 100000
+    except Exception:
+        return False
+
+
+def split_items(text, home="", keep_places=False):
+    """Skills or credentials as typed, one per item: split at new lines and semicolons, and at commas outside brackets
+    ("RN license; BLS; ACLS", "BLS, ACLS, PALS").
+    keep_places=False (skills): items that are just a place, a year or a status are dropped ("RN license, Ohio" ->
+    "RN license"). keep_places=True (license names): a comma followed by such a detail stays with its credential
+    ("RN license, Ohio" is one item)."""
+    out = []
+    for chunk in re.split(r"[;\n\r]+", str(text or "")):
+        chunk = " ".join(chunk.split()).strip(" ,")
+        if not chunk:
+            continue
+        if just_place(chunk, home):           # "Columbus, OH"
+            out += [chunk] if keep_places else []
+            continue
+        parts =[x.strip() for x in re.split(r",(?![^()]*\))", chunk) if x.strip()]
+        detail = [bool(_QUALIFIER.match(x)) or just_place(x, home) for x in parts]
+        if keep_places:
+            out += [chunk] if len(parts) > 1 and (any(detail) or any(len(x.split()) > 5 for x in parts)) else parts
+        else:
+            out += [x for x, d in zip(parts, detail) if not d]
+    seen, res = set(), []
+    for x in out:
+        if x.lower() not in seen:
+            seen.add(x.lower()); res.append(x)
+    return res
+
+
 def from_profile_rules(profile):
     degs = []
     for e in profile.get("education") or []:
-        lv = next((l for rx, l in _DEG_RX if rx.search(e)), None)
-        if not lv:
-            continue
-        m = re.search(r"\b(?:in|of)\s+(?:(?:science|arts)\s+in\s+)?([^,(]+)", e, re.I)
-        fld = m.group(1).strip() if m else ""
-        if re.match(r"(science|arts)$", fld, re.I):
-            fld = ""
-        yr = re.findall(r"\b(19\d\d|20\d\d)\b", e)
-        degs.append({"level": lv, "field": fld, "field_group": field_group(fld), "school": "",
-                     "year": int(yr[-1]) if yr else None, "completed": True})
+        for line in re.split(r"[;\n\r]+", str(e)):
+            d = parse_degree(line)
+            if not d:
+                continue
+            yr = re.findall(r"\b(19\d\d|20\d\d)\b", line)
+            degs.append({**d, "school": "", "year": int(yr[-1]) if yr else None, "completed": True})
+    home = profile.get("location") or ""
     lic = [{"name": c, "kind": "license" if re.search(r"licen|\bRN\b|\bCPA\b|\bbar\b|\bP\.?E\.?\b", c) else "cert",
-            "active": None} for c in profile.get("certifications") or []]
+            "active": None} for raw in profile.get("certifications") or [] for c in split_items(raw, home, keep_places=True)]
     clr = "none"
     for c in profile.get("clearances") or []:
         cl = str(c).lower()
@@ -287,12 +452,31 @@ def merged(raw):
             base[k] = v
     return normalize(base)
 
+def _fill_field_groups(h, pid):
+    """A degree stored with no field ("BSN, Ohio State" as an earlier version read it: Bachelor's, field unknown) gets
+    its field GROUP from the profile's own education lines, read again with parse_degree. Only the group, and only in
+    this working view: the stored level and field text stay as they are, so nothing a rating was made from changes
+    (ai_score reads merged(), and the Claude prompt prints level and field, never the group)."""
+    todo = [d for d in h.get("degrees") or [] if not d.get("field") and d.get("field_group") in (None, "", "other")]
+    if not todo:
+        return h
+    try:
+        prof = json.load(open(people.pdir("profile.json", pid=pid), encoding="utf-8"))
+        read = [x for x in (parse_degree(l) for e in prof.get("education") or [] for l in re.split(r"[;\n\r]+", str(e))) if x]
+    except Exception:
+        return h
+    for d in todo:
+        g = [x["field_group"] for x in read if x["level"] == d.get("level") and x["field_group"] != "other"]
+        if g:
+            d["field_group"] = g[0]
+    return h
+
 def get(pid):
     """Working highlights (extraction + user edits), or None if never extracted."""
     raw = load_raw(pid)
     if raw.get("extracted") is None and not raw.get("edits"):
         return None
-    return merged(raw)
+    return _fill_field_groups(merged(raw), pid)
 
 def source_hash(profile):
     keep = {k: profile.get(k) for k in ("education", "certifications", "clearances", "_resume_text")}

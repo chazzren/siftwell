@@ -340,7 +340,7 @@ const clone = o => JSON.parse(JSON.stringify(o));
 
 // Steps and how they map onto the ten progress dots (the highlights screen shares the resume dot).
 const DOT = {welcome:0, resume:1, highlights:1, where:2, pay:3, level:4, direction:5, dealbreakers:6, companies:7, questions:8, board:9};
-const DOT_NAMES = ["Welcome", "Resume", "Where", "Pay", "Level", "Direction", "Dealbreakers", "Companies", "Questions", "Start your search"];
+const DOT_NAMES = ["Welcome", "Resume", "Where", "Pay", "Level", "Direction", "Dealbreakers", "Employers", "Questions", "Start your search"];
 const STEPS = BOOT.steps;
 
 const I = {
@@ -380,6 +380,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Claude is optional: false when it isn't installed / signed in (the server says so in /api/setup and in BOOT).
 const NOCL = () => !MOCK && ((S && S.claude) ? S.claude.ready === false : BOOT.claude_ready === false);
 const NEED_CL = "Needs Claude. Connect it below, or later in Settings.";
+// A step that is left out altogether: the tailoring questions while Claude isn't connected (that screen could only say
+// "needs Claude"). Continue, Back, the dots and "Step n of m" all pass over it; connecting Claude brings it back.
+const OFF = s => s === "questions" && NOCL();
+const nextOf = s => { let i = STEPS.indexOf(s) + 1; while (OFF(STEPS[i])) i++; return STEPS[i]; };
+const prevOf = s => { let i = STEPS.indexOf(s) - 1; while (i >= 0 && OFF(STEPS[i])) i--; return STEPS[i]; };
 // The inline Connect Claude card (connect_claude.py): installs Claude Code and signs in without leaving setup. Once
 // connected, refresh the state and redraw the current step in its with-Claude form (the resume step switches to upload).
 function mountConnect(el){
@@ -390,7 +395,7 @@ function mountConnect(el){
     toast("Claude is connected.");
     if (cur === "direction") V.direction = radio("dir") || V.direction;
     if (cur === "resume") local = {mode: ""};
-    if (["resume", "direction", "questions", "board"].includes(cur)) render();
+    if (["resume", "direction", "questions", "board"].includes(cur)) render(); else renderDots();
   }});
 }
 
@@ -415,14 +420,16 @@ function toast(msg){
 function renderDots(){
   const furthest = STEPS.indexOf(S.step);
   const curDot = DOT[cur];
-  $("dots").innerHTML = DOT_NAMES.map((n, i) => {
+  const shown = DOT_NAMES.map((n, i) => i).filter(i => !(i === DOT.questions && OFF("questions")));
+  $("dots").innerHTML = shown.map(i => {
+    const n = DOT_NAMES[i];
     const reachable = i !== curDot && i <= DOT[S.step] && cur !== "board" && S.step !== "board";
     const cls = "dot" + (i === curDot ? " cur" : i < Math.max(curDot, DOT[STEPS[furthest]] || 0) ? " done" : "");
     const label = `${n}${i === curDot ? " (current step)" : i < curDot ? " (done)" : ""}`;
     return `<li>${reachable ? `<button type="button" class="${cls}" data-dot="${i}" aria-label="Go to ${esc(label)}"></button>`
                             : `<span class="${cls}" role="img" aria-label="${esc(label)}"${i === curDot ? ' aria-current="step"' : ""}></span>`}</li>`;
   }).join("");
-  $("stepof").textContent = `Step ${curDot + 1} of ${DOT_NAMES.length}`;
+  $("stepof").textContent = `Step ${shown.indexOf(curDot) + 1} of ${shown.length}`;
 }
 $("dots").addEventListener("click", e => {
   const b = e.target.closest("[data-dot]"); if (!b) return;
@@ -431,6 +438,7 @@ $("dots").addEventListener("click", e => {
 });
 
 function go(step, d){
+  if (OFF(step)) step = d < 0 ? prevOf(step) : nextOf(step);
   dir = d || 1; cur = step; local = {};
   V = clone(S.values);
   render();
@@ -469,10 +477,11 @@ function busy(on, label){
 function showErr(field, msg){
   document.querySelectorAll(".err").forEach(e => { e.textContent = ""; });
   document.querySelectorAll("[aria-invalid]").forEach(e => e.removeAttribute("aria-invalid"));
-  if (!msg) { if (showErr.said) { $("live").textContent = ""; showErr.said = false; } return; }   // (an old error isn't read out again)
-  showErr.said = true;
+  if (!msg) return;
+  // The message is shown once, in the box next to its field; the box is an alert, so a screen reader reads it out from
+  // there (it used to be copied into the hidden live region as well, which put the same sentence on the page twice).
   const box = document.querySelector(`.err[data-for="${field}"]`) || document.querySelector(".err[data-for='_']");
-  if (box) box.innerHTML = I.alert + `<span>${esc(msg)}</span>`;
+  if (box) box.innerHTML = I.alert + `<span>${esc(msg)}</span>`; else say(msg);
   const inp = document.querySelector(`[data-field="${field}"]`);
   if (inp) {
     inp.setAttribute("aria-invalid", "true");
@@ -480,9 +489,8 @@ function showErr(field, msg){
     if (f) f.focus({preventScroll: true});
     (box || inp).scrollIntoView({block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
   }
-  say(msg);
 }
-const errBox = f => `<div class="err" data-for="${f}" id="err-${f}"></div>`;
+const errBox = f => `<div class="err" data-for="${f}" id="err-${f}" role="alert"></div>`;
 
 async function saveAndNext(step, data, nextStep){
   showErr();
@@ -490,7 +498,7 @@ async function saveAndNext(step, data, nextStep){
   try {
     const d = await api("POST", "/api/setup/step", {step, data});
     S = d.state || d;
-    go(nextStep || STEPS[STEPS.indexOf(step) + 1]);
+    go(nextStep || nextOf(step));
   } catch(e) {
     busy(false); footer(SCREENS[cur].foot ? SCREENS[cur].foot() : {});
     showErr(e.field || "_", e.message);
@@ -500,7 +508,7 @@ async function saveAndNext(step, data, nextStep){
 $("form").addEventListener("input", e => { const f = e.target.closest("[data-field]"); if (f && f.getAttribute("aria-invalid")) showErr(); });
 $("form").addEventListener("change", e => { const f = e.target.closest("[data-field]"); if (f && f.getAttribute("aria-invalid")) showErr(); });
 $("form").addEventListener("submit", e => { e.preventDefault(); const s = SCREENS[cur]; if (!$("next").disabled && !$("next").hidden) s.next ? s.next() : saveAndNext(cur, s.collect ? s.collect() : {}); });
-$("back").addEventListener("click", () => { const s = SCREENS[cur]; if (s.back && s.back() === false) return; const i = STEPS.indexOf(cur); let p = STEPS[i - 1]; if (p === "resume" && S.resume.status !== "none" && cur === "where") p = "highlights"; if (p === "highlights" && S.resume.status === "none") p = "resume"; if (p) go(p, -1); });
+$("back").addEventListener("click", () => { const s = SCREENS[cur]; if (s.back && s.back() === false) return; let p = prevOf(cur); if (p === "resume" && S.resume.status !== "none" && cur === "where") p = "highlights"; if (p === "highlights" && S.resume.status === "none") p = "resume"; if (p) go(p, -1); });
 $("skip").addEventListener("click", () => { const s = SCREENS[cur]; s.skip ? s.skip() : saveAndNext(cur, {}); });
 document.addEventListener("keydown", e => {
   if (e.altKey && e.key === "ArrowLeft" && !$("back").hidden && !$("back").disabled) { e.preventDefault(); $("back").click(); }
@@ -763,6 +771,9 @@ SCREENS.where = {
     $("ru").addEventListener("click", e => { const b = e.currentTarget; b.setAttribute("aria-checked", b.getAttribute("aria-checked") === "true" ? "false" : "true"); });
     sync();
   },
+  // Not ready to say where? Skip for now: nothing is saved, and the last screen asks for the ZIP if it is still missing.
+  foot: () => ({skip: true, skipLabel: "Skip for now"}),
+  skip(){ saveAndNext("where", {skipped: true}); },
   collect: () => ({home_zip: $("zip").value, radius_miles: BOOT.radii[+$("rad").value], workplaces: checked("wp"),
                    remote_us: $("ru").getAttribute("aria-checked") === "true"}),
 };
@@ -1334,7 +1345,7 @@ const Mock = {
       {id: "clearances", label: "Clearances", icon: "shield", items: ["Public Trust (current)"]},
       {id: "skills", label: "Skills", icon: "spark", chips: ["Program management", "Vendor management", "Budgeting", "Stakeholder engagement", "Process improvement", "Jira", "Smartsheet", "SQL", "Change management", "Risk management", "Agile delivery", "Data analysis", "Contract oversight", "Executive reporting"], more: 6},
     ]};
-    s.inferred = {level: {level: 4, name: BOOT.levels["4"], why: "your most recent title, “Senior Program Manager” and about 9 years of experience"}, current_employer: "Northwind Health"};
+    s.inferred = {level: {level: 4, name: BOOT.levels["4"], why: "your most recent title, “Senior Program Manager”"}, current_employer: "Northwind Health"};
     s.market = {median: 146000, p25: 128000, p75: 171000, n: 212, basis: "212 openings with pay listed, roles like yours near your level"};
     if (!s._saved_emp) s.values.skip_employers = ["Northwind Health"];
   },
@@ -1350,7 +1361,7 @@ const Mock = {
   step(step, d){
     const s = this.s, v = s.values;
     if (step === "welcome") { const n = String(d.name || "").trim(); if (!n) this.err("Tell us what to call you.", "name"); v.name = s.name = n; }
-    if (step === "where") {
+    if (step === "where" && !d.skipped) {
       if (d.home_zip && !/^\d{5}$/.test(d.home_zip)) this.err("ZIP codes are five digits.", "home_zip");
       if (!d.workplaces.length) this.err("Pick at least one way of working.", "workplaces");
       if (!d.home_zip && !(d.workplaces.length === 1 && d.workplaces[0] === "remote")) this.err("Add your ZIP so we can measure commutes, or choose remote only.", "home_zip");
