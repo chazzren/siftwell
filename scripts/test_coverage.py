@@ -113,6 +113,32 @@ def age(co, days, fail_days=None):
         con.execute("UPDATE listings SET last_seen=? WHERE company=?", (d, co))
         if fail_days is not None:
             con.execute("UPDATE companies SET fail_since=? WHERE name=?", ((dt.date.today() - dt.timedelta(days=fail_days)).isoformat(), co))
+# Workday: a posting whose text is stored isn't requested again every day (one day in WD_RECHECK_DAYS)
+wd_calls = []
+def fake_wd(url, body=None, tries=6):
+    wd_calls.append(url)
+    if url.endswith("/jobs"):
+        return {"total": 3, "facets": [], "jobPostings": [{"title": f"Analyst {i}", "externalPath": f"/job/Columbus/A_{i}", "locationsText": "Columbus, OH"} for i in range(3)]}
+    return {"jobPostingInfo": {"location": "Columbus, OH", "jobDescription": "<p>Analyse things.</p>", "startDate": "2026-11-01"}}
+real_http, jobfinder.http_json = jobfinder.http_json, fake_wd
+jobfinder.fetch_wanted = lambda c, t: True
+wdc = company("Wd Co", ats="workday", tenant="wdco", wd="wd1", site="Careers", tier="dmv_hq")
+def wd_fetch():
+    wd_calls.clear()
+    s, js = jobfinder.process(dict(wdc))
+    with catalog.db() as con:
+        catalog.record_fetch("Wd Co", s, js, con)
+    return sum("/job/" in u for u in wd_calls), s, js
+n1, s1, _ = wd_fetch()
+check("Workday first fetch reads every posting's text", n1 == 3 and s1["status"] == "ok" and open_n("Wd Co") == 3)
+jobfinder.WD_RECHECK_DAYS = 10 ** 9      # (no posting's weekly day is today)
+n2, s2, js2 = wd_fetch()
+check("Workday later fetch doesn't ask for stored text again", n2 == 0 and all(j.get("_unchanged") for j in js2) and open_n("Wd Co") == 3)
+jobfinder.WD_RECHECK_DAYS = 1            # (every posting's day is today)
+check("... except on the posting's weekly day", wd_fetch()[0] == 3)
+jobfinder.WD_RECHECK_DAYS = 7
+jobfinder.http_json = real_http
+
 company("Dead Board")
 ids = [f"j{i}" for i in range(8)]
 fetch("Dead Board", ids)
@@ -303,7 +329,7 @@ check("... and always for a staffing board", "Green, OH" not in {p[3] for p in b
 check("a bare big city still counts", "Chicago, IL" in {p[3] for p in build.board_places({"Chicago": 4})})
 
 # USAJOBS: every state, every page, both ends of a list longer than one search pages through
-os.environ["USAJOBS_API_KEY"], os.environ["USAJOBS_EMAIL"] = "test-key", "test@example.invalid"
+os.environ["USAJOBS_API_KEY"], os.environ["USAJOBS_EMAIL"] = "test-key", "tester (no address)"
 calls = []
 def item(i, loc="Columbus, Ohio"):
     return {"MatchedObjectDescriptor": {"PositionTitle": f"Job {i}", "OrganizationName": "Agency", "PositionURI": f"https://www.usajobs.gov/job/{i}",

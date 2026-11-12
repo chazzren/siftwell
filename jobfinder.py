@@ -690,6 +690,7 @@ def _wd_location_facets(facets, unnamed=False):
     return out
 
 WD_CAP = 2000  # Workday's job search stops paging here
+WD_RECHECK_DAYS = 7  # a Workday posting whose text is stored is read again once in this many days
 
 def fetch_wanted(c, title):
     """Could anyone's filters want this title? (CFG is the union of everyone's during a fetch.) Only used to decide
@@ -743,9 +744,22 @@ def f_workday(c):
     # Every posting gets a catalog row. Full text costs one request each (and Workday rate-limits per IP), so it is
     # fetched only for titles someone's filters could want; the rest are stored as partial rows (title, location,
     # link) and get their text on a later fetch once someone's filters want them.
+    # A posting whose text is already stored isn't asked for again on every update (that was one request per posting
+    # per day, most of a daily update's time): it is re-read one day a week (each posting has its own day), which is
+    # when an edited posting is noticed. process() keeps the stored text and the row is left as it is.
+    try:
+        import catalog
+        have = {k for k, v in catalog.known(c["name"]).items() if v[2] and not v[1]}
+    except Exception:
+        have = set()
+    day = dt.date.today().toordinal() % WD_RECHECK_DAYS
     def detail(p):
         want = fetch_wanted(c, p.get("title", ""))
         d, failed = {}, False
+        jid_ = f'{c["name"]}::{p["externalPath"]}'
+        if want and jid_ in have and __import__("zlib").crc32(jid_.encode()) % WD_RECHECK_DAYS != day:
+            j = J(c, p.get("title"), f'{base}/en-US/{c["site"]}{p["externalPath"]}', [p.get("locationsText", "")], "", None, "", "", "", p["externalPath"])
+            return j
         if want:
             try:
                 d = http_json(api + p["externalPath"]).get("jobPostingInfo", {})
