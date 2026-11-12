@@ -1398,6 +1398,18 @@ def _claude_ready():
     except Exception:
         return True  # can't tell: don't show the "connect Claude" prompts
 
+def _has_relevance(pid, jobs):
+    """Does this person have a what-to-look-for sheet (so jobs get a Relevance)? Asked of the sheet, not of the jobs:
+    a board that is still empty (the first search has only just started) must already say yes, or the page opens
+    sorted "Most appealing" and keeps saying so while the jobs that then arrive are in relevance order."""
+    if any(j.get("rel") is not None for j in jobs):
+        return True
+    try:
+        import lookfor
+        return not lookfor.is_empty(lookfor.load(pid))
+    except Exception:
+        return False
+
 def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     import ai_score, collections, report
     for j in jobs:
@@ -1409,7 +1421,7 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     sums = [dict(s, matched=per_co.get(s["company"], 0)) for s in summaries if sets.get(s["company"], set()) & watch]
     payload = {"generated": dt.datetime.now().isoformat(timespec="minutes"), "salary_floor": CFG["salary_floor"],
                "ai_status": ai_status, "pivot_status": pv_status, "pivot_name": CFG["pivot"]["name"],
-               "claude_ready": _claude_ready(), "ai_scope": st.get("target_scope") == "ai", "has_relevance": any(j.get("rel") is not None for j in jobs),
+               "claude_ready": _claude_ready(), "ai_scope": st.get("target_scope") == "ai", "has_relevance": _has_relevance(pid, jobs),
                "rel_v": __import__("lookfor").BUILD,   # (the server rebuilds a board whose Relevance an earlier version made)
                "pivot_enabled": CFG["pivot_enabled"], "seniority": CFG["seniority"], "travel_max": st.get("travel_max") or "any",
                "target_name": st.get("target_name") or "Target", "target_summary": st.get("target_summary") or st.get("target_text", ""),

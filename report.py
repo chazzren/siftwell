@@ -2198,7 +2198,7 @@ if (SERVED) {
     const pct = intIn("rrPct", 1, 100), top = intIn("rrTop", 1, 2000);
     const tgtN = Math.min(RLIM.target, +(PREFS["claude.per_update"] || RLIM.target));
     document.querySelectorAll(".rrTgtN").forEach(e => e.textContent = nf(tgtN));
-    $("rrLim").textContent = `One run rates at most ${nf(RLIM.haiku)} jobs with a quick check, ${nf(RLIM.sonnet)} with a careful look and ${nf(RLIM.opus)} new ones with best judgment (plus jobs you saved). Run it again, or press Rate more on the board, for the next batch.`;
+    $("rrLim").textContent = `One run rates at most ${nf(RLIM.haiku)} jobs with a quick check, ${nf(RLIM.sonnet)} with a careful look and ${nf(RLIM.opus)} new ones with best judgment (plus up to ${nf(RLIM.saved)} jobs you saved). Run it again, or press Rate more on the board, for the next batch.`;
     if (COUNTING) {
       ["rrHN", "rrSNn", "rrONn"].forEach(id => $(id).textContent = "Counting…");
       $("rrHAll").textContent = "Counting… your board is being refreshed for this panel (a minute or so). This page reloads when it's done.";
@@ -2250,9 +2250,8 @@ if (SERVED) {
     if ($("rrTop").value === "") $("rrTop").value = PREFS["claude.opus_top"] || 50;
     document.querySelectorAll(".rrTgt").forEach(e => e.hidden = !D.pivot_enabled);
     $("rrMsg").textContent = ""; $("rrMsg").classList.remove("bad");
-    if (NOAI) $("rrMsg").innerHTML = noClaude("Re-rating");
     rrCalc(); rrPlace(); $("rrPanel").hidden = false; $("rerateBtn").setAttribute("aria-expanded", "true");
-    (NOAI ? $("rrClose") : $("rrPanel").querySelector("[data-rr=full]")).focus();
+    (NOAI ? $("rrClose") : $("rrPanel").querySelector("[data-rr=full]")).focus();   // (without Claude the panel explains itself: #rrNo)
   }
   function rrClose(){ $("rrPanel").hidden = true; $("rerateBtn").setAttribute("aria-expanded", "false"); }
   ["rrPct", "rrTop", "rrHNeed", "rrSNeed", "rrONeed"].forEach(id => $(id).addEventListener("input", rrCalc));

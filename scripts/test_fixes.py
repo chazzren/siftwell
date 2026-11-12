@@ -240,6 +240,10 @@ server.recount_old_boards()
 server.request_recompute = real_rr
 check("at start it is rebuilt, with the automatic quick check off (no Claude)", asked and pb in asked[0][0] and asked[0][1] is False, str(asked))
 
+lookfor.build(pid)
+check("a board that is still empty already knows the person has a what-to-look-for sheet (so it opens on 'Most relevant', not 'Most appealing')",
+      jobfinder._has_relevance(pid, []) is True and jobfinder._has_relevance(pb, []) is False and jobfinder._has_relevance(pb, [{"rel": 3}]) is True)
+
 # ------------------------------------------------------------------ 5. highlights are read when setup approves the draft
 import highlights
 calls = []
