@@ -14,6 +14,9 @@ text), and the directory builder (scripts/index_build: it has one posting and th
     mine_name(texts)                the employer's name as its postings state it ("Acme Health is an equal ...")
     derive(name, cfg, texts, ...)   the best of the above, or None when nothing better is known
     learn(company)                  app: derive + catalog.rename_company (listing ids don't change, so ratings stay)
+    display(name, cfg, taken)       the name a NEW company gets (no postings read yet), unique in a plain way
+    unique_name(name, cfg, taken)   "Accenture (Avanade)", "Schneider (2)": never "(taleo)" or a hash
+    group_name(name), group_map(companies)   the one name two boards of an employer are shown and grouped under
 """
 import collections
 import html as _html
@@ -71,8 +74,8 @@ def slugs(cfg):
     try:
         import company_add
         lab = company_add.host_label(cfg or {}, "")
-        if lab:
-            out.append(lab)
+        if lab:     # ("careersapply-pennentertainment.icims.com": the job-site word is not part of the employer's address)
+            out.append(" ".join(t for t in lab.split() if not _GENERIC_LEAD.match(t)) or lab)
     except Exception:
         pass
     return [s for s in dict.fromkeys(_norm(x) for x in out) if len(s) >= 4 and not s.isdigit()]
@@ -99,27 +102,200 @@ def is_slug(name, cfg=None):
     return False
 
 
+# ---------------------------------------------------------------- "(...)" after a name
+# A second board of one employer is told apart by a plain place or brand in brackets ("McKesson (Canada)", "Abbott
+# (Nutrition)", at worst "Schneider (2)"), never by a job system, a site code or a hash ("(taleo)", "(AccentureCareers)",
+# "(1 BBW PROF)", "(ADP 6dd43f)", "(board 2)").
+SYSTEMS = {"taleo", "workday", "myworkdayjobs", "adp", "adpworkforcenow", "workforcenow", "icims", "ukg", "ukgpro", "ukgready",
+           "ultipro", "greenhouse", "lever", "ashby", "bamboohr", "paylocity", "dayforce", "paycom", "paycor", "saashr", "oracle",
+           "careerssite", "careersite", "radancy", "eightfold", "avature", "recruitee", "breezy", "breezyhr", "jobvite",
+           "smartrecruiters", "workable", "jazzhr", "successfactors", "phenom", "jsonld", "brassring", "kenexa", "jibe",
+           "teamtailor", "pinpoint", "rippling", "gusto", "bullhorn", "personio", "applicantpro", "applitrack", "neogov",
+           "governmentjobs", "cornerstone", "csod", "silkroad", "linkedin", "indeed", "careerbuilder", "equest", "glassdoor",
+           "ziprecruiter", "monster", "handshake", "tmp", "symphonytalent"}
+_JOB_WORDS = {"career", "careers", "careersite", "job", "jobs", "external", "internal", "site", "sites", "board", "boards", "portal",
+              "page", "hotjob", "hotjobs", "search", "apply", "opportunities", "recruiting", "recruitment", "llc", "inc", "corp"}
+_JOB_ENDS = r"(?:careers?|careersite|jobs?|external|internal|hotjobs?)"
+_COUNTRY = re.compile(r"(?i)^(?:u\.?s\.?(?:a\.?)?|united states(?: of america)?)$")
+_CFG_CODES = ("site", "section", "token", "tenant", "slug", "sub", "ns", "board", "id", "cid", "key", "search")
+_SHORT_PLAIN = {"US", "UK", "USA"}
+
+
+def split_suffix(name):
+    """("Accenture", "AccentureCareers") for "Accenture (AccentureCareers)"; (name, "") when it ends in no brackets."""
+    n = re.sub(r"\s+", " ", str(name or "")).strip()
+    m = re.match(r"^(.*?[^\s(])\s*\(([^()]*)\)$", n)
+    return (m.group(1).strip(" ,-"), m.group(2).strip()) if m and m.group(1).strip(" ,-") else (n, "")
+
+
+def _code_words(code):
+    """The words in a site code: "Main_Event_Careers" -> Main Event Careers, "AvanadeCareers" -> Avanade Careers,
+    "salescareers" -> sales."""
+    s = re.sub(r"[_\-./]+", " ", str(code or ""))
+    s = re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[A-Za-z])(?=\d)|(?<=\d)(?=[A-Za-z])", " ", s)
+    out = []
+    for w in s.split():
+        prev = None
+        while prev != w and (w.islower() or w.istitle()):       # run-together: job words come off its ends
+            prev = w
+            w = re.sub(r"(?i)^" + _JOB_ENDS + r"(?=[a-z]{3})|(?<=[a-z]{2})" + _JOB_ENDS + r"$", "", w)
+        out.append(w)
+    return out
+
+
+def plain_suffix(code, base="", acronyms=False):
+    """The plain words in a site code / search phrase that tell a board apart from the employer's other one:
+    "AvanadeCareers" -> "Avanade", "Main_Event_Careers" -> "Main Event", "lisle" -> "Lisle", "salescareers" -> "Sales",
+    "Accenture Federal Services" (for Accenture) -> "Federal Services". "" when the code says nothing in plain words
+    ("AccentureCareers" for Accenture, "1_BBW_PROF", "abbottcareers2", "7", "taleo", a GUID). acronyms: let a short
+    all-capitals word through ("CSI")."""
+    code = str(code or "").strip()
+    if not code or len(code) > 60 or _norm(code) in SYSTEMS or _UUID.search(code) or re.search(r"\d", code):
+        return ""
+    nb = _norm(base)
+    ini = "".join(w[0] for w in re.split(r"[\s\-]+", str(base or "")) if w and w[0].isalpha()).lower()
+    out = []
+    for w in _code_words(code):
+        lw = w.lower()
+        if lw in _JOB_WORDS or len(w) < 2 or (len(lw) >= 2 and lw in nb) or (len(lw) >= 3 and lw == ini):
+            continue
+        if w in _SHORT_PLAIN:
+            out.append(w)
+            continue
+        if not re.fullmatch(r"[A-Za-z][A-Za-z'&]*", w) or len(w) < 3 or not re.search(r"[aeiouy]", lw):
+            return ""
+        if w.isupper() and len(w) <= 4:
+            if not acronyms:
+                return ""
+            out.append(w)
+            continue
+        if is_slug(w.capitalize()):
+            sp = split_business(lw)
+            if not sp:
+                return ""
+            out.append(sp)
+            continue
+        if _unsayable(lw):
+            return ""
+        out.append(w.capitalize() if (w.islower() or w.isupper()) else w)
+    s = " ".join(out)
+    return s if out and len(s) <= 24 and len(out) <= 3 and not _COUNTRY.match(s) else ""
+
+
+def _bad_suffix(suf, base="", cfg=None, strict=False):
+    """Is the "(...)" after a name a job system, a site code or a hash, rather than a plain place or brand?
+    strict: only what Siftwell or the directory wrote there itself (the system, "board 2", this board's own codes)."""
+    cfg = cfg or {}
+    ns = _norm(suf)
+    if not ns:
+        return True
+    if re.fullmatch(r"\d{1,3}", suf.strip()):
+        return False                                # "(2)": Siftwell's own last resort
+    if re.fullmatch(r"(?i)board \d+", suf.strip()) or ns in SYSTEMS or ns == _norm(cfg.get("ats")):
+        return True
+    toks = suf.split()
+    if len(toks) >= 2 and re.fullmatch(r"[0-9a-f]{4,8}", toks[-1].lower()) and (re.search(r"\d", toks[-1]) or _norm(" ".join(toks[:-1])) in SYSTEMS):
+        return True                                 # "ADP 6dd43f", "UKG Ready 0a1b2c"
+    for k in _CFG_CODES:
+        v = str(cfg.get(k) or "")
+        if v and _norm(v) == ns:
+            return suf != plain_suffix(v, base)
+    if strict:
+        return False
+    if _COUNTRY.match(suf.strip()):
+        return True                                 # "HD Supply Management LLC (USA)"
+    if re.search(r"\d", suf) and re.search(r"[A-Za-z]", suf) and " " not in suf.strip():
+        return True                                 # "abbottcareers2"
+    if any(w.lower() in _JOB_WORDS - {"llc", "inc", "corp", "board", "boards"} for w in _code_words(suf)):
+        return True                                 # "BJsCareers", "External Career ASE", "bpcareers"
+    if " " not in suf.strip() and (suf.islower() or (len(suf) >= 12 and re.search(r"[a-z][A-Z]", suf))):
+        return True                                 # "maymonthomes", "BeltoneIndependentlyOwned"
+    return False
+
+
+# ---------------------------------------------------------------- slogans and unreadable abbreviations
+_SLOGAN = re.compile(r"(?i)(?<![\w&])(?:you|you['’]ll|you['’]re|you['’]ve|your|yours|we['’]re|we['’]ll|let['’]s)(?!\w)")
+_SLOGAN2 = re.compile(r"(?i)^(?:join|work|grow|build|start|find|discover|explore|make|love|come|search|view|apply|welcome|be)\b.*"
+                      r"\b(?:us|team|careers?|future|here|today|now|difference|family|jobs?|journey|story)$")
+_OK_VOWELLESS = {"mfg", "bldg", "mgmt", "intl", "natl", "assn", "dept", "svc", "ctr", "grp", "hwy", "blvd", "ltd", "pty", "plc", "llc",
+                 "llp", "pllc", "dds", "phd", "mrs", "pvt", "dba", "std", "hts", "sts", "spc", "nw", "sw"}
+_ENTITY_ABBR = {"appl", "emp", "svcs", "hldgs", "hldg", "opco", "holdco"}
+_OK_CODA = {"sch", "tch", "ght", "xth", "fth", "gth", "dth", "pth", "cht", "hth", "chs", "phs", "ths", "ckl", "ghs"}
+
+
+def _slogan(n):
+    """A page's tag line used as a name: "You'll Love It Here", "Join Our Team", "Find Your Future"."""
+    words = n.split()
+    if len(words) < 3:
+        return False                                # ("Your Pie" is a restaurant)
+    return bool(_SLOGAN.search(n) or _SLOGAN2.match(n))
+
+
+def _unsayable(w, coda=True):
+    """A short word nobody can say: no vowel ("wvnh", "ghc"), or (coda) an ending no English word has ("copcp")."""
+    w = str(w or "").lower()
+    if not re.fullmatch(r"[a-z]{3,6}", w):
+        return False
+    if not re.search(r"[aeiouy]", w):
+        return w not in _OK_VOWELLESS
+    if not coda:
+        return False
+    w = w[:-1] if w.endswith("s") and not w.endswith("ss") else w
+    m = re.search(r"[^aeiouy]{3,}$", w)
+    if not m:
+        return False
+    end = m.group(0)[-3:]
+    return end[0] not in "rlnmsw" and end not in _OK_CODA and end[1] != end[2]
+
+
+def _abbrev(n):
+    """A name made of initials written like words ("Copcp", "Hntb", "Wve Wvnh Emp") or of a ledger's abbreviations
+    ("BOK USA Bio-Med Appl of Oklahoma")."""
+    toks = [t.strip(".,") for t in n.split()]
+    if any(t.lower() in _ENTITY_ABBR for t in toks):
+        return True
+    return any(re.fullmatch(r"[A-Z][a-z]{2,5}", t) and _unsayable(t, coda=len(toks) == 1) for t in toks)
+
+
+def _upper_abbrev(n):
+    """Initials written as initials: "Hntb" -> "HNTB", "Copcp" -> "COPCP", "Cvs Health" -> "CVS Health"."""
+    toks = n.split()
+    return " ".join(t.upper() if re.fullmatch(r"[A-Z][a-z]{2,4}", t) and _unsayable(t, coda=len(toks) == 1) else t for t in toks)
+
+
 def poor(name, cfg=None):
-    """Why this is not a name people can read ("" when it is fine): empty, placeholder, code, board-n, generic,
-    code-prefix, inverted, slug."""
+    """Why this is not a name people can read ("" when it is fine): empty, placeholder, code, board-n, suffix,
+    generic, slogan, code-prefix, inverted, slug, abbrev. A plain "(place or brand)" after a name is fine; the name
+    in front of it is judged."""
     n = re.sub(r"\s+", " ", str(name or "")).strip()
     if not n:
         return "empty"
-    if re.match(r"Employer(?: in\b| \()", n):
+    if re.match(r"Employer(?: in\b| \(|$)", n):
         return "placeholder"
+    base, suf = split_suffix(n)
+    if suf:
+        if re.fullmatch(r"board \d+", suf, re.I):
+            return "code" if looks_like_code(base) else "board-n"
+        if _bad_suffix(suf, base, cfg):
+            return "suffix"
+        if re.search(r"\(" + re.escape(suf) + r"\)$", base):
+            return "suffix"                         # "Comfort Systems USA (Ohio) (Ohio)"
+        n = base
     if looks_like_code(n):
         return "code"
-    if re.search(r"\(board \d+\)$", n, re.I):
-        return "board-n"
     toks = n.split()
     if n.lower().strip(" .") in GENERIC or _generic_lead(toks):
         return "generic"
+    if _slogan(n):
+        return "slogan"
     if _lead_code(toks) and not _code_is_name(toks, cfg):
         return "code-prefix"
     if re.search(r"\b(?:of|for|of the)$", n, re.I):
         return "inverted"
     if is_slug(n, cfg):
         return "slug"
+    if _abbrev(n):
+        return "abbrev"
     return ""
 
 
@@ -180,16 +356,23 @@ _INVERT = re.compile(r"^(.+?),?\s+((?:The\s+)?(?:Department|Dept\.?|Office|Burea
                      r"Community Foundation|Chamber of Commerce|United Way|Humane Society|Girl Scouts|Boy Scouts|Port)\s+(?:of|for)(?:\s+the)?)$", re.I)
 
 
-def clean_display(name, texts=None):
+def clean_display(name, texts=None, cfg=None):
     """A display name with the parts that are not the name removed: a leading entity code ("0101 The Huntington
     National Bank", "(5100) Genzyme", "AB3 Nationwide Life"), a job-site word in front ("Jobs Selectmedicalcorp"),
     everything before "d/b/a", a comma-inverted agency name ("Juvenile Justice, Department of" -> "Department of
-    Juvenile Justice"), "(board 2)". Real names keep their numbers ("7-Eleven", "3M", "1-800-Flowers", "84 Lumber").
+    Juvenile Justice"), "(board 2)" and any other job-system / site-code in brackets at the end ("(taleo)",
+    "(AccentureCareers)"; cfg: the board's config, so its own codes are recognised). Real names keep their numbers
+    ("7-Eleven", "3M", "1-800-Flowers", "84 Lumber") and a plain place or brand in brackets ("(Canada)").
     texts: lower-cased posting texts, when there are any, to settle unclear codes."""
     n = re.sub(r"\s+", " ", _html.unescape(str(name or ""))).strip(" ,;")
     if not n:
         return ""
     n = re.sub(r"\s*\((?:board \d+)\)$", "", n, flags=re.I)
+    for _ in range(3):
+        base, suf = split_suffix(n)
+        if not suf or not (_bad_suffix(suf, base, cfg) or re.search(r"\(" + re.escape(suf) + r"\)$", base)):
+            break
+        n = LEGAL.sub("", base).strip(" ,.") if _COUNTRY.match(suf) and LEGAL.search(base) else base
     m = re.search(r"\b(?:d/b/a|dba|d\.b\.a\.|doing business as)\s+(.{2,})$", n, re.I)
     if m:
         n = m.group(1).strip()
@@ -368,15 +551,20 @@ def ukg_prefix(cfg):
     return m.group(1) if m else None
 
 
+_SPLIT_MORE = ("entertainment", "care")     # (split off an address like BUSINESS_WORDS, but no sign of a run-together name)
+
+
 def split_business(slug):
     """Last resort for a run-together address nobody spells out: split a common business word off its end
     ("brightviewhealth" -> "Brightview Health", "cardinalgroup" -> "Cardinal Group"). None when none fits."""
     s = re.sub(r"[^a-z]", "", str(slug or "").lower())
     for _ in range(1):
-        for w in sorted(BUSINESS_WORDS, key=len, reverse=True):
+        for w in sorted(BUSINESS_WORDS + _SPLIT_MORE, key=len, reverse=True):
             if s.endswith(w) and len(s) - len(w) >= 3:
                 head = s[:-len(w)]
                 inner = split_business(head) if len(head) >= 9 else None
+                if w == "care" and not inner:
+                    continue                        # ("communicare" is one word; "freseniusmedical" + "care" is two)
                 first = inner or (head.upper() if len(head) <= 3 else head.capitalize())    # "odwlogistics" -> "ODW Logistics"
                 return f"{first} {w.upper() if w in ('usa', 'llc') else w.capitalize()}"
     return None
@@ -408,6 +596,15 @@ def derive(name, cfg=None, texts=None, board_title=None, employer=None):
     low = [t.lower() for t in texts]
     cur = re.sub(r"\s+", " ", str(name or "")).strip()
     why = poor(cur, cfg)
+    base, suf = split_suffix(cur)
+    if suf and why in ("suffix", "board-n", "code") and why != "placeholder":
+        # the brackets are a job system / site code, not part of the name: the name without them, made better if it can be
+        b = clean_display(cur, [t.lower() for t in texts], cfg)
+        if b and b != cur:
+            return derive(b, cfg, texts, board_title, employer) or b
+    elif suf and why != "placeholder":
+        d = derive(base, cfg, texts, board_title, employer)     # a plain "(place)" stays on the better name
+        return f"{d[:44]} ({suf})" if d else None
     if not why:
         # a one-word name the postings write as two ("Microcenter" -> "Micro Center") or with other capitals
         if cur and " " not in cur and len(texts) >= 3:
@@ -440,6 +637,28 @@ def derive(name, cfg=None, texts=None, board_title=None, employer=None):
                 if x.isalpha() and not is_slug(x.capitalize(), cfg) and x not in _norm(cleaned[0]):
                     return x.capitalize()[:60]
         return cleaned[0][:60]
+    if why in ("abbrev", "slogan"):
+        # "Wve Wvnh Emp" (a ledger entity at communicarehealth), "You'll Love It Here" (a page's tag line), "Copcp":
+        # what the postings and the board's own address say, else the initials written as initials
+        if strong or spelled or title:
+            return (strong or spelled or title)[:60]
+        pn = prefix_name(ukg_prefix(cfg), texts) if ukg_prefix(cfg) else None
+        if ok(pn):
+            return pn[:60]
+        mined, share = mine_name(texts)
+        mined = _tidy(mined) if mined else mined
+        if ok(mined) and (share >= 0.5 or any(_norm(mined).startswith(x[:4]) or _initialism(x, mined) for x in sl)):
+            return mined[:60]
+        words = [_norm(t) for t in cur.split() if len(_norm(t)) >= 3]
+        for x in sl:
+            if x.isalpha() and not any(w in x for w in words):
+                b = split_business(x)
+                if ok(b):
+                    return b[:60]
+                if why == "slogan" and ok(x.capitalize()):
+                    return x.capitalize()[:60]
+        up = _upper_abbrev(cur)
+        return up[:60] if ok(up) else None
     if why != "slug" and cleaned:
         return cleaned[0][:60]
     if spelled:
@@ -453,11 +672,145 @@ def derive(name, cfg=None, texts=None, board_title=None, employer=None):
     mined = _tidy(mined) if mined else mined
     if ok(mined) and (why != "slug" or share >= 0.5 or any(_norm(mined).startswith(x[:4]) or _initialism(x, mined) for x in sl)):
         return mined[:60]
-    for x in sl:
+    for x in sorted(sl, key=lambda x: x != _norm(cur)):     # (the name's own run-together form before the board's address)
         b = split_business(x)
         if ok(b):
             return b[:60]
     return None
+
+
+# ---------------------------------------------------------------- one employer, two boards
+_ENTITY_WORDS = {"laboratories", "labs", "inc", "incorporated", "corp", "corporation", "company", "co", "companies", "group", "holdings",
+                 "usa", "us", "america", "americas", "international", "global", "worldwide", "enterprises", "industries", "llc", "lp",
+                 "ltd", "limited", "stores", "brands", "the"}
+
+
+def group_name(name):
+    """The name a board is shown and grouped under on the job board: its catalog name without the "(...)" that tells
+    two boards of one employer apart. "McKesson (Canada)" and "McKesson" -> "McKesson"."""
+    n = re.sub(r"\s+", " ", str(name or "")).strip()
+    for _ in range(3):
+        base, suf = split_suffix(n)
+        if not suf:
+            break
+        n = base
+    return n or str(name or "").strip()
+
+
+def _owner(c):
+    """Whose job system account a board is on (two boards on one account belong together when their names agree)."""
+    if not isinstance(c, dict):
+        return None
+    for k in ("tenant", "host", "base", "token", "slug", "sub", "ns"):
+        v = str(c.get(k) or "").lower()
+        if v and not any(v == s or v.endswith("." + s) for s in ("recruiting.ultipro.com", "recruiting2.ultipro.com")):
+            v = re.sub(r"^https?://(?:www\.)?(?:careers?|jobs?)[\-.]", "", v)
+            return (c.get("ats"), re.sub(r"\d+$", "", v) if k == "token" else v)
+    return None
+
+
+def group_map(companies):
+    """{catalog name: the one name its jobs are shown and grouped under}. companies: catalog.companies() (or plain
+    names). Boards of one employer share a name: "McKesson" + "McKesson (2)" -> "McKesson"; "TransPerfect" +
+    "Transperfect (Workday)" -> "TransPerfect"; "Odwlogistics" + "ODW Logistics (2)" -> "ODW Logistics"; and, when both
+    are on the same job-system account, "Abbott" + "Abbott Laboratories" -> "Abbott" (never "Accenture" + "Accenture
+    Federal Services": only words like Laboratories / Inc / Group / USA are looked past)."""
+    items = [(c["name"], c) if isinstance(c, dict) else (str(c), None) for c in companies or [] if c]
+    key = lambda g: _norm(re.sub(r"(?i)^the\s+", "", LEGAL.sub("", g)))
+    buckets = {}
+    for name, c in items:
+        g = group_name(name)
+        buckets.setdefault(key(g) or g.lower(), []).append((name, g, c))
+    bare = lambda g: re.sub(r"(?i)^the\s+", "", g)
+    best = lambda forms: max(forms, key=lambda g: (not poor(g), " " in bare(g), any(ch.isupper() for ch in bare(g)[1:]) and not g.isupper(), -len(g), g))
+    shown = {k: best([g for _, g, _ in v]) for k, v in buckets.items()}
+    owners = {k: {o for o in (_owner(c) for _, _, c in v) if o} for k, v in buckets.items()}
+    for k in sorted(buckets, key=len, reverse=True):
+        words = [w for w in re.split(r"[^a-z0-9]+", re.sub(r"['’.]", "", shown[k].lower())) if w]
+        for cut in range(1, len(words)):
+            short = "".join(words[:cut])
+            if short in buckets and short != k and all(w in _ENTITY_WORDS for w in words[cut:]) and owners[k] & owners[short]:
+                shown[k] = shown[short]
+                break
+    return {name: shown[k] for k, v in buckets.items() for name, _, _ in v}
+
+
+def _main_place(locs):
+    """The one town most of a board's postings are in ("" when they are spread out): a plain way to tell it apart."""
+    import json
+    seen, n = collections.Counter(), 0
+    for raw in locs or []:
+        try:
+            v = json.loads(raw) if isinstance(raw, str) and raw.strip().startswith("[") else raw
+        except ValueError:
+            v = raw
+        first = (v[0] if isinstance(v, (list, tuple)) and v else v if isinstance(v, str) else "") or ""
+        city = str(first).split(",")[0].strip()
+        n += 1
+        if re.fullmatch(r"[A-Z][A-Za-z .'\-]{2,23}", city) and city.lower() not in ("remote", "united states", "multiple locations", "various"):
+            seen[city] += 1
+    if not seen:
+        return ""
+    city, k = seen.most_common(1)[0]
+    return city if k * 2 >= n else ""
+
+
+def suffix_options(cfg, base, place=""):
+    """Plain ways to tell this board from the employer's other one, best first: a brand or section word from its own
+    address ("Avanade", "Main Event", "Lisle"), the town most of its jobs are in."""
+    cfg = cfg or {}
+    out = [plain_suffix(cfg.get(k), base) for k in ("search", "site", "section", "token", "slug", "sub", "ns")]
+    try:
+        import company_add
+        out.append(plain_suffix(company_add.host_label(cfg, ""), base))
+    except Exception:
+        pass
+    if place and _norm(place) not in _norm(base):
+        out.append(re.sub(r"[(),]", "", place).strip()[:24])
+    return [s for s in dict.fromkeys(out) if s]
+
+
+def unique_name(name, cfg=None, taken=(), place=""):
+    """`name` when no other company has it (taken: the names in use, any case), else the name with a plain "(...)":
+    a brand, section or place, at worst "(2)". Never a job system or a hash."""
+    name = re.sub(r"\s+", " ", str(name or "").replace(",", "").replace("::", " ")).strip()[:60]
+    low = {str(t).lower() for t in taken}
+    if name.lower() not in low:
+        return name
+    base = group_name(name)
+    for s in suffix_options(cfg, base, place):
+        c = f"{base[:44]} ({s})"
+        if c.lower() not in low:
+            return c
+    for i in range(2, 1000):
+        c = f"{base[:52]} ({i})"
+        if c.lower() not in low:
+            return c
+    return name
+
+
+def plain_placeholder(name, place=""):
+    """"Employer in Columbus OH (ADP 6dd43f)" -> "Employer in Columbus OH": the last resort, without the job system and
+    the hash. place: used when the placeholder names none ("Employer (Paylocity 6997ff)" -> "Employer in Dublin")."""
+    n = re.sub(r"\s+", " ", str(name or "")).strip()
+    m = re.match(r"^(Employer(?: in [^()]+?)?)\s*(?:\(.*\))?$", n)
+    if not m:
+        return n
+    n = m.group(1).replace(",", "").strip()
+    return f"Employer in {place}" if n == "Employer" and place else n
+
+
+def display(name, cfg=None, taken=(), where=""):
+    """The name a NEW company gets before any of its postings were read (the directory's name for it, a careers
+    link's): codes and job-system brackets off, a run-together address split, a placeholder without its hash, and
+    unique among `taken` in a plain way. "Accenture (AccentureCareers)" -> "Accenture"."""
+    n = re.sub(r"\s+", " ", str(name or "").replace(",", "")).strip()
+    d = derive(n, cfg)
+    if d and (not poor(d, cfg) or poor(n, cfg) in ("suffix", "board-n")):
+        n = d
+    if poor(n, cfg) == "placeholder":
+        n = plain_placeholder(n, re.sub(r"[(),]", "", where or "").strip())
+    return unique_name(n, cfg, taken)
 
 
 # ---------------------------------------------------------------- the app: learn a name after the first fetch
@@ -465,9 +818,11 @@ SAMPLE = 60     # postings read for a name
 
 
 def learn(company, board_title=None, log=lambda m: print(m, flush=True)):
-    """After a fetch: give `company` a real name when the one it has is a code, a placeholder, a run-together address
-    or a legal entity behind a code, using what its postings say. The company keeps its listing ids (so ratings,
-    saved jobs and first-seen dates stay); a name the person typed is never changed. Returns the name it has now."""
+    """After a fetch: give `company` a real name when the one it has is a code, a placeholder, a run-together address,
+    a slogan, initials or a legal entity behind a code, using what its postings say; and take a job-system / site-code
+    "(...)" off it. When the better name is taken by the employer's other board, it gets a plain "(brand / place)",
+    at worst "(2)". The company keeps its listing ids (so ratings, saved jobs and first-seen dates stay); a name the
+    person typed is never changed. Running it again changes nothing. Returns the name it has now."""
     import json
     import catalog
     with catalog.db() as con:
@@ -475,33 +830,44 @@ def learn(company, board_title=None, log=lambda m: print(m, flush=True)):
         if not row:
             return company
         cfg = json.loads(row["cfg"])
-        if cfg.get("nm"):
+        base, suf = split_suffix(company)
+        placeholder = poor(company, cfg) == "placeholder"
+        badsuf = bool(suf) and (_bad_suffix(suf, base, cfg) or bool(re.search(r"\(" + re.escape(suf) + r"\)$", base)))
+        machine = bool(suf) and _bad_suffix(suf, base, cfg, strict=True)    # (Siftwell or the directory wrote it, not a person)
+        if cfg.get("nm") and not machine:
             return company          # typed by the person, or already settled
         rows = con.execute("SELECT title, desc FROM listings WHERE company=? AND closed_at IS NULL AND desc IS NOT NULL AND desc<>'' "
                            "ORDER BY last_seen DESC LIMIT ?", (company, SAMPLE)).fetchall()
         n_all = con.execute("SELECT COUNT(*) FROM listings WHERE company=?", (company,)).fetchone()[0]
-    if not n_all:
+        locs = [r[0] for r in con.execute("SELECT locations FROM listings WHERE company=? AND closed_at IS NULL LIMIT 400", (company,))]
+        taken = {r[0].lower() for r in con.execute("SELECT name FROM companies WHERE name<>?", (company,))}
+    if not n_all and not badsuf and not (placeholder and suf):
         return company              # nothing fetched yet: decide after a fetch that returned postings
     texts = [(r["title"] or "") + "\n" + (r["desc"] or "") for r in rows]
-    new = derive(company, cfg, texts, board_title=board_title)
+    cur = base if suf else company  # (the name is judged without its brackets; whether it needs any is decided below)
+    new = None if cfg.get("nm") else derive(cur, cfg, texts, board_title=board_title)
     new = (new or "").replace(",", "").strip()[:60]
+    if new and poor(new, cfg):
+        new = ""
+    place = _main_place(locs)
+    want = new or cur
+    if poor(want, cfg) == "placeholder":
+        want = plain_placeholder(want, place)
+    if suf and not badsuf and want == cur:
+        final = company             # its plain "(place)" stays
+    else:
+        final = unique_name(want, cfg, taken, place)
     settled = bool(texts) or not poor(company, cfg)
-    if new and new != company and not poor(new, cfg):
-        final = new
-        if not catalog.rename_company(company, final):
-            final = f"{new[:44]} ({cfg.get('ats', '')})" if cfg.get("ats") else ""
-            if not final or not catalog.rename_company(company, final):
-                final = ""
-        if final:
-            log(f"  {company} is now called {final}")
-            _follow_rename(company, final)
-            company = final
+    if final and final != company and (new or badsuf or placeholder) and catalog.rename_company(company, final):
+        log(f"  {company} is now called {final}")
+        _follow_rename(company, final)
+        company = final
     if settled:
         with catalog.db() as con:
             row = con.execute("SELECT cfg FROM companies WHERE name=?", (company,)).fetchone()
             if row:
                 cfg = json.loads(row["cfg"])
-                if not poor(company, cfg):      # (a name that is still a code is tried again after the next fetch)
+                if not poor(company, cfg) and not cfg.get("nm"):    # (a name that is still a code is tried again after the next fetch)
                     cfg["nm"] = 1
                     con.execute("UPDATE companies SET cfg=? WHERE name=?", (json.dumps(cfg), company))
     return company
