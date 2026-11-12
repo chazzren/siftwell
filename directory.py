@@ -34,6 +34,12 @@ tells them plainly, with "Try the directory again". Pruned or removed employers 
 People on the older built-in area (no home ZIP) can give the directory its own area (settings directory_zip /
 directory_radius) without changing which jobs count as near them.
 
+Two ways to get the directory ("Where my directory comes from", prefs() / source(), kept in DATA/directory/prefs.json
+for the whole household): "shared" (the default: the download described above), "local" (built on this computer by
+localdir.py / index_build/local.py, which writes the same per-state files under DATA/directory/local/; the app then
+NEVER contacts the index branch: _get refuses) or "both" (the two merged per employer, the newer reading wins:
+_merge). Everything below works on whatever _shard() returns, so nothing downstream knows the difference.
+
 Routes (server.py): GET /api/directory, GET /api/directory/preview, POST /api/directory/apply {fetch, limit, retry},
 POST /api/directory/undo, POST /api/directory/area {zip, radius}. Test hook: SIFTWELL_DIRECTORY_URL=<base>
 (http://127.0.0.1:port/... or file:///...; plain urllib, because netsafe refuses local addresses);
@@ -55,6 +61,57 @@ _LOCK = threading.Lock()
 _APPLY = threading.Lock()
 STATE_CODES = ("AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND "
                "OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY PR").split()
+LOCAL = os.path.join(DIR, "local")     # the directory built on this computer (localdir.py)
+SOURCES = ("shared", "local", "both")
+_PREFS = {"sig": None, "v": None}
+_CACHE = {}                             # parsed local files and merged shards, by file signature
+
+
+# ---------------------------------------------------------------- where the directory comes from
+def prefs():
+    """{"source": "shared" | "local" | "both", "discover": bool} for this data folder (the whole household)."""
+    p = os.path.join(DIR, "prefs.json")
+    try:
+        st = os.stat(p)
+        sig = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        sig = None
+    if _PREFS["v"] is None or _PREFS["sig"] != sig:
+        d = {}
+        if sig is not None:
+            try:
+                with open(p, encoding="utf-8") as f:
+                    d = json.load(f)
+            except (OSError, ValueError):
+                d = {}
+        d = d if isinstance(d, dict) else {}
+        _PREFS.update(sig=sig, v={"source": d.get("source") if d.get("source") in SOURCES else "shared",
+                                  "discover": bool(d.get("discover"))})
+    return dict(_PREFS["v"])
+
+
+def save_prefs(**kw):
+    cur = prefs()
+    if kw.get("source") in SOURCES:
+        cur["source"] = kw["source"]
+    if "discover" in kw:
+        cur["discover"] = bool(kw["discover"])
+    _write(os.path.join(DIR, "prefs.json"), json.dumps(cur).encode())
+    _PREFS["v"] = None
+    _PREVIEW.clear()
+    return cur
+
+
+def source():
+    return prefs()["source"]
+
+
+def uses_shared():
+    return source() != "local"
+
+
+def uses_local():
+    return source() != "shared"
 
 
 def base_url():
@@ -66,7 +123,10 @@ def base_url():
 
 
 def _get(rel):
-    """Bytes of one published file. The default address goes through netsafe; a test override uses plain urllib."""
+    """Bytes of one published file. The default address goes through netsafe; a test override uses plain urllib.
+    Refuses when the person chose "Built on this computer": then nothing is ever asked of the index branch."""
+    if not uses_shared():
+        raise RuntimeError("the shared directory is switched off (Built on this computer)")
     url = base_url() + "/" + rel
     req = urllib.request.Request(url, headers={"User-Agent": "Siftwell (employer directory)"})
     if os.environ.get("SIFTWELL_DIRECTORY_URL"):
@@ -99,6 +159,49 @@ def _now():
 
 # ---------------------------------------------------------------- manifest + shards
 def manifest(refresh=False):
+    """What the directory has, for the chosen source: the shared manifest (see _shared_manifest; a bare one when the
+    person builds their own only) plus, under "local", the manifest of the directory built on this computer."""
+    man = _shared_manifest(refresh) if uses_shared() else {"v": 1, "states": {}, "jobs": {}, "_off": True}
+    if uses_local():
+        man = dict(man)
+        man["local"] = local_manifest()
+        if not man.get("built") or man.get("_off"):
+            man["built"] = man["local"].get("built")
+    return man
+
+
+def local_manifest():
+    """The manifest of the directory built on this computer ({} when there is none)."""
+    return _cached_file(os.path.join(LOCAL, "manifest.json"), gz=False) or {}
+
+
+def _cached_file(path, gz=True):
+    """A JSON file's content (dict), parsed again only when the file changed. None when it isn't there."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        _CACHE.pop(path, None)
+        return None
+    sig = (st.st_mtime_ns, st.st_size)
+    hit = _CACHE.get(path)
+    if hit and hit[0] == sig:
+        return hit[1]
+    try:
+        with open(path, "rb") as f:
+            data = f.read(MAX_FILE + 1)
+        if gz:
+            with gzip.GzipFile(fileobj=__import__("io").BytesIO(data)) as g:
+                data = g.read(MAX_JSON + 1)
+        d = json.loads(data.decode("utf-8"))
+    except Exception:
+        return None                 # (half-written: the next look reads it)
+    if not isinstance(d, dict):
+        return None
+    _CACHE[path] = (sig, d)
+    return d
+
+
+def _shared_manifest(refresh=False):
     """The cached manifest, fetched again when it's a week old (or refresh=True). None when there is none at all."""
     p = _path("manifest.json")
     cur = None
@@ -131,9 +234,65 @@ def manifest(refresh=False):
 
 
 def _shard(kind, name, man=None):
-    """One published file as JSON (kind: 'states' or 'jobs'; name: 'OH' or 'remote'), from the cache when it matches
-    the manifest, else downloaded and checked. None when it isn't published (or can't be had)."""
+    """One directory file as JSON (kind: 'states' or 'jobs'; name: 'OH' or 'remote') for the chosen source: the
+    shared one, the one built on this computer, or the two merged per employer. None when there is none."""
     man = man or manifest()
+    if uses_shared():
+        shared = _shared_shard(kind, name, man)
+    else:   # (built on this computer only: job snapshots downloaded earlier are still read, nothing is downloaded)
+        shared = _shared_shard(kind, name, {}) if kind == "jobs" else None
+    if kind != "states" or not uses_local():
+        return shared
+    local = _cached_file(os.path.join(LOCAL, "states", f"{name}.json.gz"))
+    if local is None or shared is None:
+        return shared if local is None else local
+    return _merge(name, shared, local)
+
+
+def _entry_key(e):
+    try:
+        return _key(e["c"])
+    except Exception:
+        return None
+
+
+def _merge(name, shared, local):
+    """One state's employers from the shared file and the one built here: per employer (same job board) the newer
+    reading wins; a tie goes to the shared one. An employer only the shared file has stays, unless this computer has
+    read its board since (index.json.gz) and no longer found it hiring in this state."""
+    idx = _cached_file(os.path.join(LOCAL, "index.json.gz")) or {}
+    sig = (id(shared), id(local), id(idx))
+    hit = _CACHE.get(("merge", name))
+    if hit and hit[0] == sig:
+        return hit[2]
+    mine = {}
+    for e in local.get("employers") or []:
+        k = _entry_key(e) if isinstance(e, dict) else None
+        if k:
+            mine[k] = e
+    out, seen = [], set()
+    for e in shared.get("employers") or []:
+        k = _entry_key(e) if isinstance(e, dict) else None
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        when = str(e.get("s") or "")
+        le = mine.get(k)
+        if le is not None:
+            out.append(le if str(le.get("s") or "") > when else e)
+        elif str(idx.get(_short(k)) or "") > when:
+            continue
+        else:
+            out.append(e)
+    out += [e for k, e in mine.items() if k not in seen]
+    d = dict(shared, employers=out, built=max(str(shared.get("built") or ""), str(local.get("built") or "")))
+    _CACHE[("merge", name)] = (sig, (shared, local, idx), d)   # (the three are kept alive, so their ids stay theirs)
+    return d
+
+
+def _shared_shard(kind, name, man):
+    """One published file as JSON, from the cache when it matches the manifest, else downloaded and checked. None
+    when it isn't published (or can't be had)."""
     ent = (man.get(kind) or {}).get(name)
     rel = f"{kind}/{name}.json.gz"
     p = _path(kind, f"{name}.json.gz")
@@ -154,19 +313,28 @@ def _shard(kind, name, man=None):
             pass                    # (keep any older copy)
     if data is None:
         return None
+    sig = hashlib.sha256(data).hexdigest()
+    hit = _CACHE.get((kind, name))
+    if hit and hit[0] == sig:
+        return hit[1]
     try:
         with gzip.GzipFile(fileobj=__import__("io").BytesIO(data)) as g:
             raw = g.read(MAX_JSON + 1)
         if len(raw) > MAX_JSON:
             return None
         d = json.loads(raw.decode("utf-8"))
-        return d if isinstance(d, dict) else None
+        if not isinstance(d, dict):
+            return None
+        _CACHE[(kind, name)] = (sig, d)
+        return d
     except Exception:
         return None
 
 
 def refresh(force=False):
     """The weekly refresh: new manifest, then every cached file brought up to date. Returns the manifest."""
+    if not uses_shared():
+        return manifest()
     man = manifest(refresh=force or _stale())
     for kind in ("states", "jobs"):
         try:
@@ -179,6 +347,8 @@ def refresh(force=False):
 
 
 def _stale():
+    if not uses_shared():
+        return False                # (nothing to refresh: the directory is built on this computer)
     try:
         with open(_path("manifest.json"), encoding="utf-8") as f:
             t = json.load(f).get("_fetched")
@@ -314,7 +484,7 @@ def near_employers(pid, man=None):
         return [], {"reason": "no_place"}
     la, lo, label, radius, remote_only, remote_ok = a
     man = man or manifest()
-    if man.get("_error") and not man.get("states"):
+    if man.get("_error") and not man.get("states") and not (man.get("local") or {}).get("states"):
         return [], {"reason": "offline", "error": man["_error"]}
     out, seen = [], set()
     if remote_only:
@@ -521,7 +691,7 @@ def _order_starters(packs, la, lo):
     return packs
 
 
-def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=False):
+def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=False, tag=None):
     """Add the directory's employers near this person to their Near me list (and the job-snapshot sources with
     postings near them). limit=N: only the N with the most openings nearby (None: every one). Employers offered before
     are skipped, so taking one off the list sticks; the weekly refresh therefore adds exactly the newly indexed ones
@@ -537,7 +707,11 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
     state isn't published yet), the large national employers shipped in packs/ are added as starters, the ones known
     to hire in the person's state first; prune_starters() later drops the ones with no jobs near the person. A
     starter that was pruned is never added again this way. Without starters_ok an unreachable directory is simply
-    reported (available False, reason "offline"). Directory data wins whenever it is there (same board = same employer)."""
+    reported (available False, reason "offline"). Directory data wins whenever it is there (same board = same employer).
+
+    tag (localdir: "Build my own directory" adds what it finds near the person as it goes): everything added under
+    one tag is ONE batch, so "Remove the employers this added" takes the whole build's additions back; the person's
+    all / top N choice is left as it is."""
     import catalog, company_add
     with _APPLY:
         man = manifest()
@@ -678,13 +852,17 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
                 pass
         out["renamed"] = renamed
         batches = list(rec.get("batches") or [])
-        if added or linked:
+        if (added or linked) and tag and batches and batches[-1].get("tag") == tag:
+            b = batches[-1]
+            b.update(at=_now(), added=list(b.get("added") or []) + added, linked=list(b.get("linked") or []) + linked,
+                     keys=list(b.get("keys") or []) + keys)
+        elif added or linked:
             batches.append({"at": _now(), "added": added, "linked": linked, "keys": keys, "weekly": bool(weekly),
-                            "starter": bool(offline)})
+                            "starter": bool(offline), **({"tag": tag} if tag else {})})
         rec.update(offered=sorted(offered), applied=_now(), built=man.get("built"), starters_pending=sorted(pending),
                    near_n=near_n, pruned=pruned, added=int(rec.get("added", 0)) + len(added) + len(linked),
                    batches=batches[-6:])
-        if not weekly:
+        if not weekly and not tag:
             rec["top_only"] = bool(limit is not None and skipped)
         if offline:
             rec["offline"] = True       # (the pages say plainly that this is the starter list, not the directory)
@@ -1088,13 +1266,33 @@ PANE_HTML = """<section class="sgsec"><h3 class="sgtitle">Employers near you</h3
 <button class="btn" type="button" id="dirRetry" hidden>Try the directory again</button>
 <button class="btn" type="button" id="dirUndo" hidden>Remove the employers this added</button></div>
 <span class="note" id="dirMsg" role="status" aria-live="polite"></span></div>
+<div class="srow stack"><div class="slab"><label for="ldSource">Where my directory comes from</label><small id="ldOrigin" role="status" aria-live="polite">Checking…</small></div>
+<div class="bk-btnrow"><select id="ldSource" style="max-width:100%">
+<option value="shared">Siftwell’s shared directory (recommended)</option>
+<option value="local">Built on this computer</option>
+<option value="both">Both</option></select></div>
+<small class="note" id="ldSourceNote" style="display:block;margin-top:4px"></small></div>
+<div class="srow stack" id="ldRow"><div class="slab"><span>Build my own directory</span><small id="ldWhat">Siftwell can read employers’ public job pages itself, on this computer, instead of downloading the shared directory. It uses no Claude.</small></div>
+<div id="ldProg" hidden><div id="ldLine" role="status" aria-live="polite" style="font-weight:500"></div>
+<div role="progressbar" aria-label="Directory build progress" aria-valuemin="0" aria-valuemax="100" id="ldBarBox" style="height:6px;background:var(--bar);border-radius:3px;overflow:hidden;margin:6px 0"><i id="ldBar" style="display:block;height:100%;background:var(--bar-fill);width:0;transition:width .4s"></i></div>
+<small class="note" id="ldEta" style="display:block"></small></div>
+<label class="note" id="ldAddLab" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="ldAdd" checked style="width:auto;height:auto;flex:none;margin-top:3px"><span>Add the employers it finds near me to my list as it goes, and check their openings (you can take them all back afterwards)</span></label>
+<div class="bk-btnrow"><button class="btn" type="button" id="ldStart" style="white-space:normal;max-width:100%;height:auto;min-height:var(--h);text-align:left" disabled>Build my own directory</button>
+<button class="btn" type="button" id="ldPause" hidden>Pause</button></div>
+<label class="note" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="ldDiscover" style="width:auto;height:auto;flex:none;margin-top:3px"><span><b style="font-weight:500">Also look for job sites that aren’t on the list yet</b> (optional). Siftwell then searches public web records (the Common Crawl index) from this computer during a build, slowly and at most once every 30 days, because many copies of Siftwell asking those free services at once would be unfair to them.</span></label>
+<span class="note" id="ldMsg" role="status" aria-live="polite"></span></div>
 <div class="srow"><div class="slab"><span>Find more with Claude</span><small>Claude can also search the web for employers the directory doesn't have. It uses your Claude plan, and only runs when you start it.</small></div>
 <div class="sctl"><a class="btn sm" href="/catalog#find">Find employers</a></div></div></div>
 <p class="sfoot">The directory is a free list of employers whose job pages Siftwell can read, with the places they hire, rebuilt every week
 from public sources (web crawl indexes, certificate logs and public employer lists). It needs no key, no account and no Claude.
 Siftwell downloads only whole-state files for the states around your home (and a remote-jobs file if you only want remote work), so
 your exact location never leaves this computer. Once a week it checks for newly listed employers near you and adds them (not if you chose
-to add only the ones with the most openings); employers you stop watching stay off. <span id="dirSources"></span></p></section>"""
+to add only the ones with the most openings); employers you stop watching stay off. <span id="dirSources"></span></p>
+<p class="sfoot">There are two ways to get the directory, and neither uses Claude. <b>Shared</b>: Siftwell downloads one file per state from the
+Siftwell project. <b>Built on this computer</b>: Siftwell starts from the list of job sites that comes with the app and visits employers’
+public job pages itself, politely (it follows each site’s robots.txt and waits between requests), the ones last seen hiring near you
+first; with this choice alone it never contacts the shared directory. It keeps working even if the Siftwell project goes away, but takes
+hours instead of seconds, and afterwards about 40 minutes a week in the background to stay up to date.</p></section>"""
 
 PANE_JS = r"""(function(){
 const $ = id => document.getElementById(id);
@@ -1111,7 +1309,7 @@ function plan(){
   const box = $("dirPlan"), pv = PV;
   if (!pv || !pv.available) {
     box.style.display = pv && (pv.reason === "offline" || pv.reason === "error") ? "block" : "none";
-    box.innerHTML = "<b>Siftwell can’t reach its employer directory right now.</b> Check your internet connection, then press Try the directory again.";
+    box.innerHTML = "<b>Siftwell can’t reach its employer directory right now.</b> Check your internet connection, then press Try the directory again. Or build the directory on this computer instead (Build my own directory, below).";
     $("dirApply").disabled = true; $("dirRetry").hidden = !(pv && (pv.reason === "offline" || pv.reason === "error"));
     return;
   }
@@ -1139,7 +1337,7 @@ function load(){
   return fetch("/api/directory").then(r => r.json()).then(d => {
     let t = d.possible ? (d.remote_only ? "Remote-friendly employers anywhere in the US." : `Employers with openings within ${d.radius} miles of ${esc(d.label)}.`)
                        : "Siftwell needs to know where to look.";
-    if (d.offline_start) t = `<b>Siftwell couldn’t reach its employer directory when it set up your search</b>, so it started with a starter list of large US employers that comes with the app${d.starters_pending ? ` (${n(d.starters_pending)} still to be checked; the ones with no jobs near you are taken off)` : ""}. Press Try the directory again to get the employers near you.`;
+    if (d.offline_start) t = `<b>Siftwell couldn’t reach its employer directory when it set up your search</b>, so it started with a starter list of large US employers that comes with the app${d.starters_pending ? ` (${n(d.starters_pending)} still to be checked; the ones with no jobs near you are taken off)` : ""}. Press Try the directory again to get the employers near you, or build the directory on this computer (Build my own directory, below).`;
     else if (d.applied) t += ` Last added ${day(d.applied)}; ${n(d.near_list)} employers on your list were found this way.`;
     if (d.built && !d.offline_start) t += ` Directory updated ${day(d.built)}.`;
     $("dirState").innerHTML = t;
@@ -1191,6 +1389,76 @@ $("dirAreaSave").addEventListener("click", () => {
     if (ok) load();
   }).catch(() => { $("dirAreaSave").disabled = false; $("dirMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
 });
-load();
+// ---- Where my directory comes from + Build my own directory (localdir.py). One status call drives both rows.
+let LD = null, ldTimer = null;
+const SRC_NOTE = {
+  shared: "Siftwell downloads one file per state from the Siftwell project. Fast; needs the project to stay online.",
+  local: "Siftwell never contacts the shared directory. It uses only what it has read itself on this computer.",
+  both: "Siftwell uses the shared directory and what it has read itself; for each employer the newer reading counts."};
+function ldOrigin(d){
+  const parts = [];
+  if (d.shared_built && d.source !== "local") parts.push(`Siftwell’s shared directory, updated ${day(d.shared_built)}`);
+  if (d.local_built && d.source !== "shared") parts.push(`${parts.length ? "b" : "B"}uilt on this computer, ${day(d.local_built)}${d.local_complete ? "" : " (not finished yet)"}`);
+  if (!parts.length) return "Starter list only" + (d.source === "local" ? ": your own directory hasn’t been built yet." : d.source === "both" ? ": the shared directory couldn’t be reached, and your own hasn’t been built yet." : ": the shared directory hasn’t been reached yet.");
+  return parts.join(" and ") + ".";
+}
+function ldDraw(d){
+  LD = d;
+  if (document.activeElement !== $("ldSource")) $("ldSource").value = d.source;
+  $("ldOrigin").textContent = ldOrigin(d);
+  $("ldSourceNote").textContent = SRC_NOTE[d.source] || "";
+  $("ldDiscover").checked = !!d.discover;
+  const e = d.estimate || {}, pass = d.running && d.mode === "pass";
+  $("ldProg").hidden = !pass;
+  $("ldPause").hidden = !pass;
+  $("ldAddLab").style.display = pass || !d.possible ? "none" : "flex";
+  if (pass) {
+    const pct = d.total ? Math.round(100 * d.done / d.total) : 1;
+    $("ldLine").textContent = d.line;
+    $("ldBar").style.width = pct + "%"; $("ldBarBox").setAttribute("aria-valuenow", pct);
+    $("ldEta").textContent = !d.total ? "" : (d.near_eta_text ? `The job sites last seen hiring near you come first: ${n(d.near_done)} of ${n(d.near_total)} done, ${d.near_eta_text} to go. ` : `The job sites last seen hiring near you are done. `) + `Everything: ${d.eta_text || "a while"} to go, at ${n(Math.round(d.rate))} job sites a minute right now.` + (d.adding ? ` Employers found near you are being added to your list (${n(d.added)} so far).` : " Nothing is added to your list by itself; use Add employers near me above.");
+    $("ldWhat").textContent = "Siftwell is reading employers’ public job pages on this computer. You can keep using Siftwell, close this page, or pause; it carries on where it stopped. It uses no Claude.";
+  } else if (d.running) {
+    $("ldWhat").textContent = "Siftwell is doing its weekly check of your directory in the background (about 40 minutes at most). It uses no Claude.";
+  } else if (d.unfinished) {
+    $("ldWhat").textContent = `${d.paused ? "Paused. " : ""}Siftwell has checked ${n(e.sites - e.left)} of ${n(e.sites)} job sites so far${e.left ? `; ${e.all_text} to go` : ""}. Nothing it read is lost.`;
+  } else if (d.local_complete) {
+    $("ldWhat").textContent = `Your own directory is built (${n(d.local_employers)} employers with openings, across the US${d.pass_minutes ? `; it took ${n(Math.round(d.pass_minutes))} minutes` : ""}). Siftwell keeps it up to date once a week in the background${d.weekly_at ? `; last checked ${day(d.weekly_at)}` : ""}.`;
+  } else {
+    $("ldWhat").textContent = d.possible ? (d.offer || "") : "Siftwell needs to know where to look first: add your home ZIP on the board (Filters, then My search).";
+  }
+  const b = $("ldStart");
+  b.hidden = !!d.running; b.disabled = !d.possible;
+  b.textContent = d.unfinished ? "Continue building" : d.local_complete ? "Build it again from the start" : "Build my own directory";
+  clearTimeout(ldTimer);
+  ldTimer = setTimeout(ldLoad, d.running ? 3000 : 30000);
+}
+function ldLoad(){ return fetch("/api/localdir").then(r => r.json()).then(ldDraw).catch(() => { clearTimeout(ldTimer); ldTimer = setTimeout(ldLoad, 10000); }); }
+$("ldSource").addEventListener("change", () => {
+  const v = $("ldSource").value;
+  if (v === "local" && LD && !LD.local_built && !LD.running && !confirm("Use only a directory built on this computer?\n\nSiftwell will stop downloading the shared directory. Until your own is built (press Build my own directory), new employers near you can’t be added.")) { $("ldSource").value = LD.source; return; }
+  $("ldMsg").textContent = "Saving…";
+  post("/api/localdir/prefs", {source: v}).then(({ok, d}) => { $("ldMsg").textContent = ok ? "Saved." : (d.error || "That didn’t work."); if (ok) { ldDraw(d); load(); } })
+    .catch(() => { $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
+});
+$("ldDiscover").addEventListener("change", () => {
+  post("/api/localdir/prefs", {discover: $("ldDiscover").checked}).then(({ok, d}) => { $("ldMsg").textContent = ok ? ($("ldDiscover").checked ? "Saved. It runs with the next build." : "Saved.") : (d.error || "That didn’t work."); })
+    .catch(() => { $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
+});
+$("ldStart").addEventListener("click", () => {
+  const again = LD && LD.local_complete && !LD.unfinished;
+  if (again && !confirm("Build your directory again from the start?\n\nSiftwell reads every job site again (" + ((LD.estimate || {}).all_text || "a few hours") + "). The weekly check already keeps it up to date.")) return;
+  $("ldStart").disabled = true; $("ldMsg").textContent = "Starting…";
+  post("/api/localdir/start", {add: $("ldAdd").checked ? "all" : "none", fresh: !!again}).then(({ok, d}) => {
+    $("ldMsg").textContent = ok ? "" : (d.error || "That didn’t work.");
+    if (ok) ldDraw(d); else $("ldStart").disabled = false;
+  }).catch(() => { $("ldStart").disabled = false; $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
+});
+$("ldPause").addEventListener("click", () => {
+  $("ldPause").disabled = true; $("ldMsg").textContent = "Pausing…";
+  post("/api/localdir/pause").then(() => { setTimeout(() => { $("ldPause").disabled = false; $("ldMsg").textContent = "Paused. Nothing it read is lost."; ldLoad(); load(); }, 2500); })
+    .catch(() => { $("ldPause").disabled = false; $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
+});
+load(); ldLoad();
 })();"""
 PANE_SCRIPT = "<script>" + PANE_JS + "</script>"

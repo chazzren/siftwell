@@ -321,7 +321,7 @@ function pollStatus(){
   clearTimeout(statusTimer);
   return get("/api/status").then(s => {
     const pg = s.progress || {active: !!s.running, line: "Finding new jobs…", frac: null};
-    const run = !!pg.active, pct = Math.round(100 * (pg.frac == null ? .04 : pg.frac));
+    const run = !!pg.active && pg.blocking !== false, pct = Math.round(100 * (pg.frac == null ? .04 : pg.frac));   // (a directory build doesn't hold Find new jobs up; its line is on the board and in Settings)
     [["fetch", $("fetchBar")], ["all", $("allBar")]].forEach(([k, bar]) => {
       if (!bar) return;
       bar.hidden = !run;

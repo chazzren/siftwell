@@ -1,4 +1,4 @@
-"""Build the Siftwell employer directory (see scripts/index_build/build.py and .github/workflows/index.yml).
+"""Build the Siftwell employer directory (see index_build/build.py and .github/workflows/index.yml).
 
     python scripts/build_index.py --out <folder> [--work <scratch>] [--states OH,CO] [--limit 500] [--minutes 60]
 
@@ -20,7 +20,7 @@ def main():
     os.makedirs(work, exist_ok=True)
     os.environ["JOBBOARD_DATA"] = os.path.join(work, "data")
     os.environ["SIFTWELL_FORBID_CLAUDE"] = "1"
-    sys.path[:0] = [ROOT, HERE]
+    sys.path[:0] = [ROOT]
     from index_build import build
     return build.main()
 

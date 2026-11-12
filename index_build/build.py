@@ -28,6 +28,10 @@ A state file entry: {"n": name ("" when only a code is known), "c": board config
 "mb": 1 "maybe near" (sampled: the app adds it for people in this state and prunes it after the first fetch),
 "k": "staffing" for staffing agencies}.
 
+This package ships with the app (it is imported by name, also from inside an installed build): the same readers and
+the same state files serve "Build my own directory" (local.py: the app reads the boards itself, starting from the
+seed list in assets/directory, see seed.py). scripts/build_index.py is only the command line for the weekly build.
+
 Only company names, job-system configs, careers links, places with job counts and dates are published: no people."""
 import argparse, concurrent.futures as cf, datetime as dt, glob, gzip, hashlib, json, os, re, sys, threading, time
 
@@ -151,13 +155,17 @@ def seed_packs(T):
     log(f"packs: {n} seed boards")
 
 
-def discover_cc(T, crawls, cap, wd_extra=None):
+def discover_cc(T, crawls, cap, wd_extra=None, want=None, after=None):
+    """Job boards from the Common Crawl URL index. want(prefix) -> False skips a prefix and after(prefix) is called
+    when one was read through (the app's own, much smaller, discovery remembers what it did: local.py)."""
     for crawl in crawls:
         ix = cc.Index(crawl)
         for s in systems.SYSTEMS:
             if not s.read:
                 continue
             for prefix in s.cc:
+                if want is not None and not want(prefix):
+                    continue
                 n0 = len(T.d)
                 try:
                     for u in ix.urls(prefix, cap, log):
@@ -167,6 +175,8 @@ def discover_cc(T, crawls, cap, wd_extra=None):
                             if h:
                                 wd_extra.add(h)
                         T.add(c, "cc")
+                    if after is not None:
+                        after(prefix)
                 except Exception as e:
                     log(f"  cc {crawl} {prefix}: failed ({type(e).__name__}: {str(e)[:80]})")
                 log(f"  cc {crawl} {s.id}: +{len(T.d) - n0} new boards")
@@ -408,8 +418,9 @@ def best_name(t, bname=None):
     import company_add
     c = t["c"]
     # ("dname": what names.derive made of the board's own postings and page title the last time it was read)
-    for n in (t.get("pack_name"), t.get("dname"), clean_name(bname if bname is not None else t.get("bname")), (t.get("gov_name") or "")[:60],
-              clean_name(t.get("tname")), ident_name(c), company_add.host_label(c, systems.careers_url(c))):
+    # ("seed_name": the name the shared directory last published for this board, when the app builds its own: seed.py)
+    for n in (t.get("pack_name"), t.get("dname"), clean_name(bname if bname is not None else t.get("bname")), (t.get("seed_name") or "")[:60],
+              (t.get("gov_name") or "")[:60], clean_name(t.get("tname")), ident_name(c), company_add.host_label(c, systems.careers_url(c))):
         n = company_add.readable_name(n or "", {}, "")
         if n:
             return n
@@ -419,7 +430,7 @@ def best_name(t, bname=None):
 def wants_board_title(t, bname):
     """Should the board page be asked for the employer's name? Only when nothing better is known and the address is a
     code or doesn't read like a name, and not more than once every TNAME_DAYS."""
-    if t.get("pack_name") or clean_name(bname) or t.get("gov_name"):
+    if t.get("pack_name") or clean_name(bname) or t.get("gov_name") or t.get("seed_name"):
         return False
     if t.get("tname_at") and _days_since(t["tname_at"]) < TNAME_DAYS:
         return False
@@ -450,6 +461,41 @@ def pick_name(t, s):
 
 def lane(c):
     return c.get("ats") or "other"
+
+
+def read_tenant(t, title_budget=None):
+    """Read one board (readers.read) and record what was learnt on its tenant entry: places, open jobs, US-remote jobs,
+    name, the date. Returns "ok" (it has jobs), "empty", "failed" (counted; three in a row and the board rests for
+    REST_DAYS) or "skipped" (a system the directory doesn't read). title_budget: a one-item list, the board pages that
+    may still be asked for the employer's name (None: never ask)."""
+    try:
+        s = readers.read(dict(t["c"]))
+    except readers.Skip:
+        return "skipped"
+    except Exception as e:
+        t["fail"] = int(t.get("fail", 0)) + 1
+        t["err"] = f"{type(e).__name__}: {str(e)[:100]}"
+        if t["fail"] >= 3:
+            t["rest_until"] = (dt.date.today() + dt.timedelta(days=REST_DAYS)).isoformat()
+        return "failed"
+    if s["jobs"] and title_budget and title_budget[0] > 0 and wants_board_title(t, s.get("name")):
+        title_budget[0] -= 1
+        t["tname_at"] = today()
+        try:
+            tn = readers.board_name(dict(t["c"]))
+            if tn:
+                t["tname"] = tn[:80]
+                t["_titled"] = True
+        except Exception:
+            pass
+    name = pick_name(t, s)
+    kind = "staffing" if STAFFING.search(name or "") else ""
+    hints = [h.split(":", 1)[1] for h in t.get("hints", []) if ":" in h]
+    t.update(read=today(), fail=0, jobs=s["jobs"], remote=s["remote"], places=board_places(s["locs"], hints, bool(kind)),
+             sample=bool(s.get("sample")), name=name, bname=s.get("name"), secs=s.get("secs"), kind=kind)
+    t.pop("err", None)
+    t.pop("rest_until", None)
+    return "ok" if s["jobs"] else "empty"
 
 
 def read_all(T, args, deadline, want_states):
@@ -490,41 +536,14 @@ def read_all(T, args, deadline, want_states):
         if time.time() > deadline:
             stats["late"] += 1
             return
-        t = T.d[k]
-        try:
-            s = readers.read(dict(t["c"]))
-        except readers.Skip:
-            stats["skipped"] += 1
-            return
-        except Exception as e:
-            t["fail"] = int(t.get("fail", 0)) + 1
-            t["err"] = f"{type(e).__name__}: {str(e)[:100]}"
-            if t["fail"] >= 3:
-                t["rest_until"] = (dt.date.today() + dt.timedelta(days=REST_DAYS)).isoformat()
-            stats["failed"] += 1
-            return
-        if s["jobs"] and title_budget[0] > 0 and wants_board_title(t, s.get("name")):
-            title_budget[0] -= 1
-            t["tname_at"] = today()
-            try:
-                tn = readers.board_name(dict(t["c"]))
-                if tn:
-                    t["tname"] = tn[:80]
-                    stats["titles"] += 1
-            except Exception:
-                pass
-        name = pick_name(t, s)
-        kind = "staffing" if STAFFING.search(name or "") else ""
-        hints = [h.split(":", 1)[1] for h in t.get("hints", []) if ":" in h]
-        t.update(read=today(), fail=0, jobs=s["jobs"], remote=s["remote"], places=board_places(s["locs"], hints, bool(kind)),
-                 sample=bool(s.get("sample")), name=name, bname=s.get("name"), secs=s.get("secs"), kind=kind)
-        stats["sampled"] += bool(s.get("sample"))
-        t.pop("err", None)
-        t.pop("rest_until", None)
-        stats["ok" if s["jobs"] else "empty"] += 1
-        done_n[0] += 1
-        if done_n[0] % 200 == 0:
-            log(f"  read {done_n[0]} boards ({stats})")
+        r = read_tenant(T.d[k], title_budget)
+        stats[r] += 1
+        if r in ("ok", "empty"):
+            stats["titles"] += bool(T.d[k].pop("_titled", False))
+            stats["sampled"] += bool(T.d[k].get("sample"))
+            done_n[0] += 1
+            if done_n[0] % 200 == 0:
+                log(f"  read {done_n[0]} boards ({stats})")
 
     futs = [pools[lane(T.d[k]["c"])].submit(one, k) for k in todo]
     for f in cf.as_completed(futs):
@@ -628,9 +647,10 @@ def bucket_jobs(items, src):
     return out
 
 
-def write(out, T, jobs_by, want_states, stats, t0, prior_manifest, keep_jobs=False):
-    man = {"v": 1, "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "states": {}, "jobs": {},
-           "sources": {}, "stats": stats}
+def live_boards(T):
+    """(live, by_state): the boards to publish (read within KEEP_DAYS, with open jobs, not a job board re-posting
+    others' jobs; one per distinct career site, each carrying its name suffix as "_suffix") and the same boards per
+    state they hire in. Call drop_suffixes(live) when done."""
     live = {k: t for k, t in T.d.items() if t.get("read") and _days_since(t["read"]) <= KEEP_DAYS and int(t.get("jobs") or 0) > 0}
     live = {k: t for k, t in live.items() if not AGGREGATOR.search(best_name(t) or "")}     # (job boards re-posting others' jobs)
     suffix = distinct_boards(live)
@@ -648,16 +668,43 @@ def write(out, T, jobs_by, want_states, stats, t0, prior_manifest, keep_jobs=Fal
     for t in live.values():
         for s in {p[4] for p in t.get("places") or []}:
             by_state.setdefault(s, []).append(t)
-    for st in want_states:
-        emps = sorted((entry(t, st, t.get("_suffix", "")) for t in by_state.get(st, [])), key=lambda e: (-sum(p[2] for p in e["p"]), e["n"].lower()))
-        data = save_json_gz(os.path.join(out, "states", f"{st}.json.gz"), {"v": 1, "state": st, "built": man["built"], "employers": emps})
-        man["states"][st] = {"employers": len(emps), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
-    rem = sorted(({k: v for k, v in (entry(t, None, t.get("_suffix", "")) | {"p": []}).items() if k not in ("pt", "ps", "mb")}
-                  for t in live.values() if int(t.get("remote") or 0) > 0), key=lambda e: -e["r"])[:5000]
+    return live, by_state
+
+
+def drop_suffixes(live):
     for t in live.values():
         t.pop("_suffix", None)
-    data = save_json_gz(os.path.join(out, "states", "remote.json.gz"), {"v": 1, "state": "remote", "built": man["built"], "employers": rem})
-    man["states"]["remote"] = {"employers": len(rem), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+
+def write_states(out, live, by_state, states, built, remote=True):
+    """Write states/<ST>.json.gz for these states (and states/remote.json.gz) in the published format. Returns the
+    manifest entries {name: {employers, bytes, sha256}}."""
+    man = {}
+    for st in states:
+        emps = sorted((entry(t, st, t.get("_suffix", "")) for t in by_state.get(st, [])), key=lambda e: (-sum(p[2] for p in e["p"]), e["n"].lower()))
+        data = save_json_gz(os.path.join(out, "states", f"{st}.json.gz"), {"v": 1, "state": st, "built": built, "employers": emps})
+        man[st] = {"employers": len(emps), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    if remote:
+        rem = sorted(({k: v for k, v in (entry(t, None, t.get("_suffix", "")) | {"p": []}).items() if k not in ("pt", "ps", "mb")}
+                      for t in live.values() if int(t.get("remote") or 0) > 0), key=lambda e: -e["r"])[:5000]
+        data = save_json_gz(os.path.join(out, "states", "remote.json.gz"), {"v": 1, "state": "remote", "built": built, "employers": rem})
+        man["remote"] = {"employers": len(rem), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    return man
+
+
+def write(out, T, jobs_by, want_states, stats, t0, prior_manifest, keep_jobs=False):
+    man = {"v": 1, "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "states": {}, "jobs": {},
+           "sources": {}, "stats": stats}
+    live, by_state = live_boards(T)
+    man["states"] = write_states(out, live, by_state, want_states, man["built"])
+    drop_suffixes(live)
+    # the seed: every board the builder knows, with its last-known name and states, for people who build the directory
+    # on their own computer (index_build/local.py); releases ship the latest one (scripts/refresh_seed.py)
+    from . import seed
+    data = seed.dumps(seed.make(T.d, man["built"][:10]))
+    with open(os.path.join(out, seed.FILE), "wb") as f:
+        f.write(data)
+    man["seed"] = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "boards": seed.count(data)}
     njobs = 0
     for st in ([] if keep_jobs else list(want_states) + ["remote"]):
         items = jobs_by.get(st, [])

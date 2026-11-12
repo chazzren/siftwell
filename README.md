@@ -38,7 +38,7 @@ Later, **Find new jobs** (the circular-arrow icon) checks your employers again, 
 - Filters by distance from your home, remote or in person, pay, seniority, travel and requirements.
 - Scores every job on **Relevant** (how close it is to the work you do), **Appeal** (how good it is for you) and, with Claude, **Match** (how well your resume fits).
 - Plain-English search, saved and applied tracking, and resume tailoring (PDF or Word).
-- A free, weekly-updated [employer directory](docs/GUIDE.md#the-siftwell-employer-directory) finds employers near you (only state-level files are downloaded; Claude can optionally find more), and you can share company lists with friends.
+- A free, weekly-updated [employer directory](docs/GUIDE.md#the-siftwell-employer-directory) finds employers near you (only state-level files are downloaded; Claude can optionally find more), and you can share company lists with friends. Siftwell can also build that directory on your own computer, so it doesn't depend on this project staying online.
 - Works on your phone over your home Wi-Fi, and tells you when a new version is out (the installed version updates itself).
 
 ## What you need

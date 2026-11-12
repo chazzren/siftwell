@@ -20,6 +20,7 @@ Versions starting with `0.` are marked "Pre-release". Nothing is published unles
 4. Builds the ZIP with `git archive` (folder `Siftwell/`, dev-only files left out via `.gitattributes`) and checks that the `.command` files are still executable.
 5. In parallel on a Windows runner (`windows` job, after the checks): builds `Siftwell.exe` with PyInstaller (`installer/siftwell.spec`), builds `Siftwell-Setup-<version>.exe` with Inno Setup (`installer/siftwell.iss`), and test-installs, starts and uninstalls it. The same job zips the PyInstaller bundle as `Siftwell-Portable-<version>.zip`: a top-level `Siftwell/` folder with the bundle plus `portable.txt` (the marker that switches portable mode on: data goes to `Siftwell/data`) and `README-portable.txt` (both live in `installer/portable/`). It unzips that ZIP into a scratch folder and checks `Siftwell.exe --version`.
 6. In parallel on a `macos-15` runner (Apple silicon, `macos` job, after the checks): `installer/build_mac.sh` builds `Siftwell.app` with PyInstaller (`installer/siftwell-mac.spec`; the icon is `assets/brand/siftwell.icns`), signs it ad hoc and packs it with an `Applications` shortcut into `Siftwell-<version>.dmg` (hdiutil); `installer/smoke_mac.sh` then mounts that .dmg, checks the version and that the window / menu-bar libraries load (`Siftwell --check-imports`), starts `Siftwell --server <port>` on scratch data with Claude blocked, waits for `/api/ping`, and runs `Siftwell --stop`. The app is not signed with a developer certificate or notarized, so users do the first-launch Gatekeeper steps in `docs/GUIDE.md`. To try the Mac build without releasing anything, run **Actions -> Mac build test** (same build and smoke test; the .dmg is kept as a workflow artifact for 3 days).
+   **The seed list.** Every job that packages the app (Windows, Mac and the ZIP's release commit) first runs `python scripts/refresh_seed.py`: it downloads `seed.json.gz` from the published employer directory (the `index` branch; the weekly **Employer directory** workflow writes it next to `manifest.json`), checks its SHA-256 against the manifest and puts it in `assets/directory/seed.json.gz`. That file is the list of job sites **Build my own directory** starts from, so every release ships the newest one, and the release commit carries it. The step never fails a release: if the directory can't be reached, has no seed yet, or the seed looks wrong (bad checksum, far fewer job sites than the one in the repo, larger than 3 MB), it says so in the log and the file already in the repo is shipped. Because each job downloads it by itself, the three could differ by a week if the directory is republished in the middle of a release; that is harmless (the seed only gives reading order and names).
 7. Only when the checks, the ZIP, the installer, the portable ZIP and the .dmg all succeeded does it push the commit and tag, and create the GitHub Release (all four attached together) with notes made from the commit subjects since the last release.
 
 If any check fails, nothing is pushed or published.
@@ -43,6 +44,16 @@ Put personal words in a secret, never in the repo.
 Open the failed run and read the **Release checks** step; each problem is listed as `file:line` with the match partly hidden. Fix it in the repo (or fix the pattern), then run **Release** again with the same version. Nothing was tagged, so the version is still free.
 
 If a run fails after "Push commit and tag" (rare, for example a network error while creating the release), the tag exists. Finish by hand under Releases -> Draft a new release using that tag, or delete the tag and re-run.
+
+## The seed list for "Build my own directory"
+
+`assets/directory/seed.json.gz` (about 0.9 MB) lists every job site the directory builder knows: job system, its settings, the last-known employer name and the states it was last seen hiring in (hints only; the app reads each site itself). Three ways it gets refreshed:
+
+- **By a release**, automatically (see step 6 above): `scripts/refresh_seed.py`.
+- **By hand from the published directory:** `python scripts/refresh_seed.py` (add `--strict` to get exit code 1 when it couldn't be refreshed), then commit the file.
+- **By hand from a local builder run** (no published directory needed): `python scripts/make_seed.py --state <index out>/_state/tenants.json.gz`, then commit the file. It prints the size and the number of job sites; keep it under about 2 MB.
+
+`scripts/release_check.py` fails when the file is missing, and `Siftwell --check-imports` (run by the Windows and Mac build jobs) fails when the installed program can't load the builder or read the seed. Offline tests: `python -X utf8 scripts/test_localdir.py`.
 
 ## Run the checks locally
 

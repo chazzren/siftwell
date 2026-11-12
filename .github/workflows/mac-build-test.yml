@@ -32,6 +32,9 @@ jobs:
           if [ -n "$VERSION_INPUT" ]; then printf '%s\n' "$VERSION_INPUT" > VERSION; fi
           echo "VERSION=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
 
+      - name: Ship the newest seed list for "Build my own directory" (as a release does)
+        run: python scripts/refresh_seed.py
+
       - name: Install the build tools and Siftwell's packages
         run: |
           python -m pip install --upgrade pip

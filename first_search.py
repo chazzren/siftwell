@@ -54,6 +54,7 @@ SLOW_STALL_SECS = 900   # the last pass over the slow employers: this long witho
 # counts as checked, well inside STALL_SECS, instead of being cut off with nothing. The slow pass at the end gives
 # whoever was still cut a longer budget; anything left after that is finished by the next regular update.
 CHUNK_BUDGET = 55
+BUILD_WAIT = 150        # a first search with "Built on this computer" waits this long for the build's first results
 SLOW_BUDGET = 600
 FAST_LANES, WD_LANES = 12, 4          # jobfinder.fetch reads this many employers at once (Workday has its own lane)
 DEFAULT_SECS = {"fast": 25.0, "workday": 90.0}   # one employer's check when nothing has been measured yet
@@ -296,7 +297,8 @@ def progress(pid):
     if job["running"]:
         ph = job["phase"]
         if ph == "directory":
-            return dict(out, kind="directory", frac=.03, line="Adding employers to check…")
+            b = _build_line(pid)
+            return dict(out, kind="directory", frac=.03, line=b["line"] if b else "Adding employers to check…")
         if ph == "find":
             return dict(out, kind="find", frac=.06, line="Claude is searching the web for employers. Their jobs are checked when it’s done.")
         if ph == "build":
@@ -334,6 +336,9 @@ def progress(pid):
             return dict(out, kind="find", line="Claude is searching the web for employers…")
     except Exception:
         pass
+    b = _build_line(pid)
+    if b:
+        return dict(out, **b)    # ("blocking": False: Find new jobs stays available while the directory is built)
     if rerate:
         return dict(out, active=False, kind="idle")      # (re-rating has its own panel on the board)
     try:
@@ -344,6 +349,15 @@ def progress(pid):
     except Exception:
         pass
     return dict(out, active=False, kind="idle")
+
+
+def _build_line(pid):
+    """"Build my own directory" while it runs (localdir.progress), or None."""
+    try:
+        import localdir
+        return localdir.progress(pid)
+    except Exception:
+        return None
 
 
 def _claude_ok():
@@ -386,6 +400,11 @@ def plan(pid):
     dirp = {"possible": bool(location or remote_only), "label": find["label"], "radius": find["radius"],
             "remote_only": remote_only, "applied": drec.get("applied"), "default": bool(location or remote_only)}
     dirp["offline"] = bool(drec.get("offline"))
+    try:
+        import localdir
+        dirp["build"] = localdir.brief(pid)     # "Build my own directory": running? its line; else the offer
+    except Exception:
+        dirp["build"] = {"running": False, "offer": ""}
     stats = catalog.stats()
     chk = check_status(pid)
     est = estimates(pid)
@@ -741,13 +760,37 @@ def _run_directory(pid, limit=None):
     """Step 1: the Siftwell directory's employers near this person onto their Near me list. Returns their names.
     When the directory can't be reached, the starter list of large employers the app comes with is used instead, and
     the pages say so plainly (JOB dir_offline / dir_text; directory.record(pid)["offline"])."""
-    import directory
-    r = directory.apply(pid, limit=limit, starters_ok=True, first=True)
+    import directory, localdir
+    building = False
+    if directory.uses_local():
+        # "Built on this computer" (or Both): make sure the build is running and that what it finds near this person
+        # keeps being added (the limit they chose is the most it adds), and give it a moment to find the first ones.
+        b = localdir.brief(pid)
+        if b["running"] or not b["built"] or (b["unfinished"] and not b["paused"]):   # (a build they paused stays paused)
+            try:
+                ok, _ = localdir.start(pid, add=limit or "all")
+                building = ok or localdir.running()
+            except Exception as e:
+                print("directory build not started:", type(e).__name__, e, flush=True)
+            t0 = time.time()
+            while building and not b["built"] and time.time() - t0 < BUILD_WAIT and not _PAUSE.is_set():
+                time.sleep(3)
+                b = localdir.brief(pid)
+                if not b["running"]:
+                    break
+    # (while the build is filling the list in, the shipped starter list isn't needed: its employers are read anyway)
+    r = directory.apply(pid, limit=limit, starters_ok=not building, first=True, tag=localdir.control().get("tag") if building else None)
     if not r["available"]:
+        if building:
+            _set(dir_text="Siftwell is building your directory on this computer; employers near you are added as it finds them.")
         return []
     names = r["added"] + r["linked"]
     n = len(names)
-    if r.get("offline"):
+    if building:
+        _set(dir_text=(f"{n:,} employer{'' if n == 1 else 's'} added so far. " if n else "") +
+             "Siftwell is building your directory on this computer; employers near you are added as it finds them.")
+        _set(note=JOB["dir_text"])
+    elif r.get("offline"):
         text = (f"Siftwell couldn’t reach its employer directory, so it is starting with a starter list of {n:,} large US employers "
                 "that comes with the app. After this first check it keeps the ones hiring near you.") if n else \
                "Siftwell couldn’t reach its employer directory, so no employers near you were added this time."
@@ -759,7 +802,8 @@ def _run_directory(pid, limit=None):
     else:
         _set(dir_text=f"{n:,} employer{'' if n == 1 else 's'} added" if n else "No new employers to add")
     _set(dir_added=n, dir_near=r["near"])
-    S._actlog("companies added", pid, (f"{n} from the starter list of large employers (the directory couldn't be reached)" if r.get("offline")
+    S._actlog("companies added", pid, (f"{n} found so far by the directory build on this computer" if building else
+                                      f"{n} from the starter list of large employers (the directory couldn't be reached)" if r.get("offline")
                                       else f"{n} from the Siftwell directory" + (f" ({r['starters']} to try out)" if r.get("starters") else "")))
     return names
 
@@ -797,6 +841,9 @@ def _work(pid, want_find, p, want_dir=False, limit=None):
         _set(phase="fetch")
         _EST.clear(); _CACHE.pop(pid, None)     # (the employer list just changed)
         mine, total = watched_companies(pid)
+        if not total and _build_line(pid):
+            _set(note="Siftwell is building your directory on this computer. Employers near you are added, and their jobs checked, as it finds them.")
+            return
         if not total:
             _set(error=("Siftwell couldn’t reach its employer directory, so there are no employers to check yet. Check your internet "
                         "connection, then press Try the directory again." if JOB.get("dir_offline")

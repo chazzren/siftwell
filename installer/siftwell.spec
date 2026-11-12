@@ -17,6 +17,9 @@ VERSION = open(os.path.join(ROOT, "VERSION"), encoding="utf-8").read().strip()
 nums = [int(x) for x in (VERSION.split(".") + ["0", "0", "0"])[:3]] + [0]
 
 hidden = [os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(ROOT, "*.py"))]
+# the directory builder package ("Build my own directory" reads job sites with it; imported by name at run time)
+hidden += ["index_build"] + ["index_build." + os.path.splitext(os.path.basename(p))[0]
+                             for p in glob.glob(os.path.join(ROOT, "index_build", "*.py")) if not p.endswith("__init__.py")]
 datas, binaries = [], []
 for pkg in ("webview", "pystray", "pillow_heif"):          # window, tray icon, HEIC photos
     try:
