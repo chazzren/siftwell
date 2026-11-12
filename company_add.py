@@ -329,6 +329,9 @@ def save_found(c, nm, set_id, pid, sector="Added by you"):
 
 def add(url, name="", scope="me", target_set=None):
     """target_set: the company list to put it in (default: "all" for scope "all", else the person's own additions)."""
+    url = str(url or "").strip()
+    if url and not re.match(r"^[a-z][a-z0-9+.-]*://", url, re.I):   # a bare "careers.example.com": people rarely type https://
+        url = "https://" + url.lstrip("/")
     c = detect(url)
     total, suggested = verify(c)
     if not total:

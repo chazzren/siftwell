@@ -999,6 +999,7 @@ def process(c):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="comma-separated company names")
+    ap.add_argument("--only-file", help="a JSON list of company names (for lists too long for --only: one profile's own employers)")
     ap.add_argument("--no-rate", action="store_true", help="fetch only: rebuild the boards without Claude rating (the staged first check rates once, at the end)")
     ap.add_argument("--no-boards", action="store_true", help="fetch only: don't rebuild the boards after this fetch (a later one will)")
     ap.add_argument("--boards-every", type=int, default=0, metavar="SECS", help="fetch only: also rebuild the boards (no Claude) while the fetch runs, the first time after about a minute and then every SECS, so jobs show up before slow boards finish")
@@ -1033,7 +1034,13 @@ def fetch(args):
     use_cfg(fetch_cfg([person_cfg(pid)[0] for pid in people.ids()]))  # decides which postings get their full text fetched
     load_extra()
     companies = catalog.companies(include_paused=False)
-    if args.only:
+    if getattr(args, "only_file", None):
+        with open(args.only_file, encoding="utf-8") as fh:
+            names = [str(x) for x in json.load(fh)]
+        want = {x.strip().lower() for x in names}
+        companies = [c for c in companies if c["name"].lower() in want]
+        args.only = f"{len(companies)} employers ({os.path.basename(args.only_file)})"   # (what the run history shows)
+    elif args.only:
         want = {x.strip().lower() for x in args.only.split(",")}
         companies = [c for c in companies if c["name"].lower() in want]
     if not companies:

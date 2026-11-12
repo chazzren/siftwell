@@ -916,12 +916,19 @@ def stop_update():
         return False
     return True
 
-def run_update(only=None, defer_running=False, flags=(), quiet=False):
+def run_update(only=None, defer_running=False, flags=(), quiet=False, names=None):
     """defer_running: the caller didn't mark the update as running; it counts as running only once it holds the job
     lock (Catalog's Fetch now / Add, so a fetch queued behind Find employers doesn't block Remove or Import).
+    names: a list of company names instead of only (one profile's own employers: too long for a command line, so it
+    is handed over in a file under DATA).
     flags: extra jobfinder options (--no-rate, --no-boards: the staged first check, first_search._check); quiet: no
     activity-log line per run (the staged check logs once for all its chunks)."""
-    cmd = frozen.command("jobfinder", *(["--only", only] if only else []), *flags)
+    if names is not None:
+        nf = os.path.join(DATA, "update_only.json")
+        paths.write_atomic(nf, json.dumps(sorted(names)))
+        cmd = frozen.command("jobfinder", "--only-file", nf, *flags)
+    else:
+        cmd = frozen.command("jobfinder", *(["--only", only] if only else []), *flags)
     osdeps.keep_awake(True)
     fresh = dict(started=dt.datetime.now().isoformat(timespec="seconds"), finished=None, exit=None, phase="fetch", done=0, total=0, lines=[])
     with lock:
@@ -1142,7 +1149,7 @@ class H(BaseHTTPRequestHandler):
                     if attempt == 2:
                         raise
                     time.sleep(0.4)
-        if path == "/api/directory":
+        if path in ("/api/directory", "/api/directory/preview"):
             import directory
             return directory.handle_get(self, path, pid)
         if path == "/api/status":
@@ -1156,12 +1163,15 @@ class H(BaseHTTPRequestHandler):
             try:  # the staged first check of the employers on this person's lists (first_search._check)
                 import first_search
                 cp =self._page_person(_qarg(self.path, "person"))
+                s["progress"] = first_search.progress(cp)   # the ONE plain progress line every page shows
+                s["estimate"] = first_search.estimates(cp)
                 s["check"] = first_search.check_status(cp)
                 try:
                     s["check"]["board_at"] = os.stat(people.pdir("report.html", pid=cp)).st_mtime_ns
                 except OSError:
                     s["check"]["board_at"] = None
-            except Exception:
+            except Exception as e:
+                print("status: progress not available:", type(e).__name__, e, flush=True)
                 s["check"] = None
             return self._send(200, s)
         if path == "/api/schedule":
@@ -1436,17 +1446,17 @@ class H(BaseHTTPRequestHandler):
             out["kick"]["update"] = bool(body.get("search", True))
             if out["kick"]["update"]:
                 import first_search
-                ok, err = first_search.start(pid, body.get("find"), body.get("directory"))
+                ok, err = first_search.start(pid, body.get("find"), body.get("directory"), _limit(body))
                 out["search"] = {"started": ok, "error": err}
                 if ok:
                     self._act("job search started", pid, "from setup")
             return self._send(200, out)
-        if path == "/api/directory/apply":  # Add employers near me from the Siftwell directory (no Claude)
+        if path in ("/api/directory/apply", "/api/directory/undo", "/api/directory/area"):  # Add employers near me from the Siftwell directory (no Claude)
             import directory
             return directory.handle_post(self, path, body, pid, sys.modules[__name__])
         if path == "/api/search/start":
             import first_search
-            ok, err = first_search.start(pid, body.get("find"), body.get("directory"))
+            ok, err = first_search.start(pid, body.get("find"), body.get("directory"), _limit(body))
             if not ok:
                 return self._send(409, {"error": err})
             self._act("job search started", pid, "from the board")
@@ -1540,12 +1550,15 @@ class H(BaseHTTPRequestHandler):
             if body.get("name"): people.rename(pid, str(body["name"]))
             before = people.settings()
             saved = people.save_settings(clean)
+            # a new search area (home, radius, ways of working): the page offers the directory's employers for it
+            area = lambda s: (str(s.get("home_zip") or "").strip().lower(), int(s.get("radius_miles") or 35), tuple(s.get("workplaces") or ()), bool(s.get("remote_us", True)))
+            area_changed = area(before) != area(saved)
             changed = (before.get("target_text"), before.get("target_scope")) != (saved.get("target_text"), saved.get("target_scope"))
             if changed:
                 ps()["target"] = {"running": True, "error": None}
                 spawn(bg_interpret)
             request_recompute([pid])  # filters changed: re-run them over the whole catalog
-            return self._send(200, {"ok": True, "settings": saved, "interpreting": changed})
+            return self._send(200, {"ok": True, "settings": saved, "interpreting": changed, "area_changed": area_changed})
         if path == "/api/target/suggest":
             if not (ps().get("suggest") or {}).get("running"):
                 ps()["suggest"] = {"running": True, "error": None}
@@ -1607,9 +1620,18 @@ class H(BaseHTTPRequestHandler):
                 if state["running"]:
                     return self._send(409, {"error": "already running"})
                 state["running"] = True
-            self._act("update started", pid, "one company" if body.get("only") else "all")
-            threading.Thread(target=run_update, args=(body.get("only"),), daemon=True).start()
-            return self._send(202, {"ok": True})
+            # scope "mine" (the board's Find new jobs in a household of several profiles): only this profile's own
+            # employers, so one person's long list doesn't slow down another's. The daily update checks every
+            # employer once for everyone.
+            names = None
+            if body.get("scope") == "mine" and not body.get("only"):
+                import first_search
+                est = first_search.estimates(pid)
+                if est["mine"]["companies"] < est["all"]["companies"]:
+                    names = first_search.mine_names(pid)
+            self._act("update started", pid, "one company" if body.get("only") else f"{len(names)} of this profile's employers" if names is not None else "all")
+            threading.Thread(target=run_update, args=(body.get("only"),), kwargs={"names": names}, daemon=True).start()
+            return self._send(202, {"ok": True, "scope": "mine" if names is not None else "all"})
         if path == "/api/search":
             import claude_cli, nlsearch
             q = str(body.get("q") or "").strip()[:300]
@@ -1850,6 +1872,14 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"has_key": bool(sec.get("anthropic_api_key"))})
         self._send(404, {"error": "not found"})
 
+def _limit(body):
+    """The "only the N employers with the most openings nearby" choice of a search or directory request (None: all)."""
+    try:
+        v = body.get("limit")
+        return None if v in (None, "", "all") else max(1, min(100000, int(v)))
+    except (TypeError, ValueError):
+        return None
+
 def busy_reason():
     """What a restart would kill right now ('' when idle); used by the Get started page's Restart button."""
     with lock:
@@ -1862,6 +1892,12 @@ def busy_reason():
     import catalog_api
     if catalog_api.find_live():
         return "Find employers near me is running"
+    try:
+        import first_search
+        if first_search.JOB["running"]:
+            return "Siftwell is checking employers"
+    except Exception:
+        pass
     try:
         import joblock
         h = joblock.info()
@@ -1894,6 +1930,12 @@ def after_restore():
     with lock:  # quick checks queued before the restore were for the replaced data
         for k in [k for k in _AUTO if k != "_loop"]:
             _AUTO.pop(k, None)
+    try:  # what the pages were told about employers and time estimates belonged to the replaced data
+        import first_search, directory
+        first_search._CACHE.clear(); first_search._EST.clear(); first_search._AVG["v"] = None
+        directory._PREVIEW.clear()
+    except Exception:
+        pass
     request_recompute(auto_rate=False)  # ratings come back with the backup; a restore never starts Claude by itself
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@
 
 ## Download
 
-Go to **[Releases → latest](https://github.com/chazzren/siftwell/releases/latest)** and pick one:
+Go to **[Releases → latest](https://github.com/chazzren/siftwell/releases/latest)**. **Which download do I want?** A Windows PC: the **Setup .exe**. A Mac from late 2020 on: the **.dmg**. Everything else is for special cases:
 
 - **Siftwell-Setup-x.y.z.exe**: Windows installer (recommended). No admin needed.
 - **Siftwell-Portable-x.y.z.zip**: Windows, no install. Unzip anywhere (even a USB stick) and run `Siftwell.exe`.
@@ -28,9 +28,9 @@ The first time, Windows may say **"Windows protected your PC"**: click **More in
 
 1. **Open Siftwell** and add yourself (several people can share one Siftwell).
 2. **Set up your profile**: upload a resume (or fill in a short form), your home ZIP and radius, and the pay you're after.
-3. **Click Start my job search** at the end of setup. Siftwell adds employers near you from its free employer directory (no Claude needed), then checks their career pages. Your board fills in with the openings that fit you.
+3. **Click Start my job search** at the end of setup. Siftwell shows how many employers its free employer directory has near you (no Claude needed) and how long checking them takes, adds the ones you choose, then checks their career pages. Your board fills in with the openings that fit you.
 
-Later, **Find new jobs** (the circular-arrow icon) checks every company again, and you can add any company by its careers-page link in **Catalog**.
+Later, **Find new jobs** (the circular-arrow icon) checks your employers again, and you can add any employer by its careers-page link on the **Employers** page.
 
 ## What it does
 
@@ -43,7 +43,7 @@ Later, **Find new jobs** (the circular-arrow icon) checks every company again, a
 
 ## What you need
 
-- A Windows 11 PC (Windows 10 usually works too; Mac via the ZIP).
+- A Windows 11 PC (Windows 10 usually works too), or a Mac (Apple-chip Macs use the .dmg; Intel Macs the ZIP).
 - **Optional:** a Claude subscription. Connect it in **Settings → Get started** to unlock Match ratings, resume reading and tailoring. Siftwell works without it.
 
 ## Your data stays on your computer
@@ -52,6 +52,7 @@ Your resumes, profiles, saved jobs and ratings live only on your PC, never in th
 
 ## More
 
-- **[User guide](docs/GUIDE.md)**: every feature and setting.
-- [Install details](docs/GUIDE.md#install) · [Using it without Claude](docs/GUIDE.md#using-siftwell-without-claude) · [Updating](docs/GUIDE.md#updating-siftwell) · [Backups & moving computers](docs/GUIDE.md#moving-to-another-computer--backups) · [Troubleshooting](docs/GUIDE.md#troubleshooting)
+- **[User guide](docs/GUIDE.md)**: starts with a ten-line Quick start, then every page and setting.
+- [Install details](docs/GUIDE.md#install) · [Using it without Claude](docs/GUIDE.md#using-siftwell-without-claude) · [Updating](docs/GUIDE.md#updating-siftwell) · [Backups & moving computers](docs/GUIDE.md#moving-to-another-computer--backups)
+- **[More options & troubleshooting](docs/ADVANCED.md)**: portable version, ZIP, uninstalling, where files are kept, troubleshooting.
 - License: [MIT](LICENSE)
