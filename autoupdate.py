@@ -430,8 +430,8 @@ def heal(log=print):
 
 # ---------------------------------------------------------------- the control (Settings → Updates, Catalog → Runs)
 PANE_HTML = """<style>#auTime{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;min-width:0}</style>
-<section class="sgsec"><h3 class="sgtitle">Automatic job updates</h3><div class="sgroup" id="auBox">
-<div class="srow"><div class="slab"><label for="auMode">Automatic job updates</label><small id="auNext">Loading…</small></div><div class="sctl"><select id="auMode">
+<section class="sgsec"><h3 class="sgtitle">Find new jobs automatically</h3><div class="sgroup" id="auBox">
+<div class="srow"><div class="slab"><label for="auMode">Find new jobs automatically</label><small id="auNext">Loading…</small></div><div class="sctl"><select id="auMode">
 <option value="off">Off</option><option value="running">While Siftwell is running</option><option value="closed">Even when Siftwell is closed</option></select></div></div>
 <div class="srow" id="auTimeRow"><div class="slab"><label for="auTime">Time</label><small>Every day.</small></div><div class="sctl"><input type="time" id="auTime" class="tin"></div></div>
 <div class="srow" id="auWakeRow" hidden><div class="slab"><label for="auWake">Wake my computer to run it</label><small id="auWakeHelp"></small></div><div class="sctl"><input type="checkbox" role="switch" class="sw" id="auWake"></div></div>
@@ -445,9 +445,9 @@ const say = (t, bad) => { const s = pane && pane.querySelector(".ssave"); if (!s
 const when = iso => { const d = new Date(iso), t = new Date(), tm = d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
   return (d.toDateString() === t.toDateString() ? "today " : "tomorrow ") + tm; };
 const FOOT = {
-  off: "Siftwell won't check for new jobs by itself. Use Update on the board, or Fetch everything now in Catalog.",
-  running: "Siftwell checks every company at this time, but only while it is running (the Siftwell window is open, or it is kept available in the background).",
-  closed: "Your computer starts a small background job at this time, even when Siftwell is closed (you must be signed in to your computer). If Siftwell is open it runs the update there so you can watch it; otherwise it runs quietly and stops. It never needs administrator permission."
+  off: "Siftwell won't check for new jobs by itself. Press Find new jobs on your board whenever you want to look.",
+  running: "Siftwell checks every employer for new jobs at this time, but only while it is running (the Siftwell window is open, or it is kept available in the background).",
+  closed: "Your computer starts a small background job at this time, even when Siftwell is closed (you must be signed in to your computer). If Siftwell is open it looks for new jobs there so you can watch it; otherwise it runs quietly and stops. It never needs administrator permission."
 };
 function show(s){
   $("auMode").value = s.mode; $("auTime").value = s.time; $("auWake").checked = !!s.wake;

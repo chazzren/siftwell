@@ -106,7 +106,7 @@ def _pane_search():
         _row_ps("Current base ($, optional)", "Shown on each job's pay bar.", "ps-current_base",
                 '<input type="number" inputmode="numeric" step="5000" id="ps-current_base" data-ps="current_base">'),
         _row_ps("Current package, one line (optional)", "", "ps-current_label",
-                '<input type="text" id="ps-current_label" data-ps="current_label" placeholder="e.g. $120k base, hybrid, 4 weeks PTO">'),
+                '<input type="text" id="ps-current_label" data-ps="current_label" placeholder="e.g. your pay, schedule and time off">'),
     ]
     return ('<p class="sfoot pmoved" id="psMoved">Location, ways of working, travel, pay floor and level are set in the board\'s Filters. '
             '<a href="/#filters">Open Filters on the board</a></p>' +
@@ -120,7 +120,7 @@ def _pane_search():
             _group("Goals for Claude to weigh", "Pay, commute, what to avoid. Claude reads this when it rates a job.",
                    [_textarea("ps-goals", "goals", "Goals for Claude to weigh", 4)]) +
             _group("Your current pay", "", pay) +
-            '<p class="sfoot">Each change re-checks your board right away (no new listings). Jobs that newly appear get a quick Claude check automatically.</p>')
+            '<p class="sfoot">Each change re-checks your board right away (no new listings).<span id="psAutoRate"> Jobs that newly appear get a quick Claude check automatically.</span></p>')
 
 
 def _pane_target():
@@ -141,9 +141,9 @@ def _pane_target():
 
 def _pane_companies():
     catalog = (f'<a href="{e(CATALOG_HREF)}">Browse every company Siftwell tracks</a>' if CATALOG_HREF
-               else '<span class="note" id="catalogSlot">The Catalog, a page for browsing every company Siftwell tracks, is coming.</span>')
+               else '<span class="note" id="catalogSlot">A page for browsing every employer Siftwell checks is coming.</span>')
     return ('<p class="sfoot" style="margin-top:14px"><span id="coCount"></span>Your employers come from the Siftwell employer directory near you, '
-            'the companies you add here or on the Catalog page, and what Claude finds for you.</p>' +
+            'the companies you add here or on the Employers page, and what Claude finds for you.</p>' +
             _group("Add a company", "", [
                 '<form class="srow stack" id="coAddForm"><input type="url" id="coUrl" placeholder="Paste a company\'s careers or job-list link" aria-label="Careers page link">'
                 '<input type="text" id="coName" placeholder="Name (optional)" aria-label="Company name">'
@@ -276,6 +276,7 @@ const saved = (el, p) => p.then(({ok, d}) => { if (!ok) throw new Error(d.error 
 /*__MANUAL__*/
 const CL = window.__CLAUDE__ || {ready: true};  // false: Claude isn't connected; every Claude control explains instead of failing
 const NEED_CL = `Needs Claude. Connect it under Settings, then Get started.`;
+if (!CL.ready && $("psAutoRate")) $("psAutoRate").hidden = true;   // (no Claude: nothing is rated automatically)
 
 // ---- the name (page title, header, profile menu)
 function showName(n){
@@ -295,18 +296,20 @@ $("ab-name").addEventListener("change", e => {
 function drawStrip(){
   const chips = [], miss = [], a = PROF, d = DRAFT;
   if (ING.running) chips.push(["warn", "Resume", "being read…"]);
+  else if (a && a._manual && !d) chips.push(["ok", "Profile", "filled in by you " + when(a._approved || a._created)]);
   else if (a || d) chips.push(["ok", "Resume", "read " + when((a && (a._created || a._approved)) || (d && d._created))]);
   else { chips.push(["warn", "Resume", CL.ready ? "not uploaded" : "no profile yet"]); miss.push({go: "resume", text: CL.ready ? "Upload your resume" : "Fill in your profile"}); }
   if (d && !ING.running) { chips.push(["warn", "Profile", "new draft to approve"]); miss.push({go: "about", text: "Approve your new profile"}); }
+  else if (a && a._manual) {}   // (said above)
   else if (a) chips.push(["ok", "Profile", "approved"]);
   else chips.push(["warn", "Profile", "not approved"]);
   if (BOARD) {
     chips.push([BOARD.jobs ? "ok" : "warn", "Board", BOARD.jobs ? `${nf(BOARD.jobs)} jobs · ${nf(BOARD.rated)} rated by Claude` : "no jobs yet"]);
-    if (!BOARD.jobs && a) miss.push({href: "/", text: "Update listings to fill your board"});
+    if (!BOARD.jobs && a) miss.push({href: "/", text: "Find new jobs to fill your board"});
   }
-  if (a && HL && HL.highlights && !HL.confirmed) miss.push({go: "highlights", text: "Check the facts we pulled from your resume"});
+  if (a && HL && HL.highlights && !HL.confirmed) miss.push({go: "highlights", text: a._manual ? "Check the facts in your profile" : "Check the facts we pulled from your resume"});
   const wps = SET.workplaces || ["onsite", "hybrid", "remote"];
-  if (!(SET.home_zip || "").trim() && wps.some(w => w !== "remote")) miss.push({href: "/#filters", text: "Add your home ZIP in the board's Filters (blank uses the DC-area list)"});
+  if (!(SET.home_zip || "").trim() && wps.some(w => w !== "remote")) miss.push({href: "/#filters", text: "Add your home ZIP in the board's Filters (without one, Siftwell uses its built-in Washington, DC area list)"});
   if (ING.error) miss.push({go: "resume", text: "Fix the resume problem"});
   $("pstrip").innerHTML = chips.map(([k, t, v]) => `<span class="pchip ${k}"><b>${t}</b> ${esc(v)}</span>`).join("") +
     `<span class="pmiss">${miss.length ? "Missing: " + miss.map(m => m.go ? `<a href="#${m.go}" data-go="${m.go}">${esc(m.text)}</a>` : `<a href="${m.href}">${esc(m.text)}</a>`).join("") : "Nothing missing."}</span>`;

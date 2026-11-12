@@ -424,6 +424,11 @@ ol.rows{gap:0;background:var(--surface);border:1px solid var(--line);border-radi
 .startcard .smsg:empty{display:none}
 .startcard .dmsg{color:var(--ink)}
 .startcard ul .linkbtn{font-size:inherit;padding:0;text-align:left}
+.startcard .linkbtn{font-size:inherit}
+.dchoose{display:inline-flex;flex-wrap:wrap;gap:6px 10px;align-items:center;max-width:100%}
+.dchoose select{max-width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit;font-size:13px}
+.dchoose .dest{font-size:12.5px;color:var(--muted)}
+.field #coFind{margin-bottom:4px}
 #view-jobs.nojobs #list .dempty,#view-jobs.nojobs .countrow,#view-jobs.nojobs .split .detail{display:none}
 .reqbox{display:flex;flex-direction:column;gap:8px}
 .reqbox .chip{white-space:normal}
@@ -481,11 +486,11 @@ $("themeBtn").addEventListener("click", () => {
 });
 """
 
-# Header icon row (Home, Find new jobs (#updateBtn), Re-rate, Catalog, My profile, Theme, Settings, profile menu): shared by the board and settings_page.py.
+# Header icon row (Home, Find new jobs (#updateBtn), Re-rate, Employers (/catalog), My profile, Theme, Settings, profile menu): shared by the board and settings_page.py.
 TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></a>
-    <button class="iconBtn" type="button" id="updateBtn" title="Find new jobs: check every company for new openings (about 40 min)" aria-label="Find new jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span class="vh" id="updSmall">every company, ~40 min</span></button>
+    <button class="iconBtn" type="button" id="updateBtn" title="Find new jobs: check your employers for new openings" aria-label="Find new jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span class="vh" id="updSmall">check your employers for new openings</span></button>
     <button class="iconBtn" type="button" id="rerateBtn" title="Re-rate: choose how Claude re-rates your jobs, no new listings" aria-label="Re-rate jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="rrbadge" id="rrBadge" hidden></span><span class="vh" id="rrSmall">Claude only, no new listings</span></button>
-    <a class="iconBtn" id="catalogBtn" href="/catalog" title="Catalog: every company and listing, run history, Find employers near me, sharing" aria-label="Catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg></a>
+    <a class="iconBtn" id="catalogBtn" href="/catalog" title="Employers: every employer and job listing Siftwell checks, the history of its checks, and ways to add more" aria-label="Employers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg></a>
     <a class="iconBtn" id="resumeBtn" href="/profile" title="My profile: resume, about you, job search, target, companies" aria-label="My profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.5 17c.6-1.9 2-3 3.5-3s2.9 1.1 3.5 3"/><path d="M15 9.5h3.5M15 13h3.5"/></svg></a>
     <button class="iconBtn" type="button" id="themeBtn" title="Theme: Auto (follows your device). Click for Light" aria-label="Theme: Auto (follows your device). Click for Light"><svg class="ti ti-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg><svg class="ti ti-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="ti ti-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
     <a class="iconBtn" id="prefsBtn" href="/settings" title="Settings: setup checklist, resume PDFs, review, Claude usage, display" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="rrbadge" id="gsBadge" hidden></span></a>
@@ -511,6 +516,8 @@ BODY = """<div class="wrap">
 <div class="banner gsbn" id="gsBanner" hidden></div>
 <div class="banner gsbn updbn" id="updBanner" hidden></div>
 <div class="banner gsbn" id="chkBanner" role="status" aria-live="polite" hidden></div>
+<div class="banner gsbn" id="dirBanner" role="status" aria-live="polite" hidden></div>
+<div class="banner gsbn" id="ttlBanner" hidden></div>
 <div class="panel" id="progress" hidden>
   <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span><button class="btn sm" type="button" id="progStop" hidden title="Stop rating: batches already sent finish and their ratings are kept. Queued runs are cancelled.">Stop</button><button class="btn sm primary" type="button" id="progReload" hidden>Show new ratings</button></div>
   <div class="prog"><i id="progBar"></i></div>
@@ -593,7 +600,7 @@ BODY = """<div class="wrap">
       <div class="fgroup first">My search</div>
       <p class="fhint">These decide which jobs reach your board. They are saved with your profile.</p>
       <div class="fgrid msgrid" id="msGrid">
-        <label class="field"><span class="flabel">Home ZIP or City, ST</span><input type="text" id="msZip" data-ms="home_zip" placeholder="e.g. 20170" autocomplete="postal-code"></label>
+        <label class="field"><span class="flabel">Home ZIP or City, ST</span><input type="text" id="msZip" data-ms="home_zip" placeholder="ZIP code or City, ST" autocomplete="postal-code"></label>
         <label class="field"><span class="flabel">Search radius</span><select id="msRadius" data-ms="radius_miles">
           <option value="10">10 miles</option><option value="25">25 miles</option><option value="35">35 miles</option><option value="50">50 miles</option><option value="75">75 miles</option></select></label>
         <div class="field wide"><span class="flabel" id="msWpLbl">Ways of working</span>
@@ -613,12 +620,12 @@ BODY = """<div class="wrap">
       </div>
       <div class="fgrid fview">
         <label class="field"><span class="flabel">Fit</span><select id="lbl"></select></label>
-        <label class="field"><span class="flabel">Clearance</span><select id="clr">
-          <option value="all">Any clearance</option><option value="none">No clearance mentioned</option>
-          <option value="nopoly">No TS/SCI + poly</option><option value="secret" selected>Secret or less</option></select></label>
-        <label class="field"><span class="flabel">Company</span><select id="co"><option value="all">All companies</option></select></label>
+        <label class="field"><span class="flabel">Company</span><input type="search" id="coFind" placeholder="Type to find a company" aria-label="Type to find a company in the list below" autocomplete="off" hidden><select id="co"><option value="all">All companies</option></select></label>
         <label class="field"><span class="flabel">Show</span><select id="st">
           <option value="active">Not hidden</option><option value="saved">Saved</option><option value="applied">Applied</option><option value="hidden">Hidden</option><option value="all">Everything</option></select></label>
+        <label class="field" id="clrField" hidden><span class="flabel">Security clearance</span><select id="clr">
+          <option value="all">Any clearance</option><option value="none">No clearance mentioned</option>
+          <option value="nopoly">No TS/SCI + poly</option><option value="secret" selected>Secret or less</option></select></label>
         <div class="field"><span class="flabel">Only</span>
           <div class="checks"><label class="chk"><input type="checkbox" id="paidonly"> Salary listed</label>
           <label class="chk"><input type="checkbox" id="nowide"> No wide bands</label>
@@ -676,10 +683,10 @@ BODY = """<div class="wrap">
 </section>
 <section id="view-companies" hidden>
   <div class="tablewrap"><table>
-    <thead><tr><th>Company</th><th>Sector</th><th>Presence</th><th>Source</th><th>Postings</th><th>Matches</th><th>Status</th></tr></thead>
+    <thead><tr><th>Employer</th><th>Industry</th><th>Job listings</th><th>Matches</th><th>Last check</th></tr></thead>
     <tbody id="cos"></tbody>
   </table></div>
-  <p class="legend">Postings = every job on the company's board. Matches = jobs left after the location (near you, or US remote), title, and <span class="floorTxt"></span> salary filters.</p>
+  <p class="legend">Job listings = every open job the employer lists. Matches = the ones that fit your search: location (near you, or US remote), job title and <span class="floorTxt"></span> pay.</p>
 </section>
 </div>
 """
@@ -737,7 +744,19 @@ $("stats").innerHTML = [
 
 const coCount = {}; jobs.forEach(j => { coCount[j.company] = (coCount[j.company] || 0) + 1; });
 const cos = Object.keys(coCount).sort((a, b) => coCount[b] - coCount[a] || a.localeCompare(b));  // most matching jobs first
-$("co").insertAdjacentHTML("beforeend", cos.map(c => `<option value="${esc(c)}">${esc(c)} (${coCount[c].toLocaleString()})</option>`).join(""));
+const coOpts = list => list.map(c => `<option value="${esc(c)}">${esc(c)} (${coCount[c].toLocaleString()})</option>`).join("");
+$("co").insertAdjacentHTML("beforeend", coOpts(cos));
+if (cos.length > 25) {   // a long list: type a few letters to shorten it
+  $("coFind").hidden = false;
+  $("coFind").addEventListener("input", () => {
+    const t = $("coFind").value.trim().toLowerCase(), cur = $("co").value;
+    const list = t ? cos.filter(c => c.toLowerCase().includes(t)) : cos;
+    $("co").innerHTML = `<option value="all">${t ? `All companies (${list.length} match “${esc($("coFind").value.trim())}”)` : "All companies"}</option>` + coOpts(list);
+    if (cur !== "all" && list.includes(cur)) $("co").value = cur;
+    else if (cur !== "all") { $("co").value = "all"; shown = 100; render(); }
+  });
+}
+$("clrField").hidden = !jobs.some(j => j.clearance);   // only boards with clearance jobs get the control
 
 let shown = 100, wp = "all", mode = "current", gapSel = "";  // wp: the "Remote" quick filter ("all" or "remote")
 let NL = null, NL_PREV_SORT = "score", nlSeq = 0;  // natural-language search result from /api/search
@@ -825,6 +844,7 @@ function msSave(settings){
     .then(({ok, d}) => {
       if (!ok) { msFill(); msSay(d.error || "Couldn't save that.", true); return; }
       MYS = Object.assign({}, MYS, d.settings); msFill();
+      if (d.area_changed) { try { sessionStorage.setItem("jb.area", "1"); } catch(e) {} if (typeof areaOffer === "function") areaOffer(); }
       D.salary_floor = MYS.salary_floor || 0;
       shown = 100; render();
       msSay("Saved. Re-checking your board…"); msAwaitBoard();
@@ -837,6 +857,9 @@ $("msGrid").addEventListener("change", e => {
     if (!wps.length) { el.checked = true; msSay("Pick at least one way of working.", true); return; }
     msSave({workplaces: wps}); return;
   }
+  // The older built-in area (no home ZIP yet): a ZIP changes which jobs count as near you, so say so before saving.
+  if (el.dataset.ms === "home_zip" && el.value.trim() && MYS && !String(MYS.home_zip || "").trim() && !((MYS.workplaces || []).length === 1 && MYS.workplaces[0] === "remote") && jobs.length
+      && !confirm("Set your home ZIP?\n\nThis changes which jobs count as near you. Until now Siftwell has used its built-in Washington, DC area list for this profile; with a ZIP it keeps jobs within your search radius of that place instead, so some jobs will be added to your board and some removed.\n\n(If you only want more employers near you, Settings, then Employer directory lets you pick an area for that without changing your job filter.)")) { msFill(); el.value = ""; return; }
   if (el.dataset.ms) msSave({[el.dataset.ms]: el.type === "checkbox" ? el.checked : el.value});
 });
 
@@ -914,6 +937,7 @@ function applyDisplayDefaults(){
   if (!RESTORED) {
     $("clr").value = PREFS["display.clearance"]; $("sort").value = PREFS["display.sort"];
     if (!jobs.some(j => j.ai_fit != null) && ["score", "odds", "odds_later"].includes($("sort").value)) $("sort").value = NOMATCH_SORT();  // nothing to rank by Match yet
+    if (!OPENED) SEL = null;   // (the order may just have changed: the detail pane shows the new first row)
     if (!location.hash && PREFS["display.start_tab"] && PREFS["display.start_tab"] !== "jobs") { location.hash = "#" + PREFS["display.start_tab"]; return; }
   }
   render();
@@ -966,7 +990,7 @@ function reviewNotes(r){
 function drawTailored(){
   const byId = Object.fromEntries(jobs.map(j => [j.id, j]));
   const nRun = TLIST.filter(x => x.state === "running").length, nReady = TLIST.filter(x => x.state !== "running" && x.state !== "failed").length;
-  $("tlCount").textContent = !SERVED ? "Open the board from the server to see tailored resumes." : TLIST.length ? `${nReady} tailored resume${nReady === 1 ? "" : "s"}${nRun ? ` · ${nRun} being tailored` : ""}` : "No tailored resumes yet. Tap Tailor my resume on any job.";
+  $("tlCount").textContent = !SERVED ? "Open the board from the server to see tailored resumes." : TLIST.length ? `${nReady} tailored resume${nReady === 1 ? "" : "s"}${nRun ? ` · ${nRun} being tailored` : ""}` : (NOAI ? "No tailored resumes yet. Tailoring a resume needs Claude: connect it under Settings, then Get started." : "No tailored resumes yet. Tap Tailor my resume on any job.");
   $("tlList").innerHTML = TLIST.map(x => {
     const j = byId[x.job.id], when = x.created ? new Date(x.created).toLocaleDateString([], {month: "short", day: "numeric", year: "numeric"}) : "";
     const m = j ? (j.ai_fit ?? j.pv_now) : null, w = x.work || {};
@@ -1403,98 +1427,177 @@ function drawTabCounts(){
 }
 
 $("cos").innerHTML = D.companies.slice().sort((a,b)=>b.matched-a.matched || a.company.localeCompare(b.company)).map(c => `<tr>
-  <td>${esc(c.company)}</td><td>${esc(c.sector)}</td><td>${TIER[c.tier]||esc(c.tier)}</td><td>${esc(c.ats)}</td>
+  <td>${esc(c.company)}</td><td>${esc(c.sector === "Siftwell directory" ? "" : c.sector)}</td>
   <td class="n">${c.raw_jobs.toLocaleString()}</td><td class="n">${c.matched}</td>
-  <td class="${c.status==="ok"?"":"err"}">${c.status==="ok"?"OK":esc(c.status)}</td></tr>`).join("");
+  <td class="${c.status==="ok"?"":"err"}"${c.status==="ok"?"":` title="${esc(c.status)}"`}>${c.status==="ok"?"OK":"Couldn’t be read last time"}</td></tr>`).join("");
+
+// ---- The employer directory on the board: one chooser used wherever employers can be added (the Start card, after a
+// change of search area, "Try the directory again"). It never adds blindly: it says how many employers, about how
+// many openings and how long the first check and the daily update take, lets the person take all or the top N, and
+// offers to take the batch back afterwards. pv = GET /api/directory/preview.
+const nf0 = x => (x || 0).toLocaleString();
+function dirDefault(pv){
+  const o = pv.options || []; if (!o.length) return null;
+  const all = o[o.length - 1];
+  if (all.employers <= 500) return all;
+  return o.filter(x => x.limit && x.limit <= 500).pop() || o[0];
+}
+function dirChooser(pv, pre){
+  const o = pv.options || [], def = dirDefault(pv);
+  if (!def) return "";
+  const lab = x => x.limit ? `The ${nf0(x.employers)} with the most openings near you` : `All ${nf0(x.employers)}`;
+  const sel = o.length > 1 ? `<select id="${pre}Opt" aria-label="How many employers to add">${o.map(x => `<option value="${x.limit || "all"}"${x === def ? " selected" : ""}>${lab(x)}</option>`).join("")}</select>` : "";
+  return `<span class="dchoose">${sel}<span id="${pre}Est" class="dest"></span></span>`;
+}
+function dirChooserWire(pv, pre){
+  const o = pv.options || [], est = $(pre + "Est"); if (!est) return () => null;
+  const cur = () => { const s = $(pre + "Opt"); const v = s ? s.value : (o[0].limit || "all"); return o.find(x => String(x.limit || "all") === String(v)) || o[o.length - 1]; };
+  const say = () => { const x = cur(), b = pv.daily_before || {};
+    est.textContent = `${x.jobs ? `About ${nf0(x.jobs)} openings near you. ` : ""}First check: ${x.first_text}. Daily Find new jobs afterwards: ${x.daily_text}${b.minutes && b.text !== x.daily_text ? ` (now ${b.text})` : ""}.`; };
+  if ($(pre + "Opt")) $(pre + "Opt").addEventListener("change", say);
+  say();
+  return () => cur().limit || null;
+}
+function dirAdd(limit, retry){
+  return fetch("/api/directory/apply", {method: "POST", headers: H, body: JSON.stringify({fetch: true, limit, retry: !!retry})}).then(r => r.json().then(d => ({ok: r.ok, d})));
+}
+function dirUndo(){ return fetch("/api/directory/undo", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => ({ok: r.ok, d}))); }
+const dirPreview = refresh => fetch("/api/directory/preview" + (refresh ? "?refresh=1" : "")).then(r => r.json());
 
 // ---- Empty Jobs tab (this board has no jobs): "Start your job search" (never searched), its progress while it runs,
-// or "No jobs passed your filters" with the usual fixes. State and plan come from /api/search (first_search.py).
+// or why nothing matched, with the usual fixes. State and plan come from /api/search (first_search.py). While
+// anything runs, this card is the page's ONE progress indicator (the line is first_search.progress, the same on
+// every page); the header's progress box and the check banner stay hidden on an empty board.
 if (SERVED && !jobs.length) (function(){
-  const box = $("startCard"); let sawRun = false, lastSig = "";
+  const box = $("startCard"); let sawRun = false, lastSig = "", fails = 0, PV = null, pvFor = "", getLimit = () => null;
   const n = x => (x || 0).toLocaleString();
   const show = html => { box.innerHTML = html; box.hidden = false; $("view-jobs").classList.add("nojobs"); };
-  const findName = (f, lbl) => f.remote_only ? "remote-friendly employers in your field" : "employers near " + esc(lbl || f.label);
-  function load(){ fetch("/api/search").then(r => r.json()).then(draw).catch(() => setTimeout(load, 5000)); }
+  function load(){
+    fetch("/api/search").then(r => r.json()).then(s => { fails = 0; draw(s); })
+      .catch(() => { if (++fails >= 3) dead(); setTimeout(load, 5000); });
+  }
+  function dead(){
+    if (lastSig === "dead") return; lastSig = "dead";
+    show(`<h2 id="scTitle">Siftwell isn’t running</h2><p>This page can’t reach Siftwell on this computer, so nothing here is being updated. Open Siftwell again, then reload this page. A job search that was running carries on where it stopped.</p><div class="sacts"><button class="btn sm" type="button" onclick="location.reload()">Reload this page</button></div>`);
+  }
+  const titleTip = p => p.titles === false ? `<p class="dmsg"><b>Tell Siftwell what work you do</b> to see the most relevant jobs first: add your job title on <a href="/profile#search">My profile</a>. Without one, every kind of job is kept.</p>` : "";
+  // the directory's preview for this search area (asked once per area; again after "Try the directory again")
+  function wantPreview(p, redraw){
+    const d = p.directory || {}, key = [d.label, d.radius, d.remote_only, d.applied, p.companies].join("|");
+    if (!d.possible || pvFor === key) return;
+    pvFor = key; PV = null;
+    dirPreview(false).then(pv => { if (pvFor === key) { PV = pv; lastSig = ""; redraw(); } }).catch(() => {});
+  }
   function draw(s){
-    const p = s.plan, f = p.find, job = s.mine ? s.job : {}, up = s.update || {}, ck = p.check || {};
+    const p = s.plan, f = p.find, job = s.mine ? s.job : {}, ck = p.check || {}, pg = s.progress || {};
     if (s.running) {
       sawRun = true;
-      let line = "Getting started…", frac = .03, staged = false;
-      if (job.running && job.phase === "directory") { const d = p.directory || {}; line = d.remote_only ? "Adding remote-friendly employers from the Siftwell directory…" : `Adding employers near ${esc(d.label || "you")} from the Siftwell directory…`; frac = .05; }
-      else if (job.running && job.phase === "find") { const c = s.find || {}; line = `Finding ${findName(f, c.label)}: ${n(c.found)} found so far, ${n(c.readable)} Siftwell can read.`; frac = c.kinds ? .3 * c.kinds_done / c.kinds : .03; }
-      else if (ck.running && ck.mine && !(up.running && up.phase !== "fetch")) { staged = true; line = `Checking employers: ${n(ck.done)} of ${n(ck.total)} · your board fills in as we go` + (ck.pausing ? " (pausing…)" : ""); frac = .1 + (ck.total ? .85 * ck.done / ck.total : 0); }
-      else if (up.running && up.phase === "fetch") { line = `Checking career pages for openings: ${up.total ? `${n(up.done)} of ${n(up.total)} companies` : "starting"}.`; frac = .3 + (up.total ? .5 * up.done / up.total : 0); }
-      else if (up.running && (up.phase === "ai" || up.phase === "pivot")) { line = "Claude is reading the best matches against your resume."; frac = .85; }
-      else if (up.running) { line = "Almost done: building your board."; frac = .95; }
-      else if (job.running && job.phase === "build") { line = "Every company was checked today already, so Siftwell is building your board from what it found."; frac = .9; }
-      else if (s.find_live) line = "Finding employers (a search started from the Catalog). Jobs are checked when it’s done.";
-      else if (job.running) line = "Waiting for another job to finish…";
-      const sig = [line, Math.round(frac * 100), staged, !!ck.pausing].join("|");
+      const line = esc(pg.line || "Getting ready…"), pct = Math.round(100 * (pg.frac == null ? .03 : pg.frac)), staged = pg.kind === "check" && pg.mine;
+      const extra = job.dir_offline && job.dir_text ? `<p class="dmsg">${esc(job.dir_text)}</p>` : "";
+      const sig = [line, pct, staged, !!pg.can_pause, extra].join("|");
       if (sig !== lastSig) {   // (only redraw when something changed, so the Pause button keeps its focus)
         lastSig = sig;
-        show(`<h2 id="scTitle">Your job search is running</h2><p>${line}</p><div class="prog" role="progressbar" aria-label="Job search progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(frac * 100)}"><i style="width:${Math.round(frac * 100)}%"></i></div><p>${staged ? "Siftwell checks the employers with the most openings near you first, and jobs that fit show up here every few minutes." : "Your jobs show up here when it’s done."} You can leave this page; the search keeps going as long as Siftwell is running${staged ? ", and if it stops you can continue where it left off" : ""}.</p>${staged && !ck.pausing ? `<div class="sacts"><button class="btn sm" type="button" id="scPause">Pause</button></div>` : ""}`);
+        show(`<h2 id="scTitle">Your job search is running</h2><p>${line}</p><div class="prog" role="progressbar" aria-label="Job search progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>${extra}<p>${staged ? "Siftwell checks the employers with the most openings near you first, and jobs that fit show up here every few minutes." : "Your jobs show up here when it’s done."} You can leave this page; the search keeps going as long as Siftwell is running${staged ? ", and if it stops you can continue where it left off" : ""}.</p>${staged && pg.can_pause ? `<div class="sacts"><button class="btn sm" type="button" id="scPause">Pause</button></div>` : ""}`);
         if ($("scPause")) $("scPause").addEventListener("click", () => { $("scPause").disabled = true; fetch("/api/search/pause", {method: "POST", headers: H, body: "{}"}).then(load).catch(() => {}); });
       }
       if (staged) fetch("/api/profile/board" + pq()).then(r => r.json()).then(b => { if (b.jobs > 0 && !b.rebuilding) { saveFilters(); location.reload(); } }).catch(() => {});
       setTimeout(load, 3000);
       return;
     }
-    lastSig = "";
     if (sawRun) { saveFilters(); location.reload(); return; }  // it finished: show the new board
     const err = job.error ? `<p class="smsg">${esc(job.error)}</p>` : "";
+    const d = p.directory || {};
+    wantPreview(p, () => draw(s));
+    const sig = JSON.stringify([p.started_before, ck, p.companies, s.why_empty, job.error, job.note, PV, d]);
+    if (sig === lastSig) { setTimeout(load, 15000); return; }
+    lastSig = sig;
+    const pvOk = PV && PV.available, pvNew = pvOk ? PV.new : 0;
+    const offline = PV && !PV.available && (PV.reason === "offline" || PV.reason === "error");
     if (!p.started_before) {
-      const d = p.directory || {}, findOn = f.possible && f.default, nothing = !p.companies && !p.catalog && !d.possible && !f.possible;
-      const what = `${d.possible ? (d.remote_only ? "add remote-friendly employers from its free employer directory (no Claude needed), then " : `add employers near ${esc(d.label)} from its free employer directory (no Claude needed), then `) : ""}check the career pages of ${p.companies ? `the ${n(p.companies)} employers you already watch` : "your companies"} for openings and keep the ones that fit your search${p.claude ? ", and Claude rates the best matches" : ""}`;
+      const nothing = !p.companies && !p.catalog && !d.possible && !f.possible;
+      let dirLine = "";
+      if (d.possible && !PV) dirLine = `<p>Looking up employers ${d.remote_only ? "that hire remotely" : "near " + esc(d.label)} in Siftwell’s free employer directory…</p>`;
+      else if (pvOk && pvNew) dirLine = `<p><b>${n(pvNew)} employers</b> ${d.remote_only ? "that hire remotely" : `with openings within ${d.radius} miles of ${esc(d.label)}`} are in Siftwell’s free employer directory (no Claude needed). Which ones should Siftwell add and check?</p><div class="sacts">${dirChooser(PV, "sc")}</div>`;
+      else if (pvOk) dirLine = `<p>Siftwell’s free employer directory has no new employers ${d.remote_only ? "for remote work" : "near " + esc(d.label)} right now.</p>`;
+      else if (offline) dirLine = `<p class="dmsg"><b>Siftwell can’t reach its employer directory right now.</b> Check your internet connection and <button type="button" class="linkbtn" id="scRetry">try the directory again</button>. If you start anyway, Siftwell begins with a starter list of large US employers that comes with the app, and keeps the ones hiring near you.</p>`;
+      const what = `check the career pages of ${p.companies ? `the ${n(p.companies)} employers you already watch${d.possible ? " and the ones it adds" : ""}` : d.possible ? "the employers it adds" : "your employers"}, the ones with the most openings near you first, and keep the jobs that fit your search${p.claude ? "; Claude then rates the best matches" : ""}`;
       show(`<h2 id="scTitle">Start your job search</h2>
-        <p>Siftwell hasn’t looked for jobs for you yet. When you start, it will ${what}. The first search takes a while; you can leave this page while it runs.</p>
-        ${f.possible ? `<label class="chk"><input type="checkbox" id="scFind"${findOn ? " checked" : ""}><span>Also find more ${findName(f)} with Claude (optional): Claude searches the web, using your Claude plan; ${esc(f.estimate)}</span></label>` : ""}
+        <p>Siftwell hasn’t looked for jobs for you yet. When you start, it will ${what}. Jobs start to show up within a few minutes; you can leave this page while it runs.</p>
+        ${dirLine}
+        ${f.possible ? `<label class="chk"><input type="checkbox" id="scFind"${f.default ? " checked" : ""}><span>Also find more ${f.remote_only ? "remote-friendly employers in your field" : "employers near " + esc(f.label)} with Claude (optional): Claude searches the web, using your Claude plan; ${esc(f.estimate)}</span></label>` : ""}
         ${f.reason === "no_place" ? `<p>Add your home ZIP (Filters, then My search) so Siftwell can add employers near you.</p>` : ""}
-        ${nothing ? `<p><b>There are no companies to check yet.</b> Add your home ZIP, or add a company by its careers link.</p>` : ""}
-        <div class="sacts"><button class="btn primary" type="button" id="scGo"${nothing ? " disabled" : ""}>Start my job search</button>${nothing ? `<a class="btn" href="/catalog#companies">Add a company by link</a>` : ""}</div>
+        ${nothing ? `<p><b>There are no employers to check yet.</b> Add your home ZIP, or add an employer by its careers link.</p>` : ""}
+        ${titleTip(p)}
+        <div class="sacts"><button class="btn primary" type="button" id="scGo"${nothing ? " disabled" : ""}>Start my job search</button>${nothing ? `<a class="btn" href="/catalog#companies">Add an employer by link</a>` : ""}</div>
         <div class="smsg" id="scMsg" role="status"></div>${err}`);
+      getLimit = pvOk && pvNew ? dirChooserWire(PV, "sc") : () => null;
+      if ($("scRetry")) $("scRetry").addEventListener("click", () => { $("scRetry").disabled = true; dirPreview(true).then(pv => { PV = pv; lastSig = ""; draw(s); }).catch(() => { lastSig = ""; draw(s); }); });
       $("scGo").addEventListener("click", () => {
         const fb = $("scFind"); $("scGo").disabled = true; $("scMsg").textContent = "";
-        fetch("/api/search/start", {method: "POST", headers: H, body: JSON.stringify({find: !!(fb && fb.checked), directory: true})})
+        fetch("/api/search/start", {method: "POST", headers: H, body: JSON.stringify({find: !!(fb && fb.checked), directory: true, limit: getLimit()})})
           .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
             if (!ok) { $("scGo").disabled = false; $("scMsg").textContent = d.error || "The search couldn’t start."; return; }
-            load();
+            lastSig = ""; load();
           }).catch(() => { $("scGo").disabled = false; $("scMsg").textContent = "Couldn’t reach Siftwell. Try again."; });
       });
+      setTimeout(load, 15000);
       return;
     }
+    const note = job.note ? `<p class="dmsg">${esc(job.note)}</p>` : "";
+    const after = ({ok, d}) => {
+      const m = $("scDirMsg"); if (!m) return;
+      if (!ok) { ["scDir", "scRetry"].forEach(i => { if ($(i)) $(i).disabled = false; }); m.textContent = " " + (d.error || "That didn’t work."); return; }
+      const k = (d.added || 0) + (d.linked || 0);
+      m.textContent = k ? ` Added ${n(k)} to your employers${d.fetching ? "; checking their openings now" : ""}.` : " No new employers near you in the directory right now.";
+      lastSig = ""; pvFor = ""; setTimeout(load, 1500);
+    };
+    const wireDir = () => {
+      if ($("scDir")) $("scDir").addEventListener("click", () => { $("scDir").disabled = true; $("scDirMsg").textContent = " Adding…"; dirAdd(getLimit(), false).then(after).catch(() => after({ok: false, d: {error: "Couldn’t reach Siftwell. Try again."}})); });
+      // Try the directory again: look first (nothing is added blindly); when it answers, the card offers its employers
+      if ($("scRetry")) $("scRetry").addEventListener("click", () => {
+        $("scRetry").disabled = true; if ($("scDirMsg")) $("scDirMsg").textContent = " Trying…";
+        dirPreview(true).then(pv => {
+          if (!pv.available) return after({ok: false, d: {error: "Still can’t reach the directory. Check your internet connection and try again."}});
+          PV = pv; lastSig = ""; draw(s);
+        }).catch(() => after({ok: false, d: {error: "Couldn’t reach Siftwell. Try again."}}));
+      });
+    };
+    const offNote = pvOk && pvNew && d.offline ? `<p class="dmsg">Siftwell’s employer directory can be reached now: it has <b>${n(pvNew)} employers</b> ${d.remote_only ? "that hire remotely" : `within ${d.radius} miles of ${esc(d.label)}`}. ${dirChooser(PV, "sc")} <button type="button" class="btn sm primary" id="scDir">Add them</button><span id="scDirMsg" role="status"></span></p>`
+      : (d.offline || offline) ? `<p class="dmsg"><b>Siftwell couldn’t reach its employer directory</b>, so ${p.companies ? "your list is the starter list of large US employers that comes with the app, not the employers near you" : "no employers near you were added"}. When you are online, <button type="button" class="linkbtn" id="scRetry">try the directory again</button>.<span id="scDirMsg" role="status"></span></p>` : "";
     if (ck.pending > 0) {   // the first check didn't get through every employer (paused, stopped or restarted)
       show(`<h2 id="scTitle">${ck.done ? "No jobs that fit yet" : "Your employers haven’t been checked yet"}</h2>
-        <p>Siftwell has checked ${n(ck.done)} of the ${n(ck.total)} of your employers so far${ck.done ? ", and none of their openings fit your search" : ""}. ${n(ck.pending)} ${ck.pending === 1 ? "is" : "are"} still to check.</p>
-        <div class="sacts"><button class="btn primary" type="button" id="scCont">Continue checking</button></div>
+        <p>${ck.done ? `Siftwell has checked ${n(ck.done)} of your ${n(ck.total)} employers so far, and none of their openings fit your search. ` : `None of your ${n(ck.total)} employers has been checked yet. `}${ck.done ? `${n(ck.pending)} ${ck.pending === 1 ? "is" : "are"} still to check.` : ""}</p>
+        ${job.dir_offline ? "" : note}${offNote}${titleTip(p)}
+        <div class="sacts"><button class="btn primary" type="button" id="scCont">${ck.done ? "Continue checking" : "Check my employers"}</button></div>
         <div class="smsg" id="scMsg" role="status"></div>${err}`);
       $("scCont").addEventListener("click", () => {
         $("scCont").disabled = true; $("scMsg").textContent = "";
         fetch("/api/search/continue", {method: "POST", headers: H, body: "{}"})
           .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
             if (!ok && !/already/i.test(d.error || "")) { $("scCont").disabled = false; $("scMsg").textContent = d.error || "That didn’t work."; return; }
-            load();
+            lastSig = ""; load();
           }).catch(() => { $("scCont").disabled = false; $("scMsg").textContent = "Couldn’t reach Siftwell. Try again."; });
       });
+      getLimit = pvOk && pvNew && $("scEst") ? dirChooserWire(PV, "sc") : () => null;
+      wireDir();
+      setTimeout(load, 15000);
       return;
     }
-    show(`<h2 id="scTitle">No jobs passed your filters</h2>
-      <p>${p.companies ? `Siftwell checked ${ck.done >= ck.total ? `all ${n(ck.total)}` : `${n(ck.done)} of the ${n(ck.total)}`} employers Siftwell watches for you, but none of their openings fit your search right now.` : "Siftwell isn’t watching any employers for you yet, so there was nothing to check."} Things that usually help:</p>
-      <ul>
-        <li><a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (Filters, then My search).</li>
-        ${(p.directory || {}).possible ? `<li><button type="button" class="linkbtn" id="scDir">Add employers near me from the Siftwell directory</button>: free, no Claude; Siftwell then checks their openings.<span class="dmsg" id="scDirMsg" role="status"></span></li>` : ""}
-        <li><a href="/catalog#find">Find more employers with Claude</a>: Claude looks up employers in your area${p.claude ? "" : " (needs Claude)"}, and you add the ones Siftwell can read.</li>
-        <li><a href="/catalog#companies">Add a company by its careers link</a>.</li>
-      </ul>${err}`);
-    if ($("scDir")) $("scDir").addEventListener("click", () => {
-      $("scDir").disabled = true; $("scDirMsg").textContent = " Adding…";
-      fetch("/api/directory/apply", {method: "POST", headers: H, body: JSON.stringify({fetch: true})})
-        .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
-          if (!ok) { $("scDir").disabled = false; $("scDirMsg").textContent = " " + (d.error || "That didn’t work."); return; }
-          const k = (d.added || 0) + (d.linked || 0);
-          $("scDirMsg").textContent = k ? ` Added ${n(k)} to your employers${d.fetching ? "; checking their openings now" : ""}.` : " No new employers near you in the directory right now.";
-          if (d.fetching) setTimeout(load, 1500);
-        }).catch(() => { $("scDir").disabled = false; $("scDirMsg").textContent = " Couldn’t reach Siftwell. Try again."; });
-    });
+    // Everything was checked and nothing fits: say why, then what to do, the most useful fix first.
+    const fixes = [];
+    if (!(pvOk && pvNew) && (d.offline || offline)) fixes.push(`<b>Siftwell couldn’t reach its employer directory</b>, so ${p.companies ? "your list is only the starter list of large US employers that comes with the app" : "no employers near you were added"}. Check your internet connection, then <button type="button" class="linkbtn" id="scRetry">try the directory again</button>.<span class="dmsg" id="scDirMsg" role="status"></span>`);
+    else if (pvOk && pvNew) fixes.push(`<b>${n(pvNew)} more employers</b> ${d.remote_only ? "that hire remotely" : `within ${d.radius} miles of ${esc(d.label)}`} are in Siftwell’s free employer directory. ${dirChooser(PV, "sc")} <button type="button" class="btn sm primary" id="scDir">Add them</button><span class="dmsg" id="scDirMsg" role="status"></span>`);
+    if (p.titles === false) fixes.push(`<a href="/profile#search">Tell Siftwell what work you do</a>: with your job title it can pick out the jobs that are relevant to you.`);
+    else fixes.push(`<a href="/profile#search">Add more job titles</a> (My profile, then Job search): only jobs with a title like yours are kept.`);
+    fixes.push(`<a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (Filters, then My search). Siftwell then offers the employers in the wider area.`);
+    fixes.push(`<a href="/catalog#find">Find more employers with Claude</a>: Claude looks up employers in your area${p.claude ? "" : " (needs Claude)"}, and you add the ones Siftwell can read.`);
+    fixes.push(`<a href="/catalog#companies">Add an employer by its careers link</a>.`);
+    show(`<h2 id="scTitle">${p.companies ? "No jobs matched your search" : "There are no employers to check yet"}</h2>
+      <p>${esc(s.why_empty || "None of your employers’ openings fit your search right now.")} Things that usually help:</p>
+      ${note}<ul>${fixes.map(x => `<li>${x}</li>`).join("")}</ul>${err}`);
+    getLimit = pvOk && pvNew ? dirChooserWire(PV, "sc") : () => null;
+    wireDir();
+    setTimeout(load, 15000);
   }
   load();
 })();
@@ -1656,7 +1759,7 @@ try {
     render(); setTimeout(() => scrollTo(0, sv.y || 0), 60);
   }
 } catch(e) {}
-if (!jobs.length && !D.profile) { $("aiBanner").hidden = false; $("aiBanner").innerHTML = `New profile: <a href="/profile#resume">${NOAI ? "fill in your profile" : "upload a resume"} on My profile</a>. Once it's approved, an update fills this board (about 15 minutes).`; }
+if (!jobs.length && !D.profile) { $("aiBanner").hidden = false; $("aiBanner").innerHTML = `New profile: <a href="/profile#resume">${NOAI ? "fill in your profile" : "upload a resume"} on My profile</a>. Once it's approved, Find new jobs fills this board.`; }
 
 function noClaudeBanner(signIn){
   if (!jobs.length && !D.profile) return;  // the "New profile" prompt is more useful until there is a profile
@@ -1916,29 +2019,28 @@ if (SERVED) {
   }
 
   let wasRunning = false, bgShown = false;
-  const PH = {fetch: "Checking company job boards", ai: "Claude is scoring new jobs", pivot: "Claude is rating AI-pivot jobs", facts: "Claude is looking up company facts"};
-  // The staged first check of the employers on this person's lists (first_search.py): one line while it runs (the
-  // board is usable meanwhile and offers the new jobs instead of reloading under the reader), and Continue checking
-  // when it stopped part-way (paused, Siftwell closed or restarted).
-  let chkWas = false, chkOff = false, chkSig = "";
+  // ONE progress indicator. The words come from the server (first_search.progress: the same plain line on every page).
+  //  - a board with no jobs: the Start card shows it (above), so nothing is drawn here;
+  //  - the staged first check: the slim banner (the board stays usable and offers the new jobs instead of reloading
+  //    under the reader), with Pause, and Continue checking when it stopped part-way;
+  //  - Find new jobs: the progress box, with that line and a bar. The fetch's raw output is never shown here
+  //    (Employers page, Runs and updates, Details).
+  let chkWas = false, chkOff = false, chkSig = "", pollFails = 0, EST = null;
   function drawCheck(s){
-    const c = s.check, b = $("chkBanner");
-    if (!c || !jobs.length) { b.hidden = true; return false; }
+    const c = s.check, b = $("chkBanner"), pg = s.progress || {};
+    if (!c || !jobs.length) { b.hidden = true; return !!(c && c.running); }
     const n = x => (x || 0).toLocaleString();
     const fresh = c.board_at && String(c.board_at) !== String(BOARD_AT || c.board_at);
     if (BOARD_AT == null) BOARD_AT = c.board_at;
     const act = (id, label, url) => { const e = $(id); if (e) e.addEventListener("click", () => { e.disabled = true; fetch(url, {method: "POST", headers: H, body: "{}"}).then(() => { chkSig = ""; poll(); }).catch(() => { e.disabled = false; }); }); };
     let html = "";
-    if (c.running && !c.mine) {
-      html = `<span>Siftwell is checking employers for another profile. Find new jobs waits until it’s done.</span>`;
-    } else if (c.running) {
-      chkWas = true;
-      const rating = s.running && (s.phase === "ai" || s.phase === "pivot");
-      html = `<span>${rating ? "Almost done: Claude is reading the best matches against your resume." : `Checking employers: ${n(c.done)} of ${n(c.total)} · your board fills in as we go`}${c.pausing ? " (pausing…)" : ""}</span>`
-           + (fresh ? `<button class="btn sm primary" type="button" id="chkShow">Show new jobs</button>` : "")
-           + (c.mine && !c.pausing && !rating ? `<button class="btn sm ghost" type="button" id="chkPause">Pause</button>` : "");
+    if (c.running) {
+      chkWas = chkWas || !!c.mine;
+      html = `<span>${esc(pg.line || "Checking employers…")}</span>`
+           + (c.mine && fresh ? `<button class="btn sm primary" type="button" id="chkShow">Show new jobs</button>` : "")
+           + (c.mine && pg.can_pause ? `<button class="btn sm ghost" type="button" id="chkPause">Pause</button>` : "");
     } else if (c.pending > 0 && !chkOff && !s.running) {
-      html = `<span>${c.paused ? "Paused. " : ""}Siftwell has checked ${n(c.done)} of the ${n(c.total)} of your employers. ${n(c.pending)} still to check.</span>`
+      html = `<span>${c.paused ? "Paused. " : ""}Siftwell has checked ${n(c.done)} of your ${n(c.total)} employers. ${n(c.pending)} still to check.</span>`
            + (fresh ? `<button class="btn sm" type="button" id="chkShow">Show new jobs</button>` : "")
            + `<button class="btn sm primary" type="button" id="chkCont">Continue checking</button><button class="btn sm ghost" type="button" id="chkHide">Not now</button>`;
     } else if (chkWas && fresh) {
@@ -1953,40 +2055,136 @@ if (SERVED) {
     return !!c.running;
   }
   let BOARD_AT = null;
+  // What Find new jobs will check and how long it takes, from the real employer list (first_search.estimates).
+  const estMine = () => !!EST && EST.profiles > 1 && EST.mine.companies < EST.all.companies;
+  function estText(){
+    if (!EST) return "check your employers for new openings";
+    const e = estMine() ? EST.mine : EST.all;
+    return `check ${estMine() ? "your" : "all"} ${e.companies.toLocaleString()} employer${e.companies === 1 ? "" : "s"} for new openings (${e.text})`;
+  }
+  function serverDown(){
+    const b = $("chkBanner"), html = `<span><b>Siftwell isn’t running.</b> This page can’t reach it, so nothing here is being updated and the buttons won’t work. Open Siftwell again, then reload this page.</span><button class="btn sm" type="button" onclick="location.reload()">Reload</button>`;
+    if (!jobs.length || chkSig === html) return;
+    chkSig = html; b.innerHTML = html; b.hidden = false; $("progress").hidden = true;
+  }
   function poll(){
     fetch("/api/status" + pq()).then(r => r.json()).then(s => {
-      if (drawCheck(s)) {   // a staged check: no big progress box, no automatic reload
-        $("updateBtn").disabled = true; $("updateBtn").classList.add("busy"); $("updSmall").textContent = "checking employers…";
-        $("progress").hidden = true; wasRunning = false;
+      pollFails = 0;
+      const pg = s.progress || {active: !!s.running, line: "Finding new jobs…", frac: null};
+      EST = s.estimate || EST;
+      if (s.next_run) { const n = new Date(s.next_run); $("nextRun").textContent = "· finds new jobs again " + (n.toDateString() === new Date().toDateString() ? "today " : "tomorrow ") + n.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); }
+      else $("nextRun").textContent = "";
+      const staged = drawCheck(s);
+      if (staged || !jobs.length) {   // the banner (or, on an empty board, the Start card) is the one indicator
+        const busy = staged || !!pg.active;
+        $("updateBtn").disabled = busy; $("updateBtn").classList.toggle("busy", busy);
+        $("updSmall").textContent = busy ? "checking employers…" : estText(); $("updateBtn").title = busy ? (pg.line || "Checking employers…") : "Find new jobs: " + estText();
+        if (!pollRerate.was) $("progress").hidden = true;
+        if (staged) wasRunning = false;
+        else if (wasRunning && !s.running) { wasRunning = false; if (s.exit === 0) { saveFilters(); return void location.reload(); } }
+        else if (s.running) wasRunning = true;
         return void setTimeout(poll, 3000);
       }
       $("updateBtn").disabled = s.running; $("updateBtn").classList.toggle("busy", !!s.running);
-      $("updSmall").textContent = s.running ? "running now…" : "every company, ~40 min";
-      $("updateBtn").title = s.running ? "Finding new jobs now…" : "Find new jobs: check every company for new openings (about 40 min)";
-      if (s.next_run) { const n = new Date(s.next_run); $("nextRun").textContent = "· next update " + (n.toDateString() === new Date().toDateString() ? "today " : "tomorrow ") + n.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); }
-      else $("nextRun").textContent = "· automatic updates off";
+      $("updSmall").textContent = s.running ? "running now…" : estText();
+      $("updateBtn").title = s.running ? "Finding new jobs now…" : "Find new jobs: " + estText();
       if (s.running) {
-        wasRunning = true; $("progress").hidden = false; scrollTo(0, 0);
-        $("progTitle").textContent = (PH[s.phase] || "Working") + "…";
-        $("progNote").textContent = s.total ? `${s.done} of ${s.total}` : "";
-        $("progBar").style.width = s.total ? (100 * s.done / s.total) + "%" : "4%";
-        $("progLog").textContent = s.lines.slice(-6).join("\n");
+        if (!wasRunning) scrollTo(0, 0);
+        wasRunning = true; $("progress").hidden = false;
+        $("progTitle").textContent = pg.line || "Finding new jobs…";
+        $("progNote").textContent = "";
+        $("progBar").style.width = Math.round(100 * (pg.frac == null ? .04 : pg.frac)) + "%";
+        $("progLog").textContent = "";
         setTimeout(poll, 2000);
-      } else if (s.job && s.job.alive && !s.job.mine) {  // the job lock is held by another process (e.g. a fetch started before a restart)
+      } else if (pg.active && pg.kind !== "idle") {  // something else holds things up (Claude finding employers, a job from before a restart)
         bgShown = true; $("progress").hidden = false;
-        const t = s.job.at ? new Date(s.job.at * 1000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) : "";
-        $("progTitle").textContent = `A background job is running (${s.job.kind})` + (t ? ` since ${t}` : "");
-        $("progNote").textContent = "It will finish on its own; Find new jobs and Re-rate wait for it.";
+        $("progTitle").textContent = pg.line;
+        $("progNote").textContent = "";
         $("progBar").style.width = "4%"; $("progLog").textContent = "";
         setTimeout(poll, 5000);
       } else if (bgShown && !wasRunning) {
         bgShown = false; $("progress").hidden = true; setTimeout(poll, 5000);
       } else if (wasRunning) {
         if (s.exit === 0) location.reload();
-        else { $("progTitle").textContent = "Finding new jobs failed"; $("progNote").textContent = "Last output:"; $("progLog").textContent = s.lines.join("\n"); }
-      }
-    }).catch(() => setTimeout(poll, 5000));
+        else { $("progTitle").textContent = "Finding new jobs didn’t finish"; $("progNote").textContent = "Some employers couldn’t be checked this time. Your board shows what Siftwell has; try Find new jobs again later. (What went wrong is on the Employers page, under Finding new jobs.)"; $("progLog").textContent = ""; $("progBar").style.width = "100%"; }
+      } else setTimeout(poll, 20000);   // idle: keep watching, so the page notices a check that starts later, or Siftwell closing
+    }).catch(() => { if (++pollFails >= 3) serverDown(); setTimeout(poll, 5000); });
   }
+  // ---- The employer directory on a board with jobs: (1) an honest notice when the first search had to use the starter
+  // list because the directory couldn't be reached, with "Try the directory again"; (2) after a change of search area
+  // (home, radius, ways of working), the employers the directory has for the new area, with the count, a choice and
+  // the time it costs: never a blind add, and the batch can be taken back.
+  const dirB = $("dirBanner");
+  const dirHide = key => { dirB.hidden = true; try { sessionStorage.setItem(key, "1"); sessionStorage.removeItem("jb.area"); } catch(e) {} };
+  function dirDone(d, again){
+    const k = (d.added || 0) + (d.linked || 0);
+    // (kept across the page's own reloads while the board fills in, so "Remove the employers this added" stays in reach)
+    try { sessionStorage.removeItem("jb.area"); if (k) sessionStorage.setItem("jb.diradded", JSON.stringify({added: k, fetching: !!d.fetching})); } catch(e) {}
+    const dropNote = () => { try { sessionStorage.removeItem("jb.diradded"); } catch(e) {} };
+    dirB.hidden = false;
+    dirB.innerHTML = `<span>${k ? `Added ${k.toLocaleString()} employers.${d.fetching ? " Siftwell is checking their openings now; your board fills in as it goes." : " Their jobs show up after the next Find new jobs."}` : "No new employers near you in the directory right now."}</span>`
+      + (k ? `<button class="btn sm ghost" type="button" id="dirUndoBtn">Remove the employers this added</button>` : "") + `<button class="btn sm ghost" type="button" id="dirClose">OK</button>`;
+    $("dirClose").addEventListener("click", () => { dirB.hidden = true; dropNote(); });
+    if ($("dirUndoBtn")) $("dirUndoBtn").addEventListener("click", () => {
+      if (!confirm(`Remove the ${k.toLocaleString()} employers this added?\n\nThey leave your list (their jobs leave your board). You can add them again later.`)) return;
+      $("dirUndoBtn").disabled = true; dropNote();
+      const undo = () => dirUndo().then(({ok, d}) => {
+        dirB.innerHTML = `<span>${ok ? `Removed ${(d.removed || 0).toLocaleString()} employers. Your board is being re-checked.` : esc(d.error || "That didn’t work.")}</span><button class="btn sm ghost" type="button" id="dirClose">OK</button>`;
+        $("dirClose").addEventListener("click", () => { dirB.hidden = true; });
+        if (ok) msAwaitBoard();
+      });
+      // (a check that is running is paused first, so nothing is added back while the employers are taken off)
+      fetch("/api/search/pause", {method: "POST", headers: H, body: "{}"}).then(() => setTimeout(undo, 2500)).catch(undo);
+    });
+    if (!again) { chkSig = ""; poll(); }
+  }
+  function dirOffer(pv, why){
+    const d = dirDefault(pv); if (!pv.available || !pv.new || !d) return false;
+    dirB.hidden = false;
+    dirB.innerHTML = `<span><b>${pv.new.toLocaleString()} more employers</b> ${pv.remote_only ? "that hire remotely" : `within ${pv.radius} miles of ${esc(pv.label)}`} are in Siftwell’s free employer directory${why}. ${dirChooser(pv, "db")}</span>`
+      + `<button class="btn sm primary" type="button" id="dirGo">Add them</button><button class="btn sm ghost" type="button" id="dirNo">Not now</button><span class="updmsg" id="dirMsg"></span>`;
+    const lim = dirChooserWire(pv, "db");
+    $("dirNo").addEventListener("click", () => dirHide("jb.dirno." + PID));
+    $("dirGo").addEventListener("click", () => {
+      $("dirGo").disabled = true; $("dirMsg").textContent = "Adding…";
+      dirAdd(lim(), false).then(({ok, d}) => { if (!ok) { $("dirGo").disabled = false; $("dirMsg").textContent = d.error || "That didn’t work."; return; } dirDone(d); })
+        .catch(() => { $("dirGo").disabled = false; $("dirMsg").textContent = "Couldn’t reach Siftwell. Try again."; });
+    });
+    return true;
+  }
+  window.areaOffer = function(){
+    if (!jobs.length) return;     // (the Start card offers them on an empty board)
+    dirPreview(false).then(pv => { if (!dirOffer(pv, " for your new search area")) { try { sessionStorage.removeItem("jb.area"); } catch(e) {} } }).catch(() => {});
+  };
+  function dirOfflineNotice(){
+    let off = false; try { off = !!sessionStorage.getItem("jb.diroff." + PID); } catch(e) {}
+    if (off || !dirB.hidden) return;
+    dirB.hidden = false;
+    dirB.innerHTML = `<span><b>Siftwell couldn’t reach its employer directory</b> when it set up your search, so your employers are a starter list of large US employers that comes with the app, not the employers near you.</span><button class="btn sm primary" type="button" id="dirRetry">Try the directory again</button><button class="btn sm ghost" type="button" id="dirNo">Not now</button><span class="updmsg" id="dirMsg"></span>`;
+    $("dirNo").addEventListener("click", () => dirHide("jb.diroff." + PID));
+    $("dirRetry").addEventListener("click", () => {
+      $("dirRetry").disabled = true; $("dirMsg").textContent = "Trying…";
+      dirPreview(true).then(pv => {
+        if (!pv.available) { $("dirRetry").disabled = false; $("dirMsg").textContent = "Still can’t reach it. Check your internet connection and try again."; return; }
+        if (!dirOffer(pv, "")) dirAdd(null, true).then(({ok, d}) => { if (ok) dirDone(d); else { $("dirRetry").disabled = false; $("dirMsg").textContent = d.error || "That didn’t work."; } });
+      }).catch(() => { $("dirRetry").disabled = false; $("dirMsg").textContent = "Couldn’t reach Siftwell. Try again."; });
+    });
+  }
+  if (jobs.length) {
+    let pend = false; try { pend = !!sessionStorage.getItem("jb.area"); } catch(e) {}
+    let done = null; try { done = JSON.parse(sessionStorage.getItem("jb.diradded") || "null"); } catch(e) {}
+    if (done && done.added) dirDone(done, true);
+    else if (pend) window.areaOffer();
+    fetch("/api/directory").then(r => r.json()).then(d => { if (d.offline_start) dirOfflineNotice(); }).catch(() => {});
+  }
+  // ---- No job title yet: every kind of job is kept and nothing can be ranked by relevance. Say so once, plainly.
+  (function(){
+    const key = "jb.notitle." + PID; let off = false; try { off = !!localStorage.getItem(key); } catch(e) {}
+    if (off || !jobs.length || HASREL) return;
+    const b = $("ttlBanner"); b.hidden = false;
+    b.innerHTML = `<span><b>Tell Siftwell what work you do to see the most relevant jobs first.</b> Without a job title it keeps every kind of job (${jobs.length.toLocaleString()} here) and can only order them by pay, place and level.</span><a class="btn sm primary" href="/profile#search">Add my job title</a><button class="btn sm ghost" type="button" id="ttlNo">Not now</button>`;
+    $("ttlNo").addEventListener("click", () => { b.hidden = true; try { localStorage.setItem(key, "1"); } catch(e) {} });
+  })();
   const RR = D.ratings || {};
   const need = NOAI ? 0 : (RR.stale || 0) + (RR.unrated || 0);
   $("rrSmall").textContent = NOAI ? "needs Claude" : need ? `${need} of your top ${RR.top} not rated or out of date` : "all top jobs current";
@@ -2138,11 +2336,13 @@ if (SERVED) {
   $("rerateBtn").addEventListener("click", rrOpen);
   pollRerate();
   $("updateBtn").addEventListener("click", () => {
-    if (!confirm("Find new jobs now?\n\nChecks every company's job board for new and removed openings, then Claude rates the new ones for each profile. Takes about 40 minutes.")) return;
-    fetch("/api/update", {method: "POST", headers: H, body: "{}"}).then(() => { wasRunning = true; poll(); });
+    const mine = estMine(), e = EST ? (mine ? EST.mine : EST.all) : null;
+    const what = e ? `Siftwell checks ${mine ? "your" : "all"} ${e.companies.toLocaleString()} employer${e.companies === 1 ? "" : "s"} for new and removed openings. That takes ${e.text}.` : "Siftwell checks your employers for new and removed openings.";
+    if (!confirm("Find new jobs now?\n\n" + what + (NOAI ? "" : " Claude then rates the new ones (this uses your Claude plan).") + (mine ? "\n\nThe other profiles’ employers are checked when they press Find new jobs, or by the automatic daily one." : ""))) return;
+    fetch("/api/update", {method: "POST", headers: H, body: JSON.stringify({scope: "mine"})}).then(() => { wasRunning = true; scrollTo(0, 0); poll(); });
   });
   poll();
-  // The settings page hands its Update / Re-rate / Add a person clicks to the board (sessionStorage "jb.run").
+  // The settings page hands its Find new jobs / Re-rate / Add a person clicks to the board (sessionStorage "jb.run").
   try {
     const r = sessionStorage.getItem("jb.run"); sessionStorage.removeItem("jb.run");
     if (r === "update" || r === "rerate") setTimeout(() => $(r + "Btn").click(), 300);

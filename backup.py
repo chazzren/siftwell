@@ -37,8 +37,12 @@ CHUNK = 1024 * 1024
 
 TMP = os.path.join(paths.DATA, "_backup_tmp")
 UPLOAD = os.path.join(TMP, "upload.zip")
+# "directory": the employer directory's memory per person (which employers were offered, removed or pruned, so a
+# removed one stays off and the weekly additions keep coming) and its cached files; "claude_usage.jsonl": the Claude
+# usage history behind Settings, Claude usage.
 TOP_NAMES = {"people.json", "catalog.db", "ai_scores.json", "pivot_scores.json", "config.json", "schedule.json",
-             "network.json", "access_key", "market.json", "companies.json", "people", "company_research", "manifest.json"}
+             "network.json", "access_key", "market.json", "companies.json", "people", "company_research", "manifest.json",
+             "directory", "claude_usage.jsonl"}
 SIDECARS = ("catalog.db-wal", "catalog.db-shm", "catalog.db-journal")   # never exported; set aside with catalog.db on restore
 SKIP_SUFFIX = (".tmp", ".lock", ".pid", ".part")
 

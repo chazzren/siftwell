@@ -1017,7 +1017,7 @@ def prepare_listing(j, c):
 # read is kept, the company is marked "capped" (nothing is closed) and the fetch moves on.
 # The budget: --budget SECS on the command line, else env SIFTWELL_FETCH_BUDGET, else FETCH_BUDGET_SECS; 0 = none.
 FETCH_BUDGET_SECS = 240
-FETCH_BUDGET_GRACE = 45      # after the budget, a reader that doesn't ask over_budget() is cut off this much later
+FETCH_BUDGET_GRACE = 45      # after the budget, a reader that doesn't ask over_budget() is cut off this much later (at most budget / 4)
 FETCH_MAX_POSTINGS = 8000    # postings read from one employer in one fetch
 _BUDGET = {"secs": None}
 
@@ -1078,7 +1078,7 @@ def process(c, budget=None):
                     c["_truncated"] = c.get("_truncated") or f"stopped at {FETCH_MAX_POSTINGS} postings; the rest is read next time"
                     c["_budget_hit"] = True
                     break
-                if budget and time.time() > c["_deadline"] + FETCH_BUDGET_GRACE:
+                if budget and time.time() > c["_deadline"] + min(FETCH_BUDGET_GRACE, budget / 4):
                     budget_stop(c, f"after {raw} postings")
                     break
         finally:
@@ -1098,6 +1098,7 @@ def process(c, budget=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="comma-separated company names")
+    ap.add_argument("--only-file", help="a JSON list of company names (for lists too long for --only: one profile's own employers)")
     ap.add_argument("--no-rate", action="store_true", help="fetch only: rebuild the boards without Claude rating (the staged first check rates once, at the end)")
     ap.add_argument("--no-boards", action="store_true", help="fetch only: don't rebuild the boards after this fetch (a later one will)")
     ap.add_argument("--boards-every", type=int, default=0, metavar="SECS", help="fetch only: also rebuild the boards (no Claude) while the fetch runs, the first time after about a minute and then every SECS, so jobs show up before slow boards finish")
@@ -1136,7 +1137,13 @@ def fetch(args):
         _BUDGET["secs"] = max(0, int(args.budget))
     reparse_stored()   # (one time after an update that reads postings better: stored listings are read again first)
     companies = catalog.companies(include_paused=False)
-    if args.only:
+    if getattr(args, "only_file", None):
+        with open(args.only_file, encoding="utf-8") as fh:
+            names = [str(x) for x in json.load(fh)]
+        want = {x.strip().lower() for x in names}
+        companies = [c for c in companies if c["name"].lower() in want]
+        args.only = f"{len(companies)} employers ({os.path.basename(args.only_file)})"   # (what the run history shows)
+    elif args.only:
         want = {x.strip().lower() for x in args.only.split(",")}
         companies = [c for c in companies if c["name"].lower() in want]
     if not companies:
@@ -1224,8 +1231,13 @@ def fetch(args):
 
 CSV_COLS = ["req_status", "score", "pv_score", "pv_label", "pv_now", "pv_later", "ai_label", "ai_asis", "ai_fit", "ai_reason", "ai_tailor",
             "fit_score", "comp_score", "qol_score", "company", "title", "level", "workplace", "dmv_locations", "locations",
-            "salary_min", "salary_max", "salary_mid", "wide_band", "travel", "travel_pct", "clearance", "scif", "posted",
+            "pay", "salary_min", "salary_max", "salary_mid", "wide_band", "travel", "travel_pct", "clearance", "scif", "posted",
             "first_seen", "sector", "url"]
+# what the columns are called in jobs.csv (the keys above are internal names from when Siftwell knew one area only)
+CSV_HEAD = {"dmv_locations": "locations_near_you", "locations": "all_locations", "pv_score": "target_score", "pv_label": "target_label",
+            "pv_now": "target_now", "pv_later": "target_after_prep", "ai_label": "match_label", "ai_asis": "match_as_is", "ai_fit": "match",
+            "ai_reason": "match_reason", "ai_tailor": "tailoring_tips", "req_status": "requirements", "pay": "pay_as_posted",
+            "salary_min": "pay_per_year_min", "salary_max": "pay_per_year_max", "salary_mid": "pay_per_year_mid"}
 
 def company_sets_map():
     import catalog
@@ -1460,9 +1472,11 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     import io
     paths.dump_json_atomic(people.pdir("jobs.json", pid=pid), payload, indent=1)
     buf = io.StringIO(newline="")
-    w = csv.DictWriter(buf, fieldnames=CSV_COLS, extrasaction="ignore"); w.writeheader()
+    w = csv.DictWriter(buf, fieldnames=CSV_COLS, extrasaction="ignore")
+    w.writerow({k: CSV_HEAD.get(k, k) for k in CSV_COLS})   # (plain column names in the file people open)
     for j in jobs:
-        w.writerow({**j, "dmv_locations": "; ".join(j["dmv_locations"]), "locations": "; ".join(j["locations"])})
+        w.writerow({**j, "dmv_locations": "; ".join(j["dmv_locations"]), "locations": "; ".join(j["locations"]),
+                    "pay": jobtext.pay_label(j.get("pay_min"), j.get("pay_max"), j.get("pay_unit")) if j.get("pay_min") is not None else ""})
     paths.write_atomic(people.pdir("jobs.csv", pid=pid), buf.getvalue(), newline="")
     report.build(payload, people.pdir("report.html", pid=pid))  # (written atomically too)
     print(f"{people.name(pid)}: {len(jobs)} jobs on the board", flush=True)

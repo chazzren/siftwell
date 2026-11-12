@@ -46,6 +46,11 @@ on:
         required: false
         default: false
         type: boolean
+      allow_shrink:
+        description: "Publish even if the new directory is much smaller than the last one (only after checking why)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -68,13 +73,35 @@ jobs:
           python-version: "3.12"
 
       - name: Bring back the previous directory (builder state and files)
+        # "The branch doesn't exist" (a first build) and "the fetch failed" are different things: a network hiccup
+        # must never be taken for a first build, or this run would rebuild from nothing and force-push over the
+        # directory. So ask the server whether the branch exists (exit code 2 = it doesn't), and stop on any error.
         run: |
           mkdir -p "$RUNNER_TEMP/out"
-          if git fetch --depth=1 origin index 2>/dev/null; then
+          set +e
+          git ls-remote --exit-code --heads origin index >/dev/null 2>"$RUNNER_TEMP/lsremote.err"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            ok=""
+            for try in 1 2 3; do
+              if git fetch --depth=1 origin index; then ok=1; break; fi
+              echo "Fetching the index branch failed (try $try); waiting before the next try."
+              sleep $((try * 20))
+            done
+            if [ -z "$ok" ]; then
+              echo "::error::The index branch exists but could not be fetched. Stopping so the published directory is not overwritten by an empty rebuild."
+              exit 1
+            fi
             git archive FETCH_HEAD | tar -x -C "$RUNNER_TEMP/out"
+            cp "$RUNNER_TEMP/out/manifest.json" "$RUNNER_TEMP/previous-manifest.json" 2>/dev/null || true
             echo "Previous directory restored."
-          else
+          elif [ "$rc" -eq 2 ]; then
             echo "No index branch yet: first build."
+          else
+            cat "$RUNNER_TEMP/lsremote.err" || true
+            echo "::error::Could not ask GitHub whether the index branch exists (git ls-remote exit $rc). Stopping rather than treating this as a first build."
+            exit 1
           fi
 
       - name: Build the directory
@@ -100,6 +127,48 @@ jobs:
           python -X utf8 scripts/build_index.py "${args[@]}"
           du -sh "$RUNNER_TEMP/out"
           cat "$RUNNER_TEMP/out/manifest.json" | head -c 3000
+
+      - name: Refuse to publish a directory that shrank drastically
+        # Compares the new manifest with the one restored above: total employers and total size of the state files.
+        # Under 60% of either (or far fewer states) stops the run before anything is pushed. A manual run with
+        # "allow_shrink" ticked goes ahead (after someone has looked at why). A run limited to some states keeps the
+        # other states' entries from the previous manifest, so the totals stay comparable.
+        env:
+          ALLOW_SHRINK: ${{ inputs.allow_shrink && '1' || '' }}
+        run: |
+          python -X utf8 - "$RUNNER_TEMP/previous-manifest.json" "$RUNNER_TEMP/out/manifest.json" <<'PY'
+          import json, os, sys
+          prev_path, new_path = sys.argv[1], sys.argv[2]
+          if not os.path.exists(prev_path):
+              print("No previous directory to compare with (first build)."); sys.exit(0)
+          try:
+              prev = json.load(open(prev_path, encoding="utf-8"))
+          except ValueError:
+              print("The previous manifest could not be read; nothing to compare with."); sys.exit(0)
+          try:
+              new = json.load(open(new_path, encoding="utf-8"))
+          except (OSError, ValueError) as e:
+              print(f"::error::The new manifest is missing or unreadable ({e}). Not publishing."); sys.exit(1)
+          def totals(m):
+              st = m.get("states") or {}
+              return (len(st), sum(int(v.get("employers") or 0) for v in st.values()), sum(int(v.get("bytes") or 0) for v in st.values()))
+          (ps, pe, pb), (ns, ne, nb) = totals(prev), totals(new)
+          print(f"Previous: {ps} state files, {pe:,} employers, {pb:,} bytes. New: {ns} state files, {ne:,} employers, {nb:,} bytes.")
+          problems = []
+          if pe >= 200 and ne < 0.6 * pe:
+              problems.append(f"employers fell from {pe:,} to {ne:,}")
+          if pb >= 100_000 and nb < 0.6 * pb:
+              problems.append(f"state files shrank from {pb:,} to {nb:,} bytes")
+          if ps >= 5 and ns < 0.8 * ps:
+              problems.append(f"state files fell from {ps} to {ns}")
+          if not problems:
+              print("Size check passed."); sys.exit(0)
+          msg = "The new directory is much smaller than the published one: " + "; ".join(problems) + "."
+          if os.environ.get("ALLOW_SHRINK"):
+              print(f"::warning::{msg} Publishing anyway because allow_shrink was ticked."); sys.exit(0)
+          print(f"::error::{msg} Not publishing. If this is expected, run the workflow by hand with allow_shrink ticked.")
+          sys.exit(1)
+          PY
 
       - name: Publish to the index branch (one commit, force-pushed)
         env:

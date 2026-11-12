@@ -73,7 +73,8 @@ jobs:
       - name: Release checks
         env:
           LEAK_PATTERNS: ${{ secrets.LEAK_PATTERNS }}
-        run: python scripts/release_check.py
+        # --require-leak-patterns: a missing LEAK_PATTERNS secret fails the release instead of only warning
+        run: python scripts/release_check.py --require-leak-patterns
 
   windows:
     needs: check
@@ -297,7 +298,11 @@ jobs:
             if [ -n "$EXTRA_NOTES" ]; then printf '%s\n\n' "$EXTRA_NOTES"; fi
             echo "## Changes"
             if [ -n "$PREV_TAG" ]; then RANGE="$PREV_TAG..HEAD"; else RANGE="HEAD"; fi
-            git log --no-merges --pretty=format:'- %s' "$RANGE" | grep -v '^- Release v' || true
+            # Commit subjects, minus the ones that aren't notes: merges, our own release commit, and work-in-progress
+            # commits ("WIP ...", "wip: ...", "fixup! ...", "squash! ..."). History itself is left alone.
+            git log --no-merges --pretty=format:'- %s' "$RANGE" \
+              | grep -v -E '^- (Release v|Merge )' \
+              | grep -v -i -E '^- \[?(wip|fixup!|squash!)' || true
             echo
             echo
             echo "## Install"

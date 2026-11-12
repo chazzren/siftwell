@@ -17,6 +17,7 @@ DEFAULT_SETTINGS = {
     # Setup-flow answers (setup_done / setup_step are deliberately NOT here: save_settings writes every default,
     # and a written setup_done=False would send existing profiles back through setup).
     "home_zip": "", "radius_miles": 35, "workplaces": ["onsite", "hybrid", "remote"], "remote_us": True,
+    "directory_zip": "", "directory_radius": None,   # no home ZIP: where the employer directory looks (directory.area); not a job filter
     "salary_target": None, "travel_max": "any", "skip_employers": [], "skip_industries": [], "direction": "",
     "salary_floor": 0,          # lowest base pay to show; 0 = no floor (the default for new profiles)
     "current_base": None,

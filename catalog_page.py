@@ -1,4 +1,5 @@
-"""The Catalog page (GET /catalog): the household's shared catalog of companies and listings.
+"""The Employers page (GET /catalog; called "Employers" everywhere people see it): the household's shared catalog of
+companies and listings.
 
 Same two-pane layout as /settings (settings_page.CSS): a list of sections on the left, the selected one on the
 right, chosen by the URL hash (/catalog#listings); at phone width a drill-down with a "‹ Catalog" back control.
@@ -17,10 +18,10 @@ import settings_page
 
 _SVG = settings_page._SVG
 PANES = [
-    ("companies", "Companies", '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/>'),
-    ("listings", "Listings", '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>'),
-    ("runs", "Runs & updates", '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/><path d="M12 7v5l3 2"/>'),
-    ("rating", "Rating", '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>'),
+    ("companies", "Employers", '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/>'),
+    ("listings", "Job listings", '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>'),
+    ("runs", "Finding new jobs", '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/><path d="M12 7v5l3 2"/>'),
+    ("rating", "Ratings", '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>'),
     ("find", "Find employers near me", '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/>'),
     ("share", "Share", '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>'),
 ]
@@ -28,25 +29,25 @@ e = html.escape
 
 
 def _head(cid, name):
-    return (f'<div class="sphead"><a class="sback" href="/catalog" data-back>‹ Catalog</a>'
+    return (f'<div class="sphead"><a class="sback" href="/catalog" data-back>‹ Employers</a>'
             f'<div class="sprow"><h2 id="h-{cid}">{e(name)}</h2><span class="ssave" role="status" aria-live="polite"></span></div></div>')
 
 
 BODIES = {
     "companies": """
-<section class="sgsec"><h3 class="sgtitle">Add a company</h3><div class="sgroup">
+<section class="sgsec"><h3 class="sgtitle">Add an employer</h3><div class="sgroup">
   <form class="srow stack" id="addForm">
-    <input type="url" id="addUrl" placeholder="Paste a careers page link, e.g. https://boards.greenhouse.io/examplecompany" aria-label="Careers page link" required>
+    <input type="text" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" id="addUrl" placeholder="Paste the employer’s careers page link, e.g. careers.example.com" aria-label="Careers page link" required>
     <div class="cline"><input type="text" id="addName" placeholder="Name (optional)" aria-label="Company name (optional)" maxlength="60">
     <select id="addList" aria-label="Who it is for"></select><button class="btn primary" type="submit" id="addBtn">Add</button></div>
   </form></div>
-  <p class="sfoot" id="addMsg" role="status" aria-live="polite">Siftwell finds the company's job system, checks it can read the listings, adds it, then fetches its jobs.</p></section>
-<div class="livebar" id="fetchBar" hidden><div class="lbtop"><b id="fetchTitle">Fetching…</b><span class="note" id="fetchCount"></span></div><div class="pbar"><i id="fetchFill"></i></div><div class="note" id="fetchLine"></div></div>
+  <p class="sfoot" id="addMsg" role="status" aria-live="polite">Siftwell works out how the employer lists its jobs, checks it can read them, adds it, then gets its jobs.</p></section>
+<div class="livebar" id="fetchBar" role="status" aria-live="polite" hidden><div class="lbtop"><b id="fetchTitle">Working…</b></div><div class="pbar"><i id="fetchFill"></i></div></div>
 <div class="ctools">
   <input type="search" id="coQ" placeholder="Search companies" aria-label="Search companies">
-  <select id="coStatus" aria-label="Status"><option value="">Any status</option><option value="ok">OK</option><option value="suspect">Suspect</option><option value="capped">Capped</option><option value="error">Error</option><option value="paused">Paused</option><option value="new">Not fetched yet</option></select>
+  <select id="coStatus" aria-label="Status"><option value="">Any status</option><option value="ok">OK</option><option value="suspect">Looks incomplete</option><option value="capped">Too many to read all</option><option value="error">Couldn’t be read</option><option value="paused">Paused</option><option value="new">Not checked yet</option></select>
   <select id="coListF" aria-label="Whose employers"><option value="">Every employer</option><option value="mine">Your employers</option><option value="other">Not yours</option></select>
-  <select id="coAts" aria-label="Job system"><option value="">Any job system</option></select>
+  <select id="coAts" aria-label="Careers site type"><option value="">Any careers site type</option></select>
 </div>
 <p class="count" id="coCount">Loading…</p>
 <p class="notice" id="factsNote" hidden></p>
@@ -66,9 +67,10 @@ BODIES = {
 <p class="sfoot">Under each listing: who it currently passes the filters for, and Claude's rating for them.</p>""",
     "runs": """
 __AUTOUPDATE__
-<section class="sgsec"><h3 class="sgtitle">Fetch everything now</h3><div class="sgroup">
-  <div class="srow"><div class="slab"><span>Check every company for new and removed jobs</span><small>About 40 minutes. Claude then rates the new listings for each person (uses your Claude plan).</small></div><div class="sctl"><button class="btn primary sm" type="button" id="fetchAll">Fetch everything now</button></div></div>
-  <div class="srow stack" id="allBar" hidden><div class="lbtop"><b id="allTitle"></b><span class="note" id="allCount"></span></div><div class="pbar"><i id="allFill"></i></div><div class="note" id="allLine"></div></div>
+<section class="sgsec"><h3 class="sgtitle">Find new jobs now</h3><div class="sgroup">
+  <div class="srow"><div class="slab"><span>Check every employer for new and removed jobs</span><small id="allEst">For everyone in the household. Claude then rates the new listings for each person (uses your Claude plan).</small></div><div class="sctl"><button class="btn primary sm" type="button" id="fetchAll">Find new jobs now</button></div></div>
+  <div class="srow stack" id="allBar" role="status" aria-live="polite" hidden><div class="lbtop"><b id="allTitle"></b></div><div class="pbar"><i id="allFill"></i></div>
+    <details class="rundet" id="allDet"><summary>Details</summary><div class="note mono" id="allLine"></div></details></div>
 </div></section>
 <section class="sgsec"><h3 class="sgtitle">History</h3><div class="clist" id="runRows"><p class="note">Loading…</p></div></section>""",
     "rating": """
@@ -79,7 +81,7 @@ __AUTOUPDATE__
 <form id="fdForm" class="sgsec">
   <h3 class="sgtitle">Where and what</h3>
   <div class="sgroup">
-    <div class="srow"><div class="slab"><label for="fdLoc">Location</label><small>ZIP code or City, ST</small></div><div class="sctl cline"><input type="text" id="fdLoc" class="tin" maxlength="80" placeholder="e.g. 22201"><input type="number" id="fdRad" class="tin num" min="5" max="150" aria-label="Radius in miles"><span class="note">mi</span></div></div>
+    <div class="srow"><div class="slab"><label for="fdLoc">Location</label><small>ZIP code or City, ST</small></div><div class="sctl cline"><input type="text" id="fdLoc" class="tin" maxlength="80" placeholder="ZIP code or City, ST"><input type="number" id="fdRad" class="tin num" min="5" max="150" aria-label="Radius in miles"><span class="note">mi</span></div></div>
     <div class="srow stack"><label for="fdFocus">Focus (optional)</label><input type="text" id="fdFocus" maxlength="300" placeholder="e.g. program management, healthcare, AI"></div>
   </div>
   <h3 class="sgtitle" style="margin-top:18px">Kinds of employers</h3>
@@ -140,9 +142,10 @@ def render(pid=None) -> str:
                    f'<span class="sname">{e(label)}</span><span class="schev" aria-hidden="true">›</span></a>')
         panes.append(f'<section class="spane" data-cat="{cid}" aria-labelledby="h-{cid}" hidden>{_head(cid, label)}{BODIES[cid].replace('__AUTOUPDATE__', autoupdate.PANE_HTML)}</section>')
     tools = report.TOOLS.replace('id="catalogBtn" href="/catalog"', 'id="catalogBtn" href="/catalog" aria-current="page"')
-    head = report.HEAD.replace("<title>Siftwell</title>", "<title>Catalog · Siftwell</title>")
-    body = (settings_page.BODY.replace("<h1>Settings · __NAME__</h1>", "<h1>Catalog</h1>").replace("__TOOLS__", tools)
-            .replace('aria-label="Settings categories"', 'aria-label="Catalog sections"').replace("__NAV__", "".join(nav))
+    head = report.HEAD.replace("<title>Siftwell</title>", "<title>Employers · Siftwell</title>")
+    body = (settings_page.BODY.replace("<h1>Settings · __NAME__</h1>", "<h1>Employers</h1>").replace("__TOOLS__", tools)
+            .replace(settings_page.SUBTITLE, "Every employer and job listing Siftwell checks, for everyone in this household")
+            .replace('aria-label="Settings categories"', 'aria-label="Employers page sections"').replace("__NAV__", "".join(nav))
             .replace("__PANES__", "".join(panes)).replace("__VERSION__", e(getting_started.VERSION)))
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
@@ -155,6 +158,8 @@ def render(pid=None) -> str:
 
 CSS = """<style>
 .spanes{max-width:900px}
+.rundet{margin-top:6px}.rundet summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+.rundet .mono{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11.5px;max-height:12em;overflow:auto;margin-top:4px}
 .cline{display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-width:0}
 .cline input[type=text]{flex:1 1 160px}
 .srow.stack input[type=url],.srow.stack input[type=text],.srow.stack input[type=search],.cline input,.cline select,.ctools input,.ctools select,.tin{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;min-width:0}
@@ -260,7 +265,7 @@ const ATS = {greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", workday: 
   amazon: "Amazon", jibe: "Jibe", phenom: "Phenom", clearcompany: "ClearCompany",
   successfactors: "SAP SuccessFactors", taleo: "Taleo"};
 const atsName = a => ATS[a] || a || "";
-const STATUS = {ok: "OK", suspect: "Suspect", capped: "Capped", error: "Error", paused: "Paused", new: "Not fetched yet"};
+const STATUS = {ok: "OK", suspect: "Looks incomplete", capped: "Too many to read all", error: "Couldn’t be read", paused: "Paused", new: "Not checked yet"};
 function when(iso){
   if (!iso) return "";
   const d = new Date(iso.length <= 10 ? iso + "T12:00:00" : iso); if (isNaN(d)) return iso;
@@ -309,26 +314,29 @@ document.querySelector(".spanes").addEventListener("click", ev => {
   scrollTo(0, 0);
 });
 
-// ---- live update status (Fetch now / Fetch everything now share the server's one update slot)
+// ---- live status: the ONE plain progress line every page shows (first_search.progress, via /api/status). The
+// fetch's own output is only behind Details on the Finding new jobs section, and only while it runs.
 let statusTimer = null, wasRunning = false;
 function pollStatus(){
   clearTimeout(statusTimer);
   return get("/api/status").then(s => {
-    const run = !!s.running, pct = s.total ? Math.round(100 * s.done / s.total) : 0;
-    const phase = s.phase === "fetch" && s.total && s.done >= s.total ? "Updating everyone's boards" : s.phase === "fetch" ? "Fetching job listings" : s.phase === "ai" ? "Claude is rating new listings" : s.phase === "facts" ? "Claude is looking up company facts" : "Working";
-    const line = (s.lines || []).filter(Boolean).slice(-1)[0] || "";
+    const pg = s.progress || {active: !!s.running, line: "Finding new jobs…", frac: null};
+    const run = !!pg.active, pct = Math.round(100 * (pg.frac == null ? .04 : pg.frac));
     [["fetch", $("fetchBar")], ["all", $("allBar")]].forEach(([k, bar]) => {
       if (!bar) return;
       bar.hidden = !run;
-      $(k + "Title").textContent = phase + "…";
-      $(k + "Count").textContent = s.total ? `${n(s.done)} of ${n(s.total)}` : "";
+      $(k + "Title").textContent = pg.line || "Working…";
       $(k + "Fill").style.width = pct + "%";
-      $(k + "Line").textContent = line;
     });
-    $("fetchAll").disabled = run; $("fetchAll").textContent = run ? "Running…" : "Fetch everything now";
+    $("allDet").hidden = !s.running; if (!run) $("allDet").open = false;
+    $("allLine").textContent = s.running ? (s.lines || []).filter(Boolean).slice(-8).join("\n") : "";
+    const e = s.estimate && s.estimate.all;
+    if (e) $("allEst").textContent = `${n(e.companies)} employer${e.companies === 1 ? "" : "s"}, for everyone in the household: ${e.text}. Claude then rates the new listings for each person (uses your Claude plan).`;
+    window.__EST = e || window.__EST;
+    $("fetchAll").disabled = run; $("fetchAll").textContent = run ? "Running…" : "Find new jobs now";
     $("updateBtn").disabled = run; $("updateBtn").classList.toggle("busy", run);
     if (run) { wasRunning = true; statusTimer = setTimeout(pollStatus, 2500); }
-    else if (wasRunning) { wasRunning = false; if (loaded.companies) loadCompanies(); if (loaded.runs) loadRuns(); }
+    else { if (wasRunning) { wasRunning = false; if (loaded.companies) loadCompanies(); if (loaded.runs) loadRuns(); } statusTimer = setTimeout(pollStatus, 20000); }
     return s;
   }).catch(() => { statusTimer = setTimeout(pollStatus, 8000); });
 }
@@ -391,12 +399,12 @@ function coRow(c){
   const reason = c.reason ? `<small>${esc(c.reason)}</small>` : "";
   return `<div class="crow" data-name="${esc(c.name)}"><div><b>${esc(c.name)}</b><small>${esc(atsName(c.ats))}${lists ? " · " + esc(lists) : ""}</small><small>${esc(factsText(c))}</small></div>
   <div><span class="pill ${esc(c.status)}">${esc(STATUS[c.status] || c.status)}</span>${c.paused && c.fetch_status && c.fetch_status !== "ok" ? ` <span class="pill ${esc(c.fetch_status)}">${esc(STATUS[c.fetch_status] || c.fetch_status)}</span>` : ""}${reason}</div>
-  <div><span>${n(c.open)} open</span><small>${c.last ? "Fetched " + esc(when(c.last)) : "Never fetched"}</small></div>
-  <div class="cact"><button class="btn sm" type="button" data-act="fetch"${c.paused ? " disabled" : ""}>Fetch now</button>${factsBtn(c)}<button class="btn sm" type="button" data-act="watch" title="${c.mine ? "Take it off your employers (it stays in the catalog)" : "Add it to your employers, so its jobs can reach your board"}">${c.mine ? "Stop watching" : "Watch"}</button><button class="btn sm" type="button" data-act="pause">${c.paused ? "Resume" : "Pause"}</button><button class="btn sm" type="button" data-act="remove">Remove</button></div></div>`;
+  <div><span>${n(c.open)} open</span><small>${c.last ? "Checked " + esc(when(c.last)) : "Not checked yet"}</small></div>
+  <div class="cact"><button class="btn sm" type="button" data-act="fetch"${c.paused ? " disabled" : ""}>Check now</button>${factsBtn(c)}<button class="btn sm" type="button" data-act="watch" title="${c.mine ? "Take it off your employers (it stays on this page for the rest of the household)" : "Add it to your employers, so its jobs can reach your board"}">${c.mine ? "Stop watching" : "Watch"}</button><button class="btn sm" type="button" data-act="pause">${c.paused ? "Resume" : "Pause"}</button><button class="btn sm" type="button" data-act="remove">Remove</button></div></div>`;
 }
 function renderCompanies(){
   const list = coFiltered();
-  $("coCount").textContent = `${n(list.length)} of ${n(COS.length)} companies · ${n(COS.reduce((a, c) => a + (c.paused ? 0 : c.open), 0))} open listings`;
+  $("coCount").textContent = `${n(list.length)} of ${n(COS.length)} employers · ${n(list.reduce((a, c) => a + (c.paused ? 0 : c.open), 0))} open job listings` + (list.length < COS.length ? " in this list" : "");
   $("coRows").innerHTML = list.slice(0, coShown).map(coRow).join("");
   $("coMore").hidden = list.length <= coShown;
   $("coMore").textContent = `Show more (${n(list.length - coShown)} left)`;
@@ -421,8 +429,8 @@ $("coRows").addEventListener("click", ev => {
   }
   const url = act === "fetch" ? "/api/catalog/fetch" : act === "pause" ? "/api/catalog/pause" : act === "watch" ? "/api/catalog/watch" : "/api/catalog/remove";
   post(url, {name, paused: !c.paused, on: !c.mine}).then(d => {
-    if (act === "watch") { c.mine = !!d.mine; c.watchers = d.watchers || []; row.outerHTML = coRow(c); return; }
-    if (act === "fetch") { say("Fetching now. Its new listings reach the boards when it finishes."); wasRunning = true; pollStatus(); b.disabled = false; return; }
+    if (act === "watch") { c.mine = !!d.mine; c.watchers = d.watchers || []; renderCompanies(); return; }   // (the list and its count follow the filter)
+    if (act === "fetch") { say("Checking it now. Its new jobs reach the boards when it finishes."); wasRunning = true; pollStatus(); b.disabled = false; return; }
     if (act === "remove") { COS = COS.filter(x => x.name !== name); renderCompanies(); return; }
     c.paused = !c.paused; c.status = c.paused ? "paused" : (c.fetch_status || "new"); row.outerHTML = coRow(c);
   }).catch(err => { b.disabled = false; say(errText(err), true); });
@@ -431,17 +439,19 @@ $("addForm").addEventListener("submit", ev => {
   ev.preventDefault();
   const b = $("addBtn"), m = $("addMsg");
   b.disabled = true; m.style.color = ""; m.textContent = "Checking that link… (this can take up to a minute)";
-  post("/api/catalog/add", {url: $("addUrl").value.trim(), name: $("addName").value.trim(), list: $("addList").value}).then(d => {
+  let link = $("addUrl").value.trim();
+  if (link && !/^[a-z][a-z0-9+.-]*:\/\//i.test(link)) link = "https://" + link.replace(/^\/+/, "");   // a bare "careers.example.com" is fine
+  post("/api/catalog/add", {url: link, name: $("addName").value.trim(), list: $("addList").value}).then(d => {
     b.disabled = false; $("addUrl").value = ""; $("addName").value = "";
-    m.textContent = `${d.existing ? "Already in the catalog: now one of your employers" : "Added"} ${d.name} (${atsName(d.ats)}, ${n(d.open_jobs)} open jobs). ` +
-      (d.fetching ? "Fetching its jobs now." : "Its jobs come with the next update.");
+    m.textContent = `${d.existing ? "Siftwell already had it: now one of your employers" : "Added"} ${d.name} (${n(d.open_jobs)} open jobs). ` +
+      (d.fetching ? "Getting its jobs now." : "Its jobs come with the next Find new jobs.");
     loadCompanies(); if (d.fetching) { wasRunning = true; pollStatus(); }
   }).catch(err => { b.disabled = false; m.style.color = "var(--bad)"; m.textContent = errText(err); });
 });
 
 // ---- Listings (pages come from the server)
 let lsPage = 1, lsTotal = 0, lsTimer = null;
-const TIER = {haiku: "Haiku", sonnet: "Sonnet", opus: "Opus"};
+const TIER = {haiku: "Quick check", sonnet: "Careful look", opus: "Best judgment"};
 function whoChip(p){
   let t;
   if (p.fit == null) t = p.unmet ? "requirements not met" : "not rated yet";
@@ -479,7 +489,7 @@ const KIND = {fetch: "Find new jobs", recompute: "Board rebuild", rerate: "Re-ra
 function runRow(r){
   const d = r.details || {};
   let what = KIND[r.kind] || r.kind;
-  if (r.kind === "fetch" && d.only) what = "Fetch: " + d.only;
+  if (r.kind === "fetch" && d.only) what = "Checked: " + d.only;
   if (r.kind === "rerate" && d.person) what += " · " + d.person + (d.tiers ? " (" + d.tiers.join(", ") + ")" : "");
   if (r.kind === "find") what += " · " + [d.label || d.location, d.size === "exhaustive" ? `exhaustive (${n(d.passes)} of up to ${n(d.budget)} passes)` : d.size].filter(Boolean).join(", ");
   const c = [];
@@ -507,8 +517,9 @@ function loadRuns(){
   }).catch(err => { $("runRows").innerHTML = `<p class="note" style="padding:10px 14px">${esc(errText(err))}</p>`; });
 }
 $("fetchAll").addEventListener("click", () => {
-  if (!confirm("Fetch everything now?\n\nChecks every company's job board for new and removed jobs (about 40 minutes), then Claude rates the new listings for each person, which uses your Claude plan.")) return;
-  fetch("/api/update", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error === "already running" ? "An update is already running." : d.error); }))
+  const e = window.__EST;
+  if (!confirm("Find new jobs now?\n\n" + (e ? `Checks all ${n(e.companies)} employers for new and removed jobs, for everyone in the household. That takes ${e.text}.` : "Checks every employer for new and removed jobs, for everyone in the household.") + " Claude then rates the new listings for each person, which uses your Claude plan.")) return;
+  fetch("/api/update", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error === "already running" ? "Siftwell is already finding new jobs." : d.error); }))
     .then(() => { wasRunning = true; pollStatus(); }).catch(err => { $("allBar").hidden = false; $("allTitle").textContent = errText(err); });
 });
 
@@ -517,7 +528,7 @@ function loadRating(){
   return get("/api/catalog/rating").then(d => {
     $("rateCards").innerHTML = d.people.map(p => {
       const s = p.summary, r = p.rerate || {};
-      const stats = s ? [["Pass their filters", s.passing], ["Rated by Claude", s.rated], ["Careful or best (Sonnet, Opus)", s.deep], ["Waiting for a rating", s.unrated], ["Need a fresh rating", s.stale]]
+      const stats = s ? [["Pass their filters", s.passing], ["Rated by Claude", s.rated], ["Got a careful look or best judgment", s.deep], ["Waiting for a rating", s.unrated], ["Need a fresh rating", s.stale]]
         .map(([l, v]) => `<div><b>${n(v)}</b><span>${esc(l)}</span></div>`).join("") : "";
       const tiers = s ? `Quick ${n(s.haiku)} · careful ${n(s.sonnet)} · best ${n(s.opus)}` + (s.unmet ? ` · ${n(s.unmet)} skipped (requirements not met)` : "") : "";
       const live = r.running ? `<div class="srow"><span class="note">${esc(r.label || "Re-rating")}${r.total ? ` · ${n(r.done)} of ${n(r.total)}${r.tier ? " (" + esc(r.tier) + ")" : ""}` : ""}…</span></div>` : "";
@@ -738,11 +749,11 @@ $("imBtn").addEventListener("click", () => {
 
 /*__THEME__*/
 applyTheme();
-// ---- header: Update / Re-rate run on the board, which has the confirm and progress panel
+// ---- header: Find new jobs / Re-rate run on the board, which has the confirm and progress panel
 const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
 $("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
 $("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
-$("updateBtn").title = "Find new jobs (opens the board): check every company for new openings (about 40 min)";
+$("updateBtn").title = "Find new jobs (opens the board): check your employers for new openings";
 $("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Claude re-rates your jobs, no new listings";
 if ($("resumeBtn") && $("resumeBtn").tagName === "BUTTON") $("resumeBtn").addEventListener("click", () => toBoard(["jb.openResume", "1"]));
 fetch("/api/rerate").then(r => r.json()).then(s => { if (s.running) { $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Re-rating your best jobs now…"; } }).catch(() => {});

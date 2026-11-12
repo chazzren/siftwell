@@ -15,11 +15,22 @@ What it runs, in order, in one background thread:
      the ones with the most jobs near the person first (directory.near_order). Each chunk is one ordinary update for
      those companies (server.run_update --only ...); the boards are rebuilt about a minute in (while the first chunk's
      slow boards are still being read: jobfinder --boards-every), then every few minutes, and Claude rates once, with
-     the last chunk. One progress line: "Checking employers: 184 of
-     1,043". Nothing is kept in memory that matters: what is left is simply "watched companies never fetched"
-     (pending), so after Pause, a crash or a restart the board offers Continue checking (start_checking), and a
-     regular update in between just shortens the list.
+     the last chunk. A chunk never waits long for its last few slow employers: when only a few are left and nothing
+     has finished for STALL_SECS, the chunk is ended, the next one starts, and the slow ones are checked together at
+     the very end (given SLOW_STALL_SECS without any progress before they are left to the next regular update).
+     Nothing is kept in memory that matters: what is left is simply "watched companies never fetched" (pending), so
+     after Pause, a crash or a restart the board offers Continue checking (start_checking), and a regular update in
+     between just shortens the list.
   4. Starters (shipped packs, the directory's "maybe near" big boards) with nothing near the person are pruned.
+
+ONE progress line for every page (progress(pid), sent as "progress" by /api/status and /api/search): "Checking
+employers: 184 of 1,043 · your board fills in as we go", "Finding new jobs: 12 of 40 employers"... The pages show that
+line and nothing else; the fetch's raw output stays behind Details on the Employers page's Runs tab. The numbers of a
+staged check belong to the run (_RUN): the total is fixed when it starts (it only grows when employers are added
+meanwhile) and the done count never goes down, whatever is pruned or added while it runs.
+
+Time estimates (fetch_minutes, estimates) are worked out from the real companies and how long each one took last
+time, never a fixed number.
 
 Routes (wired in server.py): GET /api/search -> status(pid), POST /api/search/start -> start(pid, find, directory),
 POST /api/search/continue -> start_checking(pid), POST /api/search/pause -> pause(pid). /api/status carries
@@ -33,13 +44,27 @@ import people
 
 S = None          # the server module (configure)
 SIZE = "medium"   # the standard Find employers size (not Exhaustive)
-PER_MINUTE = 12   # rough companies checked per minute on a first fetch (for the "about N minutes" estimate)
 CHUNK_FIRST = 15  # employers in the first chunk (so jobs show up within minutes)
 CHUNK = 40        # employers per chunk after that
 REBUILD_SECS = 240  # boards are rebuilt after a chunk when the last rebuild is at least this old
+STALL_LEFT = 3    # a chunk with at most this many employers still running ...
+STALL_SECS = 75   # ... and nothing finished for this long is ended; those employers are checked at the very end
+SLOW_STALL_SECS = 900   # the last pass over the slow employers: this long without any progress and they are left for the next update
+# The most time one employer may take in a chunk (jobfinder --budget): it then stops by itself, keeps what it read and
+# counts as checked, well inside STALL_SECS, instead of being cut off with nothing. The slow pass at the end gives
+# whoever was still cut a longer budget; anything left after that is finished by the next regular update.
+CHUNK_BUDGET = 55
+SLOW_BUDGET = 600
+FAST_LANES, WD_LANES = 12, 4          # jobfinder.fetch reads this many employers at once (Workday has its own lane)
+DEFAULT_SECS = {"fast": 25.0, "workday": 90.0}   # one employer's check when nothing has been measured yet
 JOB = {"running": False, "pid": None, "phase": "", "find": False, "find_run": None, "added": 0, "note": "",
        "dir": False, "dir_added": 0, "dir_near": 0, "error": None, "started": None, "finished": None,
-       "check_left": 0, "check_chunk": 0, "pausing": False, "paused": False}
+       "check_left": 0, "check_chunk": 0, "pausing": False, "paused": False, "dir_offline": False, "dir_text": "",
+       "slow": 0, "slow_pass": False}
+# The running staged check's own counters (see the module docstring): base = watched employers that needed no check
+# when it started, queued = every employer it was asked to check, finished = the ones it is done with, shown = the
+# highest done count any page was told (so the number never goes back).
+_RUN = {"base": 0, "queued": set(), "finished": set(), "shown": 0}
 _LOCK = threading.Lock()
 _PAUSE = threading.Event()
 _CACHE = {}       # pid -> (time, check numbers): the board asks every couple of seconds
@@ -140,23 +165,185 @@ def pending(pid):
 
 
 def check_status(pid):
-    """{total, done, pending, running, mine, pausing} for the board's one progress line. While a check runs, done
-    counts what this run has finished (plus the running chunk's progress)."""
+    """{total, done, pending, running, mine, pausing, paused, dir_offline} for the pages. While this person's check
+    runs, the numbers are the run's own (_RUN): they only go up."""
     with _LOCK:
         job = dict(JOB)
+        run = {"base": _RUN["base"], "queued": len(_RUN["queued"]), "finished": len(_RUN["finished"])}
     running = bool(job["running"] and job["phase"] == "check")
     hit = _CACHE.get(pid)
-    if not hit or time.time() - hit[0] > (4 if running else 20):
+    if not hit or time.time() - hit[0] > (6 if running else 20):
         cos = _watched(pid)
-        hit = _CACHE[pid] = (time.time(), len(cos), len(due(pid, cos=cos)))
+        off = False
+        try:
+            import directory
+            off = bool(directory.record(pid).get("offline"))
+        except Exception:
+            pass
+        hit = _CACHE[pid] = (time.time(), len(cos), len(due(pid, cos=cos)), off)
     total, left = hit[1], hit[2]
     mine = job["pid"] == pid
-    if running and mine:
+    if running and mine and run["queued"]:      # (not yet, in the first moment of a run: the numbers above still hold)
         with S.lock:
             cur = S.state.get("done", 0) if S.state.get("running") and S.state.get("phase") == "fetch" else 0
-        left = max(0, job["check_left"] - min(cur, job["check_chunk"]))
+        total = run["base"] + run["queued"]
+        done = run["base"] + run["finished"] + min(cur, job["check_chunk"])
+        with _LOCK:
+            done = _RUN["shown"] = max(_RUN["shown"], min(done, total))
+        left = total - done
     return {"total": total, "pending": left, "done": max(0, total - left), "running": running, "mine": mine,
-            "pausing": bool(running and job["pausing"]), "paused": bool(mine and job["paused"] and not job["running"])}
+            "pausing": bool(running and job["pausing"]), "paused": bool(mine and job["paused"] and not job["running"]),
+            "dir_offline": bool(hit[3]), "slow_pass": bool(running and mine and job["slow_pass"])}
+
+
+# ---------------------------------------------------------------- honest time estimates
+_AVG = {"at": 0.0, "v": None}
+
+
+def _avg_secs():
+    """{"fast": s, "workday": s}: what one employer's check took on average, measured from the catalog (the default
+    until at least ten have been measured)."""
+    if _AVG["v"] is not None and time.time() - _AVG["at"] < 120:
+        return _AVG["v"]
+    xs = {"fast": [], "workday": []}
+    try:
+        for c in catalog.companies(include_paused=False):
+            sec = (c.get("_fetch") or {}).get("secs")
+            if sec:
+                xs["workday" if c.get("ats") == "workday" else "fast"].append(float(sec))
+    except Exception:
+        pass
+    v = {k: (sum(x) / len(x) if len(x) >= 10 else DEFAULT_SECS[k]) for k, x in xs.items()}
+    _AVG.update(at=time.time(), v=v)
+    return v
+
+
+def fetch_minutes(cos, first=False):
+    """About how many minutes one check of these companies takes: what each took last time (the measured average for
+    the ones never checked), spread over the lanes the fetch runs at once. first=True: none of them has been read
+    before (every posting's text is new), so their own earlier times don't apply."""
+    if not cos:
+        return 0
+    avg = _avg_secs()
+    tot, longest = {"fast": 0.0, "workday": 0.0}, 0.0
+    for c in cos:
+        lane = "workday" if c.get("ats") == "workday" else "fast"
+        sec = None if first else (c.get("_fetch") or {}).get("secs")
+        sec = float(sec) if sec else avg[lane]
+        tot[lane] += sec
+        longest = max(longest, sec)
+    secs = max(tot["fast"] / FAST_LANES, tot["workday"] / WD_LANES, longest) + 45 + 0.04 * len(cos)   # (+ building the boards)
+    return max(1, round(secs / 60))
+
+
+def minutes_text(m):
+    """"about 25 minutes", "about 1 hour", "about 2½ hours" (rounded the way a person would say it)."""
+    m = int(m or 0)
+    if m < 1:
+        return "under a minute"
+    if m < 50:
+        m = m if m < 10 else 5 * round(m / 5)
+        return f"about {m} minute{'' if m == 1 else 's'}"
+    h = round(m / 30) / 2
+    if h == 1:
+        return "about 1 hour"
+    return f"about {int(h) if h == int(h) else str(int(h)) + '½'} hours"
+
+
+_EST = {}
+
+
+def estimates(pid):
+    """{"all": {companies, minutes, text}, "mine": {...}, "profiles": n}: what Find new jobs costs for the whole
+    household and for this profile's own employers, from the real company list (cached a minute)."""
+    hit = _EST.get(pid)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    import netsafe
+    watch = people.company_sets(pid)
+    cos = [c for c in catalog.companies(include_paused=False) if c.get("ats") in netsafe.CONFIG_RULES]
+    mine = [c for c in cos if set(c.get("sets") or []) & watch]
+
+    def one(xs):
+        m = fetch_minutes(xs)
+        return {"companies": len(xs), "minutes": m, "text": minutes_text(m)}
+    out = {"all": one(cos), "mine": one(mine), "profiles": len(people.ids())}
+    _EST[pid] = (time.time(), out)
+    return out
+
+
+def mine_names(pid):
+    """Names of this profile's own employers (what a profile's Find new jobs checks in a household of several)."""
+    return [c["name"] for c in _watched(pid)]
+
+
+# ---------------------------------------------------------------- the one progress line
+def progress(pid):
+    """What is running now, in one plain line, for every page: {active, kind, line, frac, mine, can_pause, pausing,
+    done, total}. kind: directory / find / check / update / rate / build / other / idle."""
+    with _LOCK:
+        job = dict(JOB)
+    with S.lock:
+        up = {k: S.state.get(k) for k in ("running", "phase", "done", "total")}
+        rerate = any(v.get("running") for v in S.RERATE.values())
+    n = lambda x: f"{int(x or 0):,}"
+    out = {"active": True, "kind": "other", "line": "", "frac": None, "mine": True, "can_pause": False, "pausing": False,
+           "done": 0, "total": 0}
+    mine = job["pid"] == pid
+    if job["running"] and not mine:
+        who = people.name(job["pid"]) if job["pid"] and people.exists(job["pid"]) else "another profile"
+        return dict(out, kind="check", mine=False, line=f"Siftwell is checking employers for {who}. Find new jobs waits until that is done.")
+    if job["running"]:
+        ph = job["phase"]
+        if ph == "directory":
+            return dict(out, kind="directory", frac=.03, line="Adding employers to check…")
+        if ph == "find":
+            return dict(out, kind="find", frac=.06, line="Claude is searching the web for employers. Their jobs are checked when it’s done.")
+        if ph == "build":
+            return dict(out, kind="build", frac=.9, line="Building your board from the jobs Siftwell already has…")
+        if ph == "check":
+            ck = check_status(pid)
+            frac = .08 + (.87 * ck["done"] / ck["total"] if ck["total"] else 0)
+            if up["running"] and up["phase"] in ("ai", "pivot"):
+                return dict(out, kind="rate", frac=.96, done=ck["done"], total=ck["total"],
+                            line="Almost done: Claude is reading the best matches against your resume.")
+            if up["running"] and up["phase"] not in ("fetch", None):
+                return dict(out, kind="build", frac=.97, done=ck["done"], total=ck["total"], line="Almost done: building your board.")
+            line = f"Checking employers: {n(ck['done'])} of {n(ck['total'])} · your board fills in as we go"
+            if ck["slow_pass"]:
+                k = max(1, ck["total"] - ck["done"])
+                line = (f"Checking employers: {n(ck['done'])} of {n(ck['total'])} · finishing the last {n(k)}, "
+                        f"which {'has' if k == 1 else 'have'} a lot of openings")
+            if ck["pausing"]:
+                line = f"Pausing… {n(ck['done'])} of {n(ck['total'])} employers checked so far"
+            return dict(out, kind="check", frac=frac, done=ck["done"], total=ck["total"], line=line,
+                        can_pause=not ck["pausing"], pausing=ck["pausing"])
+        return dict(out, kind="other", frac=.05, line="Getting ready…")
+    if up["running"]:
+        ph, d, t = up["phase"], up["done"] or 0, up["total"] or 0
+        if ph == "fetch":
+            return dict(out, kind="update", done=d, total=t, frac=.02 + (.8 * d / t if t else 0),
+                        line=f"Finding new jobs: {n(d)} of {n(t)} employers" if t else "Finding new jobs: getting ready…")
+        if ph in ("ai", "pivot"):
+            return dict(out, kind="rate", frac=.88, line="Finding new jobs: Claude is rating the new ones…")
+        if ph == "facts":
+            return dict(out, kind="rate", frac=.97, line="Finding new jobs: looking up a few company facts…")
+        return dict(out, kind="build", frac=.95, line="Finding new jobs: building your board…")
+    try:
+        if _find_live():
+            return dict(out, kind="find", line="Claude is searching the web for employers…")
+    except Exception:
+        pass
+    if rerate:
+        return dict(out, active=False, kind="idle")      # (re-rating has its own panel on the board)
+    try:
+        import joblock
+        j = joblock.info() or {}
+        if j.get("alive") and not j.get("mine") and j.get("kind") not in ("recompute", "re-render"):
+            return dict(out, kind="other", line="Siftwell is finishing a job that was started earlier. Find new jobs waits until that is done.")
+    except Exception:
+        pass
+    return dict(out, active=False, kind="idle")
 
 
 def _claude_ok():
@@ -198,13 +385,64 @@ def plan(pid):
     drec = directory.record(pid)
     dirp = {"possible": bool(location or remote_only), "label": find["label"], "radius": find["radius"],
             "remote_only": remote_only, "applied": drec.get("applied"), "default": bool(location or remote_only)}
-    expected = mine + (100 if dirp["default"] and not drec.get("applied") else 0)
+    dirp["offline"] = bool(drec.get("offline"))
     stats = catalog.stats()
     chk = check_status(pid)
+    est = estimates(pid)
     return {"claude": claude, "companies": mine, "catalog": total, "find": find, "directory": dirp, "check": chk,
-            "checked": chk["done"], "fetch_minutes": max(2, round((total + (expected - mine)) / PER_MINUTE)),
+            "checked": chk["done"], "fetch_minutes": est["mine"]["minutes"], "estimate": est,
             "started_before": bool(st.get("search_started")), "last_full_fetch": stats.get("last_full_fetch"),
-            "open_listings": stats.get("open", 0)}
+            "open_listings": stats.get("open", 0), "titles": has_titles(pid), "remote_only": remote_only,
+            "legacy_area": not location and not remote_only}
+
+
+def has_titles(pid):
+    """True when the person has told Siftwell what work they do (job titles on their what-to-look-for sheet, or the
+    older built-in title rule): without any, every title passes and the board can't put the relevant jobs first."""
+    try:
+        if people.settings(pid).get("title_rule") == "builtin":
+            return True
+        import lookfor
+        return not lookfor.is_empty(lookfor.load(pid))
+    except Exception:
+        return True
+
+
+def why_empty(pid):
+    """After a search that left the board empty: one plain sentence saying why, from what Siftwell knows."""
+    st = _settings(pid)
+    cos = _watched(pid)
+    if not cos:
+        return "Siftwell isn’t watching any employers for you yet, so there was nothing to check."
+    names = [c["name"] for c in cos]
+    open_n = 0
+    try:
+        with catalog.db() as con:
+            for i in range(0, len(names), 500):
+                part = names[i:i + 500]
+                q = f"SELECT COUNT(*) FROM listings WHERE closed_at IS NULL AND company IN ({','.join('?' * len(part))})"
+                open_n += con.execute(q, part).fetchone()[0]
+    except Exception:
+        open_n = None
+    some = f"{len(cos):,} employer{'' if len(cos) == 1 else 's'}"
+    if open_n == 0:
+        return (f"Siftwell checked your {some} and found no open jobs it could read. "
+                "That usually means there are too few employers on your list.")
+    limits = []
+    wps = st.get("workplaces") or ["onsite", "hybrid", "remote"]
+    location, label = _place(st)
+    if wps == ["remote"]:
+        limits.append("remote jobs only")
+    elif location:
+        limits.append(f"within {int(st.get('radius_miles') or 35)} miles of {label or location}" + (" or remote" if "remote" in wps else ", not remote"))
+    if st.get("salary_floor"):
+        limits.append(f"paying at least ${int(st['salary_floor']):,}")
+    if st.get("seniority_mine"):
+        limits.append("around your level")
+    if has_titles(pid):
+        limits.append("with a job title like yours")
+    found = f"Your {some} have {open_n:,} open jobs" if open_n else f"Siftwell checked your {some}"
+    return f"{found}, but none matched your search" + (f" ({'; '.join(limits)})" if limits else "") + "."
 
 
 def status(pid):
@@ -214,7 +452,8 @@ def status(pid):
         job = dict(JOB)
     with S.lock:
         up = {k: S.state.get(k) for k in ("running", "phase", "done", "total", "exit", "finished")}
-    out = {"plan": plan(pid), "job": job, "mine": job["pid"] == pid, "update": up, "find_live": _find_live(), "find": None}
+    out = {"plan": plan(pid), "job": job, "mine": job["pid"] == pid, "update": up, "find_live": _find_live(), "find": None,
+           "progress": progress(pid)}
     rid = job.get("find_run")
     if rid:
         try:
@@ -229,28 +468,41 @@ def status(pid):
         except Exception:
             pass
     out["running"] = bool(job["running"] or up["running"] or out["find_live"])
+    if not out["running"] and out["plan"]["started_before"]:
+        try:
+            if not S.board_counts(pid).get("jobs"):
+                out["why_empty"] = why_empty(pid)
+        except Exception:
+            pass
     return out
 
 
-def start(pid, find=None, directory=None):
+def _fresh_job(pid, phase, **kw):
+    """(caller holds _LOCK) Reset JOB for a new run."""
+    JOB.update(running=True, pid=pid, phase=phase, find=False, find_run=None, added=0, note="", dir=False, dir_added=0,
+               dir_near=0, error=None, started=_now(), finished=None, check_left=0, check_chunk=0, pausing=False,
+               paused=False, dir_offline=False, dir_text="", slow=0, slow_pass=False)
+    JOB.update(kw)
+    _RUN.update(base=0, queued=set(), finished=set(), shown=0)
+
+
+def start(pid, find=None, directory=None, limit=None):
     """Start the search for this person. find (Claude) / directory: True / False, or None for the plan's default.
-    Returns (ok, error)."""
+    limit: add only the N directory employers with the most openings nearby (None: all). Returns (ok, error)."""
     p = plan(pid)
     want_find = p["find"]["default"] if find is None else bool(find) and p["find"]["possible"]
     want_dir = p["directory"]["default"] if directory is None else bool(directory) and p["directory"]["possible"]
     if not want_find and not want_dir and not p["companies"] and not p["catalog"]:
-        return False, ("There are no companies to check yet. Add your home ZIP so Siftwell can add employers near you, "
-                       "or add a company by its careers link in the Catalog.")
+        return False, ("There are no employers to check yet. Add your home ZIP so Siftwell can add employers near you, "
+                       "or add an employer by its careers link on the Employers page.")
     with _LOCK:
         if JOB["running"]:
             return False, "A job search is already running."
-        JOB.update(running=True, pid=pid, phase="directory" if want_dir else "find" if want_find else "fetch", find=want_find,
-                   find_run=None, added=0, note="", dir=want_dir, dir_added=0, dir_near=0, error=None, started=_now(),
-                   finished=None, check_left=0, check_chunk=0, pausing=False, paused=False)
+        _fresh_job(pid, "directory" if want_dir else "find" if want_find else "fetch", find=want_find, dir=want_dir)
     _PAUSE.clear()
     import setup_flow
     setup_flow._write(pid, {"search_started": _now()})
-    threading.Thread(target=_work, args=(pid, want_find, p, want_dir), daemon=True, name="first-search").start()
+    threading.Thread(target=_work, args=(pid, want_find, p, want_dir, limit), daemon=True, name="first-search").start()
     return True, None
 
 
@@ -262,9 +514,7 @@ def start_checking(pid, rate=True):
     with _LOCK:
         if JOB["running"]:
             return False, "A job search is already running."
-        JOB.update(running=True, pid=pid, phase="check", find=False, find_run=None, added=0, note="", dir=False, dir_added=0,
-                   dir_near=0, error=None, started=_now(), finished=None, check_left=0, check_chunk=0, pausing=False,
-                   paused=False)
+        _fresh_job(pid, "check")
     _PAUSE.clear()
 
     def work():
@@ -296,23 +546,81 @@ def _set(**kw):
         JOB.update(**kw)
 
 
+def note_added(pid):
+    """Employers were just added for this person: when their check is running, count them in its total right away (the
+    check itself picks them up after the chunk it is on), so every page shows the same, larger total at once."""
+    with _LOCK:
+        if not (JOB["running"] and JOB["pid"] == pid and JOB["phase"] == "check" and _RUN["queued"]):
+            return
+    names = due(pid)
+    with _LOCK:
+        _RUN["queued"].update(names)
+    _CACHE.pop(pid, None)
+
+
+def _fetched_since(names, t0):
+    """The names among these whose check finished (well or not) at or after t0 (an ISO time)."""
+    want = set(names)
+    return {c["name"] for c in catalog.companies() if c["name"] in want and ((c.get("_fetch") or {}).get("at") or "") >= t0}
+
+
+def _run_chunk(chunk, flags, stall):
+    """One fetch of these employers (server.run_update), watched: when at most STALL_LEFT of them are still running
+    (any number, for the long `stall` of a last chunk) and nothing has finished for `stall` seconds, the fetch is
+    ended so the next chunk can start. Returns (cut, names not finished)."""
+    t0 = catalog.now()
+    th = threading.Thread(target=S.run_update, args=(",".join(chunk),), kwargs={"flags": flags, "quiet": True}, daemon=True)
+    th.start()
+    cut, last, last_at = False, -1, time.time()
+    while th.is_alive():
+        th.join(2)
+        if _PAUSE.is_set() or cut:
+            continue
+        with S.lock:
+            ph, d, t = S.state.get("phase"), S.state.get("done", 0), S.state.get("total", 0)
+        if ph != "fetch" or not t or d >= t:
+            last_at = time.time()       # (waiting for the job lock, or already building boards / rating)
+            continue
+        if d != last:
+            last, last_at = d, time.time()
+        elif time.time() - last_at >= stall and (t - d <= STALL_LEFT or stall >= SLOW_STALL_SECS):
+            cut = S.stop_update()
+    if not cut and not _PAUSE.is_set():
+        return False, []
+    time.sleep(1.5)                      # (the ended fetch's last writes)
+    got = _fetched_since(chunk, t0)
+    return cut, [n for n in chunk if n not in got]
+
+
 def _check(pid, stale, rate=True):
     """The staged first check (see the module docstring). Returns the number of companies it fetched."""
     queue = due(pid, stale)
-    _set(phase="check", check_left=len(queue), check_chunk=0)
+    t_start = catalog.now()
+    with _LOCK:
+        _RUN.update(base=max(0, len(_watched(pid)) - len(queue)), queued=set(queue), finished=set(), shown=0)
+    _set(phase="check", check_left=len(queue), check_chunk=0, slow=0, slow_pass=False)
     _CACHE.pop(pid, None)
-    done, fails, first, last_build, tried = 0, 0, True, 0.0, set()
+    fails, first, last_build, tried, slow, need_build, seen = 0, True, 0.0, set(), [], False, set(queue)
     while True:
         if _PAUSE.is_set():
             _set(paused=True, note="Paused. The employers checked so far are on your board; press Continue checking to do the rest.")
             break
-        # what is still unchecked right now (an update that ran in between may have done some of it)
-        left_now = set(due(pid, stale))
-        queue = [n for n in queue if n in left_now and n not in tried]
-        _set(check_left=len(queue), check_chunk=0)
-        if not queue:
+        # what is still unchecked right now: an update that ran in between may have done some of it, and employers
+        # added meanwhile (Add employers near me) join the end of the queue
+        now_due = due(pid, stale)
+        left_now = set(now_due)
+        new = [n for n in now_due if n not in seen]
+        seen.update(new)
+        with _LOCK:
+            _RUN["queued"].update(new)
+            _RUN["finished"].update(n for n in _RUN["queued"] if n not in left_now)
+        queue = [n for n in queue if n in left_now and n not in tried] + new
+        slow = [n for n in slow if n in left_now]
+        _set(check_left=len(queue) + len(slow), check_chunk=0, slow=len(slow))
+        if not queue and not slow:
             break
-        chunk = queue[:CHUNK_FIRST if first else CHUNK]
+        slow_pass = not queue
+        chunk = slow if slow_pass else queue[:CHUNK_FIRST if first else CHUNK]
         claimed = False
         while not _PAUSE.is_set() and not claimed:
             claimed = S.claim_update()
@@ -324,36 +632,61 @@ def _check(pid, stale, rate=True):
             with S.lock:
                 S.state["running"] = False
             continue
-        last = len(queue) <= len(chunk)
-        build = first or last or time.time() - last_build >= REBUILD_SECS
+        last = slow_pass or (len(queue) <= len(chunk) and not slow)
+        build = first or last or need_build or time.time() - last_build >= REBUILD_SECS
         flags = ["--boards-every", str(REBUILD_SECS)] + ([] if (last and rate) else ["--no-rate"] + ([] if build else ["--no-boards"]))
-        _set(check_chunk=len(chunk))
+        flags += ["--budget", str(SLOW_BUDGET if slow_pass else CHUNK_BUDGET)]
+        _set(check_chunk=len(chunk), slow_pass=slow_pass)
         if first:
             S._actlog("update started", pid, f"Checking employers: {len(queue)} to check, most jobs nearby first")
-        S.run_update(",".join(chunk), flags=flags, quiet=True)
-        tried.update(chunk)
+        # the last chunk has nothing waiting behind it, so it is only ended after a long silence
+        cut, unfinished = _run_chunk(chunk, flags, SLOW_STALL_SECS if last else STALL_SECS)
         _CACHE.pop(pid, None)
+        _AVG["v"] = None
+        _EST.clear()
         if _PAUSE.is_set():
-            last_build = 0.0     # (the fetch was ended: the boards are rebuilt below)
-            done += 1
+            need_build = True            # (the fetch was ended: the boards are rebuilt below)
+            with _LOCK:
+                _RUN["finished"].update(n for n in chunk if n not in unfinished)
+            continue
+        if cut:
+            need_build, first, fails = True, False, 0
+            tried.update(chunk)
+            with _LOCK:
+                _RUN["finished"].update(n for n in chunk if n not in unfinished)
+            if last:
+                # even with nothing else waiting they took too long: the next regular update (no time limit) checks them
+                if unfinished:
+                    _set(note=(f"{len(unfinished)} large employer{'' if len(unfinished) == 1 else 's'} took too long to read this time; "
+                               "Siftwell tries again with the next Find new jobs."))
+                slow = []
+                break
+            slow += [n for n in unfinished if n not in slow]
             continue
         if S.state.get("exit") not in (0, 3):
             fails += 1
             if fails >= 2:
                 _set(error="Checking employers stopped because two rounds in a row failed. Press Continue checking to try again.")
                 break
-            tried.difference_update(chunk)   # (one more try for these)
-            time.sleep(5)
+            time.sleep(5)                # (one more try for these)
             continue
         fails, first = 0, False
-        done += len(chunk)
+        tried.update(chunk)
+        with _LOCK:
+            _RUN["finished"].update(chunk)
         if build:
-            last_build = time.time()
+            last_build, need_build = time.time(), False
+        if slow_pass:
+            slow = []
+    with _LOCK:
+        asked = set(_RUN["queued"])
+    done = len(_fetched_since(asked, t_start))     # (what was really checked, whatever was added or removed meanwhile)
+    _set(slow_pass=False)
     S._actlog("update finished" if not _PAUSE.is_set() else "update stopped", pid, f"Checking employers: {done} checked this time")
     if done:
         _prune(pid)
-        if _PAUSE.is_set():
-            S.request_recompute([pid])   # (the fetch that was ended didn't get to rebuild the boards)
+    if need_build:
+        S.request_recompute([pid])       # (a fetch that was ended didn't get to rebuild the boards)
     return done
 
 
@@ -404,22 +737,30 @@ def _link_known(pid, cands):
     return out
 
 
-def _run_directory(pid):
-    """Step 1: the Siftwell directory's employers near this person onto their Near me list. Returns their names."""
+def _run_directory(pid, limit=None):
+    """Step 1: the Siftwell directory's employers near this person onto their Near me list. Returns their names.
+    When the directory can't be reached, the starter list of large employers the app comes with is used instead, and
+    the pages say so plainly (JOB dir_offline / dir_text; directory.record(pid)["offline"])."""
     import directory
-    r = directory.apply(pid)
+    r = directory.apply(pid, limit=limit, starters_ok=True, first=True)
     if not r["available"]:
         return []
     names = r["added"] + r["linked"]
-    if r.get("pack_starters") and r.get("offline"):
-        _set(note="Siftwell couldn't download its employer directory this time, so it started with the large US employers it comes with; "
-                  "after this first check it keeps the ones hiring near you. Nearby employers from the directory are added once it can be reached.")
+    n = len(names)
+    if r.get("offline"):
+        text = (f"Siftwell couldn’t reach its employer directory, so it is starting with a starter list of {n:,} large US employers "
+                "that comes with the app. After this first check it keeps the ones hiring near you.") if n else \
+               "Siftwell couldn’t reach its employer directory, so no employers near you were added this time."
+        _set(dir_offline=True, dir_text=text, note=text + " Use “Try the directory again” on your board or in Settings when you are back online.")
     elif r.get("pack_starters"):
-        _set(note="The employer directory doesn't cover your area yet, so Siftwell also started with the large US employers it comes with; "
-                  "after this first check it keeps the ones hiring near you.")
-    _set(dir_added=len(names), dir_near=r["near"])
-    S._actlog("companies added", pid, f"{len(names)} from the Siftwell directory"
-              + (f" ({r['starters']} from the shipped large-employer list)" if r.get("starters") else ""))
+        text = (f"{n:,} employers added. The directory doesn’t cover all of your area yet, so {r['pack_starters']:,} of them are large US "
+                "employers from the starter list that comes with the app; after this first check Siftwell keeps the ones hiring near you.")
+        _set(dir_text=text, note=text)
+    else:
+        _set(dir_text=f"{n:,} employer{'' if n == 1 else 's'} added" if n else "No new employers to add")
+    _set(dir_added=n, dir_near=r["near"])
+    S._actlog("companies added", pid, (f"{n} from the starter list of large employers (the directory couldn't be reached)" if r.get("offline")
+                                      else f"{n} from the Siftwell directory" + (f" ({r['starters']} to try out)" if r.get("starters") else "")))
     return names
 
 
@@ -436,24 +777,30 @@ def _prune(pid):
         S.request_recompute([pid])
 
 
-def _work(pid, want_find, p, want_dir=False):
+def _work(pid, want_find, p, want_dir=False, limit=None):
     try:
         added = []
         if want_dir:
             try:
-                added += _run_directory(pid)
+                added += _run_directory(pid, limit)
             except Exception as e:
-                _set(note=f"The employer directory didn't work this time ({type(e).__name__}: {str(e)[:120]}).")
+                print("directory apply failed:", type(e).__name__, e, flush=True)
+                _set(dir_offline=True, dir_text="Siftwell couldn’t read its employer directory this time.",
+                     note="Siftwell couldn’t read its employer directory this time. Use “Try the directory again” on your board or in Settings.")
         if want_find:
             _set(phase="find")
             try:
                 added += _run_find(pid, p)
             except Exception as e:
-                _set(note=f"Finding employers near you didn't work this time ({type(e).__name__}: {str(e)[:120]}).")
+                print("find employers failed:", type(e).__name__, e, flush=True)
+                _set(note="Claude’s search for employers didn’t work this time. You can run it again from the Employers page.")
         _set(phase="fetch")
+        _EST.clear(); _CACHE.pop(pid, None)     # (the employer list just changed)
         mine, total = watched_companies(pid)
         if not total:
-            _set(error="There are no companies to check yet. Add one by its careers link in the Catalog.")
+            _set(error=("Siftwell couldn’t reach its employer directory, so there are no employers to check yet. Check your internet "
+                        "connection, then press Try the directory again." if JOB.get("dir_offline")
+                        else "There are no employers to check yet. Add one by its careers link on the Employers page."))
             return
         # The first check, staged. Nothing due (every company was checked today): the board just needs rebuilding.
         fresh = catalog.stats().get("last_full_fetch") == dt.date.today().isoformat()
