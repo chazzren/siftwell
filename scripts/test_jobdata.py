@@ -608,6 +608,9 @@ check("...one that says United States stays, and so does one that merely mention
 j = P("Nurse", ["Columbus, OH"], "", "Care for patients.")
 check("a kept posting records whether it names a US place", j["geo"] == "us" and P("Engineer", ["Remote"], "remote", "Build things.")["geo"] == ""
       and P("Engineer", ["Arlington"])["geo"] == "us")
+check("a US place at the end of the title is US evidence for a plain 'Remote' posting ('... - Kansas, US', '(Baltimore, MD)')",
+      P("AI Training Experts - Kansas, US", ["Remote"], "remote")["geo"] == "us" and P("Tutor (Baltimore, MD)", ["Remote"], "remote")["geo"] == "us"
+      and P("Tutor - Glasgow", ["Remote"], "remote") is None)
 check("'Ontario' written alone is the province unless the employer hires in a state with a town of that name ('Ontario Remote Work')",
       jobfinder.is_foreign("Ontario Remote Work") and not jobfinder.is_foreign("Ontario", {"CA"}) and not jobfinder.is_foreign("Ontario, CA"))
 

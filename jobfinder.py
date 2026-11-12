@@ -1050,7 +1050,8 @@ def prepare_listing(j, c):
     title = j.get("title") or ""
     # No US place on the posting: its own words decide. Written in another language, or its title or text puts the
     # job in another country ("based in Toronto", "remote within Canada", pay in euros) with nothing saying US: out.
-    said_us = jobtext.text_us(text)
+    # ("AI Training Experts - Kansas, US" at "Remote": the title says where, and it is the US)
+    said_us = jobtext.text_us(text) or bool(tp and geo.where(tp) == "us")
     rem = [l for l in locs if l and jobtext.remote_label(l)]
     if not us_loc:
         abroad = lambda s: is_foreign(s) and not re.search(r"united states|\bU\.?S\.?A?\b", s)
