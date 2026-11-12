@@ -2165,10 +2165,12 @@ if (SERVED) {
   }
   // after Stop: the boards are rebuilt from what the fetch had finished; reload when that is done
   function stopWatch(){
-    let seen = false, tries = 0;
+    let seen = false, tries = 0, at0;
     const tick = () => fetch("/api/status" + pq()).then(r => r.json()).then(s => {
+      const at = s.check && s.check.board_at;
+      if (at0 === undefined) at0 = at;
       if (s.recomputing) seen = true;
-      if ((seen && !s.recomputing) || ++tries > 100) { saveFilters(); return void location.reload(); }
+      if ((seen && !s.recomputing) || (at && String(at) !== String(at0)) || ++tries > 40) { saveFilters(); return void location.reload(); }
       setTimeout(tick, 3000);
     }).catch(() => setTimeout(tick, 5000));
     setTimeout(tick, 2500);

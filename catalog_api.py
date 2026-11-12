@@ -108,7 +108,11 @@ def plain_reason(status, error):
     if not e:
         return ""
     if status == "capped":
-        m = re.search(r"(\d[\d,]*) of (\d[\d,]*)", e)
+        m = re.search(r"(?:capped at|stops at|stopped at) (\d[\d,]*) of (\d[\d,]*)", e)
+        f = re.search(r"(\d[\d,]*) of (\d[\d,]*) job pages failed to load", e)
+        if f and not m:
+            return (f"{f.group(1)} of this employer’s {f.group(2)} job pages didn’t load this time. Siftwell kept the jobs it already had "
+                    "open and tries again at the next check.")
         if "time budget" in e or "ran out" in e:
             return "This employer has more openings than Siftwell could read in one go. It kept what it read and reads the rest next time; nothing was closed."
         return ("Siftwell read " + (f"{m.group(1)} of this employer’s {m.group(2)} job pages" if m else "only part of this employer’s job pages")

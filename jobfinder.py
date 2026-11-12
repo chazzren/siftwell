@@ -1470,7 +1470,11 @@ def select_for_person(pool, sets=None):
             continue
         j = dict(j0)
         j["workplace"] = wp
-        j["remote_in"] = ", ".join(geo.STATES[s].title() for s in rst if s in geo.STATES) if (remote and rst) else ""
+        # "Remote (Ohio)": the person's own state when they have a home; else the states (a long list as a count)
+        shown = [s for s in rst if s in home_states] or (rst if len(rst) <= 3 else [])
+        j["remote_in"] = "" if not (remote and rst) else \
+            (", ".join(geo.STATES[s].title() for s in shown if s in geo.STATES) + (" only" if not home_states and len(rst) == 1 else "")
+             if shown else f"{len(rst)} states")
         j["where"] = nice_place(mine[0]) if (mine and not dc_fallback and vague_near is None) else ""
         j["dmv_locations"] = [f"{l} (DC area)" for l in locs if l][:3] if dc_fallback else [x for x in (vague_near or []) if x] if vague_near is not None else mine
         j["tracks"] = (["current"] if cur_ok else []) + (["ai"] if ai_ok else [])
