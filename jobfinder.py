@@ -1087,6 +1087,20 @@ def prepare_listing(j, c):
     j["snippet"] = text[:600]
     return j
 
+_CODED = re.compile(r"\d{3,}|^\s*US\s*[-_]|^[A-Z]{2}\s*[-_]\s*\S|_")
+
+def nice_place(label):
+    """A job-system location code as a place a person reads: "US-OH-Columbus" and "01088 - Columbus Victorian Village
+    Selec" -> "Columbus, OH". Labels that already read fine are left alone ("" is returned: the page shows the label)."""
+    if not label or not _CODED.search(label):
+        return ""
+    try:
+        import geo
+        hs = [h for h in geo.locate_all(label, weak=True) if h.kind in ("place", "alias", "county", "bare") and "," in h.label]
+        return hs[0].label if hs else ""
+    except Exception:
+        return ""
+
 def employer_us_states(c):
     """The US states an employer is known to hire in: the directory's, and the ones its postings name with a town
     (c["_us_st"], filled by process() and reparse_stored())."""
@@ -1448,6 +1462,7 @@ def select_for_person(pool, sets=None):
         j = dict(j0)
         j["workplace"] = wp
         j["remote_in"] = ", ".join(geo.STATES[s].title() for s in rst if s in geo.STATES) if (remote and rst) else ""
+        j["where"] = nice_place(mine[0]) if (mine and not dc_fallback and vague_near is None) else ""
         j["dmv_locations"] = [f"{l} (DC area)" for l in locs if l][:3] if dc_fallback else [x for x in (vague_near or []) if x] if vague_near is not None else mine
         j["tracks"] = (["current"] if cur_ok else []) + (["ai"] if ai_ok else [])
         out.append(j)
@@ -1637,6 +1652,9 @@ def company_info(jobs):
         info[co] = {**facts.get(co, {}),
                     "open": len(js), "new_week": sum(1 for j in js if (j.get("first_seen") or "") >= week_ago),
                     "median_mid": round(statistics.median(mids)) if mids else None}
+        hourly = [j for j in js if j.get("salary_mid") and j.get("pay_unit") == "hour"]
+        if mids and 2 * len(hourly) > len(mids):     # an employer that mostly posts hourly pay: say it per hour
+            info[co]["median_hr"] = round(statistics.median(j["salary_mid"] for j in hourly) / jobtext.HOURS_PER_YEAR, 2)
     return info
 
 def ratings_summary(jobs):
@@ -1673,6 +1691,15 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
         for k in BOARD_HIDDEN:  # catalog bookkeeping the page doesn't use
             j.pop(k, None)
     jobs.sort(key=board_order)
+    try:        # two job boards of one employer ("McKesson", "McKesson (2)") are shown and filtered under one name
+        import catalog, names
+        gm = names.group_map(catalog.companies())
+        for j in jobs:
+            g = gm.get(j["company"]) or names.group_name(j["company"])
+            if g and g != j["company"]:
+                j["co"] = g
+    except Exception as e:
+        print(f"(company names not grouped: {type(e).__name__}: {e})", flush=True)
     # titles nothing on the person's list names: kept apart ("N hidden because their titles aren't on your list · Show")
     off = [j for j in jobs if j.get("off_list") and "ai" not in (j.get("tracks") or [])]
     jobs[:] = [j for j in jobs if not j.get("off_list") or "ai" in (j.get("tracks") or [])]

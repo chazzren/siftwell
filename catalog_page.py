@@ -153,7 +153,7 @@ def render(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + settings_page.CSS + CSS + "</head><body>" + body +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") + ";window.__ME__=" + json.dumps({"id": pid, "name": people.name(pid)}).replace("</", "<\\/") +
-            ";</script>\n" + SCRIPT.replace("/*__THEME__*/", report.THEME_JS) + autoupdate.SCRIPT + "</body></html>")
+            ";</script>\n" + SCRIPT.replace("/*__THEME__*/", report.THEME_JS) + autoupdate.SCRIPT + report.DOWN_SCRIPT + "</body></html>")
 
 
 CSS = """<style>
@@ -266,6 +266,7 @@ const ATS = {greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", workday: 
   successfactors: "SAP SuccessFactors", taleo: "Taleo"};
 const atsName = a => ATS[a] || a || "";
 const STATUS = {ok: "OK", suspect: "Looks incomplete", capped: "Too many to read all", error: "Couldn’t be read", paused: "Paused", new: "Not checked yet"};
+ATS.directory_jobs = "Job listing source";
 function when(iso){
   if (!iso) return "";
   const d = new Date(iso.length <= 10 ? iso + "T12:00:00" : iso); if (isNaN(d)) return iso;
@@ -398,7 +399,8 @@ function pollFacts(){
 }
 function coRow(c){
   const lists = c.mine ? "one of your employers" : (c.watchers || []).length ? "watched by " + c.watchers.join(", ") : "watched by nobody";
-  const reason = c.reason ? `<small>${esc(c.reason)}</small>` : "";
+  const abroad = c.abroad ? `<small>Hires mostly outside the US (${n(c.foreign)} of its postings are abroad). Only its jobs that name a US place go on a board; its plain “Remote” jobs are not counted as US remote.</small>` : "";
+  const reason = (c.reason ? `<small>${esc(c.reason)}</small>` : "") + abroad;
   return `<div class="crow" data-name="${esc(c.name)}"><div><b>${esc(c.name)}</b><small>${esc(atsName(c.ats))}${lists ? " · " + esc(lists) : ""}</small><small>${esc(factsText(c))}</small></div>
   <div><span class="pill ${esc(c.status)}">${esc(STATUS[c.status] || c.status)}</span>${c.paused && c.fetch_status && c.fetch_status !== "ok" ? ` <span class="pill ${esc(c.fetch_status)}">${esc(STATUS[c.fetch_status] || c.fetch_status)}</span>` : ""}${reason}</div>
   <div><span>${n(c.open)} open</span><small>${c.last ? "Checked " + esc(when(c.last)) : "Not checked yet"}</small></div>
@@ -419,7 +421,7 @@ $("coRows").addEventListener("click", ev => {
   const row = b.closest(".crow"), name = row.dataset.name, c = COS.find(x => x.name === name) || {}, act = b.dataset.act;
   const say = (t, bad) => { let m = row.querySelector(".rowmsg"); if (!m) { m = document.createElement("small"); m.className = "rowmsg"; row.firstElementChild.appendChild(m); } m.textContent = t; m.style.color = bad ? "var(--bad)" : ""; };
   if (act === "remove" && b.dataset.armed !== "1") {
-    b.dataset.armed = "1"; b.textContent = "Tap again to remove";
+    b.dataset.armed = "1"; b.textContent = (window.matchMedia && matchMedia("(pointer: coarse)").matches ? "Tap" : "Click") + " again to remove";
     say("Removes it from everyone's boards. Its listings are kept as closed, so adding it back later keeps their history.");
     clearTimeout(rmTimer); rmTimer = setTimeout(() => { b.dataset.armed = ""; b.textContent = "Remove"; say(""); }, 6000); return;
   }
@@ -491,7 +493,7 @@ const KIND = {fetch: "Find new jobs", recompute: "Board rebuild", rerate: "Re-ra
 function runRow(r){
   const d = r.details || {};
   let what = KIND[r.kind] || r.kind;
-  if (r.kind === "fetch" && d.only) what = "Checked: " + d.only;
+  if (r.kind === "fetch" && d.only) { const k = String(d.only).split(",").length; what = k > 3 ? `Checked ${n(k)} employers` : "Checked: " + d.only; }
   if (r.kind === "rerate" && d.person) what += " · " + d.person + (d.tiers ? " (" + d.tiers.join(", ") + ")" : "");
   if (r.kind === "find") what += " · " + [d.label || d.location, d.size === "exhaustive" ? `exhaustive (${n(d.passes)} of up to ${n(d.budget)} passes)` : d.size].filter(Boolean).join(", ");
   const c = [];

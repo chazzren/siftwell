@@ -472,6 +472,48 @@ details.howto .legend{margin-top:8px}
 </style>
 """
 
+# ---- shared by every page -------------------------------------------------------------------------------------------
+# DOWN_SCRIPT: the "Siftwell isn't running" notice for pages other than the board (Settings, Employers, setup): the
+# page asks the server now and then; three misses in a row and it says so, in the same words as the board.
+DOWN_SCRIPT = """<script>(function(){
+  var fails = 0, bar = null;
+  function show(){
+    if (bar) return;
+    bar = document.createElement("div"); bar.id = "srvDown"; bar.setAttribute("role", "alert");
+    bar.style.cssText = "position:sticky;top:0;z-index:60;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;padding:10px 16px;background:var(--warn-soft,#fff4d6);color:var(--text,#1b1b1b);border-bottom:1px solid var(--line,#d9d9d9);font-size:14px;line-height:1.4";
+    bar.innerHTML = "<span><b>Siftwell isn\\u2019t running.</b> This page can\\u2019t reach it, so nothing here is being updated and the buttons won\\u2019t work. Open Siftwell again, then reload this page.</span>";
+    var b = document.createElement("button"); b.className = "btn sm"; b.type = "button"; b.textContent = "Reload";
+    b.addEventListener("click", function(){ location.reload(); }); bar.appendChild(b);
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+  function hide(){ if (bar) { bar.remove(); bar = null; } }
+  function tick(){
+    fetch("/api/people", {cache: "no-store"}).then(function(){ fails = 0; hide(); }, function(){ if (++fails >= 3) show(); })
+      .then(function(){ setTimeout(tick, fails ? 5000 : 20000); });
+  }
+  if (location.protocol.indexOf("http") === 0) setTimeout(tick, 15000);
+})();</script>
+"""
+# CONFIRM_SCRIPT: window.appConfirm(message, okLabel) -> Promise<bool>: a yes/no question in the app's own dialog
+# (the sheet style when the page has it), instead of the browser's confirm box.
+CONFIRM_SCRIPT = """<script>window.appConfirm = function(msg, okLabel){
+  return new Promise(function(resolve){
+    var d = document.createElement("dialog"); d.className = "sheet"; d.setAttribute("aria-label", "Please confirm");
+    d.style.cssText = "max-width:min(440px,calc(100vw - 32px));border:1px solid var(--line,#d9d9d9);border-radius:14px;padding:20px;background:var(--panel,var(--bg,#fff));color:var(--text,#1b1b1b)";
+    var parts = String(msg).split("\\n\\n"), h = document.createElement("p"); h.style.cssText = "margin:0 0 8px;font-weight:650;font-size:16px"; h.textContent = parts[0]; d.appendChild(h);
+    parts.slice(1).forEach(function(t){ var p = document.createElement("p"); p.style.cssText = "margin:0 0 8px;color:var(--muted,#555)"; p.textContent = t; d.appendChild(p); });
+    var row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px";
+    var no = document.createElement("button"); no.type = "button"; no.className = "btn ghost"; no.textContent = "Cancel";
+    var yes = document.createElement("button"); yes.type = "button"; yes.className = "btn primary"; yes.textContent = okLabel || "OK";
+    row.appendChild(no); row.appendChild(yes); d.appendChild(row); document.body.appendChild(d);
+    var done = function(v){ try { d.close(); } catch(e) {} d.remove(); resolve(v); };
+    no.addEventListener("click", function(){ done(false); }); yes.addEventListener("click", function(){ done(true); });
+    d.addEventListener("cancel", function(e){ e.preventDefault(); done(false); });
+    if (d.showModal) d.showModal(); else resolve(confirm(msg));
+  });
+};</script>
+"""
+
 THEME_JS = r"""// ---- theme button: Auto -> Light -> Dark -> Auto; saves display.theme and applies it at once. Needs $, H, PREFS, applyTheme().
 function themeMode(){ const t = PREFS["display.theme"]; return t === "light" || t === "dark" ? t : "system"; }
 function themeSync(){
@@ -720,6 +762,11 @@ const LBL_HELP = {apply_now: "Apply with your resume as it is.", tailor: "A good
 const TIER = {dmv_hq:"HQ near you", dmv_office:"Office near you", remote_first:"Remote-first", remote_friendly:"Remote-friendly"};
 
 const jobs = D.jobs;
+// Jobs whose titles nothing on the person's what-to-look-for list names: not on the board. They are kept apart
+// (D.off_jobs; ones that are there for the Target tab stay in D.jobs, marked off_list) and offered once, in the count
+// line: "N hidden because their titles aren't on your list · Show".
+const OFF = D.off_jobs || []; let offShown = false;
+const coOf = j => j.co || j.company;      // (two job boards of one employer show and filter as one name)
 const HASREL = !!D.has_relevance;   // the profile has a what-to-look-for sheet, so every job has a Relevance
 const NOMATCH_SORT = () => HASREL ? "relevant" : "appeal";   // the order when there is no Match to rank by
 // Claude is optional: when it isn't connected the board says so once (banner) and shows "-" where Match would be.
@@ -744,7 +791,7 @@ $("stats").innerHTML = [
 
 
 
-const coCount = {}; jobs.forEach(j => { coCount[j.company] = (coCount[j.company] || 0) + 1; });
+const coCount = {}; jobs.forEach(j => { coCount[coOf(j)] = (coCount[coOf(j)] || 0) + 1; });
 const cos = Object.keys(coCount).sort((a, b) => coCount[b] - coCount[a] || a.localeCompare(b));  // most matching jobs first
 const coOpts = list => list.map(c => `<option value="${esc(c)}">${esc(c)} (${coCount[c].toLocaleString()})</option>`).join("");
 $("co").insertAdjacentHTML("beforeend", coOpts(cos));
@@ -795,7 +842,10 @@ $("pvCounts").addEventListener("click", e => { const b = e.target.closest("butto
 $("pvGaps").addEventListener("click", e => { const b = e.target.closest("button[data-gap]"); if (!b) return; gapSel = gapSel === b.dataset.gap ? "" : b.dataset.gap; if (gapSel) $("lbl").value = "noskip"; shown = 100; drawPivotPanel(); render(); });
 ["q","clr","co","st","sort","paidonly","newonly","reqall","lbl","nowide","cType","cSize","cVal","cAge","cGd","cLay","cEq"].forEach(id => $(id).addEventListener("input", () => { shown = 100; render(); }));
 $("more").addEventListener("click", () => { shown += 100; render(); });
-$("count").addEventListener("click", e => { if (e.target.id === "reqShow") { $("reqall").checked = true; shown = 100; render(); } });
+$("count").addEventListener("click", e => {
+  if (e.target.id === "reqShow") { $("reqall").checked = true; shown = 100; render(); }
+  if (e.target.id === "offShow") { offShown = true; OFF.forEach(j => { j.off_list = true; jobs.push(j); }); OFF.length = 0; shown = 100; render(); }
+});
 // ---- My search (top of the Filters panel): this profile's saved search settings, the same ones /setup asks for.
 // They decide which jobs reach the board: home ZIP / radius / ways of working / remote anywhere / pay floor are applied
 // when the board is built (jobfinder.select_for_person); level and travel limit are applied here (mySearchOk).
@@ -891,7 +941,8 @@ function payScale(j){
   return [lo, hi > lo ? hi : lo + step];
 }
 function payBar(j){
-  if (j.salary_max == null) return `<div class="pay"><span class="amt">Not listed</span><div>No salary range in posting</div></div>`;
+  if (j.salary_max == null) return j.lazy ? `<div class="pay"><span class="amt">Open to check</span><div>Siftwell has this job’s title and place so far. Press “Show the full posting” below and its pay is read from it.</div></div>`
+    : `<div class="pay"><span class="amt">Not listed</span><div>No salary range in posting</div></div>`;
   const [lo, hi] = payScale(j), p = v => Math.max(0, Math.min(100, (v-lo)/(hi-lo)*100));
   const mid = j.salary_mid ?? Math.round((j.salary_min + j.salary_max)/2);
   const hourly = j.pay_unit === "hour" && j.pay_min != null, own = payOwn(j, " – ");
@@ -1021,7 +1072,7 @@ function drawTailored(){
       <div class="scores">${j ? `<div class="score" title="Overall">${j.score}<small>OVERALL</small></div>` : ""}${m != null ? `<div class="score match ${m >= 70 ? "hi" : m >= 45 ? "mid" : "lo"}">${m}<small>MATCH</small></div>` : ""}</div>
       <div style="min-width:0">
         ${safeUrl(x.job.url) ? `<a class="title" href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">${esc(x.job.title || "")}</a>` : `<span class="title">${esc(x.job.title || "")}</span>`}
-        <div class="meta"><span class="coname">${esc(x.job.company || "")}</span><span>Tailored ${esc(when)}</span><span>${j ? "Still open" : "No longer on your board"}</span>${x.gaps ? `<span>${x.gaps} gaps flagged</span>` : ""}${w.running ? `<span class="tlwork" role="status"><span class="spin"></span>Re-tailoring: ${esc(TL_STEP[w.step] || "working…")}</span>` : reviewBadge(x.review)}</div>
+        <div class="meta"><span class="coname">${esc(x.job.company || "")}</span><span>Tailored ${esc(when)}</span><span>${j ? "Still open" : "No longer on your board"}</span>${x.gaps ? `<span>${x.gaps} gap${x.gaps === 1 ? "" : "s"} flagged</span>` : ""}${w.running ? `<span class="tlwork" role="status"><span class="spin"></span>Re-tailoring: ${esc(TL_STEP[w.step] || "working…")}</span>` : reviewBadge(x.review)}</div>
         ${x.headline ? `<div class="tl2">${esc(x.headline)}</div>` : ""}
         ${w.running ? "" : factNotes(x.facts)}
         ${w.running ? "" : reviewNotes(x.review)}
@@ -1073,7 +1124,7 @@ function coPanel(j){
     row("Tender offers", c.tender_offers ? esc(c.tender_offers) : ""),
     row("Layoffs (18 mo)", c.layoffs ? esc(c.layoffs) + (c.layoffs === "none reported" && !c.layoffs_source ? "" : src(c.layoffs_source)) : ""),
     row("Glassdoor", c.gd_rating != null ? `★ ${c.gd_rating.toFixed(1)}${c.gd_reviews ? ` · ${c.gd_reviews.toLocaleString()} reviews` : ""}${c.gd_recommend_pct != null ? ` · ${c.gd_recommend_pct}% would recommend` : ""}${c.gd_as_of ? ` <span class="asof">as of ${mon(c.gd_as_of)}</span>` : ""}${src(c.gd_source)}${c.gd_reviews != null && c.gd_reviews < 100 ? ` <span class="asof">(few reviews)</span>` : ""}${c.gd_note ? ` <span class="asof">${esc(c.gd_note)}</span>` : ""}` : ""),
-    row("Hiring for you", `${c.open || 0} open on your board${c.new_week && c.new_week < c.open ? `, ${c.new_week} new this week` : ""}${c.median_mid ? ` · typical midpoint ${fmt(c.median_mid)}` : ""}`),
+    row("Hiring for you", `${c.open || 0} open on your board${c.new_week && c.new_week < c.open ? `, ${c.new_week} new this week` : ""}${c.median_hr ? ` · typical pay $${c.median_hr.toFixed(2)}/hr` : c.median_mid ? ` · typical midpoint ${fmt(c.median_mid)}` : ""}`),
   ].join("");
   return `<details class="copanel" open><summary>About ${esc(j.company)}</summary>
     ${c.blurb ? `<p>${esc(c.blurb)}</p>` : ""}<dl>${facts}</dl>
@@ -1082,8 +1133,8 @@ function coPanel(j){
 }
 
 const ago = d => { if (!d) return ""; const t = Date.parse(d); if (!t) return ""; const n = Math.round((Date.now() - t) / 864e5); return n <= 0 ? "today" : n === 1 ? "yesterday" : n < 7 ? n + "d ago" : n < 45 ? Math.round(n / 7) + "w ago" : Math.round(n / 30) + "mo ago"; };
-const whereTxt = j => j.workplace === "remote" ? "Remote" : ((j.dmv_locations.length ? j.dmv_locations : j.locations)[0] || "").replace(/,?\s*(United States( of America)?|USA)$/i, "").slice(0, 40) + (j.workplace === "hybrid" ? " · Hybrid" : "");
-const payTxt = j => j.salary_min == null ? "Pay not listed" : (payOwn(j) || (j.salary_max && j.salary_max !== j.salary_min ? `${fmt(j.salary_min)}–${fmt(j.salary_max)}` : fmt(j.salary_min)));
+const whereTxt = j => j.workplace === "remote" ? (j.remote_in ? `Remote (${j.remote_in})` : "Remote") : (j.where || (j.dmv_locations.length ? j.dmv_locations : j.locations)[0] || "").replace(/,?\s*(United States( of America)?|USA)$/i, "").slice(0, 40) + (j.workplace === "hybrid" ? " · Hybrid" : "");
+const payTxt = j => j.salary_min == null ? (j.lazy ? "Pay: open to check" : "Pay not listed") : (payOwn(j) || (j.salary_max && j.salary_max !== j.salary_min ? `${fmt(j.salary_min)}–${fmt(j.salary_max)}` : fmt(j.salary_min)));
 const TIERN = {haiku: "Quick check (Haiku)", sonnet: "Careful look (Sonnet)", opus: "Best judgment (Opus)"};   // the same three names everywhere
 const tierName = j => j.ai_tier ? TIERN[j.ai_tier] + (j.ai_at ? " · " + j.ai_at : "") + (j.ai_stale ? " · made with older info" : "") : "Not rated yet";
 const verdict = j => mode === "pivot" ? (j.pv_label ? [pvLab(j), PVL[j.pv_label]] : null) : (j.ai_label ? [j.ai_label, LBL[j.ai_label]] : null);
@@ -1094,7 +1145,7 @@ function card(j){
   return `<li class="jrow ${s==="hidden"?"hidden-by-user":""}" role="option" tabindex="0" data-id="${esc(j.id)}" aria-selected="${SEL === j.id}">
     <div class="rtitle">${j.new ? '<span class="ndot" title="New this week"></span>' : ""}${esc(j.title)}</div>
     <div class="rsc">${!pvm && HASREL ? `<div title="${esc(j.rel_why || "How close this job is to the work you do")}"><b class="rv${j.rel >= 70 ? " hi" : ""}">${j.rel ?? "–"}</b><small>Relevant</small></div>` : ""}<div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}${m == null && NOAI ? " na" : ""}" title="${m == null ? (NOAI ? "Match ratings need Claude" : "Not rated yet") : pvm ? "" : tierName(j)}">${m ?? "—"}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
-    <div class="rco">${esc(j.company)} · ${esc(whereTxt(j))}</div>
+    <div class="rco">${esc(coOf(j))} · ${esc(whereTxt(j))}</div>
     <div class="rmeta">${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : NOAI ? "" : `<span class="vpill">Not rated yet</span>`}<span class="amt">${payTxt(j)}</span>${j.posted ? `<span>${ago(j.posted)}</span>` : ""}${(pvm ? j.pv_stale : j.ai_stale) ? '<span class="old" title="Rated before your latest info">Older info</span>' : ""}${j.req_status === "unmet" ? '<span class="rq un">Requirement not met</span>' : j.req_status === "flag" ? '<span class="rq">Check requirements</span>' : ""}${TAILORED[j.id] ? "<span>Resume ready</span>" : WORK[j.id] && WORK[j.id].state === "running" ? "<span>Tailoring…</span>" : ""}${s === "applied" ? "<span>Applied</span>" : s === "saved" ? "<span>★ Saved</span>" : ""}</div>
     <div class="racts"><button type="button" data-k="saved" aria-pressed="${s==="saved"}" title="Save" aria-label="Save">★</button><button type="button" data-k="hidden" aria-pressed="${s==="hidden"}" title="Not for me" aria-label="Hide">✕</button></div>
   </li>`;
@@ -1108,7 +1159,7 @@ function detail(j){
     ? (j.pv_reason ? `<p><span class="lab">${v ? v[1] : ""}${j.pv_now != null ? ` · now ${j.pv_now}, after prep ${j.pv_later}` : ""}</span>${esc(j.pv_reason)}</p>` : "") + (j.pv_angle ? `<p><span class="lab">How to pitch yourself</span>${esc(j.pv_angle)}</p>` : "") + ((j.pv_gaps || []).length ? `<div class="chips">${j.pv_gaps.map(g => `<span class="chip gap">${esc(g)}</span>`).join("")}</div>` : "")
     : (j.ai_reason ? `<p><span class="lab">${v ? v[1] : ""}</span>${esc(LBL_HELP[j.ai_label] || "")}</p><p><span class="lab">Why it fits, and the gap${j.ai_level && j.ai_level !== "match" ? (j.ai_level === "stretch" ? " · a step above you" : " · below your level") : ""}</span>${esc(j.ai_reason)}</p>` : "") + (j.ai_tailor ? `<p><span class="lab">How to pitch yourself</span>${esc(j.ai_tailor)}</p>` : "");
   const unrated = pvm ? j.pv_label == null : j.ai_fit == null;
-  const wpChip = j.workplace ? `<span class="chip ${j.workplace}">${j.workplace === "onsite" ? "On-site" : j.workplace[0].toUpperCase()+j.workplace.slice(1)}</span>` : `<span class="chip">Workplace not stated</span>`;
+  const wpChip = j.workplace ? `<span class="chip ${j.workplace}"${j.remote_in ? ` title="Remote for people who live in ${esc(j.remote_in)}"` : ""}>${j.workplace === "onsite" ? "On-site" : j.workplace === "remote" && j.remote_in ? `Remote (${esc(j.remote_in)})` : j.workplace[0].toUpperCase()+j.workplace.slice(1)}</span>` : `<span class="chip">Workplace not stated</span>`;
   const locs = (j.dmv_locations.length ? j.dmv_locations : j.locations).slice(0,4).map(l => `<span class="chip">${esc(l)}</span>`).join("");
   const clr = j.clearance ? `<span class="chip ${j.clearance.includes("poly")?"poly":""}">${esc(j.clearance)}</span>` : "";
   const tl = TAILORED[j.id], wk = WORK[j.id];
@@ -1119,7 +1170,7 @@ function detail(j){
   return `<div class="dpane" data-id="${esc(j.id)}">
     <button class="dback" type="button" id="dBack">‹ All jobs</button>
     <div><h2 class="dtitle">${esc(j.title)}</h2>
-      <div class="dco"><span class="coname">${esc(j.company)}</span><span>${esc(whereTxt(j))}</span>${j.posted ? `<span>Posted ${ago(j.posted)}</span>` : ""}${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : ""}${j.new ? '<span class="chip new">New</span>' : ""}</div></div>
+      <div class="dco"><span class="coname">${esc(coOf(j))}</span><span>${esc(whereTxt(j))}</span>${j.posted ? `<span>Posted ${ago(j.posted)}</span>` : ""}${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : ""}${j.new ? '<span class="chip new">New</span>' : ""}</div></div>
     <div class="dacts acts">${tailorBtns}
       <button class="btn" type="button" data-k="saved" aria-pressed="${s==="saved"}">${s==="saved" ? "★ Saved" : "☆ Save"}</button>
       <button class="btn" type="button" data-k="applied" aria-pressed="${s==="applied"}">${s==="applied" ? "✓ Applied" : "Mark applied"}</button>
@@ -1197,7 +1248,14 @@ $("detail").addEventListener("click", e => {
   const full = e.target.closest("#dFull");
   if (full) {
     full.disabled = true; full.textContent = "Loading…";
-    fetch("/api/desc?id=" + encodeURIComponent(SEL)).then(r => r.json()).then(d => { $("dDesc").textContent = d.desc || "The full posting isn't saved; use View posting."; full.remove(); })
+    const jid = SEL;
+    fetch("/api/desc?id=" + encodeURIComponent(jid)).then(r => r.json()).then(d => {
+      // the text was only just fetched: its pay, level and workplace are read from it and shown right away (the
+      // server has stored them, so the next rebuild of the board has them too)
+      const j = d.job && (jobs.find(x => x.id === jid) || OFF.find(x => x.id === jid));
+      if (j) { Object.assign(j, d.job); delete j.lazy; render(); }
+      if (SEL === jid && $("dDesc")) { $("dDesc").textContent = d.desc || "The full posting isn't saved; use View posting."; const b = $("dFull"); if (b) b.remove(); }
+    })
       .catch(() => { full.textContent = "Couldn't load it"; });
     return;
   }
@@ -1220,12 +1278,13 @@ document.addEventListener("keydown", e => {
 });
 function render(){
   const q = $("q").value.trim().toLowerCase(), clr = $("clr").value, co = $("co").value, st = $("st").value;
-  window.__reqHidden = 0; window.__lvlHidden = 0;
+  window.__reqHidden = 0; window.__lvlHidden = 0; window.__offHidden = 0;
   const lvlBand = msNow().seniority_band || [1, 7];
   let r = jobs.filter(j => {
     if (wp === "remote" && j.workplace !== "remote") return false;
     if (!mySearchOk(j)) { if (j.level != null && (j.level < lvlBand[0] || j.level > lvlBand[1])) window.__lvlHidden++; return false; }
-    if (co !== "all" && j.company !== co) return false;
+    if (co !== "all" && coOf(j) !== co) return false;
+    if (j.off_list && !offShown && mode !== "pivot") { window.__offHidden++; return false; }
     const lb = $("lbl").value;
     if (mode === "pivot") {
       if (!(j.tracks || []).includes("ai")) return false;
@@ -1262,7 +1321,8 @@ function render(){
     gd: j => -(gdWeighted(CI[j.company] || {}) * 1e6 + (j.salary_mid || 0) / 1e3), pay: j => -(j.salary_mid ?? 0), odds: j => -(((mode === "pivot" ? j.pv_now : j.ai_fit) ?? -1) * 1e6 + ((mode === "pivot" ? j.pv_later : j.ai_asis) ?? 0) * 1e3 + (j.salary_mid || 0) / 1e3),
     odds_later: j => -(((mode === "pivot" ? j.pv_later : j.ai_asis) ?? -1) * 1e6 + ((mode === "pivot" ? j.pv_now : j.ai_fit) ?? 0) * 1e3 + (j.salary_mid || 0) / 1e3), new: j => -(Date.parse(j.first_seen + "T00:00") || 0) - (Date.parse(j.posted) || 0)/1e6};
   r.sort((a,b) => by[key](a) - by[key](b));
-  const base = mode === "pivot" ? pvJobs().length : jobs.length;
+  const base = mode === "pivot" ? pvJobs().length : jobs.filter(j => offShown || !j.off_list).length;
+  const offN = mode === "pivot" || offShown ? 0 : OFF.length + jobs.filter(j => j.off_list).length;
   // jobs Claude would rate that have no rating yet (whole board, not just this filtered list)
   const notRated = !D.profile ? 0 : mode === "pivot" ? pvJobs().filter(j => j.pv_label == null && j.req_status !== "unmet").length : jobs.filter(j => j.ai_rs && j.ai_fit == null).length;
   // ratings made with older info, for the tab being shown (the Target tab has its own ratings, so its own count)
@@ -1271,7 +1331,8 @@ function render(){
     (notRated ? ` · <span title="Claude rates a limited number of jobs in one go, the ones most relevant to your work first. The rest show a dash for Match until they are rated.">${notRated.toLocaleString()} job${notRated === 1 ? "" : "s"} not rated yet</span>` : "") +
     (!NOAI && staleN ? ` · <span title="Rated before your latest resume, answers or goals. Rate more (or the Re-rate icon at the top) brings them up to date.">${staleN.toLocaleString()} rated with older info</span>` : "") +
     (window.__lvlHidden ? ` · <span title="These jobs state a level outside the levels you chose (Filters, then My search). Jobs that state no level are always shown.">${window.__lvlHidden.toLocaleString()} hidden by your level</span>` : "") +
-    (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "");
+    (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "") +
+    (offN ? ` · <span title="Your board shows jobs whose titles match your list (Profile, then What Siftwell looks for). These don't match anything on it, and Claude doesn't rate them.">${offN.toLocaleString()} hidden because their titles aren’t on your list</span> · <button type="button" class="linkbtn" id="offShow">Show</button>` : "");
   drawChips();
   const moreN = notRated + (NOAI ? 0 : staleN);
   $("rateMore").hidden = !SERVED || !D.profile || !moreN;
@@ -2128,6 +2189,13 @@ if (SERVED) {
       EST = s.estimate || EST;
       if (s.next_run) { const n = new Date(s.next_run); $("nextRun").textContent = "· finds new jobs again " + (n.toDateString() === new Date().toDateString() ? "today " : "tomorrow ") + n.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); }
       else $("nextRun").textContent = "";
+      // Claude was connected after this board was built: ask for a rebuild once, and reload when it is there, so
+      // "needs Claude" doesn't stay on the buttons until the first rating run
+      if (NOAI && s.claude_ready && SERVED) {
+        const at = s.check && s.check.board_at;
+        if (window.__clAt === undefined) { window.__clAt = at || null; fetch("/api/board/refresh", {method: "POST", headers: H, body: "{}"}).catch(() => {}); }
+        else if (at && String(at) !== String(window.__clAt) && !s.recomputing) { saveFilters(); return void location.reload(); }
+      }
       const staged = drawCheck(s);
       if (staged || !jobs.length) {   // the banner (or, on an empty board, the Start card) is the one indicator
         const busy = staged || (!!pg.active && pg.blocking !== false);   // (building the directory doesn't hold Find new jobs up)
@@ -2179,11 +2247,12 @@ if (SERVED) {
     try { sessionStorage.removeItem("jb.area"); if (k) sessionStorage.setItem("jb.diradded", JSON.stringify({added: k, fetching: !!d.fetching})); } catch(e) {}
     const dropNote = () => { try { sessionStorage.removeItem("jb.diradded"); } catch(e) {} };
     dirB.hidden = false;
-    dirB.innerHTML = `<span>${k ? `Added ${k.toLocaleString()} employers.${d.fetching ? " Siftwell is checking their openings now; your board fills in as it goes." : " Their jobs show up after the next Find new jobs."}` : "No new employers near you in the directory right now."}</span>`
+    // (again: the note is being shown anew after a reload; whether the check is still running is in the banner above it)
+    dirB.innerHTML = `<span>${k ? `Added ${k.toLocaleString()} employers.${again ? " Their openings are checked right after they are added; the line above says how far that is." : d.fetching ? " Siftwell is checking their openings now; your board fills in as it goes." : " Their jobs show up after the next Find new jobs."}` : "No new employers near you in the directory right now."}</span>`
       + (k ? `<button class="btn sm ghost" type="button" id="dirUndoBtn">Remove the employers this added</button>` : "") + `<button class="btn sm ghost" type="button" id="dirClose">OK</button>`;
     $("dirClose").addEventListener("click", () => { dirB.hidden = true; dropNote(); });
-    if ($("dirUndoBtn")) $("dirUndoBtn").addEventListener("click", () => {
-      if (!confirm(`Remove the ${k.toLocaleString()} employers this added?\n\nThey leave your list (their jobs leave your board). You can add them again later.`)) return;
+    if ($("dirUndoBtn")) $("dirUndoBtn").addEventListener("click", async () => {
+      if (!await appConfirm(`Remove the ${k.toLocaleString()} employers this added?\n\nThey leave your list (their jobs leave your board). You can add them again later.`, "Remove them")) return;
       $("dirUndoBtn").disabled = true; dropNote();
       const undo = () => dirUndo().then(({ok, d}) => {
         dirB.innerHTML = `<span>${ok ? `Removed ${(d.removed || 0).toLocaleString()} employers. Your board is being re-checked.` : esc(d.error || "That didn’t work.")}</span><button class="btn sm ghost" type="button" id="dirClose">OK</button>`;
@@ -2427,10 +2496,10 @@ def build(payload, path, fragment=False):
     data = "<script>window.__DATA__=" + json.dumps(payload, separators=(",", ":")).replace("</", "<\\/") + \
            ";window.__CURRENT__=" + json.dumps(cur) + ";</script>\n"
     import appupdate
-    body = HEAD + BODY + data + SCRIPT + appupdate.BANNER_SCRIPT
+    body = HEAD + BODY + data + CONFIRM_SCRIPT + SCRIPT + appupdate.BANNER_SCRIPT
     if not fragment:
         body = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
-                HEAD + "</head><body>" + BODY + data + SCRIPT + appupdate.BANNER_SCRIPT + "</body></html>")
+                HEAD + "</head><body>" + BODY + data + CONFIRM_SCRIPT + SCRIPT + appupdate.BANNER_SCRIPT + "</body></html>")
     import paths
     paths.write_atomic(path, body)  # temp file + replace: the server never serves a half-written board

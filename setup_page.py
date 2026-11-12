@@ -18,7 +18,8 @@ def render_setup_html() -> str:
     boot = {"levels": {str(k): v for k, v in setup_flow._levels().items()},
             "radii": setup_flow.RADII, "industries": setup_flow.INDUSTRY_IDEAS, "steps": setup_flow.STEPS}
     boot["claude_ready"] = claude_cli.claude_ready()
-    return (PAGE.replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
+    import report
+    return (PAGE.replace("</body>", report.DOWN_SCRIPT + "</body>").replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
             .replace("/*__MANUAL_CSS__*/", manual_profile.CSS + connect_claude.CSS)
             .replace("/*__MANUAL_JS__*/", manual_profile.JS + connect_claude.JS))
 

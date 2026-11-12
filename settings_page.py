@@ -201,7 +201,7 @@ def render_settings_html(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + CSS + getting_started.CSS + backup.CSS + appupdate.CSS + "</head><body>" + body + '<script src="/assets/vendor/qrcode.js"></script>\n' +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") +
-            ";</script>\n" + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + autoupdate.SCRIPT + appupdate.BANNER_SCRIPT + appupdate.PANE_SCRIPT + directory.PANE_SCRIPT + "</body></html>")
+            ";</script>\n" + report.CONFIRM_SCRIPT + report.DOWN_SCRIPT + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + autoupdate.SCRIPT + appupdate.BANNER_SCRIPT + appupdate.PANE_SCRIPT + directory.PANE_SCRIPT + "</body></html>")
 
 
 CSS = """<style>

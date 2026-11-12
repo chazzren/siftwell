@@ -100,6 +100,36 @@ def _board(pid):
 
 
 # ---------------------------------------------------------------- GET
+def plain_reason(status, error):
+    """What went wrong with an employer's last check, in plain words for the Employers page. The stored note is a
+    log line ("incomplete fetch (capped at 300 of 500 job pages; 79 of 300 job pages failed to load); missing postings
+    kept open"); the page says what it means for the person."""
+    e = str(error or "")
+    if not e:
+        return ""
+    if status == "capped":
+        m = re.search(r"(\d[\d,]*) of (\d[\d,]*)", e)
+        if "time budget" in e or "ran out" in e:
+            return "This employer has more openings than Siftwell could read in one go. It kept what it read and reads the rest next time; nothing was closed."
+        return ("Siftwell read " + (f"{m.group(1)} of this employer’s {m.group(2)} job pages" if m else "only part of this employer’s job pages")
+                + " this time (the site limits how many can be read at once). The jobs it couldn’t read stay open on your board.")
+    if status == "suspect":
+        m = re.search(r"returned (\d+|no) postings but (\d+) were open", e)
+        return (f"The last check came back with {'no' if m and m.group(1) == 'no' else (m.group(1) if m else 'far fewer')} jobs where there were {m.group(2) if m else 'more'} before. "
+                "That usually means the site had a hiccup, so Siftwell kept the earlier jobs open and will check again.") if m else \
+            "The last check came back with far fewer jobs than before, so Siftwell kept the earlier jobs open and will check again."
+    if status == "error":
+        low = e.lower()
+        if "404" in low or "not found" in low:
+            return "The employer’s job page wasn’t found (it may have moved). Its jobs stay as they were; try Check now, or add the employer again from its careers link."
+        if "403" in low or "401" in low or "forbidden" in low:
+            return "The employer’s job site refused the request this time. Its jobs stay as they were; Siftwell tries again at the next check."
+        if "timed out" in low or "timeout" in low or "urlopen" in low or "connection" in low:
+            return "The employer’s job site didn’t answer in time. Its jobs stay as they were; Siftwell tries again at the next check."
+        return "The employer’s job site couldn’t be read this time. Its jobs stay as they were; Siftwell tries again at the next check."
+    return e
+
+
 def handle_get(h, path, pid):
     q = {k: v[0] for k, v in parse_qs(h.path.partition("?")[2]).items()}
     if path == "/catalog":
@@ -117,7 +147,8 @@ def handle_get(h, path, pid):
             f = c["_fetch"]
             status = "paused" if c["_paused"] else (f["status"] or "new")
             cos.append({"name": c["name"], "ats": c["ats"], "mine": bool(set(c.get("sets") or []) & watch), "watchers": _watchers(c.get("sets") or [], names), "paused": c["_paused"],
-                        "status": status, "fetch_status": f["status"], "reason": f["error"], "last": f["at"], "open": f["open"] or 0,
+                        "status": status, "fetch_status": f["status"], "reason": plain_reason(f["status"], f["error"]), "last": f["at"], "open": f["open"] or 0,
+                        "abroad": bool(f.get("abroad")), "foreign": f.get("foreign") or 0,
                         "raw": f["raw"], "secs": f["secs"], "sector": c.get("sector") or "", "added_by": c.get("added_by"),
                         "facts": facts.get(c["name"])})
         return h._send(200, {"companies": cos, "lists": lists(pid), "current": pid, "stats": catalog.stats(),

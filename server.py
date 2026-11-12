@@ -1230,6 +1230,11 @@ class H(BaseHTTPRequestHandler):
             s["next_run"] = nr.isoformat(timespec="minutes") if nr else None
             s["schedule"] = schedule()
             s["recomputing"] = _RECOMPUTE["running"]
+            try:
+                import claude_cli
+                s["claude_ready"] = bool(claude_cli.claude_ready())
+            except Exception:
+                s["claude_ready"] = None
             s["job"] = joblock.info()  # whoever holds the job lock, even a job this server didn't start
             try:  # the staged first check of the employers on this person's lists (first_search._check)
                 import first_search
@@ -1260,6 +1265,7 @@ class H(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs
             jid = (parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "").get("id") or [""])[0]
             desc = catalog.description(jid)
+            facts = None
             if not desc.strip():
                 # a posting stored from its title only (nobody's titles named it at fetch time): get its text now
                 try:
@@ -1267,9 +1273,17 @@ class H(BaseHTTPRequestHandler):
                     desc = jobfinder.lazy_text(jid)
                     if desc:
                         request_recompute([pid], auto_rate=False)   # its pay, level and requirements reach the board
+                        # ...and the open card shows them at once ("Pay: open to check" -> "$47.80/hr")
+                        with catalog.db() as con:
+                            row = con.execute("SELECT data, partial FROM listings WHERE id=?", (jid,)).fetchone()
+                        if row and not row["partial"]:
+                            d_ = json.loads(row["data"])
+                            facts = {k: d_.get(k) for k in ("salary_min", "salary_max", "salary_mid", "salary_text", "pay_unit", "pay_min",
+                                                            "pay_max", "wide_band", "level", "level_src", "travel", "travel_pct",
+                                                            "clearance", "snippet")}
                 except Exception as e:
                     print("couldn't fetch that posting's text:", e, flush=True)
-            return self._send(200, {"desc": desc})
+            return self._send(200, {"desc": desc, **({"job": facts} if facts else {})})
         if path == "/api/lookfor":
             import lookfor
             self._page_person(_qarg(self.path, "person"))
@@ -1555,6 +1569,9 @@ class H(BaseHTTPRequestHandler):
             if not ok:
                 return self._send(409, {"error": err})
             self._act("job search continued", pid, "checking the remaining employers")
+            return self._send(202, {"ok": True})
+        if path == "/api/board/refresh":    # the board page noticed it is older than something it shows (Claude got connected)
+            request_recompute([pid], auto_rate=False)
             return self._send(202, {"ok": True})
         if path == "/api/update/stop":      # Stop on a running Find new jobs: keep what was found, rebuild the boards
             import first_search

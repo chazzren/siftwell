@@ -1456,8 +1456,9 @@ $("dirRetry").addEventListener("click", () => {
     $("dirMsg").textContent = pv && pv.available ? (pv.new ? "The directory is back. Choose how many employers to add." : "The directory is back.") : "Still can’t reach it. Check your internet connection and try again.";
   });
 });
-$("dirUndo").addEventListener("click", () => {
-  if (!confirm($("dirUndo").textContent + "?\n\nThey leave your list (their jobs leave your board). You can add them again later.")) return;
+$("dirUndo").addEventListener("click", async () => {
+  const ask = window.appConfirm || (m => Promise.resolve(confirm(m)));
+  if (!await ask($("dirUndo").textContent + "?\n\nThey leave your list (their jobs leave your board). You can add them again later.", "Remove them")) return;
   $("dirUndo").disabled = true; $("dirMsg").textContent = "Removing…";
   post("/api/directory/undo").then(({ok, d}) => {
     $("dirUndo").disabled = false;
