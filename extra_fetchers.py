@@ -142,22 +142,56 @@ def f_oracle(c):
                 budget_stop(c, f"listing postings ({off} of {item.get('TotalJobsCount', 0)}{' near ' + label if label else ''})")
                 return
 
+JIBE_ALL_MAX = 1500      # a Jibe board with more postings than this is searched by place instead of read whole
+
+def home_place(h):
+    """"Columbus, OH" for a home (lat, lon, label): what a job site's own location search understands."""
+    import geo
+    label = str(h[2]) if len(h) > 2 else ""
+    m = re.search(r"\((.+)\)", label)
+    if not m and re.search(r",\s*[A-Z]{2}$", label):
+        return label
+    city = m.group(1).split(",")[0].strip() if m else label.split(",")[0].strip()
+    st = geo.state_at(h[0], h[1])
+    return f"{city}, {st}" if city and st and not city.isdigit() else None
+
+def jibe_searches(c, total):
+    """How to read a Jibe board: whole when it is small; a big one (Costco lists 19,000 postings) by place, one search
+    around each home (radius + 10 miles). Returns the extra query parameters of each search; [{}] = everything."""
+    if total <= JIBE_ALL_MAX or c.get("all"):
+        return [{}]
+    out = []
+    for h, r in household_homes():
+        place = home_place(h)
+        if not place:
+            return [{}]
+        out.append({"location": place, "stretch": int(r) + 10, "stretchUnit": "MILES"})
+    return out or [{}]
+
 def f_jibe(c):
-    page = 1
-    while True:
-        d = http_json(f'{c["base"]}/api/jobs?page={page}&limit=100')
-        for w in d.get("jobs", []):
-            j = w.get("data", {})
-            locs = [j.get("full_location") or j.get("location_name") or ", ".join(filter(None, [j.get("city"), j.get("state")]))]
-            desc = strip_html(j.get("description", ""))
-            yield J(c, j.get("title"), f'{c["base"]}/jobs/{j.get("slug")}', locs, "", None, desc,
-                    (j.get("posted_date") or "")[:10], "", j.get("slug"))
-        if page * 100 >= d.get("totalCount", 0):
-            break
-        if over_budget(c):
-            budget_stop(c, f"listing postings ({page * 100} of {d.get('totalCount', 0)})")
-            break
-        page += 1
+    import urllib.parse
+    first = http_json(f'{c["base"]}/api/jobs?page=1&limit=100')
+    seen = set()
+    for extra in jibe_searches(c, first.get("totalCount", 0)):
+        page = 1
+        while True:
+            d = first if (not extra and page == 1) else http_json(f'{c["base"]}/api/jobs?' + urllib.parse.urlencode({"page": page, "limit": 100, **extra}))
+            new = 0
+            for w in d.get("jobs", []):
+                j = w.get("data", {})
+                if j.get("slug") in seen:
+                    continue
+                seen.add(j.get("slug")); new += 1
+                locs = [j.get("full_location") or j.get("location_name") or ", ".join(filter(None, [j.get("city"), j.get("state")]))]
+                desc = strip_html(j.get("description", ""))
+                yield J(c, j.get("title"), f'{c["base"]}/jobs/{j.get("slug")}', locs, "", None, desc,
+                        (j.get("posted_date") or "")[:10], "", j.get("slug"))
+            if page * 100 >= d.get("totalCount", 0) or not d.get("jobs"):
+                break
+            if over_budget(c):
+                budget_stop(c, f"listing postings ({page * 100} of {d.get('totalCount', 0)})")
+                return
+            page += 1
 
 def f_clearcompany(c):
     d = http_json(c["url"])
@@ -188,8 +222,13 @@ def wanted(c, title):
     """Same title test the pipeline applies; used to skip detail fetches for jobs that would be dropped anyway."""
     jf = _jf()
     if over_budget(c):
-        budget_stop(c, "reading the postings' full text")
+        budget_stop(c, listed=True)
         return False   # (this employer's time is used up: the posting is stored from its list row, the text comes next time)
+    if str(c.get("name") or "").startswith("Employer") and c.get("_name_sample", 0) < 6:
+        # a board known only by a code ("Employer in Columbus OH (ADP 0330de)"): read a few postings whatever their
+        # titles, so the employer's real name can be learned from them (names.learn)
+        c["_name_sample"] = c.get("_name_sample", 0) + 1
+        return True
     try:
         return jf.title_ok(title) or any(jf.target_ok(st, c.get("ai_track"), title) for st in jf.CFG.get("targets", []))
     except Exception:

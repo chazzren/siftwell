@@ -362,9 +362,16 @@ LEGAL = re.compile(r"[,\s]+(Inc\.?|Incorporated|LLC|L\.L\.C\.|LLP|Corp\.?|Corpor
 def clean_name(n):
     """A posting's legal-entity name made presentable: '0101 The Huntington National Bank' -> 'The Huntington National
     Bank', '00100 LEIDOS, INC' -> 'Leidos'. None when it names a foreign entity or nothing is left."""
+    import names
     n = re.sub(r"\s+", " ", str(n or "")).strip()
-    n = re.sub(r"^(?:[A-Z]{1,3}\d{2,6}|0\d{1,5}|\d{3,6})\s*[-–:]?\s+(?=\S)", "", n)   # leading company codes ("0101 ", "US101 ")
-    n = __import__("company_add").strip_code_prefix(n)
+    if not n or n.upper() in ("UNAVAILABLE", "N/A", "NA", "NONE", "NULL"):
+        return None
+    # leading entity codes ("0101 ", "US101 ", "(5100) ", "AB3 ", an EIN), "d/b/a", "X, Department of": names.py, the
+    # same rules the app applies after a fetch; real number-led names ("84 Lumber", "2020 Companies") are kept
+    c = names.clean_display(n)
+    if c == n and not re.match(r"(?:\d+(?:st|nd|rd|th)\b)", n) and n.split()[0] not in names._KEEP_NUM:
+        c = re.sub(r"^(?:[A-Z]{1,3}\d{2,6}|0\d{1,5}|\d{3,6})\s*[-–:]?\s+(?=\S)", "", n)   # ("1001 Target Corporation" with nothing to compare)
+    n = __import__("company_add").strip_code_prefix(c)
     if not n or FOREIGN_ENTITY.search(n):
         return None
     for _ in range(2):
@@ -400,7 +407,8 @@ def best_name(t, bname=None):
     list, the board page's title, the careers address. "" when only a code is known (the app then describes it)."""
     import company_add
     c = t["c"]
-    for n in (t.get("pack_name"), clean_name(bname if bname is not None else t.get("bname")), (t.get("gov_name") or "")[:60],
+    # ("dname": what names.derive made of the board's own postings and page title the last time it was read)
+    for n in (t.get("pack_name"), t.get("dname"), clean_name(bname if bname is not None else t.get("bname")), (t.get("gov_name") or "")[:60],
               clean_name(t.get("tname")), ident_name(c), company_add.host_label(c, systems.careers_url(c))):
         n = company_add.readable_name(n or "", {}, "")
         if n:
@@ -420,7 +428,24 @@ def wants_board_title(t, bname):
 
 
 def pick_name(t, s):
-    return best_name(t, (s or {}).get("name"))
+    """The board's display name after a read. When the usual sources leave a code, a placeholder, a run-together
+    address or a legal entity behind a code, names.derive() works the name out from what the read saw: the postings'
+    text, the board page's title, the employer field (the app does the same after its own first fetch)."""
+    s = s or {}
+    t.pop("dname", None)
+    n = best_name(t, s.get("name"))
+    if t.get("pack_name"):
+        return n
+    try:
+        import names
+        raw = n or s.get("name") or ""
+        d = names.derive(raw, t["c"], s.get("texts") or [], board_title=s.get("btitle") or t.get("tname"), employer=s.get("name"))
+        if d and not names.poor(d, t["c"]):
+            t["dname"] = d[:60]
+            return best_name(t, s.get("name"))
+    except Exception:
+        pass
+    return n
 
 
 def lane(c):
@@ -527,6 +552,10 @@ def entry(t, state=None, suffix=""):
     places.sort(key=lambda p: -p[2])
     name = best_name(t)
     if name and suffix:
+        m = re.fullmatch(r"board (\d+)", suffix)
+        if m:   # a second board with no label of its own: say where it hires ("Hondros (Columbus OH #2)"), not "(board 2)"
+            top = (places[0][3] if places else "").replace(",", "")
+            suffix = f"{top} #{m.group(1)}" if top else f"#{m.group(1)}"
         name = f"{name[:60 - len(suffix) - 3]} ({suffix})"
     e = {"n": name, "c": {k: v for k, v in t["c"].items() if not k.startswith("verified_")}, "u": systems.careers_url(t["c"]), "j": int(t.get("jobs") or 0),
          "r": int(t.get("remote") or 0), "p": places[:PLACES_MAX], "s": t.get("read")}
@@ -606,6 +635,13 @@ def write(out, T, jobs_by, want_states, stats, t0, prior_manifest, keep_jobs=Fal
     live = {k: t for k, t in live.items() if not AGGREGATOR.search(best_name(t) or "")}     # (job boards re-posting others' jobs)
     suffix = distinct_boards(live)
     live = {k: live[k] for k in suffix}
+    same = {}
+    for t in live.values():
+        nm = best_name(t).lower()
+        same[nm] = same.get(nm, 0) + 1
+    for k, t in live.items():   # a board whose own name already tells it apart needs no suffix
+        if suffix[k] and same.get(best_name(t).lower(), 0) == 1:
+            suffix[k] = ""
     for k, t in live.items():
         t["_suffix"] = suffix[k]
     by_state = {}

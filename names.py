@@ -39,9 +39,17 @@ BUSINESS_WORDS = ("healthcare", "health", "group", "partners", "financial", "fin
                   "consulting", "diagnostics", "industries", "international", "associates", "hospitals", "hospital", "university",
                   "college", "schools", "energy", "foods", "restaurants", "technologies", "technology", "pharma", "automotive",
                   "auto", "homes", "realty", "properties", "transport", "freight", "express", "labs", "network", "networks",
-                  "management", "enterprises", "company", "corporation", "corp", "inc", "llc", "careers", "jobs", "usa", "law")
+                  "management", "enterprises", "company", "corporation", "corp", "inc", "llc", "careers", "jobs", "usa", "law",
+                  "national", "american", "community", "regional", "memorial", "federal", "county", "dental", "electrical",
+                  "mechanical", "manufacturing", "engineering", "contractors", "builders", "equipment", "materials", "packaging",
+                  "plastics", "steel", "motors", "markets", "stores", "retail", "wholesale", "hospitality", "hotel", "resorts",
+                  "senior", "living", "homecare", "hospice", "therapy", "rehab", "dentistry", "orthopedics", "physicians",
+                  "clinic", "clinics", "labs", "laboratories", "sciences", "biotech", "therapeutics", "capital", "advisors",
+                  "wealth", "credit", "union", "trust", "title", "mortgage", "lending", "security", "aviation", "airlines",
+                  "transportation", "trucking", "delivery", "foundation", "ministries", "church", "academy", "school", "zoo",
+                  "library", "museum", "armory", "army", "physicaltherapy")
 # number-led names that are real ("84 Lumber", "24 Hour Fitness", "360 Behavioral Health", "2020 Companies")
-_KEEP_NUM = {"7", "24", "76", "84", "99", "100", "101", "180", "247", "360", "365", "500", "800", "911", "1000", "1800", "2020"}
+_KEEP_NUM = {"7", "24", "76", "84", "99", "360", "365", "911", "1800", "2020"}
 _KEEP_MIXED = re.compile(r"^(?:\d+(?:st|nd|rd|th)|a123|3m|2u|f5|c3|g4s|k12|a1|a10|m3|8x8|h2o|e2open|b2b|p3|o2|q2|v2x|i3|3d|4front|"
                          r"1-800-\S+|\d+-eleven|7up|s&p|at&t|t-\w+|[a-z]+\d*\.(?:com|ai|io|org))$", re.I)
 _UUID = re.compile(r"[0-9a-f]{8}[ _-]?[0-9a-f]{4}[ _-]?[0-9a-f]{4}[ _-]?[0-9a-f]{4}[ _-]?[0-9a-f]{12}", re.I)
@@ -84,8 +92,8 @@ def is_slug(name, cfg=None):
     if " " in n or not re.fullmatch(r"[A-Za-z][a-z]+", n):
         return False
     low = n.lower()
-    if len(low) >= 13 or _VOWELLESS.search(low):
-        return True
+    if len(low) >= 13 or (_VOWELLESS.search(low) and not re.search(r"[aeiouy]", low[-3:])):
+        return True     # (five consonants in a row, ending in more: "Chordsdp"; not "Nordstrom")
     if any(low.endswith(w) and 3 <= len(low) - len(w) for w in BUSINESS_WORDS) and len(low) >= 9:
         return True
     return False
@@ -106,7 +114,7 @@ def poor(name, cfg=None):
     toks = n.split()
     if n.lower().strip(" .") in GENERIC or _generic_lead(toks):
         return "generic"
-    if _lead_code(toks):
+    if _lead_code(toks) and not _code_is_name(toks, cfg):
         return "code-prefix"
     if re.search(r"\b(?:of|for|of the)$", n, re.I):
         return "inverted"
@@ -119,6 +127,12 @@ def poor(name, cfg=None):
 def _in_texts(phrase, texts):
     p = re.sub(r"\s+", " ", phrase).strip().lower()
     return bool(p) and any(p in t for t in texts)
+
+
+def _code_is_name(toks, cfg):
+    """The board's own address starts with the "code": it is the name ("C5MI Insight" at c5mi.wd1..., "A10 Networks")."""
+    head = _norm(toks[0]) if toks else ""
+    return len(head) >= 3 and any(x.startswith(head) for x in slugs(cfg))
 
 
 def _lead_code(toks, texts=None):
@@ -307,6 +321,53 @@ def mine_name(texts, need=0.3):
     return forms[k].most_common(1)[0][0][:60], share
 
 
+_PREFIX_STOP = {"all", "the", "our", "you", "your", "this", "that", "with", "will", "must", "able", "work", "team", "for", "and", "are",
+                "job", "full", "part", "pay", "per", "may", "can", "any", "new", "one", "two", "who", "why", "how", "what", "when"}
+
+
+def prefix_name(prefix, texts, need=0.1):
+    """UKG addresses a board by a code that starts with the first three letters of the employer's name ("ALL1029AECR"
+    is ALL Crane Rental, "ACE1005APMI" Ace Parking, "UNI1101UDFI" United Dairy Farmers). The capitalised phrase
+    starting with those letters that most postings share is the name; None when there is no such phrase."""
+    pre = re.sub(r"[^a-z]", "", str(prefix or "").lower())[:3]
+    if len(pre) < 3 or not texts:
+        return None
+    rx = re.compile(r"(?<![A-Za-z0-9])((?i:" + re.escape(pre) + r")[A-Za-z'’]*(?:[ \t]+(?:(?:&|of|and)[ \t]+)?[A-Z][A-Za-z0-9&'’.\-]*){1,4})")
+    docs, forms = collections.Counter(), {}
+    for t in texts:
+        found = set()
+        for m in rx.finditer(t[:12000]):
+            words = m.group(1).split()
+            if not words[0][0].isupper():
+                continue
+            for k in range(2, len(words) + 1):
+                if words[k - 1].lower() in ("of", "and", "&") or words[k - 1].lower() in _TAIL_STOP:
+                    continue
+                ph = " ".join(words[:k]).strip(" .,-")
+                found.add(ph.lower())
+                forms.setdefault(ph.lower(), collections.Counter())[ph] += 1
+        docs.update(found)
+    if not docs:
+        return None
+    two = {k: v for k, v in docs.items() if len(k.split()) == 2}
+    if not two:
+        return None
+    base, n = max(two.items(), key=lambda kv: kv[1])
+    if n < max(2, need * len(texts)) or (base.split()[0] in _PREFIX_STOP and n < 0.5 * len(texts)):
+        return None
+    best = base
+    for k, v in sorted(docs.items(), key=lambda kv: len(kv[0])):
+        if k.startswith(base + " ") and v >= 0.6 * n and len(k) > len(best):
+            best = k
+    form = forms[best].most_common(1)[0][0]
+    return _tidy(form)[:60]
+
+
+def ukg_prefix(cfg):
+    m = re.match(r"([A-Za-z]{3})\d{3,}", str((cfg or {}).get("tenant") or "")) if (cfg or {}).get("ats") == "ukg" else None
+    return m.group(1) if m else None
+
+
 def split_business(slug):
     """Last resort for a run-together address nobody spells out: split a common business word off its end
     ("brightviewhealth" -> "Brightview Health", "cardinalgroup" -> "Cardinal Group"). None when none fits."""
@@ -316,7 +377,8 @@ def split_business(slug):
             if s.endswith(w) and len(s) - len(w) >= 3:
                 head = s[:-len(w)]
                 inner = split_business(head) if len(head) >= 9 else None
-                return f"{inner or head.capitalize()} {w.upper() if w in ('usa', 'llc') else w.capitalize()}"
+                first = inner or (head.upper() if len(head) <= 3 else head.capitalize())    # "odwlogistics" -> "ODW Logistics"
+                return f"{first} {w.upper() if w in ('usa', 'llc') else w.capitalize()}"
     return None
 
 
@@ -347,9 +409,16 @@ def derive(name, cfg=None, texts=None, board_title=None, employer=None):
     cur = re.sub(r"\s+", " ", str(name or "")).strip()
     why = poor(cur, cfg)
     if not why:
+        # a one-word name the postings write as two ("Microcenter" -> "Micro Center") or with other capitals
+        if cur and " " not in cur and len(texts) >= 3:
+            sp = split_slug(_norm(cur), texts, min_share=0.3)
+            if sp and sp != cur and _norm(sp) == _norm(cur) and not poor(sp, cfg):
+                return sp[:60]
         return None
     ok = lambda n: bool(n) and not poor(n, cfg) and n != cur
-    cleaned = [c for c in (_tidy(clean_display(employer or "", low)), clean_display(cur, low)) if ok(c)]
+    keep = lambda n: n if not _code_is_name((n or "").split(), cfg) else None
+    cleaned = [c for c in (_tidy(clean_display(employer or "", low)) if keep(employer) else _tidy(employer or ""),
+                           clean_display(cur, low)) if ok(c)]
     sl = list(dict.fromkeys(slugs(cfg) + ([_norm(cur)] if is_slug(cur, cfg) else [])))
     spelled, strong = None, None
     for x in sl:
@@ -357,13 +426,19 @@ def derive(name, cfg=None, texts=None, board_title=None, employer=None):
         strong = strong or (split_slug(x, texts, min_share=0.3) if len(texts) >= 3 else None)
     spelled = spelled if ok(spelled) else None
     strong = strong if ok(strong) else None
-    title = clean_display(name_from_title(board_title) or "", low) if board_title else ""
+    title = _tidy(clean_display(name_from_title(board_title) or "", low)) if board_title else ""
     title = title if ok(title) else None
     if why == "code-prefix" and cleaned:
         # "ISD ISD Renal" (DaVita), "9111 Cellco Partnership" (Verizon): a legal entity nobody knows gives way to the
         # name the board's address and most of its postings agree on; "0101 The Huntington National Bank" stays
         if strong and _norm(strong) not in _norm(cleaned[0]) and len(_norm(strong)) >= 4:
             return strong[:60]
+        if " " not in cleaned[0] and not texts:
+            # nothing left but one word ("ISD ISD Renal" -> "Renal") and no postings to check it against: the board's
+            # own address is the safer name ("davita" -> "Davita")
+            for x in sl:
+                if x.isalpha() and not is_slug(x.capitalize(), cfg) and x not in _norm(cleaned[0]):
+                    return x.capitalize()[:60]
         return cleaned[0][:60]
     if why != "slug" and cleaned:
         return cleaned[0][:60]
@@ -371,7 +446,11 @@ def derive(name, cfg=None, texts=None, board_title=None, employer=None):
         return spelled[:60]
     if title:
         return title[:60]
+    pn = prefix_name(ukg_prefix(cfg), texts) if ukg_prefix(cfg) else None
+    if ok(pn):
+        return pn[:60]
     mined, share = mine_name(texts)
+    mined = _tidy(mined) if mined else mined
     if ok(mined) and (why != "slug" or share >= 0.5 or any(_norm(mined).startswith(x[:4]) or _initialism(x, mined) for x in sl)):
         return mined[:60]
     for x in sl:

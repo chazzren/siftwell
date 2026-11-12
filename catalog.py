@@ -176,6 +176,21 @@ def places_map():
     return out
 
 
+def dir_states_map():
+    """{company name: [states]} the employer directory says each employer hires in (every company with a "dir"
+    entry, also those whose places are not all known). Used to place a bare city name ("Columbus Campus")."""
+    out = {}
+    with db() as con:
+        for r in con.execute("SELECT name, cfg FROM companies WHERE cfg LIKE '%\"dir\"%'"):
+            try:
+                d = json.loads(r["cfg"]).get("dir")
+            except ValueError:
+                continue
+            if isinstance(d, dict) and d.get("st"):
+                out[r["name"]] = list(d["st"])
+    return out
+
+
 def id_prefix(c):
     """What a company's listing ids start with: the name it had when its first posting was stored ("idp" in its
     config once it has been renamed), else its name."""

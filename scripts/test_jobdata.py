@@ -214,6 +214,7 @@ company("Kidney Care National")  # hires in both Columbus, OH and Columbus, GA
 company("Buckeye Clinics")       # only Ohio
 company("Nowhere Named")         # nothing to go on
 company("Georgia-Pacific")       # the name must not count as a state
+company("The Ohio State University")   # a state in the name must not hide the Ohio its postings name
 company("Local Health", dir={"all": True, "p": [[39.96, -83.0], [40.1, -83.1]], "st": ["OH"], "lab": "Columbus, OH"})
 GA_TEXT = "Join Team Georgia! Applicants must hold a current Georgia license as a Registered Nurse. State of Georgia benefits."
 store("Team Georgia", [("g1", "Registered Nurse", ["Columbus"], "", GA_TEXT), ("g2", "Nurse Manager", ["Atlanta, GA"], "", GA_TEXT)])
@@ -224,6 +225,7 @@ store("Kidney Care National", [("k1", "Staff RN", ["01054 - Piedmont Columbus Mi
 store("Buckeye Clinics", [("b1", "RN", ["Columbus"], "", "Great team."), ("b2", "RN", ["Dayton, OH"], "", "x"), ("b3", "RN", ["Dublin, OH"], "", "x")])
 store("Nowhere Named", [("n1", "RN", ["Columbus"], "", "Great team.")])
 store("Georgia-Pacific", [("p1", "Electrician", ["Columbus"], "", "Georgia-Pacific is hiring. Georgia-Pacific makes paper."), ("p2", "Electrician", ["Columbus, OH"], "", "x")])
+store("The Ohio State University", [("u1", "Outpatient RN", ["Columbus Campus"], "", "The Ohio State University Wexner Medical Center. Requires a current Ohio RN license. Columbus, OH 43210.")])
 store("Local Health", [("l1", "RN", ["Columbus"], "", "Great team."), ("l2", "RN", ["Main Campus"], "", "x")])
 pc, prof, st = jobfinder.person_cfg(PID)
 jobfinder.use_cfg(pc)
@@ -237,6 +239,7 @@ check("labelled places are untouched: 'Columbus, OH' in, 'Columbus, GA' out", "k
 check("an employer that only hires in Ohio: its bare 'Columbus' is Columbus, OH", "b1" in got and "b3" in got)
 check("no support at all: unplaced", "n1" not in got)
 check("a state in the company's name is not support ('Georgia-Pacific'): its other postings decide", "p1" in got)
+check("'Columbus Campus' at The Ohio State University, whose posting names Ohio: near", "u1" in got)
 check("an all-nearby employer still shows a posting that names no place", "l2" in got and "l1" in got)
 check("the stored listing remembers the states its text names", next(j for j in pool if j["id"].endswith("::g1"))["loc_st"] == ["GA"])
 
@@ -307,6 +310,16 @@ check("derive: a placeholder gets the name its postings state", N.derive("Employ
       str(N.derive("Employer in Columbus OH (UKG uni110)", {"ats": "ukg", "tenant": "UNI1101UDFI", "board": "x"}, UDF)))
 check("derive: the board page's title names a code-only board", N.derive("Employer (Paylocity 6997ff)", {"ats": "paylocity", "id": "6997ffbe-94a8-44cb-8ba7-1de69dc5abf6"}, [], board_title="Dewey&#39;s Pizza - Job Opportunities") == "Dewey's Pizza")
 check("derive: no text at all: a business word is split off the address", N.derive("Brightviewhealth", {"ats": "icims", "base": "https://careers-brightviewhealth.icims.com"}, []) == "Brightview Health")
+ACE = ["Valet\nACE Parking is an Affirmative Action employer. Park cars downtown.", "Cashier\nJoin Ace Parking as a cashier in our garage.",
+       "Site Manager\nThis position supervises staff. Ace Parking Management offers benefits.", "Attendant\nWe are hiring. All Applicants Welcome here."]
+check("derive: a UKG code starts with the employer's first letters ('ACE1005APMI' = Ace Parking)",
+      N.derive("Employer in Columbus OH (UKG ace100)", {"ats": "ukg", "tenant": "ACE1005APMI", "board": "b"}, ACE) in ("Ace Parking", "ACE Parking"),
+      str(N.derive("Employer in Columbus OH (UKG ace100)", {"ats": "ukg", "tenant": "ACE1005APMI", "board": "b"}, ACE)))
+MC = ["Tech\nJoining Micro Center means more. At Micro Center, we care.", "Sales\nMICRO CENTER is the nation's leading retailer. Life at Micro Center is great.",
+      "Cashier\nMicro Center is hiring cashiers now."]
+check("derive: a one-word name the postings write as two is spelled their way ('Microcenter' -> 'Micro Center')",
+      N.derive("Microcenter", {"ats": "ukg", "tenant": "MIC1003MEI", "board": "b"}, MC) == "Micro Center")
+check("derive: a page title in capitals with LLC is tidied", N.derive("Employer (Paylocity 33704a)", {"ats": "paylocity", "id": "33704aa8-8475-45e8-b8a8-55e4d6765e36"}, [], board_title="NEMEAN SOLUTIONS LLC - Job Opportunities") == "Nemean Solutions")
 check("derive: a good name is never touched", N.derive("OhioHealth", {"ats": "workday", "tenant": "ohiohealth", "wd": "wd5", "site": "x"}, DV) is None
       and N.derive("7-Eleven", {}, CM) is None and N.derive("3M", {}, []) is None)
 check("derive: nothing known -> None (the placeholder stays)", N.derive("Employer in Columbus OH (ADP 0330de)", {"ats": "adp", "cid": "0330dee1-d933-49d0-9a55-3d0d5b7b0b3f"}, []) is None)
@@ -411,6 +424,9 @@ big = extra_fetchers.oracle_searches({"ats": "oracle"}, 91405)
 check("a huge Oracle board is searched by place (each home + remote), a small one read whole",
       len(big) == 2 and "latitude=39.9" in big[0][0] and "radius=45" in big[0][0] and "ORA_REMOTE" in big[1][0]
       and extra_fetchers.oracle_searches({"ats": "oracle"}, 300) == [("", "")], str(big))
+js_ = extra_fetchers.jibe_searches({"ats": "jibe"}, 18956)
+check("a huge Jibe board (Costco) is searched around each home too", js_ == [{"location": "Columbus, OH", "stretch": 45, "stretchUnit": "MILES"}]
+      and extra_fetchers.jibe_searches({"ats": "jibe"}, 400) == [{}], str(js_))
 card = '<span class="sr-only field-label">Work Location</span> <span > In Person</span> <span class="sr-only field-label">ID</span> <span > 2026-19146</span>'
 check("iCIMS: the card's own 'Work Location: In Person' is read", extra_fetchers._icims_workplace(card) == "onsite"
       and extra_fetchers._icims_workplace(card.replace("In Person", "Remote")) == "remote"

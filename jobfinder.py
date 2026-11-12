@@ -231,9 +231,18 @@ class EmployerPlaces:
     the places its other postings name with their state, and the places and states the employer directory lists.
     Built lazily, one employer at a time."""
     def __init__(self, pool, places=None):
-        self.locs, self.dir, self.done = {}, places or {}, {}
+        self.locs, self.dir, self.done, self._dir_st = {}, places or {}, {}, None
         for j in pool:
             self.locs.setdefault(j["company"], set()).update(l for l in (j.get("locations") or []) if l)
+
+    def dir_states(self):
+        if self._dir_st is None:
+            try:
+                import catalog
+                self._dir_st = catalog.dir_states_map()
+            except Exception:
+                self._dir_st = {}
+        return self._dir_st
 
     def of(self, company):
         """({place name key: {states}}, {states}) for one employer."""
@@ -247,6 +256,7 @@ class EmployerPlaces:
                     if nm:
                         city.setdefault(nm, set()).add(st)
             sts.update((self.dir.get(company) or {}).get("states") or [])
+            sts.update(self.dir_states().get(company) or [])
             got = self.done[company] = (city, sts)
         return got
 
@@ -271,7 +281,6 @@ def bare_support(loc, job, emp):
     for l in job.get("locations") or []:
         if l and l != loc:
             own.update(st for _, st in geo.place_states(l))
-    own -= set(jobtext.text_states(job.get("company") or ""))   # "Georgia-Pacific", "Texas Roadhouse" name no place
     out = set()
     for name, opts in names_:
         cand = set(opts)
@@ -932,7 +941,7 @@ def f_workday(c):
     with cf.ThreadPoolExecutor(6) as ex:
         yield from ex.map(detail, postings)
     if over_budget(c):
-        budget_stop(c, "reading the postings' full text")
+        budget_stop(c, listed=True)   # (every posting was listed; the texts left out are read by the next fetch)
 
 FETCHERS = {"greenhouse": f_greenhouse, "lever": f_lever, "ashby": f_ashby,
             "smartrecruiters": f_smartrecruiters, "workday": f_workday}
@@ -991,7 +1000,12 @@ def prepare_listing(j, c):
     # pay: what the board itself listed, else the posting's text, else its title ("Line Cook - $17/hour")
     set_pay(j, j.pop("salary", None) or parse_salary(text) or parse_salary(j.get("title") or ""))
     # the states the posting names, for placing a bare city name ("Columbus" + "a current Georgia license")
-    j["loc_st"] = jobtext.text_states((j.get("title") or "") + "\n" + text)
+    # (the employer's own name is taken out first: "Georgia-Pacific" and "Texas Roadhouse" name no place)
+    co = (j.get("company") or "").strip()
+    named = (j.get("title") or "") + "\n" + text
+    if len(co) >= 4 and jobtext.text_states(co):
+        named = re.sub(re.escape(co), " ", named, flags=re.I)
+    j["loc_st"] = jobtext.text_states(named)
     enrich(j, text)  # also fills workplace from the text when the board didn't say
     j["snippet"] = text[:600]
     return j
@@ -1020,9 +1034,11 @@ def over_budget(c):
     d = c.get("_deadline")
     return bool(d) and time.time() > d
 
-def budget_stop(c, where=""):
-    """Note that a reader stopped early for its budget (the company is then marked "capped")."""
-    if not c.get("_truncated"):
+def budget_stop(c, where="", listed=False):
+    """Note that a reader stopped early for its budget. listed=False: it stopped while listing postings, so the list
+    is incomplete and the company is marked "capped" (nothing is closed). listed=True: every posting was listed and
+    only some full texts were left for next time, so the fetch still counts as complete."""
+    if not listed and not c.get("_truncated"):
         c["_truncated"] = f"time budget of {int(c.get('_budget') or 0)}s used up{(' ' + where) if where else ''}; the rest is read next time"
     c["_budget_hit"] = True
 
@@ -1656,8 +1672,8 @@ def reparse_one(old, text, c):
                 or bool(REMOTE_DESC.search(text.lower())))
         if any(l and jobtext.workplace_label(l) == "onsite" and not jobtext.remote_label(l) and "remote" in l.lower() for l in locs):
             base = "onsite"          # "Not Remote", "Remote: No"
-        elif (c.get("ats") or "") in UNSURE_REMOTE_ATS and not said:
-            base, recheck = "", True
+        elif (c.get("ats") or "") in UNSURE_REMOTE_ATS and not said and int(old.get("pv") or 1) < 2:
+            base, recheck = "", True     # (only rows stored before the fix: later ones were read correctly)
     j["workplace"] = base
     # pay the board itself listed (not words from the text) is kept as it is; everything else is read again
     flat = lambda x: " ".join(str(x or "").split())
