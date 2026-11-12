@@ -167,6 +167,11 @@ def note_foreign(gone):
             open_n = con.execute("SELECT COUNT(*) FROM listings WHERE company=? AND closed_at IS NULL", (name,)).fetchone()[0]
             con.execute("UPDATE companies SET foreign_n=?, us_n=?, open_count=? WHERE name=?",
                         (int(r["foreign_n"] or 0) + int(n), _us_count(con, name), open_n, name))
+        # every company's open count, counted the way record_fetch now does (postings stored without their text too)
+        counts = {r[0]: r[1] for r in con.execute("SELECT company, COUNT(*) FROM listings WHERE closed_at IS NULL GROUP BY company")}
+        for r in con.execute("SELECT name, open_count FROM companies WHERE last_fetch_at IS NOT NULL").fetchall():
+            if (r["open_count"] or 0) != counts.get(r["name"], 0):
+                con.execute("UPDATE companies SET open_count=? WHERE name=?", (counts.get(r["name"], 0), r["name"]))
 
 
 def company_states(company):
@@ -286,6 +291,11 @@ def rename_company(old, new):
             except ValueError:
                 data = r["data"]
             con.execute("UPDATE listings SET company=?, data=? WHERE id=?", (new, data, r["id"]))
+    try:        # the directory's records of what it added follow the new name ("Remove the employers this added")
+        import directory
+        directory.note_rename(old, new)
+    except Exception as e:
+        print(f"(directory records not renamed for {old}: {type(e).__name__}: {e})", flush=True)
     return True
 
 

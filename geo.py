@@ -243,7 +243,7 @@ def _where_part(part):
         kb = _key(before)
         if not strong and _near_town(kb, state):
             return "us"                                  # "Sydney, OH" is Sidney, Ohio misspelt
-        if strong or city or F["shared"].search(kb):
+        if strong or city:
             return "foreign"                             # "Utrecht, UT", "Barcelona, CT", "Hyderabad, IN"
         return ""                                        # a place the gazetteer doesn't have in that state: unresolved
     if strong:

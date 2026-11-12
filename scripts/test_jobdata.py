@@ -683,6 +683,12 @@ people.save_settings({"home_zip": "", "radius_miles": 35}, PID)
 jobfinder.use_cfg(jobfinder.person_cfg(PID)[0])
 got2 = {j["id"].split("::")[1] for j in jobfinder.select_for_person(catalog.open_listings(lazy=True)) if j["company"] == "Statewide Health"}
 check("...with no home set, every state's remote jobs are shown as before", {"r1", "r2", "r3"} <= got2 and "r4" not in got2, str(sorted(got2)))
+jv = P("Field Service Engineer III", ["Remote, Maryland, USA"], "remote", "Service instruments at customer sites in your territory.")
+check("an in-person job labelled 'Remote, Maryland, USA' is not remote", not jv["remote_strict"] and jv["workplace"] == "onsite", str(jv["workplace"]))
+check("'Richmond, NC' (a common town name, the wrong state) settles nothing; 'Remote, EST' is a time zone, not Estonia",
+      _geo.where("NCL Richmond - Ellwood NC") != "foreign" and not jobfinder.is_foreign("Remote, EST"))
+check("a title that names a region only decides a remote posting ('Managing Editor, Asia' at an office with no label stays)",
+      P("Managing Editor, Asia", []) is not None and P("Sales Associate Liberia FT", []) is not None and P("Managing Editor, Asia", ["Remote"], "remote") is None)
 people.save_settings({"home_zip": "43215", "radius_miles": 35}, PID)
 
 blocked = os.path.join(DATA, claude_cli.FORBID_LOG)

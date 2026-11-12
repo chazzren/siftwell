@@ -1051,11 +1051,13 @@ def prepare_listing(j, c):
     # No US place on the posting: its own words decide. Written in another language, or its title or text puts the
     # job in another country ("based in Toronto", "remote within Canada", pay in euros) with nothing saying US: out.
     said_us = jobtext.text_us(text)
+    rem = [l for l in locs if l and jobtext.remote_label(l)]
     if not us_loc:
         abroad = lambda s: is_foreign(s) and not re.search(r"united states|\bU\.?S\.?A?\b", s)
         if jobtext.non_english(title, text):
             return None
-        if not said_us and (geo.names_foreign(title) or jobtext.text_abroad(text, abroad)):
+        # (only a remote posting: "Managing Editor, Asia" at an office with no label is a job at that office)
+        if (base == "remote" or rem) and not said_us and (geo.names_foreign(title) or jobtext.text_abroad(text, abroad)):
             return None
     # Remote for real? A label can say remote while the work is done in person (in-home visits, a clinic).
     veto = jobtext.remote_veto(title, text) if (strict or base == "remote") else ""
@@ -1063,7 +1065,6 @@ def prepare_listing(j, c):
         strict, base = False, ("" if base == "remote" else base)
         j["workplace"] = base
     # "OH - Work from home", "Remote - Texas": remote, for people who live in that state
-    rem = [l for l in locs if l and jobtext.remote_label(l)]
     bound = [jobtext.remote_state(l) for l in rem]
     remote_st = sorted(set(bound)) if strict and rem and all(bound) else []
     bare = not veto and any(BARE_US.fullmatch(l.lower()) for l in locs) and (c.get("tier") == "remote_first" or bool(REMOTE_DESC.search(text.lower())))
@@ -1497,8 +1498,9 @@ def night_spent(pid, timings):
     catalog.set_meta(f"night:{pid}", used)
 
 def eligible_for_claude(j):
-    """Skip jobs the person can't or won't pursue: unmet hard requirements, or levels well outside their band."""
-    if j.get("req_status") == "unmet":
+    """Skip jobs the person can't or won't pursue: unmet hard requirements, levels well outside their band, or a
+    title that nothing on their what-to-look-for list names (those are not on the board)."""
+    if j.get("req_status") == "unmet" or j.get("off_list"):
         return False
     L, band = j.get("level"), (CFG.get("seniority") or {}).get("band") or [1, 7]
     return L is None or band[0] - 1 <= L <= band[1] + 1
@@ -1643,6 +1645,9 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
         for k in BOARD_HIDDEN:  # catalog bookkeeping the page doesn't use
             j.pop(k, None)
     jobs.sort(key=board_order)
+    # titles nothing on the person's list names: kept apart ("N hidden because their titles aren't on your list · Show")
+    off = [j for j in jobs if j.get("off_list") and "ai" not in (j.get("tracks") or [])]
+    jobs[:] = [j for j in jobs if not j.get("off_list") or "ai" in (j.get("tracks") or [])]
     per_co =collections.Counter(j["company"] for j in jobs)
     watch, sets = people.company_sets(pid), company_sets_map()
     sums = [dict(s, matched=per_co.get(s["company"], 0)) for s in summaries if sets.get(s["company"], set()) & watch]
@@ -1659,7 +1664,7 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
                "companies": sorted(sums, key=lambda s: s["company"]), "company_info": company_info(jobs),
                "ratings": ratings_summary(jobs),
                "rate_batch": {t: v["batch_size"] for t, v in ai_score.TIER_RUN.items()},
-               "rate_limits": dict(ai_score.RUN_LIMITS), "jobs": jobs}
+               "rate_limits": dict(ai_score.RUN_LIMITS), "jobs": jobs, "off_jobs": off}
     import io
     paths.dump_json_atomic(people.pdir("jobs.json", pid=pid), payload, indent=1)
     buf = io.StringIO(newline="")
@@ -1722,7 +1727,8 @@ def new_unrated(pid, jobs):
         prev, first = set(), True  # first board for this person (e.g. setup just finished)
     except Exception:
         return [], False  # can't tell what's new: don't guess
-    return [j["id"] for j in jobs if j["id"] not in prev and (j.get("ai_rs") or "f")[0] == "-" and j.get("ai_fit") is None], first
+    return [j["id"] for j in jobs if j["id"] not in prev and (j.get("ai_rs") or "f")[0] == "-" and j.get("ai_fit") is None
+            and not j.get("off_list")], first
 
 def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
     """Rebuild boards from the catalog: each person's filters over every open listing, requirements, Appeal and
@@ -1760,6 +1766,7 @@ def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
             relevance = lookfor.scorer(pid, prof).fit(jobs)
             for j in jobs:
                 relevance.score(j)
+            mark_off_list(jobs, relevance, st)
             if rate:
                 print(f"--- {people.name(pid)}: {len(jobs)} listings pass their filters", flush=True)
             ai_status, pv_status = score_person(jobs, prof, new_claude=rate, refresh=refresh, opts=opts)
@@ -1770,8 +1777,8 @@ def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
                 fresh_ids, first = new_unrated(pid, jobs) if prof else ([], False)
                 if fresh_ids:  # the server queues a quick Haiku check of just these (if the person allows it)
                     print("NEW_UNRATED " + json.dumps({"pid": pid, "ids": fresh_ids, "first": first}), flush=True)
-            unrated = sum(1 for j in jobs if j.get("ai_fit") is None)
-            write_person(pid, jobs, summaries, prof, st, ai_status, pv_status)
+            unrated = sum(1 for j in jobs if j.get("ai_fit") is None and not j.get("off_list"))
+            write_person(pid, jobs, summaries, prof, st, ai_status, pv_status)   # (takes the off-list jobs out of `jobs`)
             out[pid] = {"jobs": len(jobs), "unrated": unrated, "secs": round(time.time() - t0, 1)}
             if rate:
                 out[pid]["timings"] = list(ai_score.TIMINGS)
@@ -1780,6 +1787,25 @@ def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
             print(f"board rebuild failed for {pid} (kept the previous board): {type(e).__name__}: {e}", flush=True)
             traceback.print_exc()
     return out
+
+def mark_off_list(jobs, relevance, st):
+    """The title filter of a profile that goes by its own titles is its what-to-look-for sheet: a job whose title
+    nothing on the sheet names (no entry matches; at most it shares everyday words with one) is not on the board and
+    is never rated. Marked "off_list" here; write_person() keeps those apart (the page offers "N hidden ... Show", so
+    nothing vanishes silently). A job that is there for the Target tab stays, on that tab only. Nothing is marked for
+    a profile on the earlier built-in word list, or while the sheet is empty (then every title passes, as before)."""
+    if (st or {}).get("title_rule") == "builtin" or getattr(relevance, "empty", True):
+        return 0
+    n = 0
+    for j in jobs:
+        ts = relevance.title_score(j.get("title") or "")
+        if ts[0] and ts[1] not in ("", "shared"):
+            continue
+        if "ai" in (j.get("tracks") or []):
+            j["tracks"] = ["ai"]        # (stays for the Target tab; the page keeps it off the main list)
+        j["off_list"] = True
+        n += 1
+    return n
 
 def _failed(boards):
     return sorted(p for p, v in (boards or {}).items() if isinstance(v, dict) and v.get("error"))

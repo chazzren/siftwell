@@ -58,7 +58,7 @@ REMOTE_ADD = 150                # remote-only searches: the employers with the m
 SOURCE_SECTOR = "Siftwell directory"
 ATS = "directory_jobs"
 _LOCK = threading.Lock()
-_APPLY = threading.Lock()
+_APPLY = threading.RLock()      # (re-entrant: apply() renames companies, and a rename updates these records)
 STATE_CODES = ("AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND "
                "OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY PR").split()
 LOCAL = os.path.join(DIR, "local")     # the directory built on this computer (localdir.py)
@@ -740,6 +740,7 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
         by_key = {catalog.ats_key(c): c for c in cos}
         by_name = {c["name"].lower(): c for c in cos}
         added, linked, starters, renames, packs_n, new, keys, skipped = [], [], 0, [], 0, [], [], 0
+        items = []      # [board key, "a" (added) | "l" (already in the catalog, put on the list), name then]: what undo() goes by
         save = (lambda entry, con: None) if dry else catalog.save_company
         with catalog.db() as con:
             for e in emps:
@@ -783,6 +784,7 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
                     save(entry, con)
                     co.update(entry)
                     linked.append(co["name"])
+                    items.append([k, "l", co["name"]])
                 else:
                     name = e["name"].replace(",", "").strip()[:60]
                     if name.lower() in by_name:
@@ -797,6 +799,7 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
                     save(entry, con)
                     co = by_key[k] = by_name[name.lower()] = dict(entry)
                     added.append(name)
+                    items.append([k, "a", name])
                 if starter:
                     pending.add(co["name"])
                     starters += 1
@@ -823,6 +826,7 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
                         entry["sets"] = sorted(set(co.get("sets") or []) | {want})
                         save(entry, con)
                     linked.append(co["name"])
+                    items.append([k, "l", co["name"]])
                     near_n[co["name"]] = n
                     new.append({"name": co["name"], "near": n, "ats": ATS, "starter": False})
                 else:
@@ -831,6 +835,7 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
                     save(entry, con)
                     by_key[catalog.ats_key(entry)] = entry
                     added.append(name)
+                    items.append([k, "a", name])
                     near_n[name] = n
                     new.append({"name": name, "near": n, "ats": ATS, "starter": False})
         out = {"added": added, "linked": linked, "near": sum(1 for e in emps if not e.get("starter")), "available": True,
@@ -845,6 +850,7 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
             try:
                 if catalog.rename_company(old, new_name):
                     renamed += 1
+                    _rename_in(rec, old, new_name)      # (this record is saved below, from memory)
                     near_n[new_name] = near_n.pop(old, 0)
                     if old in pending:
                         pending.discard(old); pending.add(new_name)
@@ -855,9 +861,9 @@ def apply(pid, weekly=False, limit=None, starters_ok=False, first=False, dry=Fal
         if (added or linked) and tag and batches and batches[-1].get("tag") == tag:
             b = batches[-1]
             b.update(at=_now(), added=list(b.get("added") or []) + added, linked=list(b.get("linked") or []) + linked,
-                     keys=list(b.get("keys") or []) + keys)
+                     keys=list(b.get("keys") or []) + keys, items=list(b.get("items") or []) + items)
         elif added or linked:
-            batches.append({"at": _now(), "added": added, "linked": linked, "keys": keys, "weekly": bool(weekly),
+            batches.append({"at": _now(), "added": added, "linked": linked, "keys": keys, "items": items, "weekly": bool(weekly),
                             "starter": bool(offline), **({"tag": tag} if tag else {})})
         rec.update(offered=sorted(offered), applied=_now(), built=man.get("built"), starters_pending=sorted(pending),
                    near_n=near_n, pruned=pruned, added=int(rec.get("added", 0)) + len(added) + len(linked),
@@ -919,13 +925,88 @@ def preview(pid, refresh=False):
     return out
 
 
+def _batch_companies(b, cos):
+    """The companies a batch added, as they are in the catalog NOW: [(company, "a" | "l")]. An employer is found by its
+    job board (system + config), which never changes, so one that was given a better name at its first fetch is
+    still found; a batch stored before boards were recorded is found by name, then by the name its listing ids
+    start with ("idp", what a renamed company keeps of its first name)."""
+    import catalog
+    by_key, by_name, by_idp, by_src = {}, {}, {}, {}
+    for c in cos:
+        by_key[catalog.ats_key(c)] = c
+        by_name[c["name"]] = c
+        if c.get("idp"):
+            by_idp[c["idp"]] = c
+        if c.get("ats") == ATS and c.get("source"):
+            by_src[c["source"]] = c
+    out, seen = [], set()
+
+    def take(c, kind):
+        if c is not None and c["name"] not in seen:
+            seen.add(c["name"])
+            out.append((c, kind))
+
+    def by_k(k):
+        k = str(k)
+        if k.startswith("src:"):
+            return by_src.get(k[4:])
+        return by_key.get(k[8:] if k.startswith("starter:") else k)
+
+    for it in b.get("items") or []:
+        if isinstance(it, list) and len(it) >= 3:
+            take(by_k(it[0]) or by_name.get(it[2]) or by_idp.get(it[2]), "l" if it[1] == "l" else "a")
+    for kind, names_ in (("a", b.get("added") or []), ("l", b.get("linked") or [])):
+        for nm in names_:
+            take(by_name.get(nm) or by_idp.get(nm), kind)
+    return out
+
+
 def last_batch(pid):
-    """The latest batch apply() added for this person that can be taken back: {at, employers} or None."""
+    """The latest batch apply() added for this person that can be taken back: {at, employers} or None. employers is
+    how many of them are on the person's list right now (what "Remove the N employers" will take off), job-listing
+    sources not counted."""
     b = (record(pid).get("batches") or [])
     if not b:
         return None
-    return {"at": b[-1].get("at"), "employers": len(b[-1].get("added") or []) + len(b[-1].get("linked") or []),
-            "starter": bool(b[-1].get("starter"))}
+    n = len(b[-1].get("added") or []) + len(b[-1].get("linked") or [])
+    try:
+        import catalog
+        want = f"near-{pid}"
+        live = [c for c, _ in _batch_companies(b[-1], catalog.companies()) if want in (c.get("sets") or [])]
+        n = sum(1 for c in live if c.get("ats") != ATS) or len(live)
+    except Exception:
+        pass
+    return {"at": b[-1].get("at"), "employers": n, "starter": bool(b[-1].get("starter"))}
+
+
+def _rename_in(rec, old, new):
+    """Swap a company name in one person's record (batches, starters still to be checked, the first check's order)."""
+    swap = lambda xs: [new if x == old else x for x in (xs or [])]
+    hit = False
+    for b in rec.get("batches") or []:
+        for k in ("added", "linked"):
+            if old in (b.get(k) or []):
+                b[k], hit = swap(b[k]), True
+        for it in b.get("items") or []:
+            if isinstance(it, list) and len(it) >= 3 and it[2] == old:
+                it[2], hit = new, True
+    if old in (rec.get("starters_pending") or []):
+        rec["starters_pending"], hit = sorted(set(swap(rec["starters_pending"]))), True
+    if old in (rec.get("near_n") or {}):
+        rec["near_n"][new] = rec["near_n"].pop(old)
+        hit = True
+    return hit
+
+
+def note_rename(old, new):
+    """A company got a new name (catalog.rename_company): every person's record follows (batches, the order of the
+    first check, starters still to be checked), so nothing here goes on pointing at a name that no longer exists."""
+    with _APPLY:
+        for pid in users():
+            rec = record(pid)
+            if rec and _rename_in(rec, old, new):
+                _save_record(pid, rec)
+                _PREVIEW.pop(pid, None)
 
 
 def undo(pid):
@@ -940,16 +1021,15 @@ def undo(pid):
             return {"removed": 0}
         b = batches.pop()
         want = f"near-{pid}"
-        cos = {c["name"]: c for c in catalog.companies()}
         pending = set(rec.get("starters_pending") or [])
         near_n = dict(rec.get("near_n") or {})
         removed = 0
-        for name in list(b.get("added") or []) + list(b.get("linked") or []):
-            co = cos.get(name)
-            if co is None or want not in (co.get("sets") or []):
+        for co, kind in _batch_companies(b, catalog.companies()):
+            name = co["name"]
+            if want not in (co.get("sets") or []):
                 continue
             sets = sorted(set(co.get("sets") or []) - {want})
-            if sets or name in (b.get("linked") or []):
+            if sets or kind == "l":
                 entry = {k: v for k, v in co.items() if not k.startswith("_")}
                 entry["sets"] = sets
                 catalog.save_company(entry)
@@ -1243,9 +1323,12 @@ def handle_post(h, path, body, pid, server):
         r["fetching"] = ok or "already" in (err or "")
     if names:
         server._actlog("companies added", pid, f"{len(names)} from the Siftwell directory")
+    # (job-listing sources such as USAJOBS ride along with the employers: "the top 250" is 250 employers, and says so)
+    r["sources"] = sum(1 for x in (r.get("new") or []) if x.get("ats") == ATS)
     for k in ("jobs", "new"):
         r.pop(k, None)
     r["added"], r["linked"] = len(r["added"]), len(r["linked"])
+    r["employers"] = max(0, r["added"] + r["linked"] - r["sources"])
     r["last"] = last_batch(pid)
     h._send(200, r)
     return True
@@ -1338,7 +1421,7 @@ function load(){
     let t = d.possible ? (d.remote_only ? "Remote-friendly employers anywhere in the US." : `Employers with openings within ${d.radius} miles of ${esc(d.label)}.`)
                        : "Siftwell needs to know where to look.";
     if (d.offline_start) t = `<b>Siftwell couldn’t reach its employer directory when it set up your search</b>, so it started with a starter list of large US employers that comes with the app${d.starters_pending ? ` (${n(d.starters_pending)} still to be checked; the ones with no jobs near you are taken off)` : ""}. Press Try the directory again to get the employers near you, or build the directory on this computer (Build my own directory, below).`;
-    else if (d.applied) t += ` Last added ${day(d.applied)}; ${n(d.near_list)} employers on your list were found this way.`;
+    else if (d.applied) t += ` ${n(d.near_list)} employers on your list were found this way` + (d.last && d.last.employers && d.last.employers < d.near_list ? ` (${n(d.last.employers)} of them in the last addition, ${day(d.last.at)}).` : `; last added ${day(d.applied)}.`);
     if (d.built && !d.offline_start) t += ` Directory updated ${day(d.built)}.`;
     $("dirState").innerHTML = t;
     $("dirArea").hidden = !d.own_area;
@@ -1352,8 +1435,8 @@ function load(){
   }).catch(() => { $("dirState").textContent = "Couldn’t reach Siftwell."; });
 }
 function added(d){
-  const k = (d.added || 0) + (d.linked || 0), p = d.pending || 0;
-  $("dirMsg").textContent = k ? `Added ${n(k)} to your employers.` + (d.fetching ? " Siftwell is checking their openings now, the ones with the most jobs near you first; your board fills in as it goes." : " Their jobs show up after the next Find new jobs.")
+  const k = d.employers != null ? d.employers + (d.sources || 0) : (d.added || 0) + (d.linked || 0), p = d.pending || 0, e = d.employers != null ? d.employers : k;
+  $("dirMsg").textContent = k ? `Added ${n(e)} employer${e === 1 ? "" : "s"}${d.sources ? ` and ${n(d.sources)} job listing source${d.sources === 1 ? "" : "s"}` : ""} to your list.` + (d.fetching ? " Siftwell is checking their openings now, the ones with the most jobs near you first; your board fills in as it goes." : " Their jobs show up after the next Find new jobs.")
                               : p && d.fetching ? `No new employers to add, but ${n(p)} on your list haven’t been checked yet. Siftwell is checking them now; your board fills in as it goes.`
                               : "No new employers near you in the directory right now. Employers you took off your list stay off.";
   load();

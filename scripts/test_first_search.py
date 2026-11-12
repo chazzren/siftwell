@@ -153,6 +153,32 @@ directory.undo(pid)
 check("undo for one profile leaves the other's list alone", not mine(pid) and len(mine(pid_b)) == 5)
 directory.undo(pid_b)
 
+# employers that were given a better name at their first fetch are still taken back (found by their job board)
+r = directory.apply(pid, limit=20)
+first20 = sorted(mine(pid))
+check("20 added; the count offered for undo is 20", len(first20) == 20 and directory.last_batch(pid)["employers"] == 20)
+def give_listing(name):
+    c = next(x for x in catalog.companies() if x["name"] == name)
+    with catalog.db() as con:
+        catalog.put_listing(con, {"id": f"{name}::1", "company": name, "title": "Clerk", "url": "https://example.com/1", "locations": ["Columbus, OH"]},
+                            first_seen="2026-11-01", last_seen="2026-11-01")
+for i, nm in enumerate(first20[:6]):
+    give_listing(nm)
+    check(f"renamed like a first fetch does ({nm})", catalog.rename_company(nm, f"Better Name {i}"))
+rec = directory.record(pid)
+check("the batch follows the new names", {f"Better Name {i}" for i in range(6)} <= set(rec["batches"][-1]["added"] + rec["batches"][-1]["linked"]))
+check("...the count offered for undo is still 20", directory.last_batch(pid)["employers"] == 20, str(directory.last_batch(pid)))
+# a record written before boards were stored and before names were kept up to date: old names only
+old_rec = directory.record(pid)
+old_rec["batches"][-1].pop("items", None)
+old_rec["batches"][-1]["added"] = [first20[i] if x == f"Better Name {i}" else x for x in old_rec["batches"][-1]["added"] for i in [next((k for k in range(6) if x == f"Better Name {k}"), 0)]]
+directory._save_record(pid, old_rec)
+check("...also for a batch that only knows the first names (found by what their listing ids start with)", directory.last_batch(pid)["employers"] == 20,
+      str(directory.last_batch(pid)))
+u = directory.undo(pid)
+check("undo takes back all 20, the renamed ones included", u["removed"] == 20 and not mine(pid) and not [c for c in catalog.companies() if c["name"].startswith("Better Name")],
+      str((u, len(mine(pid)))))
+
 # ---------------------------------------------------------------- time estimates come from real numbers
 cos_fast = [{"ats": "greenhouse", "_fetch": {"secs": 12}} for _ in range(120)]
 check("estimate: measured seconds over the lanes", first_search.fetch_minutes(cos_fast) == round((120 * 12 / 12 + 45 + 0.04 * 120) / 60))

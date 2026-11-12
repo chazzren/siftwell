@@ -542,5 +542,49 @@ check("the lists are gone from the code people see", not hasattr(people, "COMPAN
 catalog.save_company({"name": "NewCo", "ats": "greenhouse", "token": "newco"})
 check("a company saved without a list is watched by nobody (no default list)", catalog.sets_map()["NewCo"] == set())
 
+# ------------------------------------------------------------------ 11. the board's title filter is the sheet
+rn = people.add("Sheet Nurse"); people.set_current(rn)
+resume.save_manual({"name": "Sheet Nurse", "current_title": "Registered Nurse", "skills": ["patient care"], "experience": []})
+people.save_settings({"home_zip": "43215", "radius_miles": 35}, rn)
+lookfor.build(rn)
+nt = people.add("No Titles")
+people.save_settings({"home_zip": "43215", "radius_miles": 35}, nt)
+catalog.save_company({"name": "Sheet Hospital", "ats": "greenhouse", "token": "sheethosp", "sets": [f"own-{rn}", f"own-{nt}"], "tier": "", "sector": "Health"})
+SH = [("s1", "Registered Nurse - ICU"), ("s2", "Nurse Practitioner"), ("s3", "Family Nurse Practitioner - Urgent Care"),
+      ("s4", "Certified Registered Nurse Anesthetist (CRNA)"), ("s5", "Staff Nurse"), ("s6", "Nurse Recruiter")]
+shc = next(c for c in catalog.companies() if c["name"] == "Sheet Hospital")
+with catalog.db() as con:
+    catalog.record_fetch("Sheet Hospital", {"status": "ok", "raw_jobs": len(SH), "secs": 1},
+                         [jobfinder.prepare_listing(jobfinder.J(shc, t, "https://example.com/" + i, ["Columbus, OH"], "", None, "Patient care.", "", "", i), shc) for i, t in SH], con)
+def board_of(pid):
+    out = jobfinder.recompute([pid])
+    d = json.load(open(people.pdir("jobs.json", pid=pid), encoding="utf-8"))
+    pick = lambda js: {j["id"].split("::")[1]: j for j in js if j["company"] == "Sheet Hospital"}
+    return pick(d["jobs"]), pick(d.get("off_jobs") or []), out[pid]
+on, off, res = board_of(rn)
+check("own-titles nurse: RN, Staff Nurse and (a related role) Nurse Practitioner jobs are on the board",
+      {"s1", "s2", "s3", "s5"} <= set(on), str((sorted(on), sorted(off))))
+check("...a CRNA (nothing on the list names it: Relevant 0) is not",
+      "s4" in off and "s4" not in on, str((sorted(on), sorted(off), {k: (v["rel"], v["rel_why"]) for k, v in {**on, **off}.items()})))
+check("...they are kept apart for 'N hidden because their titles aren't on your list - Show', and not counted",
+      res["jobs"] == len(json.load(open(people.pdir("jobs.json", pid=rn), encoding="utf-8"))["jobs"]) and all(v.get("off_list") for v in off.values()))
+jobfinder.use_cfg(jobfinder.person_cfg(rn)[0])
+check("...and Claude is never asked about them", not any(jobfinder.eligible_for_claude(v) for v in off.values())
+      and not set(off) & {i.split("::")[1] for i in jobfinder.new_unrated(rn, list(on.values()) + list(off.values()))[0]})
+lookfor.edit(rn, {"remove": "occ", "code": np_code})
+on2, off2, _ = board_of(rn)
+check("removing 'Nurse Practitioners' from the list takes the NP jobs off the board", {"s2", "s3"} <= set(off2) and not {"s2", "s3"} & set(on2) and "s1" in on2,
+      str((sorted(on2), sorted(off2))))
+on3, off3, _ = board_of(nt)
+check("an empty list: every title passes, as before", len(on3) == len(SH) and not off3, str((sorted(on3), sorted(off3))))
+people.set_current(rn)
+fake = [{"title": "Certified Registered Nurse Anesthetist (CRNA)", "tracks": ["current"]}]
+check("a profile on the earlier built-in word list is not filtered by its sheet",
+      jobfinder.mark_off_list(fake, lookfor.scorer(rn), {"title_rule": "builtin"}) == 0 and not fake[0].get("off_list")
+      and jobfinder.mark_off_list(fake, lookfor.scorer(rn), {}) == 1)
+fake = [{"title": "Certified Registered Nurse Anesthetist (CRNA)", "tracks": ["current", "ai"]}]
+jobfinder.mark_off_list(fake, lookfor.scorer(rn), {})
+check("a job that is also there for the Target tab stays, for that tab only", fake[0]["tracks"] == ["ai"] and fake[0]["off_list"])
+
 print("\n" + ("ALL OK" if not fails else f"{fails} FAILED"))
 sys.exit(1 if fails else 0)
