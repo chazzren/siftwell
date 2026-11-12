@@ -1478,6 +1478,18 @@ function dirAdd(limit, retry){
 function dirUndo(){ return fetch("/api/directory/undo", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => ({ok: r.ok, d}))); }
 const dirPreview = refresh => fetch("/api/directory/preview" + (refresh ? "?refresh=1" : "")).then(r => r.json());
 
+// ---- "Build my own directory" (localdir.py), offered wherever the shared directory can't be reached, or when the
+// person chose a directory built on this computer and there is none yet. bd = plan.directory.build (first_search.plan).
+const buildOffer = (bd, pre) => bd && bd.offer ? `<span class="dbuild">${esc(bd.offer)} <button type="button" class="btn sm" id="${pre}Build">Build my own directory</button></span>` : "";
+function buildStart(btn, msg, then){
+  btn.disabled = true; if (msg) msg.textContent = " Starting…";
+  fetch("/api/localdir/start", {method: "POST", headers: H, body: JSON.stringify({add: "all"})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
+    if (!ok) { btn.disabled = false; if (msg) msg.textContent = " " + (d.error || "That didn’t work."); return; }
+    if (msg) msg.textContent = " Started. Employers near you are added to your list as Siftwell finds them.";
+    if (then) then(d);
+  }).catch(() => { btn.disabled = false; if (msg) msg.textContent = " Couldn’t reach Siftwell. Try again."; });
+}
+
 // ---- Empty Jobs tab (this board has no jobs): "Start your job search" (never searched), its progress while it runs,
 // or why nothing matched, with the usual fixes. State and plan come from /api/search (first_search.py). While
 // anything runs, this card is the page's ONE progress indicator (the line is first_search.progress, the same on
@@ -1520,20 +1532,29 @@ if (SERVED && !jobs.length) (function(){
     }
     if (sawRun) { saveFilters(); location.reload(); return; }  // it finished: show the new board
     const err = job.error ? `<p class="smsg">${esc(job.error)}</p>` : "";
-    const d = p.directory || {};
+    const d = p.directory || {}, bd = d.build || {};
     wantPreview(p, () => draw(s));
-    const sig = JSON.stringify([p.started_before, ck, p.companies, s.why_empty, job.error, job.note, PV, d]);
-    if (sig === lastSig) { setTimeout(load, 15000); return; }
+    const sig = JSON.stringify([p.started_before, ck, p.companies, s.why_empty, job.error, job.note, PV, Object.assign({}, d, {build: [bd.running, bd.offer]})]);
+    if (sig === lastSig) { if ($("scBuildLine")) $("scBuildLine").textContent = bd.line || ""; setTimeout(load, bd.running ? 4000 : 15000); return; }
     lastSig = sig;
     const pvOk = PV && PV.available, pvNew = pvOk ? PV.new : 0;
     const offline = PV && !PV.available && (PV.reason === "offline" || PV.reason === "error");
+    // the directory built on this computer: its progress line while it runs; the offer when the shared one can't be
+    // reached (or was switched off) and there is nothing built yet
+    const buildLine = bd.running ? `<p class="dmsg"><b id="scBuildLine">${esc(bd.line)}</b>. Siftwell is reading employers’ public job pages on this computer (no Claude); the ones hiring near you ${p.started_before ? "are added to your list, and their jobs checked, as it finds them" : "are added to your list as it finds them"}. You can pause it in <a href="/settings#directory">Settings</a>.</p>` : "";
+    const wantBuild = !bd.running && !!bd.offer && (offline || d.offline || bd.source !== "shared");
+    const buildP = wantBuild ? `<p class="dmsg">${buildOffer(bd, "sc")}<span id="scBuildMsg" role="status"></span></p>` : "";
+    const wireBuild = () => { if ($("scBuild")) $("scBuild").addEventListener("click", () => buildStart($("scBuild"), $("scBuildMsg"), () => { lastSig = ""; pvFor = ""; setTimeout(load, 1200); })); };
     if (!p.started_before) {
       const nothing = !p.companies && !p.catalog && !d.possible && !f.possible;
       let dirLine = "";
       if (d.possible && !PV) dirLine = `<p>Looking up employers ${d.remote_only ? "that hire remotely" : "near " + esc(d.label)} in Siftwell’s free employer directory…</p>`;
-      else if (pvOk && pvNew) dirLine = `<p><b>${n(pvNew)} employers</b> ${d.remote_only ? "that hire remotely" : `with openings within ${d.radius} miles of ${esc(d.label)}`} are in Siftwell’s free employer directory (no Claude needed). Which ones should Siftwell add and check?</p><div class="sacts">${dirChooser(PV, "sc")}</div>`;
-      else if (pvOk) dirLine = `<p>Siftwell’s free employer directory has no new employers ${d.remote_only ? "for remote work" : "near " + esc(d.label)} right now.</p>`;
+      else if (pvOk && pvNew) dirLine = `<p><b>${n(pvNew)} employers</b> ${d.remote_only ? "that hire remotely" : `with openings within ${d.radius} miles of ${esc(d.label)}`} are in ${bd.source === "local" ? "the employer directory built on this computer" : "Siftwell’s free employer directory"} (no Claude needed). Which ones should Siftwell add and check?</p><div class="sacts">${dirChooser(PV, "sc")}</div>`;
+      else if (pvOk && bd.source === "local" && !bd.built) dirLine = bd.running ? "" : `<p class="dmsg"><b>Your employer directory hasn’t been built on this computer yet.</b> If you start anyway, Siftwell builds it now and begins with a starter list of large US employers that comes with the app, keeping the ones hiring near you.</p>`;
+      else if (pvOk) dirLine = `<p>${bd.source === "local" ? "The employer directory built on this computer" : "Siftwell’s free employer directory"} has no new employers ${d.remote_only ? "for remote work" : "near " + esc(d.label)} right now.</p>`;
+      else if (offline && bd.running) dirLine = "";
       else if (offline) dirLine = `<p class="dmsg"><b>Siftwell can’t reach its employer directory right now.</b> Check your internet connection and <button type="button" class="linkbtn" id="scRetry">try the directory again</button>. If you start anyway, Siftwell begins with a starter list of large US employers that comes with the app, and keeps the ones hiring near you.</p>`;
+      dirLine += buildLine + buildP;
       const what = `check the career pages of ${p.companies ? `the ${n(p.companies)} employers you already watch${d.possible ? " and the ones it adds" : ""}` : d.possible ? "the employers it adds" : "your employers"}, the ones with the most openings near you first, and keep the jobs that fit your search${p.claude ? "; Claude then rates the best matches" : ""}`;
       show(`<h2 id="scTitle">Start your job search</h2>
         <p>Siftwell hasn’t looked for jobs for you yet. When you start, it will ${what}. Jobs start to show up within a few minutes; you can leave this page while it runs.</p>
@@ -1545,6 +1566,7 @@ if (SERVED && !jobs.length) (function(){
         <div class="sacts"><button class="btn primary" type="button" id="scGo"${nothing ? " disabled" : ""}>Start my job search</button>${nothing ? `<a class="btn" href="/catalog#companies">Add an employer by link</a>` : ""}</div>
         <div class="smsg" id="scMsg" role="status"></div>${err}`);
       getLimit = pvOk && pvNew ? dirChooserWire(PV, "sc") : () => null;
+      wireBuild();
       if ($("scRetry")) $("scRetry").addEventListener("click", () => { $("scRetry").disabled = true; dirPreview(true).then(pv => { PV = pv; lastSig = ""; draw(s); }).catch(() => { lastSig = ""; draw(s); }); });
       $("scGo").addEventListener("click", () => {
         const fb = $("scFind"); $("scGo").disabled = true; $("scMsg").textContent = "";
@@ -1554,10 +1576,10 @@ if (SERVED && !jobs.length) (function(){
             lastSig = ""; load();
           }).catch(() => { $("scGo").disabled = false; $("scMsg").textContent = "Couldn’t reach Siftwell. Try again."; });
       });
-      setTimeout(load, 15000);
+      setTimeout(load, bd.running ? 4000 : 15000);
       return;
     }
-    const note = job.note ? `<p class="dmsg">${esc(job.note)}</p>` : "";
+    const note = job.note && !bd.running ? `<p class="dmsg">${esc(job.note)}</p>` : "";
     const after = ({ok, d}) => {
       const m = $("scDirMsg"); if (!m) return;
       if (!ok) { ["scDir", "scRetry"].forEach(i => { if ($(i)) $(i).disabled = false; }); m.textContent = " " + (d.error || "That didn’t work."); return; }
@@ -1566,6 +1588,7 @@ if (SERVED && !jobs.length) (function(){
       lastSig = ""; pvFor = ""; setTimeout(load, 1500);
     };
     const wireDir = () => {
+      wireBuild();
       if ($("scDir")) $("scDir").addEventListener("click", () => { $("scDir").disabled = true; $("scDirMsg").textContent = " Adding…"; dirAdd(getLimit(), false).then(after).catch(() => after({ok: false, d: {error: "Couldn’t reach Siftwell. Try again."}})); });
       // Try the directory again: look first (nothing is added blindly); when it answers, the card offers its employers
       if ($("scRetry")) $("scRetry").addEventListener("click", () => {
@@ -1577,7 +1600,7 @@ if (SERVED && !jobs.length) (function(){
       });
     };
     const offNote = pvOk && pvNew && d.offline ? `<p class="dmsg">Siftwell’s employer directory can be reached now: it has <b>${n(pvNew)} employers</b> ${d.remote_only ? "that hire remotely" : `within ${d.radius} miles of ${esc(d.label)}`}. ${dirChooser(PV, "sc")} <button type="button" class="btn sm primary" id="scDir">Add them</button><span id="scDirMsg" role="status"></span></p>`
-      : (d.offline || offline) ? `<p class="dmsg"><b>Siftwell couldn’t reach its employer directory</b>, so ${p.companies ? "your list is the starter list of large US employers that comes with the app, not the employers near you" : "no employers near you were added"}. When you are online, <button type="button" class="linkbtn" id="scRetry">try the directory again</button>.<span id="scDirMsg" role="status"></span></p>` : "";
+      : (d.offline || offline) && !bd.running ? `<p class="dmsg"><b>Siftwell couldn’t reach its employer directory</b>, so ${p.companies ? "your list is the starter list of large US employers that comes with the app, not the employers near you" : "no employers near you were added"}. When you are online, <button type="button" class="linkbtn" id="scRetry">try the directory again</button>.<span id="scDirMsg" role="status"></span></p>${buildP}` : buildLine + buildP;
     if (ck.pending > 0) {   // the first check didn't get through every employer (paused, stopped or restarted)
       show(`<h2 id="scTitle">${ck.done ? "No jobs that fit yet" : "Your employers haven’t been checked yet"}</h2>
         <p>${ck.done ? `Siftwell has checked ${n(ck.done)} of your ${n(ck.total)} employers so far, and none of their openings fit your search. ` : `None of your ${n(ck.total)} employers has been checked yet. `}${ck.done ? `${n(ck.pending)} ${ck.pending === 1 ? "is" : "are"} still to check.` : ""}</p>
@@ -1594,12 +1617,14 @@ if (SERVED && !jobs.length) (function(){
       });
       getLimit = pvOk && pvNew && $("scEst") ? dirChooserWire(PV, "sc") : () => null;
       wireDir();
-      setTimeout(load, 15000);
+      setTimeout(load, bd.running ? 4000 : 15000);
       return;
     }
     // Everything was checked and nothing fits: say why, then what to do, the most useful fix first.
     const fixes = [];
-    if (!(pvOk && pvNew) && (d.offline || offline)) fixes.push(`<b>Siftwell couldn’t reach its employer directory</b>, so ${p.companies ? "your list is only the starter list of large US employers that comes with the app" : "no employers near you were added"}. Check your internet connection, then <button type="button" class="linkbtn" id="scRetry">try the directory again</button>.<span class="dmsg" id="scDirMsg" role="status"></span>`);
+    if (bd.running) fixes.push(`<b id="scBuildLine">${esc(bd.line)}</b>. Siftwell is reading employers’ public job pages on this computer; the ones hiring near you are added to your list, and their jobs checked, as it finds them.`);
+    else if (!(pvOk && pvNew) && (d.offline || offline)) fixes.push(`<b>Siftwell couldn’t reach its employer directory</b>, so ${p.companies ? "your list is only the starter list of large US employers that comes with the app" : "no employers near you were added"}. Check your internet connection, then <button type="button" class="linkbtn" id="scRetry">try the directory again</button>.<span class="dmsg" id="scDirMsg" role="status"></span>` + (wantBuild ? `<br>${buildOffer(bd, "sc")}<span class="dmsg" id="scBuildMsg" role="status"></span>` : ""));
+    else if (wantBuild && !(pvOk && pvNew)) fixes.push(`${buildOffer(bd, "sc")}<span class="dmsg" id="scBuildMsg" role="status"></span>`);
     else if (pvOk && pvNew) fixes.push(`<b>${n(pvNew)} more employers</b> ${d.remote_only ? "that hire remotely" : `within ${d.radius} miles of ${esc(d.label)}`} are in Siftwell’s free employer directory. ${dirChooser(PV, "sc")} <button type="button" class="btn sm primary" id="scDir">Add them</button><span class="dmsg" id="scDirMsg" role="status"></span>`);
     if (p.titles === false) fixes.push(`<a href="/profile#search">Tell Siftwell what work you do</a>: with your job title it can pick out the jobs that are relevant to you.`);
     else fixes.push(`<a href="/profile#search">Add more job titles</a> (My profile, then Job search): only jobs with a title like yours are kept.`);
@@ -1611,7 +1636,7 @@ if (SERVED && !jobs.length) (function(){
       ${note}<ul>${fixes.map(x => `<li>${x}</li>`).join("")}</ul>${err}`);
     getLimit = pvOk && pvNew ? dirChooserWire(PV, "sc") : () => null;
     wireDir();
-    setTimeout(load, 15000);
+    setTimeout(load, bd.running ? 4000 : 15000);
   }
   load();
 })();
@@ -2090,7 +2115,7 @@ if (SERVED) {
       else $("nextRun").textContent = "";
       const staged = drawCheck(s);
       if (staged || !jobs.length) {   // the banner (or, on an empty board, the Start card) is the one indicator
-        const busy = staged || !!pg.active;
+        const busy = staged || (!!pg.active && pg.blocking !== false);   // (building the directory doesn't hold Find new jobs up)
         $("updateBtn").disabled = busy; $("updateBtn").classList.toggle("busy", busy);
         $("updSmall").textContent = busy ? "checking employers…" : estText(); $("updateBtn").title = busy ? (pg.line || "Checking employers…") : "Find new jobs: " + estText();
         if (!pollRerate.was) $("progress").hidden = true;
@@ -2113,8 +2138,8 @@ if (SERVED) {
       } else if (pg.active && pg.kind !== "idle") {  // something else holds things up (Claude finding employers, a job from before a restart)
         bgShown = true; $("progress").hidden = false;
         $("progTitle").textContent = pg.line;
-        $("progNote").textContent = "";
-        $("progBar").style.width = "4%"; $("progLog").textContent = "";
+        $("progNote").textContent = pg.kind === "dirbuild" ? "Siftwell is reading employers’ public job pages on this computer (no Claude). You can keep using it; pause the build in Settings, under Employer directory." : "";
+        $("progBar").style.width = (pg.kind === "dirbuild" && pg.frac != null ? Math.max(1, Math.round(100 * pg.frac)) : 4) + "%"; $("progLog").textContent = "";
         setTimeout(poll, 5000);
       } else if (bgShown && !wasRunning) {
         bgShown = false; $("progress").hidden = true; setTimeout(poll, 5000);
@@ -2174,8 +2199,18 @@ if (SERVED) {
     let off = false; try { off = !!sessionStorage.getItem("jb.diroff." + PID); } catch(e) {}
     if (off || !dirB.hidden) return;
     dirB.hidden = false;
-    dirB.innerHTML = `<span><b>Siftwell couldn’t reach its employer directory</b> when it set up your search, so your employers are a starter list of large US employers that comes with the app, not the employers near you.</span><button class="btn sm primary" type="button" id="dirRetry">Try the directory again</button><button class="btn sm ghost" type="button" id="dirNo">Not now</button><span class="updmsg" id="dirMsg"></span>`;
+    dirB.innerHTML = `<span><b>Siftwell couldn’t reach its employer directory</b> when it set up your search, so your employers are a starter list of large US employers that comes with the app, not the employers near you.</span><button class="btn sm primary" type="button" id="dirRetry">Try the directory again</button><button class="btn sm" type="button" id="dirBuild" hidden>Build my own directory</button><button class="btn sm ghost" type="button" id="dirNo">Not now</button><span class="updmsg" id="dirMsg"></span>`;
     $("dirNo").addEventListener("click", () => dirHide("jb.diroff." + PID));
+    // the other way out: build the directory on this computer (what it does and how long it takes is the button's hint
+    // and is said in full before anything starts)
+    fetch("/api/localdir").then(r => r.json()).then(ld => {
+      const b = $("dirBuild"); if (!b || !ld.possible || ld.running || !ld.offer) return;
+      b.hidden = false; b.title = ld.offer;
+      b.addEventListener("click", () => {
+        if (!confirm("Build my own directory?\n\n" + ld.offer)) return;
+        buildStart(b, $("dirMsg"), () => { $("dirRetry").hidden = true; chkSig = ""; poll(); });
+      });
+    }).catch(() => {});
     $("dirRetry").addEventListener("click", () => {
       $("dirRetry").disabled = true; $("dirMsg").textContent = "Trying…";
       dirPreview(true).then(pv => {

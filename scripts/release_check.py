@@ -31,7 +31,8 @@ REQUIRED_FILES = ["README.md", "LICENSE", "requirements.txt", "server.py", "app_
                   "assets/brand/siftwell-mark.svg", "assets/brand/siftwell-mark-mono.svg", "assets/brand/siftwell-logo.svg",
                   "assets/brand/siftwell-logo-dark.svg", "assets/brand/favicon-16.png", "assets/brand/favicon-32.png",
                   "assets/brand/favicon-48.png", "assets/brand/apple-touch-icon.png", "assets/brand/siftwell.ico",
-                  "assets/brand/siftwell.icns", "assets/onet/onet.json.gz", "assets/onet/NOTICE.txt"]
+                  "assets/brand/siftwell.icns", "assets/onet/onet.json.gz", "assets/onet/NOTICE.txt",
+                  "assets/directory/seed.json.gz", "index_build/__init__.py", "index_build/local.py", "localdir.py"]
 LAUNCHER_FILES = ["Start Siftwell.cmd", "Start Siftwell.command", "tools/launcher.ps1"]  # warning with --local
 PAGE_MODULES = ["report", "settings_page", "setup_page", "welcome_page", "getting_started", "catalog_page", "backup", "autoupdate", "appupdate", "directory"]  # missing = skipped
 LEAK_SKIP_PREFIXES = ["assets/geo/"]

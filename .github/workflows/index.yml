@@ -14,6 +14,10 @@ name: Employer directory
 #                                            variable CAREERONESTOP_ENABLE to 1.
 # Keys are only passed to the builder as environment variables; nothing it publishes contains them.
 #
+# Next to the state files the build writes seed.json.gz (listed in manifest.json with its SHA-256): every job board it
+# knows, with last-known names and states. It is what "Build my own directory" in the app starts from: each release
+# ships the newest one (release.yml runs scripts/refresh_seed.py) and the app fetches a newer one when it can.
+#
 # Two runs a week:
 #   Monday    the full build: discovery (about 30-60 minutes, including 45 minutes of Web Data Commons domains), then
 #             reading boards, time-boxed (--minutes) so the job stays well inside the 6-hour limit. Boards not reached
@@ -126,6 +130,7 @@ jobs:
           if [ -n "$STATES" ]; then args+=(--states "$STATES"); fi
           python -X utf8 scripts/build_index.py "${args[@]}"
           du -sh "$RUNNER_TEMP/out"
+          ls -l "$RUNNER_TEMP/out/seed.json.gz"   # the seed list for "Build my own directory" (index_build/seed.py)
           cat "$RUNNER_TEMP/out/manifest.json" | head -c 3000
 
       - name: Refuse to publish a directory that shrank drastically

@@ -96,6 +96,11 @@ jobs:
       - name: Write the version (the same VERSION the release commit will carry)
         run: Set-Content -Path VERSION -Value $env:VERSION -Encoding ascii
 
+      - name: Ship the newest seed list for "Build my own directory" (from the published directory)
+        # assets/directory/seed.json.gz: the job sites the app starts from when someone builds the employer directory
+        # on their own computer. Taken from the index branch; if that can't be had, the file in the repo is kept.
+        run: python scripts/refresh_seed.py
+
       - name: Install the build tools and Siftwell's packages
         run: |
           python -m pip install --upgrade pip
@@ -200,6 +205,9 @@ jobs:
       - name: Write the version (the same VERSION the release commit will carry)
         run: printf '%s\n' "$VERSION" > VERSION
 
+      - name: Ship the newest seed list for "Build my own directory" (from the published directory)
+        run: python scripts/refresh_seed.py
+
       - name: Install the build tools and Siftwell's packages
         run: |
           python -m pip install --upgrade pip
@@ -264,7 +272,10 @@ jobs:
           PREV=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
           echo "PREV_TAG=$PREV" >> "$GITHUB_ENV"
           printf '%s\n' "$VERSION" > VERSION
-          git add VERSION
+          # The seed list for "Build my own directory" (assets/directory/seed.json.gz), refreshed from the published
+          # directory so the ZIP and the repo carry the same one the installers were built with. Never fails a release.
+          python3 scripts/refresh_seed.py || echo "::warning::The seed list could not be refreshed; the one in the repo is shipped."
+          git add VERSION assets/directory/seed.json.gz
           git commit --allow-empty -m "Release v$VERSION"
           git tag -a "v$VERSION" -m "Siftwell v$VERSION"
 

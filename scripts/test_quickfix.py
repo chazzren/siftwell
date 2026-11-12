@@ -62,7 +62,7 @@ check("prepare_listing keeps postings in US towns named like foreign places", le
 gone = [l for l in ("Dublin, Ireland", "Bangalore, India", "London, UK", "Mexico City, Mexico")
         if jobfinder.prepare_listing(listing(l), {"name": "X"}) is None]
 check("prepare_listing still drops postings abroad", len(gone) == 4, str(gone))
-from scripts.index_build import readers
+from index_build import readers
 check("directory builder (readers._nonus) uses the same rule",
       not readers._nonus("Indianapolis, IN") and not readers._nonus("Dublin, OH") and readers._nonus("Dublin, Ireland")
       and readers._nonus("Bangalore, India"))

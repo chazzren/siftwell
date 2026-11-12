@@ -9,7 +9,8 @@ source checkout behave the same:
     installed Mac Siftwell.app/Contents/MacOS/Siftwell --<mode> <args>   (the same exe inside the .app bundle)
 
 Modes of Siftwell.exe (dispatch()): no argument = open the window (app_window.main); --server [port] = the windowless
-server; --jobfinder <jobfinder args> = a fetch / recompute / re-rate run; --tray <port>; --update = the headless
+server; --jobfinder <jobfinder args> = a fetch / recompute / re-rate run; --dirbuild <args> = "Build my own
+directory" reading job sites (localdir.py / index_build/local.py); --tray <port>; --update = the headless
 updater (siftwell_update.py, when present); --stop = stop this data folder's Siftwell (the installer runs it before
 upgrading or uninstalling); --waiter = the restart helper; --version; --check-imports = load the window / tray
 libraries and say so (the release build runs it as a smoke test, since the build machine has no screen).
@@ -24,7 +25,7 @@ APP = (getattr(sys, "_MEIPASS", None) if FROZEN else None) or os.path.dirname(os
 WINDOWS = sys.platform == "win32"
 
 SCRIPTS = {"server": "server.py", "jobfinder": "jobfinder.py", "tray": "tray.py", "window": "app_window.py",
-           "update": "siftwell_update.py"}
+           "update": "siftwell_update.py", "dirbuild": "localdir.py"}
 
 
 def interpreter(windowed=False):
@@ -104,8 +105,38 @@ def _check_imports():
         names.append(f"{len(jobfinder.FETCHERS)} job readers")
     except Exception as e:
         bad.append(f"job readers: {type(e).__name__}: {e}")
+    bad += directory_builder_problems()
+    names.append("directory builder")
     print("imports ok: " + ", ".join(names) if not bad else "imports FAILED: " + "; ".join(bad))
     return 1 if bad else 0
+
+
+DIRECTORY_BUILDER = ("index_build", "index_build.build", "index_build.local", "index_build.seed", "index_build.net",
+                     "index_build.readers", "index_build.systems", "index_build.cc", "index_build.ct", "index_build.gov",
+                     "index_build.postings", "localdir")
+
+
+def directory_builder_problems():
+    """"Build my own directory" must work from inside the bundle: the builder package imports by name (an installed
+    build has no .py files on disk) and the seed list it starts from is there and readable. [] when all is well."""
+    import importlib
+    bad = []
+    for n in DIRECTORY_BUILDER:
+        try:
+            importlib.import_module(n)
+        except Exception as e:
+            bad.append(f"{n}: {type(e).__name__}: {e}")
+    if not bad:
+        try:
+            import localdir
+            from index_build import seed
+            s = seed.read(localdir.SEED_ASSET)
+            n = sum(len(g.get("t") or []) for g in (s or {}).get("groups") or [])
+            if n < 1000:
+                bad.append(f"seed list: only {n} job sites in {localdir.SEED_ASSET}")
+        except Exception as e:
+            bad.append(f"seed list: {type(e).__name__}: {e}")
+    return bad
 
 
 def _run_server(rest):
@@ -150,6 +181,9 @@ def dispatch(argv=None):
         import jobfinder
         sys.argv = [os.path.join(APP, "jobfinder.py"), *rest]
         return jobfinder.main() or 0
+    if mode == "--dirbuild":
+        import localdir
+        return localdir.main(rest) or 0
     if mode == "--tray":
         import paths
         import app_window as aw

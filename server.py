@@ -1211,6 +1211,9 @@ class H(BaseHTTPRequestHandler):
         if path in ("/api/directory", "/api/directory/preview"):
             import directory
             return directory.handle_get(self, path, pid)
+        if path == "/api/localdir":     # "Build my own directory": where the directory comes from, how far the build is
+            import localdir
+            return localdir.handle_get(self, path, pid)
         if path == "/api/status":
             with lock:
                 s = dict(state)
@@ -1527,6 +1530,9 @@ class H(BaseHTTPRequestHandler):
         if path in ("/api/directory/apply", "/api/directory/undo", "/api/directory/area"):  # Add employers near me from the Siftwell directory (no Claude)
             import directory
             return directory.handle_post(self, path, body, pid, sys.modules[__name__])
+        if path in ("/api/localdir/start", "/api/localdir/pause", "/api/localdir/prefs"):  # Build my own directory (no Claude)
+            import localdir
+            return localdir.handle_post(self, path, body, pid)
         if path == "/api/search/start":
             import first_search
             ok, err = first_search.start(pid, body.get("find"), body.get("directory"), _limit(body))
@@ -1976,6 +1982,12 @@ def busy_reason():
     except Exception:
         pass
     try:
+        import localdir
+        if localdir.running():
+            return "Siftwell is building your employer directory (pause it in Settings, under Employer directory)"
+    except Exception:
+        pass
+    try:
         import joblock
         h = joblock.info()
         if h and h["alive"]:
@@ -1991,6 +2003,8 @@ import catalog_api
 catalog_api.configure(sys.modules[__name__])
 import first_search
 first_search.configure(sys.modules[__name__])
+import localdir
+localdir.configure(sys.modules[__name__])
 def after_restore():
     """Backup & move just swapped DATA's contents: re-read the access key and the people index, drop in-memory
     per-profile state, and rebuild every board from the restored catalog (restart-free)."""
@@ -2010,7 +2024,7 @@ def after_restore():
     try:  # what the pages were told about employers and time estimates belonged to the replaced data
         import first_search, directory
         first_search._CACHE.clear(); first_search._EST.clear(); first_search._AVG["v"] = None
-        directory._PREVIEW.clear()
+        directory._PREVIEW.clear(); directory._CACHE.clear(); directory._PREFS["v"] = None
     except Exception:
         pass
     request_recompute(auto_rate=False)  # ratings come back with the backup; a restore never starts Claude by itself
@@ -2047,6 +2061,7 @@ if __name__ == "__main__":
     appupdate.start_background()  # looks for a newer Siftwell on GitHub at most once a day (Settings -> About & updates)
     import directory
     directory.start_background()  # the Siftwell employer directory: weekly refresh + newly indexed employers near each person
+    localdir.start_background()   # "Build my own directory": carry on an unfinished build; weekly upkeep of a finished one
     threading.Thread(target=recount_old_boards, daemon=True).start()
     # start-at-sign-in entry still pointing at an old app folder or runtime? rewrite it (see getting_started.heal_startup)
     threading.Thread(target=getting_started.heal_entries, kwargs={"log": lambda m: print(m, flush=True)}, daemon=True).start()

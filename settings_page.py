@@ -351,9 +351,10 @@ $("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Cl
     let b = $("runBanner");
     if (!b && $("updBanner")) { b = document.createElement("div"); b.id = "runBanner"; b.className = "banner gsbn"; b.setAttribute("role", "status"); b.hidden = true; $("updBanner").after(b); }
     if (b) { b.hidden = !pg.active; if (pg.active) b.innerHTML = `<span>${esc(pg.line)}</span><a class="btn sm ghost" href="/#jobs">Go to my board</a>`; }
-    $("updateBtn").disabled = !!pg.active; $("updateBtn").classList.toggle("busy", !!pg.active);
+    const busy = !!pg.active && pg.blocking !== false;   // (building the directory doesn't hold Find new jobs up)
+    $("updateBtn").disabled = busy; $("updateBtn").classList.toggle("busy", busy);
     const e = s.estimate && (s.estimate.profiles > 1 && s.estimate.mine.companies < s.estimate.all.companies ? s.estimate.mine : s.estimate.all);
-    $("updateBtn").title = pg.active ? pg.line : "Find new jobs (opens the board)" + (e ? `: check ${e.companies.toLocaleString()} employers for new openings (${e.text})` : "");
+    $("updateBtn").title = busy ? pg.line : "Find new jobs (opens the board)" + (e ? `: check ${e.companies.toLocaleString()} employers for new openings (${e.text})` : "");
     setTimeout(watch, pg.active ? 3000 : 20000);
   }).catch(() => setTimeout(watch, 10000));
 })();

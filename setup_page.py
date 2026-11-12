@@ -1115,8 +1115,16 @@ SCREENS.board = {
     const steps = [], pv = this.pv, pvOk = !!(pv && pv.available), nn = x => (x || 0).toLocaleString();
     const offline = !!pv && !pv.available && (pv.reason === "offline" || pv.reason === "error");
     let chooser = "";
-    if (d.possible && offline) {
-      steps.push(["Add employers to check", `<b>Siftwell can’t reach its employer directory right now</b> (check your internet connection). If you start anyway, it begins with a starter list of large US employers that comes with the app and keeps the ones hiring ${d.remote_only ? "remotely" : "near you"}; you can try the directory again later from your board or Settings.`]);
+    // "Build my own directory" (localdir.py): its line while it runs; the offer when the shared directory can't be
+    // reached, or the person chose a directory built on this computer and there is none yet
+    const bd = d.build || {};
+    const buildBox = bd.offer ? `<span style="display:block;margin-top:8px">${esc(bd.offer)}</span><span style="display:block;margin-top:8px"><button type="button" class="btn" id="ldBuild">Build my own directory</button> <span id="ldBuildMsg" role="status"></span></span>` : "";
+    if (d.possible && bd.running) {
+      steps.push(["Add employers as your directory is built", `<b>${esc(bd.line)}</b>. Siftwell is reading employers’ public job pages on this computer; the ones hiring ${d.remote_only ? "remotely" : "near you"} become your employers as it finds them. No Claude needed.`]);
+    } else if (d.possible && offline) {
+      steps.push(["Add employers to check", `<b>Siftwell can’t reach its employer directory right now</b> (check your internet connection). If you start anyway, it begins with a starter list of large US employers that comes with the app and keeps the ones hiring ${d.remote_only ? "remotely" : "near you"}; you can try the directory again later from your board or Settings.${buildBox}`]);
+    } else if (d.possible && bd.source === "local" && !bd.built) {
+      steps.push(["Add employers to check", `<b>Your employer directory hasn’t been built on this computer yet.</b> When you start, Siftwell builds it and begins with a starter list of large US employers that comes with the app, keeping the ones hiring ${d.remote_only ? "remotely" : "near you"}.${buildBox}`]);
     } else if (d.possible) {
       let count = "";
       if (pvOk && pv.new) {
@@ -1157,6 +1165,14 @@ SCREENS.board = {
     document.querySelectorAll('input[name="dirN"]').forEach(r => r.addEventListener("change", () => { this.limit = r.value === "all" ? null : Number(r.value); }));
     if ($("toWhere")) $("toWhere").addEventListener("click", () => go("where", -1));
     if ($("toCos")) $("toCos").addEventListener("click", () => go("companies", -1));
+    if ($("ldBuild")) $("ldBuild").addEventListener("click", async () => {
+      $("ldBuild").disabled = true; $("ldBuildMsg").textContent = "Starting…";
+      try {
+        await api("POST", "/api/localdir/start", {add: "all"});
+        const s = await api("GET", "/api/search");
+        if (cur === "board" && this.view === "summary") { this.plan = s.plan; this.pv = null; this.summary(); say("Siftwell is building your directory."); }
+      } catch(e) { $("ldBuild").disabled = false; $("ldBuildMsg").textContent = e.message || "That didn’t work."; }
+    });
   },
   async next(){
     if (this.view === "progress" || this.view === "done") { location.href = "/"; return; }

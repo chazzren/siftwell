@@ -54,7 +54,7 @@ The first time, a window says *"Setting up Siftwell. This happens once and takes
 - **The app itself** (installer): `%LOCALAPPDATA%\Programs\Siftwell` on Windows, **Applications** on a Mac. Siftwell never saves anything into its own folder.
 - **The ZIP's setup** (Python and the packages Siftwell runs on): Windows `%LOCALAPPDATA%\Siftwell\runtime`; Mac `~/Library/Application Support/Siftwell/runtime`. It can be rebuilt from the internet any time and holds none of your data.
 - **The address Siftwell runs at:** **http://127.0.0.1:8766** on your own computer. If another program already uses that port, Siftwell picks the next free one (8767 to 8775) and keeps using it; **Settings → Get started** shows which.
-- **The employer directory's files:** a `directory` folder inside your data folder (see the guide).
+- **The employer directory's files:** a `directory` folder inside your data folder (see the guide). A directory you built on this computer is in `directory/local` (deleting that folder only means Siftwell would have to build it again).
 
 ## Updating the portable version or the ZIP
 

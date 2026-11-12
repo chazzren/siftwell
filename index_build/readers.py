@@ -252,6 +252,8 @@ def generic(c):
         raise net.Blocked("robots.txt forbids the job board")
     rows, err, sample, texts = [], [], [False], []
     cc = dict(c, name="directory")
+    # the app's own per-employer time budget (jobfinder.over_budget): a reader that pages stops by itself at the limit
+    cc["_deadline"], cc["_budget"] = time.time() + GENERIC_SECS, GENERIC_SECS
     def run():
         try:
             for j in fx(cc):
@@ -266,7 +268,7 @@ def generic(c):
     t = threading.Thread(target=run, daemon=True)
     t.start()
     t.join(GENERIC_SECS)
-    if t.is_alive():
+    if t.is_alive() or cc.get("_truncated"):
         sample[0] = True
     if err and not rows:
         raise err[0]
