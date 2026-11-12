@@ -96,6 +96,14 @@ def _check_imports():
             importlib.import_module("pystray._darwin")
         except Exception as e:
             bad.append(f"pystray._darwin: {type(e).__name__}: {e}")
+    try:   # every job-system reader must load from inside the bundle (an installed build has no .py files on disk)
+        import jobfinder
+        jobfinder.load_extra()
+        if len(jobfinder.FETCHERS) < 30:
+            bad.append(f"job readers: only {len(jobfinder.FETCHERS)} loaded")
+        names.append(f"{len(jobfinder.FETCHERS)} job readers")
+    except Exception as e:
+        bad.append(f"job readers: {type(e).__name__}: {e}")
     print("imports ok: " + ", ".join(names) if not bad else "imports FAILED: " + "; ".join(bad))
     return 1 if bad else 0
 

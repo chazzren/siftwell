@@ -922,23 +922,14 @@ def f_workday(c):
 FETCHERS = {"greenhouse": f_greenhouse, "lever": f_lever, "ashby": f_ashby,
             "smartrecruiters": f_smartrecruiters, "workday": f_workday}
 def load_extra():
-    if os.path.exists(os.path.join(HERE, "extra_fetchers.py")):
+    # (import by name, never by "is the .py file on disk": an installed build keeps its modules inside the bundle)
+    if HERE not in sys.path:
         sys.path.insert(0, HERE)
-        import extra_fetchers
-        FETCHERS.update(extra_fetchers.FETCHERS)
-    if os.path.exists(os.path.join(HERE, "smb_fetchers.py")):
-        import smb_fetchers
-        FETCHERS.update(smb_fetchers.FETCHERS)
-    if os.path.exists(os.path.join(HERE, "ats_sap_taleo.py")):
-        sys.path.insert(0, HERE)
-        import ats_sap_taleo
-        FETCHERS.update(ats_sap_taleo.FETCHERS)
-    if os.path.exists(os.path.join(HERE, "ats_more.py")):
-        import ats_more
-        FETCHERS.update(ats_more.FETCHERS)
-    if os.path.exists(os.path.join(HERE, "ats_public.py")):
-        import ats_public
-        FETCHERS.update(ats_public.FETCHERS)
+    for mod in ("extra_fetchers", "smb_fetchers", "ats_sap_taleo", "ats_more", "ats_public"):
+        try:
+            FETCHERS.update(__import__(mod).FETCHERS)
+        except ImportError:
+            pass
     import directory   # job snapshots from the Siftwell employer directory (USAJOBS ...), read from its cached files
     FETCHERS.update(directory.FETCHERS)
 
