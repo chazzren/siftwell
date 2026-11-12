@@ -1412,7 +1412,7 @@ if (SERVED && !jobs.length) (function(){
     const err = job.error ? `<p class="smsg">${esc(job.error)}</p>` : "";
     if (!p.started_before) {
       const d = p.directory || {}, findOn = f.possible && f.default, nothing = !p.companies && !p.catalog && !d.possible && !f.possible;
-      const what = `${d.possible ? (d.remote_only ? "add remote-friendly employers from its free employer directory (no Claude needed), then " : `add employers near ${esc(d.label)} from its free employer directory (no Claude needed), then `) : ""}check the career pages of ${p.companies ? `the ${n(p.companies)} companies in your lists` : "your companies"} for openings and keep the ones that fit your search${p.claude ? ", and Claude rates the best matches" : ""}`;
+      const what = `${d.possible ? (d.remote_only ? "add remote-friendly employers from its free employer directory (no Claude needed), then " : `add employers near ${esc(d.label)} from its free employer directory (no Claude needed), then `) : ""}check the career pages of ${p.companies ? `the ${n(p.companies)} employers you already watch` : "your companies"} for openings and keep the ones that fit your search${p.claude ? ", and Claude rates the best matches" : ""}`;
       show(`<h2 id="scTitle">Start your job search</h2>
         <p>Siftwell hasn’t looked for jobs for you yet. When you start, it will ${what}. The first search takes a while; you can leave this page while it runs.</p>
         ${f.possible ? `<label class="chk"><input type="checkbox" id="scFind"${findOn ? " checked" : ""}><span>Also find more ${findName(f)} with Claude (optional): Claude searches the web, using your Claude plan; ${esc(f.estimate)}</span></label>` : ""}
@@ -1432,7 +1432,7 @@ if (SERVED && !jobs.length) (function(){
     }
     if (ck.pending > 0) {   // the first check didn't get through every employer (paused, stopped or restarted)
       show(`<h2 id="scTitle">${ck.done ? "No jobs that fit yet" : "Your employers haven’t been checked yet"}</h2>
-        <p>Siftwell has checked ${n(ck.done)} of the ${n(ck.total)} employers on your lists so far${ck.done ? ", and none of their openings fit your search" : ""}. ${n(ck.pending)} ${ck.pending === 1 ? "is" : "are"} still to check.</p>
+        <p>Siftwell has checked ${n(ck.done)} of the ${n(ck.total)} of your employers so far${ck.done ? ", and none of their openings fit your search" : ""}. ${n(ck.pending)} ${ck.pending === 1 ? "is" : "are"} still to check.</p>
         <div class="sacts"><button class="btn primary" type="button" id="scCont">Continue checking</button></div>
         <div class="smsg" id="scMsg" role="status"></div>${err}`);
       $("scCont").addEventListener("click", () => {
@@ -1446,7 +1446,7 @@ if (SERVED && !jobs.length) (function(){
       return;
     }
     show(`<h2 id="scTitle">No jobs passed your filters</h2>
-      <p>${p.companies ? `Siftwell checked ${ck.done >= ck.total ? `all ${n(ck.total)}` : `${n(ck.done)} of the ${n(ck.total)}`} companies in your lists, but none of their openings fit your search right now.` : "Your company lists don’t have any companies in them yet, so there was nothing to check."} Things that usually help:</p>
+      <p>${p.companies ? `Siftwell checked ${ck.done >= ck.total ? `all ${n(ck.total)}` : `${n(ck.done)} of the ${n(ck.total)}`} employers Siftwell watches for you, but none of their openings fit your search right now.` : "Siftwell isn’t watching any employers for you yet, so there was nothing to check."} Things that usually help:</p>
       <ul>
         <li><a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (Filters, then My search).</li>
         ${(p.directory || {}).possible ? `<li><button type="button" class="linkbtn" id="scDir">Add employers near me from the Siftwell directory</button>: free, no Claude; Siftwell then checks their openings.<span class="dmsg" id="scDirMsg" role="status"></span></li>` : ""}
@@ -1906,7 +1906,7 @@ if (SERVED) {
            + (fresh ? `<button class="btn sm primary" type="button" id="chkShow">Show new jobs</button>` : "")
            + (c.mine && !c.pausing && !rating ? `<button class="btn sm ghost" type="button" id="chkPause">Pause</button>` : "");
     } else if (c.pending > 0 && !chkOff && !s.running) {
-      html = `<span>${c.paused ? "Paused. " : ""}Siftwell has checked ${n(c.done)} of the ${n(c.total)} employers on your lists. ${n(c.pending)} still to check.</span>`
+      html = `<span>${c.paused ? "Paused. " : ""}Siftwell has checked ${n(c.done)} of the ${n(c.total)} of your employers. ${n(c.pending)} still to check.</span>`
            + (fresh ? `<button class="btn sm" type="button" id="chkShow">Show new jobs</button>` : "")
            + `<button class="btn sm primary" type="button" id="chkCont">Continue checking</button><button class="btn sm ghost" type="button" id="chkHide">Not now</button>`;
     } else if (chkWas && fresh) {

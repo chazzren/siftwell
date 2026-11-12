@@ -160,7 +160,8 @@ def combine(job):
 CODER = re.compile(r"software engineer|research|scientist|machine learning engineer|ml engineer|kernel|compiler|gpu|hardware", re.I)
 
 def priority(j, st):
-    """Which unrated jobs Claude should look at first: target-title matches, pay, level band, frontier labs (if AI-scoped)."""
+    """Which unrated jobs Claude should look at first: target-title matches, pay and level band. (A target an earlier
+    version limited to AI companies also keeps its old leanings.) Only the order of rating: never part of a cache key."""
     t = j["title"].lower()
     kws = st.get("target_keywords") or []
     p = min(30, 15 * sum(1 for k in kws if k in t)) if kws else 0
@@ -169,8 +170,8 @@ def priority(j, st):
     mid, floor = j.get("salary_mid"), st.get("salary_floor") or 0
     if mid:
         p += max(-20, min(30, (mid - floor) / 5000))
-    if CODER.search(t) and not any(k in t for k in kws):
-        p -= 10
+    if st.get("target_scope") == "ai" and CODER.search(t) and not any(k in t for k in kws):
+        p -= 10   # (only for a target still limited to AI companies, an earlier version's option)
     p -= 15 if j.get("clearance") in ("TS/SCI + poly", "TS/SCI", "Top Secret") else 0
     band, lv = st.get("seniority_band") or [1, 7], j.get("level")
     p -= 20 if lv is not None and not (band[0] <= lv <= band[1]) else 0

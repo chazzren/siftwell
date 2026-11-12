@@ -110,9 +110,13 @@ def _pane_search():
     ]
     return ('<p class="sfoot pmoved" id="psMoved">Location, ways of working, travel, pay floor and level are set in the board\'s Filters. '
             '<a href="/#filters">Open Filters on the board</a></p>' +
-            _group("Job titles to search for", "", [_pad('<p class="note" id="ttNote">One per line. Your board shows jobs whose titles match these (or the title words taken '
-                                                          'from your resume). With none at all, every job title is shown.</p>'
-                                                          '<textarea id="ps-titles" rows="6" aria-label="Job titles to search for, one per line"></textarea>')]) +
+            _group("What Siftwell looks for", "Siftwell gives every job a Relevance score from this list, with plain matching and no Claude: "
+                   "a job title on the list counts most, then one step up, then related roles; your skills found in a posting add a little. "
+                   "Your board shows jobs whose titles match the list (with nothing on it, every job title is shown), puts the most relevant first, "
+                   "and Claude rates the most relevant ones first. Changing the list never resets ratings you already have.",
+                   [_pad('<div id="lfRoot" class="lf"><p class="note">Loading…</p></div>')]) +
+            '<p class="sfoot">Other names for a job, related occupations and typical skills come from the O*NET occupation list '
+            '(U.S. Department of Labor), which ships with Siftwell and works offline.</p>' +
             _group("Goals for Claude to weigh", "Pay, commute, what to avoid. Claude reads this when it rates a job.",
                    [_textarea("ps-goals", "goals", "Goals for Claude to weigh", 4)]) +
             _group("Your current pay", "", pay) +
@@ -138,20 +142,15 @@ def _pane_target():
 def _pane_companies():
     catalog = (f'<a href="{e(CATALOG_HREF)}">Browse every company Siftwell tracks</a>' if CATALOG_HREF
                else '<span class="note" id="catalogSlot">The Catalog, a page for browsing every company Siftwell tracks, is coming.</span>')
-    return ('<p class="sfoot" style="margin-top:14px">Your employers come from the Siftwell employer directory near you (your Near me list, on the '
-            'Catalog page), the companies you add here, and what Claude finds for you.</p>'
-            # (shared lists from an earlier version: shown only when this profile already watches one, to keep or drop)
-            '<div id="coSetsWrap" hidden>' +
-            _group("Lists I already watch", "Shared company lists from an earlier version of Siftwell. Untick one to stop watching its companies; "
-                   "changes apply right away to listings already fetched.", [_pad('<div class="checks" id="coSets"></div>')]) +
-            '</div>' +
+    return ('<p class="sfoot" style="margin-top:14px"><span id="coCount"></span>Your employers come from the Siftwell employer directory near you, '
+            'the companies you add here or on the Catalog page, and what Claude finds for you.</p>' +
             _group("Add a company", "", [
                 '<form class="srow stack" id="coAddForm"><input type="url" id="coUrl" placeholder="Paste a company\'s careers or job-list link" aria-label="Careers page link">'
                 '<input type="text" id="coName" placeholder="Name (optional)" aria-label="Company name">'
                 '<select id="coScope" aria-label="Who sees it"><option value="me">Just this profile</option><option value="all">Everyone</option></select>'
                 '<div class="sbtns"><button class="btn primary" type="submit">Add company</button></div></form>',
                 '<div class="srow"><span class="note" id="coMsg" role="status" aria-live="polite"></span></div>']) +
-            _group("Companies I added", "", [_pad('<div class="factlist" id="coOwn"><div class="note">Loading…</div></div>')]) +
+            _group("Employers on my own list", "Added by you, or kept from an earlier version of Siftwell.", [_pad('<div class="factlist" id="coOwn"><div class="note">Loading…</div></div>')]) +
             # CLEAR SPOT for the Catalog link: set CATALOG_HREF above once the Catalog page exists.
             _group("Browse all companies", "", [f'<div class="srow" id="coCatalog"><div class="slab">{catalog}</div></div>']))
 
@@ -204,6 +203,19 @@ CSS = """<style>
 .spad textarea{min-height:5.5em;resize:vertical}
 .spad .row,.sgroup .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .spad .note,.pnote{color:var(--muted);font-size:12.5px;margin:0}
+.lf{display:flex;flex-direction:column;gap:16px}
+.lf h4{margin:0 0 2px;font-size:14px;font-weight:600}
+.lf .lfsec{display:flex;flex-direction:column;gap:7px;min-width:0}
+.lfchips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.lfchip{display:inline-flex;align-items:center;gap:2px;max-width:100%;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:2px 4px 2px 11px;font-size:13.5px;line-height:1.5}
+.lfchip span{overflow-wrap:anywhere}
+.lfchip.occ{border-style:dashed}
+.lfchip small{color:var(--muted);margin-left:5px}
+.lfchip button{flex:none;border:0;background:none;color:var(--muted);cursor:pointer;font:inherit;font-size:15px;line-height:1;width:24px;height:24px;border-radius:50%}
+.lfchip button:hover,.lfchip button:focus-visible{background:var(--bar,var(--line));color:var(--ink)}
+.lfadd{display:flex;gap:6px;min-width:0}
+.lfadd input{flex:1}
+.lfadd .btn{flex:none}
 .pnote{margin:8px 14px 0}
 .sctl input[type=text],.sctl input[type=url]{width:240px;max-width:100%;height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit}
 .srow.stack input[type=text]{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;width:100%;min-width:0}
@@ -325,7 +337,7 @@ function drawResume(){
 function loadProfile(){
   return fetch("/api/profile").then(r => r.json()).then(p => {
     PROF = p.active; DRAFT = p.draft; ING = p.ingest || {};
-    drawResume(); drawTitles(); drawStrip();
+    drawResume(); loadLF(); drawStrip();
     if (!$("abBody").contains(document.activeElement)) drawAbout();
     drawFacts(); $("generalQs").disabled = !PROF || !CL.ready;
     clearTimeout(loadProfile.t);
@@ -415,7 +427,7 @@ $("abBody").addEventListener("click", e => {
   if (rr) { AB.reframings.splice(+rr.dataset.rmref, 1); $("abRefr").innerHTML = AB.reframings.map(refRow).join("") || `<div class="note">None.</div>`; if (!DRAFT) saveAbout(); }
 });
 $("rvApprove").addEventListener("click", () => {
-  const edits = collectAbout(); edits.target_roles = unlines($("ps-titles").value);
+  const edits = collectAbout();
   $("rvApprove").disabled = true; $("abNote").textContent = "Approving…";
   jpost("/api/profile/approve", {edits, rescore: true}).then(({ok, d}) => {
     if (!ok) { $("abNote").textContent = d.error || "Couldn't approve."; return; }
@@ -451,19 +463,64 @@ document.querySelector(".spanes").addEventListener("change", e => {
   if (el.dataset.wp) { savePS(el, {workplaces: [...document.querySelectorAll("[data-wp]")].filter(x => x.checked).map(x => x.dataset.wp)}); return; }
   savePS(el, {[el.dataset.ps]: el.type === "checkbox" ? el.checked : el.value});
 });
-function drawTitles(){
-  const p = DRAFT || PROF, t = $("ps-titles");
-  t.disabled = !p;
-  if (document.activeElement !== t) t.value = p ? lines(p.target_roles) : "";
-  $("ttNote").textContent = !p ? "Upload your resume first: Claude drafts these from it."
-    : DRAFT ? "From your new draft. They are saved when you approve it under About you."
-    : "One per line. Your board shows jobs whose titles match these (or the title words taken from your resume). With none at all, every job title is shown.";
+// ---- What Siftwell looks for: the sheet behind the free Relevance score (chips; every change saves and re-checks the board)
+let LF = null, lfPoll = null;
+const lfChip = (kind, x, extra) => `<span class="lfchip${kind === "occ" ? " occ" : ""}" title="${esc((LF.src_words || {})[x.src] || extra || "")}"><span>${esc(x.t)}${kind === "occ" ? `<small>+ ${nf(x.names)} other names</small>` : ""}</span><button type="button" data-lfrm="${kind}" data-v="${esc(kind === "occ" ? x.code : x.t)}" aria-label="Remove ${esc(x.t)}">×</button></span>`;
+const lfAdd = (kind, ph, label) => `<form class="lfadd" data-lfadd="${kind}"><input type="text" maxlength="80" placeholder="${esc(ph)}" aria-label="${esc(label)}"><button class="btn sm" type="submit">Add</button></form>`;
+function drawLF(){
+  const r = $("lfRoot"); if (!r || !LF) return;
+  const sec = (title, help, chips, add) => `<div class="lfsec"><h4>${title}</h4><p class="note">${help}</p>${chips ? `<div class="lfchips">${chips}</div>` : ""}${add || ""}</div>`;
+  const occNote = "A whole occupation from the O*NET list: every name employers use for it counts.";
+  const lr = LF.learned || {up: [], down: []};
+  r.innerHTML =
+    `<div class="lfsec"><h4><label for="lfRecent">Your most recent job title</label></h4><p class="note">This one counts most. ${LF.recent ? "" : "<b>Add it</b> so Siftwell can tell which jobs are close to your work."}</p>
+      <form class="lfadd" id="lfRecentForm"><input type="text" id="lfRecent" maxlength="80" value="${esc(LF.recent)}" placeholder="e.g. Registered Nurse, Electrician, Office Manager"><button class="btn sm" type="submit">Save</button></form></div>` +
+    sec("Job titles you’re looking for", "The same job under the names employers use, and other titles you’d take.",
+        LF.same.map(x => lfChip("title", x)).join("") + LF.occs_same.map(x => lfChip("occ", x, occNote)).join(""), lfAdd("title", "Add a job title", "Add a job title")) +
+    sec("One step up", "Senior, lead and supervisor versions of your titles already count. Add the titles you’d move up into.",
+        LF.up.map(x => lfChip("title", x)).join(""), lfAdd("up", "Add a step-up title", "Add a step-up title")) +
+    sec("Related roles", "Different jobs you could plausibly move into. They count for less than your own titles.",
+        LF.related.map(x => lfChip("title", x)).join("") + LF.occs_related.map(x => lfChip("occ", x, occNote)).join(""), lfAdd("related", "Add a related role", "Add a related role")) +
+    sec("Skills and tools", "Found in a posting’s text, each one adds a little.", LF.skills.map(x => lfChip("skill", x)).join(""), lfAdd("skill", "Add a skill or tool", "Add a skill or tool")) +
+    (LF.past.length ? sec("Jobs you held before", "From your profile. They count a little.", LF.past.map(x => lfChip("title", x)).join("")) : "") +
+    `<div class="lfsec"><h4><label for="lfField">Your field</label></h4><form class="lfadd" id="lfFieldForm"><input type="text" id="lfField" maxlength="60" value="${esc(LF.field)}" placeholder="e.g. Healthcare, Construction, Education"><button class="btn sm" type="submit">Save</button></form></div>` +
+    `<div class="lfsec"><h4>Learned from what you save and hide</h4><p class="note">${lr.n_up || lr.n_down
+        ? `Jobs with titles like the ${nf(lr.n_up)} you saved or applied to move up a little${lr.up.length ? ` (${esc(lr.up.slice(-4).join(", "))})` : ""}; titles like the ${nf(lr.n_down)} you hid move down a little${lr.down.length ? ` (${esc(lr.down.slice(-4).join(", "))})` : ""}. Never more than a few points.`
+        : "Nothing yet. Saving a job nudges similar titles up a little; hiding one nudges similar titles down. Never more than a few points."}</p>
+      <div class="row">${lr.n_up || lr.n_down ? `<button class="btn ghost sm" type="button" data-lfreset="learning">Forget what was learned</button>` : ""}
+      <button class="btn ghost sm" type="button" data-lfreset="sheet">Start this list over</button>
+      ${LF.claude_ready ? `<button class="btn sm" type="button" id="lfSuggest"${LF.can_suggest && !(LF.job || {}).running ? "" : " disabled"}>${(LF.job || {}).running ? "Claude is thinking…" : "Ask Claude for more titles"}</button>` : ""}</div>
+      <p class="note" id="lfMsg" role="status" aria-live="polite">${LF.claude_ready ? ((LF.job || {}).error ? esc(LF.job.error) : "Asking Claude is one small request.") : "Connect Claude to get more title ideas → Settings → Get started. The list works without it."}</p></div>`;
 }
-$("ps-titles").addEventListener("change", e => {
-  if (DRAFT) return;
-  const el = e.target; saveState(el, "Saving…");
-  saved(el, jpost("/api/profile/edit", {edits: {target_roles: unlines(el.value)}})).then(d => { PROF = d.profile; saveState(el, "Saved"); soonBoard(); })
-    .catch(err => { drawTitles(); saveState(el, netErr(err), true); });
+function loadLF(){
+  return fetch("/api/lookfor").then(r => r.json()).then(d => {
+    LF = d; drawLF();
+    clearTimeout(lfPoll); if ((d.job || {}).running) lfPoll = setTimeout(loadLF, 2500);
+  }).catch(() => { const r = $("lfRoot"); if (r && !LF) r.innerHTML = `<p class="note">Couldn't load. Check the connection.</p>`; });
+}
+function lfOp(op){
+  const m = $("lfMsg"); if (m) m.textContent = "Saving…";
+  return jpost("/api/lookfor", {op}).then(({ok, d}) => {
+    if (!ok) { if ($("lfMsg")) $("lfMsg").textContent = d.error || "Couldn't save."; return; }
+    LF = d.sheet; drawLF(); if ($("lfMsg")) $("lfMsg").textContent = "Saved. Your board is re-checking."; soonBoard();
+    if ((LF.job || {}).running) lfPoll = setTimeout(loadLF, 2500);
+  }).catch(() => { if ($("lfMsg")) $("lfMsg").textContent = "Couldn't save. Check the connection."; });
+}
+$("lfRoot").addEventListener("submit", e => {
+  e.preventDefault();
+  const f = e.target, inp = f.querySelector("input"), v = inp.value.trim();
+  if (f.id === "lfRecentForm") { lfOp({recent: v}); return; }
+  if (f.id === "lfFieldForm") { lfOp({field: v}); return; }
+  if (v && f.dataset.lfadd) lfOp({add: f.dataset.lfadd, text: v});
+});
+$("lfRoot").addEventListener("click", e => {
+  const rm = e.target.closest("[data-lfrm]");
+  if (rm) { lfOp(rm.dataset.lfrm === "occ" ? {remove: "occ", code: rm.dataset.v} : {remove: rm.dataset.lfrm, text: rm.dataset.v}); return; }
+  const rs = e.target.closest("[data-lfreset]");
+  if (rs) { if (rs.dataset.lfreset !== "sheet" || confirm("Start the list over from your profile? The titles and skills you added or removed here are forgotten.")) lfOp({reset: rs.dataset.lfreset}); return; }
+  if (e.target.closest("#lfSuggest")) {
+    jpost("/api/lookfor/suggest", {}).then(({ok, d}) => { if (!ok) { $("lfMsg").textContent = d.error || "Couldn't ask Claude."; return; } LF.job = {running: true}; drawLF(); lfPoll = setTimeout(loadLF, 2500); });
+  }
 });
 function drawTarget(){
   $("tgState").textContent = TJ.running ? "Claude is working out which jobs fit this target…"
@@ -639,15 +696,10 @@ $("qGo").addEventListener("click", () => {
 // ---- Companies: lists watched, companies added, adding by link
 function loadCompanies(){
   return fetch("/api/companies/mine").then(r => r.json()).then(d => {
-    $("coSetsWrap").hidden = !d.sets.length;
-    $("coSets").innerHTML = d.sets.map(x => `<label class="chk"><input type="checkbox" data-set="${esc(x.id)}" ${d.watching.includes(x.id) ? "checked" : ""}> ${esc(x.label)} <span class="note">(${x.count})</span></label>`).join("");
-    $("coOwn").innerHTML = d.own.length ? d.own.map(c => `<div class="fact"><div><b>${esc(c.name)}</b><div class="fl">${esc(c.ats)}${c.everyone ? " · everyone" : " · this profile"}</div></div></div>`).join("") : `<div class="note">None yet. Paste a careers link above.</div>`;
+    $("coCount").textContent = d.watched ? `Siftwell watches ${nf(d.watched)} employer${d.watched === 1 ? "" : "s"} for you. ` : "";
+    $("coOwn").innerHTML = d.own.length ? d.own.slice(0, 40).map(c => `<div class="fact"><div><b>${esc(c.name)}</b><div class="fl">${esc(c.ats)}${c.everyone ? " · everyone" : " · this profile"}</div></div></div>`).join("") + (d.own.length > 40 ? `<div class="note">And ${nf(d.own.length - 40)} more. The Catalog page lists them all.</div>` : "") : `<div class="note">None yet. Paste a careers link above.</div>`;
   }).catch(() => { $("coOwn").innerHTML = `<div class="note">Couldn't load. Check the connection.</div>`; });
 }
-$("coSets").addEventListener("change", e => {
-  const sets = [...$("coSets").querySelectorAll("input:checked")].map(i => i.dataset.set);
-  savePS(e.target, {company_sets: sets});
-});
 $("coAddForm").addEventListener("submit", e => {
   e.preventDefault();
   $("coMsg").textContent = "Checking that link…";

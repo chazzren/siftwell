@@ -11,9 +11,6 @@
    "tenant": "3m",
    "wd": "wd1",
    "site": "Search",
-   "sets": [
-    "large"
-   ],
    "verified_total": 788,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -25,9 +22,6 @@
    "tenant": "abbott",
    "wd": "wd5",
    "site": "abbottcareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2000,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -39,9 +33,6 @@
    "list_url": "https://careers.abbvie.com/en/jobs",
    "sitemap": "https://careers.abbvie.com/sitemap.xml",
    "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1725,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -53,9 +44,6 @@
    "tenant": "adobe",
    "wd": "wd5",
    "site": "external_experienced",
-   "sets": [
-    "large"
-   ],
    "verified_total": 276,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -65,9 +53,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://careers.agcocorp.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 335,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -79,9 +64,6 @@
    "tenant": "aig",
    "wd": "wd1",
    "site": "aig",
-   "sets": [
-    "large"
-   ],
    "verified_total": 415,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -92,9 +74,6 @@
    "ats": "oracle",
    "base": "https://eofd.fa.us6.oraclecloud.com",
    "site": "CX_1001",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -106,9 +85,6 @@
    "tenant": "alcoa",
    "wd": "wd5",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 111,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -120,9 +96,6 @@
    "tenant": "allstate",
    "wd": "wd5",
    "site": "allstate_careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 407,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -134,9 +107,6 @@
    "tenant": "ally",
    "wd": "wd1",
    "site": "ally",
-   "sets": [
-    "large"
-   ],
    "verified_total": 73,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -148,9 +118,6 @@
    "tenant": "ameren",
    "wd": "wd1",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 92,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -162,9 +129,6 @@
    "tenant": "aep",
    "wd": "wd1",
    "site": "AEPCareerSite",
-   "sets": [
-    "large"
-   ],
    "verified_total": 246,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -175,9 +139,6 @@
    "ats": "oracle",
    "base": "https://egug.fa.us2.oraclecloud.com",
    "site": "CX_1",
-   "sets": [
-    "large"
-   ],
    "verified_total": 330,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -189,9 +150,6 @@
    "tenant": "amfam",
    "wd": "wd1",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 46,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -203,9 +161,6 @@
    "tenant": "ameriprise",
    "wd": "wd5",
    "site": "ameriprise",
-   "sets": [
-    "large"
-   ],
    "verified_total": 223,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -217,9 +172,6 @@
    "tenant": "amgen",
    "wd": "wd1",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1938,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -231,9 +183,6 @@
    "tenant": "analogdevices",
    "wd": "wd1",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 799,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -245,9 +194,6 @@
    "tenant": "amat",
    "wd": "wd1",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2000,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -259,9 +205,6 @@
    "tenant": "archgroup",
    "wd": "wd1",
    "site": "careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 196,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -273,9 +216,6 @@
    "tenant": "arrow",
    "wd": "wd1",
    "site": "AC",
-   "sets": [
-    "large"
-   ],
    "verified_total": 561,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -287,9 +227,6 @@
    "tenant": "att",
    "wd": "wd1",
    "site": "ATTGeneral",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1110,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -301,9 +238,6 @@
    "tenant": "atmosenergy",
    "wd": "wd108",
    "site": "External_Career_Site",
-   "sets": [
-    "large"
-   ],
    "verified_total": 42,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -315,9 +249,6 @@
    "tenant": "autodesk",
    "wd": "wd1",
    "site": "Ext",
-   "sets": [
-    "large"
-   ],
    "verified_total": 4,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -329,9 +260,6 @@
    "tenant": "autonation",
    "wd": "wd5",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 728,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -343,9 +271,6 @@
    "tenant": "avnet",
    "wd": "wd1",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 335,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -357,9 +282,6 @@
    "tenant": "ghr",
    "wd": "wd1",
    "site": "Lateral-US",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1981,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -371,9 +293,6 @@
    "tenant": "baxter",
    "wd": "wd1",
    "site": "baxter",
-   "sets": [
-    "large"
-   ],
    "verified_total": 527,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -385,9 +304,6 @@
    "tenant": "bdx",
    "wd": "wd1",
    "site": "EXTERNAL_CAREER_SITE_USA",
-   "sets": [
-    "large"
-   ],
    "verified_total": 571,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -399,9 +315,6 @@
    "tenant": "biibhr",
    "wd": "wd3",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 267,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -413,9 +326,6 @@
    "tenant": "bjswholesaleclub",
    "wd": "wd1",
    "site": "BJsCareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1373,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -427,9 +337,6 @@
    "tenant": "blackrock",
    "wd": "wd1",
    "site": "BlackRock_Professional",
-   "sets": [
-    "large"
-   ],
    "verified_total": 277,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -440,9 +347,6 @@
    "ats": "oracle",
    "base": "https://eofe.fa.us2.oraclecloud.com",
    "site": "BNY",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -454,9 +358,6 @@
    "tenant": "boeing",
    "wd": "wd1",
    "site": "EXTERNAL_CAREERS",
-   "sets": [
-    "large"
-   ],
    "verified_total": 743,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -468,9 +369,6 @@
    "tenant": "bah",
    "wd": "wd1",
    "site": "BAH_Jobs",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2000,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -480,9 +378,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://jobs.bostonscientific.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 559,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -494,9 +389,6 @@
    "tenant": "bristolmyerssquibb",
    "wd": "wd5",
    "site": "BMS",
-   "sets": [
-    "large"
-   ],
    "verified_total": 629,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -508,9 +400,6 @@
    "tenant": "broadcom",
    "wd": "wd1",
    "site": "External_Career",
-   "sets": [
-    "large"
-   ],
    "verified_total": 387,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -522,9 +411,6 @@
    "tenant": "broadridge",
    "wd": "wd5",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 313,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -536,9 +422,6 @@
    "tenant": "burlington",
    "wd": "wd5",
    "site": "burlingtonCareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 334,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -550,9 +433,6 @@
    "tenant": "chrobinson",
    "wd": "wd5",
    "site": "CHRobinson",
-   "sets": [
-    "large"
-   ],
    "verified_total": 145,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -564,9 +444,6 @@
    "tenant": "capitalone",
    "wd": "wd12",
    "site": "Capital_One",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2064,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -578,9 +455,6 @@
    "tenant": "cardinalhealth",
    "wd": "wd1",
    "site": "EXT",
-   "sets": [
-    "large"
-   ],
    "verified_total": 849,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -590,9 +464,6 @@
    "sector": "",
    "ats": "radancy",
    "base": "https://careers.cargill.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1358,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -604,9 +475,6 @@
    "tenant": "carmax",
    "wd": "wd1",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1185,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -616,9 +484,6 @@
    "sector": "",
    "ats": "radancy",
    "base": "https://jobs.carnivalcorp.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 129,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -630,9 +495,6 @@
    "tenant": "cat",
    "wd": "wd5",
    "site": "CaterpillarCareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1005,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -644,9 +506,6 @@
    "tenant": "cdw",
    "wd": "wd5",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 213,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -658,9 +517,6 @@
    "tenant": "centene",
    "wd": "wd5",
    "site": "Centene_External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 380,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -672,9 +528,6 @@
    "sitemap": "https://careers.centerpointenergy.com/sitemap.xml",
    "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
    "list_url": "https://careers.centerpointenergy.com/",
-   "sets": [
-    "large"
-   ],
    "verified_total": 34,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -684,9 +537,6 @@
    "sector": "Brokerage",
    "ats": "icims",
    "base": "https://career-schwab.icims.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 288,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -698,9 +548,6 @@
    "tenant": "chevron",
    "wd": "wd5",
    "site": "jobs",
-   "sets": [
-    "large"
-   ],
    "verified_total": 157,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -712,9 +559,6 @@
    "tenant": "chewy",
    "wd": "wd5",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 234,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -726,9 +570,6 @@
    "sitemap": "https://jobs.chipotle.com/sitemap.xml",
    "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
    "list_url": "https://jobs.chipotle.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 8480,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -739,9 +580,6 @@
    "ats": "oracle",
    "base": "https://fa-ewgu-saasfaprod1.fa.ocs.oraclecloud.com",
    "site": "CX_2001",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -753,9 +591,6 @@
    "tenant": "cigna",
    "wd": "wd5",
    "site": "cignacareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 563,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -766,9 +601,6 @@
    "ats": "taleo",
    "host": "cinfin.taleo.net",
    "section": "ex",
-   "sets": [
-    "large"
-   ],
    "verified_total": 108,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -778,9 +610,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://careers.cintas.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 3050,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -792,9 +621,6 @@
    "tenant": "cisco",
    "wd": "wd5",
    "site": "Cisco_Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1471,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -806,9 +632,6 @@
    "tenant": "citi",
    "wd": "wd5",
    "site": "2",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2000,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -819,9 +642,6 @@
    "ats": "oracle",
    "base": "https://hcgn.fa.us2.oraclecloud.com",
    "site": "CX_1",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -833,9 +653,6 @@
    "tenant": "clorox",
    "wd": "wd1",
    "site": "clorox",
-   "sets": [
-    "large"
-   ],
    "verified_total": 191,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -847,9 +664,6 @@
    "tenant": "coke",
    "wd": "wd1",
    "site": "coca-cola-careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 240,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -859,9 +673,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://jobs.colgate.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 574,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -873,9 +684,6 @@
    "tenant": "comcast",
    "wd": "wd115",
    "site": "Comcast_Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 706,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -887,9 +695,6 @@
    "tenant": "conocophillips",
    "wd": "wd1",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 21,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -901,9 +706,6 @@
    "tenant": "corebridgefinancial",
    "wd": "wd1",
    "site": "corebridgefinancial",
-   "sets": [
-    "large"
-   ],
    "verified_total": 148,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -915,9 +717,6 @@
    "tenant": "corteva",
    "wd": "wd5",
    "site": "corteva",
-   "sets": [
-    "large"
-   ],
    "verified_total": 46,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -929,9 +728,6 @@
    "tenant": "crownholdings",
    "wd": "wd501",
    "site": "CrownHoldings",
-   "sets": [
-    "large"
-   ],
    "verified_total": 285,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -943,9 +739,6 @@
    "tenant": "cvshealth",
    "wd": "wd1",
    "site": "CVS_Health_Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 19026,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -955,9 +748,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://jobs.dana.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 359,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -969,9 +759,6 @@
    "tenant": "danaher",
    "wd": "wd1",
    "site": "DanaherJobs",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1458,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -982,9 +769,6 @@
    "ats": "eightfold",
    "host": "careers.deere.com",
    "domain": "johndeere.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 158,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -996,9 +780,6 @@
    "tenant": "devonenergy",
    "wd": "wd5",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 53,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1009,9 +790,6 @@
    "ats": "oracle",
    "base": "https://ibxwjb.fa.ocs.oraclecloud.com",
    "site": "CX_1",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1021,9 +799,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://careers.dominionenergy.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 90,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1035,9 +810,6 @@
    "tenant": "dover",
    "wd": "wd103",
    "site": "Dover",
-   "sets": [
-    "large"
-   ],
    "verified_total": 763,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1049,9 +821,6 @@
    "tenant": "dow",
    "wd": "wd1",
    "site": "ExternalCareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 174,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1063,9 +832,6 @@
    "sitemap": "https://careers.dteenergy.com/sitemap.xml",
    "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
    "list_url": "https://careers.dteenergy.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 86,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1077,9 +843,6 @@
    "sitemap": "https://careers.dupont.com/cz/cz/sitemap.xml",
    "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
    "list_url": "https://careers.dupont.com/us/en",
-   "sets": [
-    "large"
-   ],
    "verified_total": 206,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1091,9 +854,6 @@
    "tenant": "dxctechnology",
    "wd": "wd1",
    "site": "DXCJobs",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1279,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1104,9 +864,6 @@
    "ats": "eightfold",
    "host": "eaton.eightfold.ai",
    "domain": "eaton.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1204,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1118,9 +875,6 @@
    "tenant": "ebay",
    "wd": "wd5",
    "site": "apply",
-   "sets": [
-    "large"
-   ],
    "verified_total": 280,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1132,9 +886,6 @@
    "tenant": "elevancehealth",
    "wd": "wd1",
    "site": "ANT",
-   "sets": [
-    "large"
-   ],
    "verified_total": 275,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1145,9 +896,6 @@
    "ats": "oracle",
    "base": "https://hdjq.fa.us2.oraclecloud.com",
    "site": "CX_1",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1157,9 +905,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://jobs.entergy.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 370,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1170,9 +915,6 @@
    "ats": "taleo",
    "host": "epco.taleo.net",
    "section": "it",
-   "sets": [
-    "large"
-   ],
    "verified_total": 92,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1184,9 +926,6 @@
    "tenant": "equifax",
    "wd": "wd5",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 164,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1198,9 +937,6 @@
    "tenant": "equinix",
    "wd": "wd1",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 302,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1212,9 +948,6 @@
    "tenant": "expedia",
    "wd": "wd108",
    "site": "search",
-   "sets": [
-    "large"
-   ],
    "verified_total": 124,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1224,9 +957,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://jobs.exxonmobil.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 519,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1238,9 +968,6 @@
    "sitemap": "https://careers.fedex.com/sitemap.xml",
    "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
    "list_url": "https://careers.fedex.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 3292,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1252,9 +979,6 @@
    "tenant": "fifththird",
    "wd": "wd5",
    "site": "53careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 989,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1266,9 +990,6 @@
    "tenant": "fiserv",
    "wd": "wd5",
    "site": "EXT",
-   "sets": [
-    "large"
-   ],
    "verified_total": 385,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1280,9 +1001,6 @@
    "tenant": "flextronics",
    "wd": "wd1",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 855,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1293,9 +1011,6 @@
    "ats": "eightfold",
    "host": "careers.frontier.com",
    "domain": "ftr.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 19,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1307,9 +1022,6 @@
    "host": "gamestop.rec.pro.ukg.net",
    "tenant": "GAM1502GMSP",
    "board": "4a726edc-cff3-44d0-a230-bfeb9bb65328",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1321,9 +1033,6 @@
    "tenant": "gartner",
    "wd": "wd5",
    "site": "EXT",
-   "sets": [
-    "large"
-   ],
    "verified_total": 803,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1333,9 +1042,6 @@
    "sector": "Aerospace and defense",
    "ats": "icims",
    "base": "https://careers-gdms.icims.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1347,9 +1053,6 @@
    "tenant": "geaerospace",
    "wd": "wd5",
    "site": "GE_ExternalSite",
-   "sets": [
-    "large"
-   ],
    "verified_total": 613,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1361,9 +1064,6 @@
    "tenant": "genmills",
    "wd": "wd1",
    "site": "GMI_External_Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 389,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1375,9 +1075,6 @@
    "tenant": "generalmotors",
    "wd": "wd5",
    "site": "Careers_GM",
-   "sets": [
-    "large"
-   ],
    "verified_total": 695,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1389,9 +1086,6 @@
    "tenant": "genpt",
    "wd": "wd1",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2000,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1403,9 +1097,6 @@
    "tenant": "gilead",
    "wd": "wd1",
    "site": "gileadcareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 420,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1417,9 +1108,6 @@
    "tenant": "tsys",
    "wd": "wd1",
    "site": "tsys",
-   "sets": [
-    "large"
-   ],
    "verified_total": 466,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1431,9 +1119,6 @@
    "tenant": "goodyear",
    "wd": "wd1",
    "site": "goodyearCareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 96,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1445,9 +1130,6 @@
    "tenant": "graybar",
    "wd": "wd1",
    "site": "Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 429,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1459,9 +1141,6 @@
    "tenant": "guardianlife",
    "wd": "wd5",
    "site": "Guardian-Life-Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 111,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1471,9 +1150,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://jobs.halliburton.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 564,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1485,9 +1161,6 @@
    "tenant": "thehartford",
    "wd": "wd5",
    "site": "Careers_External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 221,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1499,9 +1172,6 @@
    "sitemap": "https://careers.thehersheycompany.com/sitemap.xml",
    "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
    "list_url": "https://careers.thehersheycompany.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 345,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1513,9 +1183,6 @@
    "tenant": "hpe",
    "wd": "wd5",
    "site": "Jobsathpe",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1755,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1526,9 +1193,6 @@
    "ats": "oracle",
    "base": "https://efet.fa.us2.oraclecloud.com",
    "site": "CX_1",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1540,9 +1204,6 @@
    "tenant": "homedepot",
    "wd": "wd5",
    "site": "CareerDepot",
-   "sets": [
-    "large"
-   ],
    "verified_total": 936,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1553,9 +1214,6 @@
    "ats": "oracle",
    "base": "https://ibqbjb.fa.ocs.oraclecloud.com",
    "site": "Honeywell",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1566,9 +1224,6 @@
    "ats": "oracle",
    "base": "https://ekkh.fa.us2.oraclecloud.com",
    "site": "CX_2002",
-   "sets": [
-    "large"
-   ],
    "verified_total": 215,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1580,9 +1235,6 @@
    "tenant": "hosthotels",
    "wd": "wd5",
    "site": "HostHotels",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1594,9 +1246,6 @@
    "tenant": "hp",
    "wd": "wd5",
    "site": "ExternalCareerSite",
-   "sets": [
-    "large"
-   ],
    "verified_total": 928,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1608,9 +1257,6 @@
    "tenant": "humana",
    "wd": "wd5",
    "site": "Humana_External_Career_Site",
-   "sets": [
-    "large"
-   ],
    "verified_total": 315,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1622,9 +1268,6 @@
    "tenant": "itw",
    "wd": "wd5",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 756,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1634,9 +1277,6 @@
    "sector": "",
    "ats": "successfactors",
    "base": "https://careers.irco.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 279,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1648,9 +1288,6 @@
    "tenant": "ingrammicro",
    "wd": "wd5",
    "site": "ingrammicro",
-   "sets": [
-    "large"
-   ],
    "verified_total": 371,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1662,9 +1299,6 @@
    "tenant": "intel",
    "wd": "wd1",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 853,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1676,9 +1310,6 @@
    "sitemap": "https://jobs.intuit.com/sitemap.xml",
    "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
    "list_url": "https://jobs.intuit.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 610,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1690,9 +1321,6 @@
    "tenant": "jabil",
    "wd": "wd5",
    "site": "Jabil_Careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2000,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1704,9 +1332,6 @@
    "sitemap": "https://careers.jetblue.com/sitemap.xml",
    "path_re": "/(jobs?|careers?|positions?|openings?|vacanc\\w*)/.",
    "list_url": "https://careers.jetblue.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 62,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1718,9 +1343,6 @@
    "tenant": "jj",
    "wd": "wd5",
    "site": "JJ",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1774,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1732,9 +1354,6 @@
    "tenant": "jci",
    "wd": "wd5",
    "site": "jci",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2787,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1746,9 +1365,6 @@
    "tenant": "jll",
    "wd": "wd1",
    "site": "jllcareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2000,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1759,9 +1375,6 @@
    "ats": "oracle",
    "base": "https://jpmc.fa.oraclecloud.com",
    "site": "CX_1001",
-   "sets": [
-    "large"
-   ],
    "verified_total": 400,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1773,9 +1386,6 @@
    "tenant": "hpe",
    "wd": "wd5",
    "site": "Jobsathpe",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1755,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1786,9 +1396,6 @@
    "ats": "eightfold",
    "host": "kdrp.eightfold.ai",
    "domain": "kdrp.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 636,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1800,9 +1407,6 @@
    "tenant": "keybank",
    "wd": "wd5",
    "site": "External_Career_Site",
-   "sets": [
-    "large"
-   ],
    "verified_total": 585,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1814,9 +1418,6 @@
    "tenant": "kla",
    "wd": "wd1",
    "site": "Search",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1156,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1827,9 +1428,6 @@
    "ats": "avature",
    "base": "https://koch.avature.net",
    "portal": "careers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 16,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1841,9 +1439,6 @@
    "tenant": "kohls",
    "wd": "wd504",
    "site": "kohlscareers",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2000,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1854,9 +1449,6 @@
    "ats": "jsonld",
    "list_url": "https://careers.l3harris.com/en",
    "link_prefix": "/en/job/fort-wayne/l3harris-engineering-hiring-event-for-fort-wayne-in-virtual/4832/",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1868,9 +1460,6 @@
    "tenant": "labcorp",
    "wd": "wd1",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 1734,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1881,9 +1470,6 @@
    "ats": "eightfold",
    "host": "careers.lamresearch.com",
    "domain": "lamresearch.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 585,
    "verified_at": "2026-11-11T15:14:04Z"
   },
@@ -1895,9 +1481,6 @@
    "tenant": "landolakes",
    "wd": "wd1",
    "site": "landolakes",
-   "sets": [
-    "large"
-   ],
    "verified_total": 175,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1909,9 +1492,6 @@
    "tenant": "leidos",
    "wd": "wd5",
    "site": "External",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2000,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1923,9 +1503,6 @@
    "tenant": "loewscorp",
    "wd": "wd1",
    "site": "loewscorp",
-   "sets": [
-    "large"
-   ],
    "verified_total": 2,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1937,9 +1514,6 @@
    "tenant": "lowes",
    "wd": "wd5",
    "site": "LWS_External_CS",
-   "sets": [
-    "large"
-   ],
    "verified_total": 13034,
    "verified_at": "2026-11-10T16:22:25Z"
   },
@@ -1950,9 +1524,6 @@
    "ats": "eightfold",
    "host": "careers.lumen.com",
    "domain": "lumen.com",
-   "sets": [
-    "large"
-   ],
    "verified_total": 91,
    "verified_at": "2026-11-11T15:14:04Z"
   }

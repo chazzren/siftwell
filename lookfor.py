@@ -82,7 +82,7 @@ def onet():
                         d = json.load(f)
                 except Exception:
                     d = {"occ": {}, "df": {}, "titles": 1, "version": ""}
-                d["_n"] = max(1, int(d.get("titles") or 1))
+                d["_n"] = max(1, len(d.get("occ") or {}))
                 _ONET.update(d)
     return _ONET
 
@@ -91,7 +91,8 @@ _WCACHE = {}
 
 
 def weight(tok):
-    """How much a title word counts: rare words (phlebotomist) far more than common ones (manager); level words nothing."""
+    """How much a title word counts: a word few occupations use (nurse, rn, electrician) far more than one hundreds
+    use (manager, technician); level words nothing. From the extract's count of occupations per word."""
     w = _WCACHE.get(tok)
     if w is None:
         if tok in LEVEL:
@@ -113,7 +114,7 @@ def _head(seq):
     return seq[-1] if seq else None
 
 
-GENERIC_W = 22.0   # a one-word name lighter than this ("Manager", "Driver", "Technician") says little by itself
+GENERIC_W = 10.0   # a one-word name lighter than this (used by 40+ occupations: "Manager", "Technician") says little by itself
 
 _INDEX = {}
 
@@ -232,6 +233,14 @@ def recent_title(prof):
     return best
 
 
+def _auto_recent(prof):
+    """The most recent job title when the person hasn't typed one: from their experience, else what Claude read off
+    the resume, else the first job title they search for."""
+    p = prof or {}
+    lf = p.get("look_for") if isinstance(p.get("look_for"), dict) else {}
+    return recent_title(p) or clean_title(lf.get("recent_title")) or clean_title(next(iter(p.get("target_roles") or []), ""))
+
+
 def _basis(recent, prof):
     """What the automatic part was built from. A new basis rebuilds it (the person's own chips are kept)."""
     p = prof or {}
@@ -275,8 +284,10 @@ def build(pid=None, prof=None):
     rm_t, rm_o, rm_s = (set(removed.get(k) or []) for k in ("titles", "occs", "skills"))
     p = prof or {}
     mine_recent = clean_title(old.get("recent")) if old.get("recent_by") == "you" else ""
-    recent = mine_recent or recent_title(p) or clean_title(next(iter(p.get("target_roles") or []), ""))
     lf = p.get("look_for") if isinstance(p.get("look_for"), dict) else None
+    if lf and not any(lf.get(k) for k in ("same_titles", "step_up_titles", "related_roles", "key_skills")):
+        lf = None
+    recent = mine_recent or _auto_recent(p)
     cl = lf or old.get("claude") or {}
     titles, occs, skills = [], [], []
     add = lambda t, tier, src: titles.append({"t": clean_title(t), "tier": tier, "src": src}) if clean_title(t) else None
@@ -337,7 +348,7 @@ def ensure(pid=None, prof=None):
     pid = pid or people.current()
     prof = prof if prof is not None else _profile(pid)
     sheet = load(pid)
-    recent = clean_title(sheet.get("recent")) if sheet and sheet.get("recent_by") == "you" else (recent_title(prof) or clean_title(next(iter((prof or {}).get("target_roles") or []), "")))
+    recent = clean_title(sheet.get("recent")) if sheet and sheet.get("recent_by") == "you" else _auto_recent(prof)
     if sheet and sheet.get("basis") == _basis(recent, prof):
         return sheet
     try:
@@ -650,7 +661,8 @@ class Scorer:
         T, tier, label, nudge = self.title_score(job.get("title") or "")
         hits, hw = self.skill_hits(job.get("desc") or job.get("snippet") or "") if self.skills else ([], 0.0)
         S = min(100.0, 22.0 * hw)
-        rel = max(0.85 * T + 0.15 * S, 0.35 * S)
+        # the title decides; skills found in the text close up to 30% of what's left, and by themselves reach 35
+        rel = max(T + (100 - T) * 0.3 * S / 100, 0.35 * S)
         if self.field and rel > 0:
             ctx = set(tokens((job.get("dept") or "") + " " + (job.get("sector") or "")))
             if any(t in ctx for t in self.field):
@@ -689,7 +701,7 @@ def title_phrases(sheet, own_only=False):
                     out.append(n)
     seen, res = set(), []
     for t in out:
-        k = " ".join(tokens(t))
+        k = " ".join(t.lower().split())
         if k and k not in seen:
             seen.add(k); res.append(t.lower())
     return res

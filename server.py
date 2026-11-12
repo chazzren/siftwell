@@ -1133,8 +1133,15 @@ class H(BaseHTTPRequestHandler):
             st_ = os.stat(rp)
             return self._send(200, lambda: open(rp, "rb").read(), "text/html", gz_key=(rp, st_.st_mtime_ns, st_.st_size))
         if path == "/api/search":
-            import first_search
-            return self._send(200, first_search.status(pid))
+            import first_search, sqlite3, time
+            # (the catalog can be briefly unreadable while a fetch is being stopped, e.g. right after Pause: read again)
+            for attempt in range(3):
+                try:
+                    return self._send(200, first_search.status(pid))
+                except sqlite3.Error:
+                    if attempt == 2:
+                        raise
+                    time.sleep(0.4)
         if path == "/api/directory":
             import directory
             return directory.handle_get(self, path, pid)

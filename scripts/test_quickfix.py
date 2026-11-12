@@ -96,8 +96,8 @@ jobfinder.OLD_EXCLUDE_MATCH = old_mode
 new = people.add("New Person")
 s = people.settings(new)
 check("new profile: no pay floor, no level, no shared lists, own-titles rule",
-      s["salary_floor"] == 0 and s["seniority_mine"] is None and s["seniority_band"] == [1, 7] and s["company_sets"] == []
-      and s["title_rule"] == "own", str({k: s[k] for k in ("salary_floor", "seniority_mine", "seniority_band", "company_sets", "title_rule")}))
+      s["salary_floor"] == 0 and s["seniority_mine"] is None and s["seniority_band"] == [1, 7] and "company_sets" not in s
+      and s["title_rule"] == "own", str({k: s[k] for k in ("salary_floor", "seniority_mine", "seniority_band", "title_rule")}))
 check("new profile watches only its own lists", people.company_sets(new) == {f"own-{new}", f"near-{new}", "all"})
 
 # a profile as an earlier version left it: a settings file that never heard of the new keys / an old explicit file
@@ -112,9 +112,10 @@ people.save_index(people.load_index() + [{"id": bare, "name": "Bare Person"}])
 people.pdir(pid=bare)   # no settings.json at all
 for pid in (old, bare):
     s = people.settings(pid)
-    check(f"{pid}: keeps the old floor, level, list and built-in title words",
-          s["salary_floor"] == 150000 and s["seniority_mine"] == 4 and s["seniority_band"] == [3, 5] and s["company_sets"] == ["tech"]
-          and s["title_rule"] == "builtin" and "tech" in people.company_sets(pid))
+    # (the earlier shared company lists are moved onto the profile's own list by catalog.move_lists: scripts/test_relevance.py)
+    check(f"{pid}: keeps the old floor, level and built-in title words",
+          s["salary_floor"] == 150000 and s["seniority_mine"] == 4 and s["seniority_band"] == [3, 5]
+          and s["title_rule"] == "builtin" and people.company_sets(pid) == {f"own-{pid}", f"near-{pid}", "all"})
 pr = people.prefs(old)
 check("older saved rating numbers now mean 'as many as allowed'", pr["claude.haiku_per_night"] == 500 and pr["claude.per_update"] == 50
       and pr["claude.opus_top"] == 300 and pr["claude.sonnet_pct"] == 15, str({k: v for k, v in pr.items() if k.startswith("claude.")}))
@@ -161,8 +162,10 @@ def scored(**kw):
          "level": None, "travel": "", **kw}
     jobfinder.score(j)
     return j
-a, b, c = scored(), scored(salary_mid=40000), scored(workplace="remote", travel="heavy")
-check("Appeal works with no floor, level or keywords", 0 < a["appeal"] <= 100 and b["appeal"] > a["appeal"] and a["fit_score"] == 0
+# (no floor: pay is placed within the spread of pay on the person's board, or a broad US spread when the board has
+#  too few listed pays, so well-paid beats unlisted beats low-paid; scripts/test_relevance.py checks the spread itself)
+a, b, c = scored(), scored(salary_mid=120000), scored(workplace="remote", travel="heavy")
+check("Appeal works with no floor, level or keywords", 0 < a["appeal"] <= 100 and b["appeal"] > a["appeal"] > scored(salary_mid=32000)["appeal"] and a["fit_score"] == 0
       and c["appeal_parts"]["place"] > a["appeal_parts"]["place"], str((a["appeal"], b["appeal"], c["appeal"])))
 check("level: no level chosen treats every level alike; entry level (1) is a valid choice",
       scored(level=2)["appeal_parts"]["level"] == scored(level=6)["appeal_parts"]["level"] and jobfinder.LEVEL_NAMES[1] == "Entry level")

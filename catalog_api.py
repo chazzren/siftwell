@@ -33,18 +33,28 @@ def find_live():
 
 
 # ---------------------------------------------------------------- lists and boards
-def lists():
-    """Every company list: the shared ones, Everyone, and each person's own additions and Near me list."""
-    # shared lists from earlier versions appear only while a company is still on them (never in a new household)
-    try:
-        used = {s for c in catalog.companies() for s in (c.get("sets") or [])}
-    except Exception:
-        used = set(people.COMPANY_SETS)
-    out = [{"id": k, "label": v} for k, v in people.COMPANY_SETS.items() if k in used]
-    out.append({"id": "all", "label": "Everyone (added for the whole household)"})
-    for p in people.load_index():
-        out.append({"id": f"own-{p['id']}", "label": f"Added by {p['name']}"})
-        out.append({"id": f"near-{p['id']}", "label": f"Near me ({p['name']})"})
+def lists(pid=None):
+    """Who a newly added employer is for: this person ("Your employers") or everyone in the household. There are no
+    other lists: the shared category lists of earlier versions are gone (catalog.move_lists)."""
+    pid = pid or people.current()
+    return [{"id": f"own-{pid}", "label": "Your employers"}, {"id": "all", "label": "Everyone in the household"}]
+
+
+def _list_id(body, pid, default):
+    """The catalog list id for an add: "all" when the page asked for everyone, else this person's own list (default:
+    own-<id>, or near-<id> for employers found near them, which the weekly directory check may prune)."""
+    return "all" if str(body.get("list") or "") == "all" else f"{default}-{pid}"
+
+
+def _watchers(sets, names):
+    """Plain words for who watches a company: profile names, or "everyone"."""
+    if "all" in sets:
+        return ["everyone"]
+    out = []
+    for s in sets:
+        p = s.split("-", 1)[1] if s.startswith(("own-", "near-")) else None
+        if p in names and names[p] not in out:
+            out.append(names[p])
     return out
 
 
@@ -102,14 +112,15 @@ def handle_get(h, path, pid):
         except Exception:
             facts = {}
         cos = []
+        watch, names = people.company_sets(pid), {p["id"]: p["name"] for p in people.load_index()}
         for c in catalog.companies():
             f = c["_fetch"]
             status = "paused" if c["_paused"] else (f["status"] or "new")
-            cos.append({"name": c["name"], "ats": c["ats"], "sets": c.get("sets") or [], "paused": c["_paused"],
+            cos.append({"name": c["name"], "ats": c["ats"], "mine": bool(set(c.get("sets") or []) & watch), "watchers": _watchers(c.get("sets") or [], names), "paused": c["_paused"],
                         "status": status, "fetch_status": f["status"], "reason": f["error"], "last": f["at"], "open": f["open"] or 0,
                         "raw": f["raw"], "secs": f["secs"], "sector": c.get("sector") or "", "added_by": c.get("added_by"),
                         "facts": facts.get(c["name"])})
-        return h._send(200, {"companies": cos, "lists": lists(), "current": pid, "stats": catalog.stats(),
+        return h._send(200, {"companies": cos, "lists": lists(pid), "current": pid, "stats": catalog.stats(),
                              "facts_job": facts_status()})
     if path == "/api/catalog/facts":
         return h._send(200, facts_status())
@@ -169,7 +180,7 @@ def handle_get(h, path, pid):
         out = {"categories": [{"id": c[0], "label": c[1]} for c in ef.CATEGORIES], "sizes": ef.SIZES, "estimate": ef.ESTIMATE,
                "exhaustive": {"budget": ef.BUDGET_DEFAULT, "min": ef.BUDGET_MIN, "max": ef.BUDGET_MAX, "min_new": ef.MIN_NEW},
                "defaults": ef.defaults(pid), "claude": ef.claude_status(), "live": live, "lines": FIND["lines"][-6:],
-               "waiting": FIND["waiting"] if live else None, "lists": lists(), "current": pid, "run": None}
+               "waiting": FIND["waiting"] if live else None, "lists": lists(pid), "current": pid, "run": None}
         if run:
             d = dict(run.get("details") or {})
             d.pop("pid", None)
@@ -339,9 +350,7 @@ def handle_post(h, path, body, pid):
         url = str(body.get("url") or "").strip()
         if not url:
             return h._send(400, {"error": "Paste a careers page link first."})
-        set_id = str(body.get("list") or f"own-{pid}")
-        if set_id not in {x["id"] for x in lists()}:
-            return h._send(400, {"error": "Pick a list."})
+        set_id = _list_id(body, pid, "own")
         try:
             res = company_add.add(url, str(body.get("name") or "")[:60], target_set=set_id)
         except ValueError as e:
@@ -351,6 +360,24 @@ def handle_post(h, path, body, pid):
         if not started:
             S.request_recompute()
         return h._send(200, {"ok": True, **res, "fetching": started})
+    if path == "/api/catalog/watch":   # put a company on this person's employers, or take it off (it stays in the catalog)
+        name = str(body.get("name") or "")
+        co = next((c for c in catalog.companies() if c["name"] == name), None)
+        if co is None:
+            return h._send(404, {"error": "That company isn't in the catalog."})
+        sets = set(co.get("sets") or [])
+        if body.get("on"):
+            sets.add(f"own-{pid}")
+        else:
+            if "all" in sets and not sets & {f"own-{pid}", f"near-{pid}"}:
+                return h._send(409, {"error": "This one was added for everyone in the household. Use Remove to take it away for everyone."})
+            sets -= {f"own-{pid}", f"near-{pid}"}
+        with catalog.db() as con:
+            con.execute("UPDATE companies SET sets=? WHERE name=?", (json.dumps(sorted(sets)), name))
+        h._act("employer watched" if body.get("on") else "employer no longer watched", pid, name)
+        S.request_recompute([pid])
+        names = {p["id"]: p["name"] for p in people.load_index()}
+        return h._send(200, {"ok": True, "mine": bool(sets & people.company_sets(pid)), "watchers": _watchers(sorted(sets), names)})
     if path in ("/api/catalog/pause", "/api/catalog/remove", "/api/catalog/fetch"):
         name = str(body.get("name") or "")
         if name not in {c["name"] for c in catalog.companies()}:
@@ -437,9 +464,7 @@ def handle_post(h, path, body, pid):
         return h._send(202, {"ok": True})
     if path == "/api/catalog/find/add":
         import employer_finder as ef
-        set_id = str(body.get("list") or f"near-{pid}")
-        if set_id not in {x["id"] for x in lists()}:
-            return h._send(400, {"error": "Pick a list."})
+        set_id = _list_id(body, pid, "near")
         ids = [int(x) for x in (body.get("ids") or []) if str(x).isdigit()]
         if body.get("all"):
             run = ef.latest()
@@ -459,9 +484,10 @@ def handle_post(h, path, body, pid):
         names = {str(x) for x in (body.get("names") or [])}
         want = set(body.get("lists") or [])
         if want:
-            names |= {c["name"] for c in catalog.companies() if want & set(c.get("sets") or [])}
+            # "mine": every employer this person watches (the only list there is)
+            names |= {c["name"] for c in catalog.companies() if people.company_sets(pid) & set(c.get("sets") or [])}
         if not names:
-            return h._send(400, {"error": "Pick at least one list or company."})
+            return h._send(400, {"error": "Tick your employers, or at least one company."})
         data, man = catalog_share.export(sorted(names), bool(body.get("listings", True)), getting_started.VERSION)
         h._act("catalog exported", pid, f"{man['companies']} companies, {man['listings']} listings")
         fn = f"siftwell-companies-{dt.date.today().isoformat()}.siftwell"
@@ -475,11 +501,9 @@ def handle_post(h, path, body, pid):
     if path == "/api/catalog/import":
         import catalog_share
         token = str(body.get("token") or "")
-        set_id = str(body.get("list") or f"own-{pid}")
+        set_id = _list_id(body, pid, "own")
         if not re.fullmatch(r"[0-9a-f]{16}", token):
             return h._send(400, {"error": "Choose the file again."})
-        if set_id not in {x["id"] for x in lists()}:
-            return h._send(400, {"error": "Pick a list."})
         p = os.path.join(S.DATA, IMPORT_DIR, token + ".siftwell")
         if not os.path.isfile(p):
             return h._send(400, {"error": "Choose the file again."})

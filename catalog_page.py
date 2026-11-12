@@ -38,14 +38,14 @@ BODIES = {
   <form class="srow stack" id="addForm">
     <input type="url" id="addUrl" placeholder="Paste a careers page link, e.g. https://boards.greenhouse.io/examplecompany" aria-label="Careers page link" required>
     <div class="cline"><input type="text" id="addName" placeholder="Name (optional)" aria-label="Company name (optional)" maxlength="60">
-    <select id="addList" aria-label="List to put it in"></select><button class="btn primary" type="submit" id="addBtn">Add</button></div>
+    <select id="addList" aria-label="Who it is for"></select><button class="btn primary" type="submit" id="addBtn">Add</button></div>
   </form></div>
   <p class="sfoot" id="addMsg" role="status" aria-live="polite">Siftwell finds the company's job system, checks it can read the listings, adds it, then fetches its jobs.</p></section>
 <div class="livebar" id="fetchBar" hidden><div class="lbtop"><b id="fetchTitle">Fetching…</b><span class="note" id="fetchCount"></span></div><div class="pbar"><i id="fetchFill"></i></div><div class="note" id="fetchLine"></div></div>
 <div class="ctools">
   <input type="search" id="coQ" placeholder="Search companies" aria-label="Search companies">
   <select id="coStatus" aria-label="Status"><option value="">Any status</option><option value="ok">OK</option><option value="suspect">Suspect</option><option value="capped">Capped</option><option value="error">Error</option><option value="paused">Paused</option><option value="new">Not fetched yet</option></select>
-  <select id="coListF" aria-label="List"><option value="">All lists</option></select>
+  <select id="coListF" aria-label="Whose employers"><option value="">Every employer</option><option value="mine">Your employers</option><option value="other">Not yours</option></select>
   <select id="coAts" aria-label="Job system"><option value="">Any job system</option></select>
 </div>
 <p class="count" id="coCount">Loading…</p>
@@ -109,7 +109,7 @@ __AUTOUPDATE__
 <section class="sgsec" id="fdReview" hidden>
   <h3 class="sgtitle">Employers Siftwell can read</h3>
   <div class="sgroup">
-    <div class="srow stack"><div class="cline"><label for="fdList" class="note">Add to</label><select id="fdList"></select>
+    <div class="srow stack"><div class="cline"><label for="fdList" class="note">Add for</label><select id="fdList"></select>
       <button class="btn primary sm" type="button" id="fdAdd">Add ticked</button><button class="btn sm" type="button" id="fdAddAll">Add all readable</button></div>
       <p class="note" id="fdAddMsg" role="status" aria-live="polite"></p></div>
     <div id="fdOk"></div>
@@ -119,14 +119,14 @@ __AUTOUPDATE__
 </section>""",
     "share": """
 <section class="sgsec"><h3 class="sgtitle">Export</h3><div class="sgroup">
-  <div class="srow stack"><span>Lists</span><div class="cats" id="exLists"></div></div>
+  <div class="srow stack"><span>Which employers</span><div class="cats" id="exLists"></div></div>
   <div class="srow stack"><span>Or pick companies</span><input type="search" id="exQ" placeholder="Filter companies" aria-label="Filter companies"><div class="pick" id="exCos"></div></div>
   <div class="srow"><div class="slab"><label for="exListings">Include current listings</label><small>The open job posts and their text, so the other household sees them before their first update.</small></div><div class="sctl"><input type="checkbox" role="switch" class="sw" id="exListings" checked></div></div>
   <div class="srow stack"><div class="sbtns"><button class="btn primary" type="button" id="exBtn">Download .siftwell file</button></div><p class="note" id="exMsg" role="status" aria-live="polite"></p></div>
 </div><p class="sfoot">Only public information goes in the file: company names, their job systems and (if ticked) their open listings. Never profiles, resumes, saved or applied marks, tailored resumes, settings, your access key, Claude's ratings or company research.</p></section>
 <section class="sgsec"><h3 class="sgtitle">Import</h3><div class="sgroup">
   <div class="srow stack"><input type="file" id="imFile" accept=".siftwell" aria-label="Choose a .siftwell file"><p class="note" id="imMsg" role="status" aria-live="polite">Choose a .siftwell file someone shared with you.</p></div>
-  <div class="srow stack" id="imGo" hidden><div class="cline"><label for="imList" class="note">Put new companies in</label><select id="imList"></select><button class="btn primary sm" type="button" id="imBtn">Add</button></div></div>
+  <div class="srow stack" id="imGo" hidden><div class="cline"><label for="imList" class="note">Add them for</label><select id="imList"></select><button class="btn primary sm" type="button" id="imBtn">Add</button></div></div>
 </div><p class="sfoot">Companies already in your catalog are matched by their job board and listings by their id. Nothing you have is removed or closed; dates keep the earliest first seen and latest last seen.</p></section>""",
 }
 
@@ -341,7 +341,6 @@ function loadCompanies(){
     factsNote(); if (FJ.running) pollFacts();
     if (!$("addList").options.length) fillListSelect($("addList"), "own-" + ME.id);
     const lf = $("coListF"), cur = lf.value;
-    lf.innerHTML = `<option value="">All lists</option>` + LISTS.filter(l => COS.some(c => c.sets.includes(l.id))).map(l => `<option value="${esc(l.id)}">${esc(l.label)}</option>`).join("");
     lf.value = cur;
     const af = $("coAts"), ca = af.value, atsList = [...new Set(COS.map(c => c.ats))].sort((a, b) => atsName(a).localeCompare(atsName(b)));
     af.innerHTML = `<option value="">Any job system</option>` + atsList.map(a => `<option value="${esc(a)}">${esc(atsName(a))}</option>`).join("");
@@ -353,7 +352,7 @@ function loadCompanies(){
 function coFiltered(){
   const q = $("coQ").value.trim().toLowerCase(), st = $("coStatus").value, li = $("coListF").value, at = $("coAts").value;
   return COS.filter(c => (!q || c.name.toLowerCase().includes(q) || atsName(c.ats).toLowerCase().includes(q)) && (!st || c.status === st)
-    && (!li || c.sets.includes(li)) && (!at || c.ats === at));
+    && (!li || (li === "mine") === !!c.mine) && (!at || c.ats === at));
 }
 // ---- company facts (looked up by Claude; the button looks one company up now)
 let FJ = {running: null, last: null, claude: true}, factsTimer = null;
@@ -388,12 +387,12 @@ function pollFacts(){
   }).catch(() => { factsTimer = setTimeout(pollFacts, 8000); });
 }
 function coRow(c){
-  const lists = c.sets.map(listLabel).join(", ");
+  const lists = c.mine ? "one of your employers" : (c.watchers || []).length ? "watched by " + c.watchers.join(", ") : "watched by nobody";
   const reason = c.reason ? `<small>${esc(c.reason)}</small>` : "";
   return `<div class="crow" data-name="${esc(c.name)}"><div><b>${esc(c.name)}</b><small>${esc(atsName(c.ats))}${lists ? " · " + esc(lists) : ""}</small><small>${esc(factsText(c))}</small></div>
   <div><span class="pill ${esc(c.status)}">${esc(STATUS[c.status] || c.status)}</span>${c.paused && c.fetch_status && c.fetch_status !== "ok" ? ` <span class="pill ${esc(c.fetch_status)}">${esc(STATUS[c.fetch_status] || c.fetch_status)}</span>` : ""}${reason}</div>
   <div><span>${n(c.open)} open</span><small>${c.last ? "Fetched " + esc(when(c.last)) : "Never fetched"}</small></div>
-  <div class="cact"><button class="btn sm" type="button" data-act="fetch"${c.paused ? " disabled" : ""}>Fetch now</button>${factsBtn(c)}<button class="btn sm" type="button" data-act="pause">${c.paused ? "Resume" : "Pause"}</button><button class="btn sm" type="button" data-act="remove">Remove</button></div></div>`;
+  <div class="cact"><button class="btn sm" type="button" data-act="fetch"${c.paused ? " disabled" : ""}>Fetch now</button>${factsBtn(c)}<button class="btn sm" type="button" data-act="watch" title="${c.mine ? "Take it off your employers (it stays in the catalog)" : "Add it to your employers, so its jobs can reach your board"}">${c.mine ? "Stop watching" : "Watch"}</button><button class="btn sm" type="button" data-act="pause">${c.paused ? "Resume" : "Pause"}</button><button class="btn sm" type="button" data-act="remove">Remove</button></div></div>`;
 }
 function renderCompanies(){
   const list = coFiltered();
@@ -420,8 +419,9 @@ $("coRows").addEventListener("click", ev => {
       .catch(err => { b.disabled = false; say(errText(err), true); if (err.data && err.data.needs_claude) { FJ.claude = false; factsNote(); renderCompanies(); } });
     return;
   }
-  const url = act === "fetch" ? "/api/catalog/fetch" : act === "pause" ? "/api/catalog/pause" : "/api/catalog/remove";
-  post(url, {name, paused: !c.paused}).then(() => {
+  const url = act === "fetch" ? "/api/catalog/fetch" : act === "pause" ? "/api/catalog/pause" : act === "watch" ? "/api/catalog/watch" : "/api/catalog/remove";
+  post(url, {name, paused: !c.paused, on: !c.mine}).then(d => {
+    if (act === "watch") { c.mine = !!d.mine; c.watchers = d.watchers || []; row.outerHTML = coRow(c); return; }
     if (act === "fetch") { say("Fetching now. Its new listings reach the boards when it finishes."); wasRunning = true; pollStatus(); b.disabled = false; return; }
     if (act === "remove") { COS = COS.filter(x => x.name !== name); renderCompanies(); return; }
     c.paused = !c.paused; c.status = c.paused ? "paused" : (c.fetch_status || "new"); row.outerHTML = coRow(c);
@@ -433,7 +433,7 @@ $("addForm").addEventListener("submit", ev => {
   b.disabled = true; m.style.color = ""; m.textContent = "Checking that link… (this can take up to a minute)";
   post("/api/catalog/add", {url: $("addUrl").value.trim(), name: $("addName").value.trim(), list: $("addList").value}).then(d => {
     b.disabled = false; $("addUrl").value = ""; $("addName").value = "";
-    m.textContent = `${d.existing ? "Already in the catalog: added it to the list" : "Added"} ${d.name} (${atsName(d.ats)}, ${n(d.open_jobs)} open jobs). ` +
+    m.textContent = `${d.existing ? "Already in the catalog: now one of your employers" : "Added"} ${d.name} (${atsName(d.ats)}, ${n(d.open_jobs)} open jobs). ` +
       (d.fetching ? "Fetching its jobs now." : "Its jobs come with the next update.");
     loadCompanies(); if (d.fetching) { wasRunning = true; pollStatus(); }
   }).catch(err => { b.disabled = false; m.style.color = "var(--bad)"; m.textContent = errText(err); });
@@ -591,7 +591,7 @@ function loadFind(){
       $("fdCats").innerHTML = d.categories.map(c => `<label><input type="checkbox" value="${esc(c.id)}" checked> ${esc(c.label)}</label>`).join("");
       $("fdLoc").value = d.defaults.location; $("fdRad").value = d.defaults.radius;
       $("fdBudget").value = d.exhaustive.budget; $("fdBudget").min = $("fdBudget2").min = d.exhaustive.min; $("fdBudget").max = $("fdBudget2").max = d.exhaustive.max;
-      fillListSelect($("fdList"), "near-" + ME.id);
+      fillListSelect($("fdList"), "own-" + ME.id);
       fdEstimate();
     }
     fdClaudeNotice(d.claude);
@@ -676,7 +676,7 @@ $("fdResume").addEventListener("click", () => {
 function fdAdd(body){
   const m = $("fdAddMsg"); m.style.color = ""; m.textContent = "Adding…";
   post("/api/catalog/find/add", {...body, list: $("fdList").value}).then(d => {
-    m.textContent = `Added ${n(d.added.length)} employer${d.added.length === 1 ? "" : "s"} to ${listLabel($("fdList").value)}. ` + (d.fetching ? "Fetching their jobs now." : "Their jobs come with the next update.");
+    m.textContent = `Added ${n(d.added.length)} employer${d.added.length === 1 ? "" : "s"}${$("fdList").value === "all" ? " for everyone" : " to your employers"}. ` + (d.fetching ? "Fetching their jobs now." : "Their jobs come with the next update.");
     loaded.companies = false; loadFind();
   }).catch(err => { m.style.color = "var(--bad)"; m.textContent = errText(err); });
 }
@@ -686,8 +686,8 @@ $("fdAddAll").addEventListener("click", () => fdAdd({all: true}));
 // ---- Share
 function loadShare(){
   const draw = () => {
-    const counts = {}; COS.forEach(c => c.sets.forEach(s => counts[s] = (counts[s] || 0) + 1));
-    $("exLists").innerHTML = LISTS.filter(l => counts[l.id]).map(l => `<label><input type="checkbox" value="${esc(l.id)}"> ${esc(l.label)} <span class="note">(${n(counts[l.id])})</span></label>`).join("");
+    const mineN = COS.filter(c => c.mine).length;
+    $("exLists").innerHTML = mineN ? `<label><input type="checkbox" value="mine"> All of your employers <span class="note">(${n(mineN)})</span></label>` : "";
     drawPick();
     fillListSelect($("imList"), "own-" + ME.id);
   };
@@ -703,7 +703,7 @@ $("exQ").addEventListener("input", drawPick);
 $("exCos").addEventListener("change", ev => { const x = ev.target; if (x.checked) picked.add(x.value); else picked.delete(x.value); });
 $("exBtn").addEventListener("click", () => {
   const lists = [...$("exLists").querySelectorAll("input:checked")].map(x => x.value), m = $("exMsg");
-  if (!lists.length && !picked.size) { m.textContent = "Tick at least one list or company."; return; }
+  if (!lists.length && !picked.size) { m.textContent = "Tick your employers, or at least one company."; return; }
   m.textContent = "Preparing the file…"; $("exBtn").disabled = true;
   fetch("/api/catalog/export", {method: "POST", headers: H, body: JSON.stringify({lists, names: [...picked], listings: $("exListings").checked})}).then(r => {
     if (!r.ok) return r.json().then(d => { throw new Error(d.error || "Couldn't export."); });
@@ -731,7 +731,7 @@ $("imFile").addEventListener("change", () => {
 $("imBtn").addEventListener("click", () => {
   const m = $("imMsg"); $("imBtn").disabled = true; m.style.color = ""; m.textContent = "Adding…";
   post("/api/catalog/import", {token: imToken, list: $("imList").value}).then(d => {
-    m.textContent = `Added ${pl(d.new_companies, "company", "companies")} and ${pl(d.new_listings, "listing", "listings")}` + (d.known_companies ? `; ${pl(d.known_companies, "company", "companies")} you already had ${d.known_companies === 1 ? "is" : "are"} now in ${listLabel($("imList").value)} too` : "") + ". Everyone's boards are being rebuilt.";
+    m.textContent = `Added ${pl(d.new_companies, "company", "companies")} and ${pl(d.new_listings, "listing", "listings")}` + (d.known_companies ? `; ${pl(d.known_companies, "company", "companies")} you already had ${d.known_companies === 1 ? "is" : "are"} now among ${$("imList").value === "all" ? "everyone’s" : "yours"} too` : "") + ". Everyone's boards are being rebuilt.";
     $("imGo").hidden = true; $("imFile").value = ""; imToken = ""; loaded.companies = false; COS = [];
   }).catch(err => { m.style.color = "var(--bad)"; m.textContent = errText(err); }).then(() => { $("imBtn").disabled = false; });
 });

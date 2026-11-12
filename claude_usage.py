@@ -19,7 +19,7 @@ FEATURES = {
     "ai_score": "Match ratings", "pivot": "Target ratings", "resume": "Reading your resume", "highlights": "Resume highlights",
     "tailor": "Tailored resumes", "interview": "Questions about your experience", "target": "Target suggestions",
     "nlsearch": "Search", "employer_finder": "Finding employers", "company_research": "Company facts",
-    "requirements": "Job requirements", "manual_profile": "Your profile",
+    "requirements": "Job requirements", "manual_profile": "Your profile", "lookfor": "What to look for",
 }
 
 

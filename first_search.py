@@ -258,7 +258,7 @@ def start_checking(pid, rate=True):
     """Continue checking: fetch this person's never-checked companies, staged (also what "Add employers near me" runs).
     Returns (ok, error)."""
     if not pending(pid):
-        return False, "Every employer on your lists has been checked already."
+        return False, "Every one of your employers has been checked already."
     with _LOCK:
         if JOB["running"]:
             return False, "A job search is already running."

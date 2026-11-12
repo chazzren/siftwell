@@ -1,0 +1,14 @@
+onet.json.gz in this folder is a trimmed extract of the O*NET 31.0 Database.
+
+This product includes information from the O*NET 31.0 Database
+(https://www.onetcenter.org/database.html) by the U.S. Department of Labor,
+Employment and Training Administration (USDOL/ETA), used under the CC BY 4.0
+license (https://creativecommons.org/licenses/by/4.0/). O*NET(R) is a trademark
+of USDOL/ETA. Siftwell has modified all or some of this information: only
+occupation titles, other job titles for each occupation, the closest related
+occupations, in-demand software names and a few task words per occupation are
+kept (the task words are worked out by Siftwell from the task statements).
+USDOL/ETA has not approved, endorsed, or tested these modifications.
+
+The extract is rebuilt with scripts/build_onet.py from the official "Text"
+download (the raw download is not part of Siftwell).

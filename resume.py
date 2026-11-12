@@ -2,7 +2,7 @@
 import datetime as dt, hashlib, json, os, re, shutil, subprocess, tempfile, urllib.request
 import osdeps
 
-import claude_cli, people
+import claude_cli, people, lookfor
 
 import paths
 DATA = paths.DATA
@@ -121,10 +121,11 @@ PROFILE_SCHEMA = {
         "target_roles": LIST,
         "title_keywords": LIST,
         "fit_keywords": LIST,
+        "look_for": lookfor.LOOK_SCHEMA,   # the what-to-look-for sheet, in this same call (no second request)
     },
     "required": ["name", "summary", "location", "years_experience", "clearances", "education", "certifications",
                  "skills", "languages", "experience", "reframings", "hard_limits", "target_roles", "title_keywords",
-                 "fit_keywords"],
+                 "fit_keywords", "look_for"],
     "additionalProperties": False,
 }
 
@@ -140,11 +141,17 @@ Facts (clearances, education, certifications, skills, languages, experience) mus
 
 "title_keywords" are 15 to 30 lowercase words or short phrases that appear in titles of suitable jobs (used as a title filter, e.g. "solutions architect", "program manager"). "fit_keywords" are 15 to 30 lowercase terms that signal a good match inside a job description.
 
+List "experience" newest first.
+
+""" + lookfor.LOOK_RULES + """
+
 Never include phone numbers, email addresses or street addresses anywhere."""
 
 def build_profile(text):
     prof = claude_cli.run_json(PROFILE_SYSTEM, "Resume:\n\n" + text[:40000], PROFILE_SCHEMA, effort="medium", timeout=900)
     prof["notes"] = ""
+    # (not part of the rating key, see PROFILE_HASH_KEYS: lookfor.py reads it to build the what-to-look-for sheet)
+    prof["look_for"] = lookfor.clean_look(prof.get("look_for"))
     return prof
 
 # What the person's rating key is made from: resume content, reframings, notes. NOT the job titles to search for

@@ -1,6 +1,6 @@
 """Per-profile career targets.
 
-A target is the person's own words ("max comp at an AI company, any role", "product management in health tech").
+A target is the person's own words ("office manager at a school or hospital", "a move from retail into human resources").
 Claude turns it into a title filter and a tab name (interpret), or, for someone who isn't sure, proposes
 targets from their resume and what the local market actually pays for (suggest)."""
 import collections, json, os, re, statistics
@@ -64,9 +64,9 @@ ISCHEMA = {
 
 ISYSTEM = """You configure a job search tool from a person's career target, written in their own words.
 Return:
-- tab_name: 1 to 3 words naming the target, for a tab label (e.g. "AI pivot", "Product roles", "Health tech").
-- any_title: true when the target is open to any kind of role (e.g. "any role at an AI company", "whatever pays most"); then the title filter is skipped.
-- title_keywords: 15 to 40 lowercase words or short phrases that appear in job titles fitting the target (used as a substring filter on titles, so prefer stems like "product manag", "solutions", "deploy"). Include adjacent titles this person could realistically aim for given their background. Empty list if any_title is true.
+- tab_name: 1 to 3 words naming the target, for a tab label (e.g. "School office", "Project management", "Health care").
+- any_title: true when the target is open to any kind of role (e.g. "any job at a hospital", "whatever pays most"); then the title filter is skipped.
+- title_keywords: 15 to 40 lowercase words or short phrases that appear in job titles fitting the target (used as a substring filter on titles, so prefer stems like "office manag", "coordinat", "technician"). Include adjacent titles this person could realistically aim for given their background. Empty list if any_title is true.
 - summary: one sentence restating the target as the tool will use it."""
 
 def interpret(target_text, scope):

@@ -147,11 +147,14 @@ def main():
     for c, cnt in tf.items():
         scored = sorted(((n * math.log(n_occ / df[s]), s) for s, n in cnt.items() if n >= 3 and df[s] <= 0.10 * n_occ), reverse=True)
         occ[c]["k"] = [surface[s].most_common(1)[0][0] for _, s in scored[:10]]
-    # ---- how common each title word is (rarer words count for more when titles are compared)
+    # ---- in how many occupations each title word turns up (a word used by few occupations, like "nurse" or "rn",
+    #      says far more about a job than one used by hundreds, like "manager"; lookfor.weight uses this)
     tdf = collections.Counter()
     for o in occ.values():
+        seen_words = set()
         for t in [o["t"]] + o["a"]:
-            tdf.update({stem(w) for w in re.findall(r"[a-z0-9+#]+", t.lower())})
+            seen_words.update(stem(w) for w in re.findall(r"[a-z0-9]+(?:[+#]+)?", t.lower().replace("&", " and ").replace("'", "")))
+        tdf.update(seen_words)
     data = {"version": version, "titles": sum(1 + len(o["a"]) for o in occ.values()),
             "source": "O*NET %s Database, U.S. Department of Labor, Employment and Training Administration (USDOL/ETA). "
                       "CC BY 4.0. Trimmed and modified by Siftwell." % version,

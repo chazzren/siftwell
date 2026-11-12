@@ -106,6 +106,13 @@ def person_cfg(pid):
                             if not excluded_words(w, c["title_exclude"])]
     except Exception as e:
         print(f"what-to-look-for sheet skipped for {pid}: {type(e).__name__}: {e}", flush=True)
+    if st.get("title_rule") != "builtin":
+        # very short title words ("RN", "PA", "IT") only make sense as whole words: anywhere-in-the-title matching
+        # would let "rn" pass Intern, Journeyman and Government
+        short = [w for w in c["title_include"] if len(w.strip()) <= 3]
+        if short:
+            c["title_include"] = [w for w in c["title_include"] if w not in short]
+            c["title_words"] = sorted(set(c["title_words"]) | {w.strip() for w in short if w.strip()})
     return c, prof, st
 
 def use_cfg(c):

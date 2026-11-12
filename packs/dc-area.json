@@ -1,7 +1,7 @@
 {
  "id": "dc-area",
  "name": "Washington, DC area",
- "description": "Employers with offices in the Washington, DC area or remote-friendly hiring, in three lists: Tech & AI, Business & corporate, and Nonprofit & mission-driven.",
+ "description": "Employers with offices in the Washington, DC area or remote-friendly hiring.",
  "fallback_area": {
   "_note": "Place names used to decide 'nearby' for profiles that have no home ZIP set. Copy into config.json (close_places / close_places_need_va) to use them.",
   "close_places": [
@@ -45,10 +45,7 @@
    "tier": "dmv_office",
    "sector": "Defense tech",
    "ats": "greenhouse",
-   "token": "andurilindustries",
-   "sets": [
-    "tech"
-   ]
+   "token": "andurilindustries"
   },
   {
    "name": "Palantir",
@@ -56,10 +53,7 @@
    "sector": "Defense tech / data",
    "ats": "lever",
    "token": "palantir",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Scale AI",
@@ -67,50 +61,35 @@
    "sector": "AI / defense",
    "ats": "greenhouse",
    "token": "scaleai",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Shield AI",
    "tier": "dmv_office",
    "sector": "Defense tech",
    "ats": "lever",
-   "token": "shieldai",
-   "sets": [
-    "tech"
-   ]
+   "token": "shieldai"
   },
   {
    "name": "Vannevar Labs",
    "tier": "dmv_office",
    "sector": "Defense tech",
    "ats": "greenhouse",
-   "token": "vannevarlabs",
-   "sets": [
-    "tech"
-   ]
+   "token": "vannevarlabs"
   },
   {
    "name": "HawkEye 360",
    "tier": "dmv_hq",
    "sector": "Space / RF intel",
    "ats": "greenhouse",
-   "token": "hawkeye360",
-   "sets": [
-    "tech"
-   ]
+   "token": "hawkeye360"
   },
   {
    "name": "BlackSky",
    "tier": "dmv_hq",
    "sector": "Space / geoint",
    "ats": "greenhouse",
-   "token": "blacksky",
-   "sets": [
-    "tech"
-   ]
+   "token": "blacksky"
   },
   {
    "name": "Primer AI",
@@ -118,211 +97,147 @@
    "sector": "AI / defense",
    "ats": "ashby",
    "token": "primer",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Saronic",
    "tier": "dmv_office",
    "sector": "Defense tech",
    "ats": "ashby",
-   "token": "saronic",
-   "sets": [
-    "tech"
-   ]
+   "token": "saronic"
   },
   {
    "name": "Epirus",
    "tier": "dmv_office",
    "sector": "Defense tech",
    "ats": "greenhouse",
-   "token": "epirus",
-   "sets": [
-    "tech"
-   ]
+   "token": "epirus"
   },
   {
    "name": "Shift5",
    "tier": "dmv_hq",
    "sector": "OT cybersecurity",
    "ats": "greenhouse",
-   "token": "shift5",
-   "sets": [
-    "tech"
-   ]
+   "token": "shift5"
   },
   {
    "name": "Expel",
    "tier": "remote_first",
    "sector": "Cybersecurity",
    "ats": "greenhouse",
-   "token": "expel",
-   "sets": [
-    "tech"
-   ]
+   "token": "expel"
   },
   {
    "name": "Dragos",
    "tier": "remote_first",
    "sector": "OT cybersecurity",
    "ats": "greenhouse",
-   "token": "dragos",
-   "sets": [
-    "tech"
-   ]
+   "token": "dragos"
   },
   {
    "name": "Huntress",
    "tier": "remote_first",
    "sector": "Cybersecurity",
    "ats": "greenhouse",
-   "token": "huntress",
-   "sets": [
-    "tech"
-   ]
+   "token": "huntress"
   },
   {
    "name": "Sonatype",
    "tier": "remote_first",
    "sector": "Software supply chain",
    "ats": "lever",
-   "token": "sonatype",
-   "sets": [
-    "tech"
-   ]
+   "token": "sonatype"
   },
   {
    "name": "Babel Street",
    "tier": "dmv_hq",
    "sector": "Data / intel",
    "ats": "greenhouse",
-   "token": "babelstreet",
-   "sets": [
-    "tech"
-   ]
+   "token": "babelstreet"
   },
   {
    "name": "Appian",
    "tier": "dmv_hq",
    "sector": "Low-code platform",
    "ats": "greenhouse",
-   "token": "appian",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "token": "appian"
   },
   {
    "name": "FiscalNote",
    "tier": "dmv_hq",
    "sector": "Policy tech",
    "ats": "lever",
-   "token": "fiscalnote",
-   "sets": [
-    "tech"
-   ]
+   "token": "fiscalnote"
   },
   {
    "name": "Quorum",
    "tier": "dmv_hq",
    "sector": "Policy tech",
    "ats": "ashby",
-   "token": "quorum",
-   "sets": [
-    "tech"
-   ]
+   "token": "quorum"
   },
   {
    "name": "Morning Consult",
    "tier": "dmv_hq",
    "sector": "Data / research",
    "ats": "ashby",
-   "token": "morningconsult",
-   "sets": [
-    "tech"
-   ]
+   "token": "morningconsult"
   },
   {
    "name": "Axios",
    "tier": "dmv_hq",
    "sector": "Media tech",
    "ats": "greenhouse",
-   "token": "axios",
-   "sets": [
-    "tech"
-   ]
+   "token": "axios"
   },
   {
    "name": "Nava PBC",
    "tier": "remote_first",
    "sector": "Gov tech",
    "ats": "greenhouse",
-   "token": "navapbc",
-   "sets": [
-    "tech"
-   ]
+   "token": "navapbc"
   },
   {
    "name": "Oddball",
    "tier": "remote_first",
    "sector": "Gov tech",
    "ats": "greenhouse",
-   "token": "oddball",
-   "sets": [
-    "tech"
-   ]
+   "token": "oddball"
   },
   {
    "name": "Agile Six",
    "tier": "remote_first",
    "sector": "Gov tech",
    "ats": "greenhouse",
-   "token": "agilesix",
-   "sets": [
-    "tech"
-   ]
+   "token": "agilesix"
   },
   {
    "name": "ID.me",
    "tier": "dmv_hq",
    "sector": "Identity",
    "ats": "greenhouse",
-   "token": "idme",
-   "sets": [
-    "tech"
-   ]
+   "token": "idme"
   },
   {
    "name": "Socure",
    "tier": "remote_first",
    "sector": "Identity",
    "ats": "ashby",
-   "token": "socure",
-   "sets": [
-    "tech"
-   ]
+   "token": "socure"
   },
   {
    "name": "Verisign",
    "tier": "dmv_hq",
    "sector": "Internet infrastructure",
    "ats": "greenhouse",
-   "token": "verisign",
-   "sets": [
-    "tech"
-   ]
+   "token": "verisign"
   },
   {
    "name": "2U",
    "tier": "dmv_hq",
    "sector": "Ed tech",
    "ats": "greenhouse",
-   "token": "2u",
-   "sets": [
-    "tech"
-   ]
+   "token": "2u"
   },
   {
    "name": "Capital One",
@@ -331,11 +246,7 @@
    "ats": "workday",
    "tenant": "capitalone",
    "wd": "wd12",
-   "site": "Capital_One",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "Capital_One"
   },
   {
    "name": "Fannie Mae",
@@ -344,11 +255,7 @@
    "ats": "workday",
    "tenant": "fanniemae",
    "wd": "wd1",
-   "site": "FannieMaeCareers",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "FannieMaeCareers"
   },
   {
    "name": "Freddie Mac",
@@ -357,11 +264,7 @@
    "ats": "workday",
    "tenant": "freddiemac",
    "wd": "wd5",
-   "site": "External",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Leidos",
@@ -370,11 +273,7 @@
    "ats": "workday",
    "tenant": "leidos",
    "wd": "wd5",
-   "site": "External",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "CACI",
@@ -383,11 +282,7 @@
    "ats": "workday",
    "tenant": "caci",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Booz Allen Hamilton",
@@ -396,11 +291,7 @@
    "ats": "workday",
    "tenant": "bah",
    "wd": "wd1",
-   "site": "BAH_Jobs",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "BAH_Jobs"
   },
   {
    "name": "Guidehouse",
@@ -409,11 +300,7 @@
    "ats": "workday",
    "tenant": "guidehouse",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "ICF",
@@ -422,11 +309,7 @@
    "ats": "workday",
    "tenant": "icf",
    "wd": "wd5",
-   "site": "ICFExternal_Career_Site",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "ICFExternal_Career_Site"
   },
   {
    "name": "Parsons",
@@ -435,10 +318,7 @@
    "ats": "workday",
    "tenant": "parsons",
    "wd": "wd5",
-   "site": "Search",
-   "sets": [
-    "tech"
-   ]
+   "site": "Search"
   },
   {
    "name": "Northrop Grumman",
@@ -447,10 +327,7 @@
    "ats": "workday",
    "tenant": "ngc",
    "wd": "wd1",
-   "site": "Northrop_Grumman_External_Site",
-   "sets": [
-    "tech"
-   ]
+   "site": "Northrop_Grumman_External_Site"
   },
   {
    "name": "RTX",
@@ -459,10 +336,7 @@
    "ats": "workday",
    "tenant": "globalhr",
    "wd": "wd5",
-   "site": "REC_RTX_Ext_Gateway",
-   "sets": [
-    "tech"
-   ]
+   "site": "REC_RTX_Ext_Gateway"
   },
   {
    "name": "KBR",
@@ -471,10 +345,7 @@
    "ats": "workday",
    "tenant": "kbr",
    "wd": "wd5",
-   "site": "KBR_Careers",
-   "sets": [
-    "tech"
-   ]
+   "site": "KBR_Careers"
   },
   {
    "name": "GEICO",
@@ -483,11 +354,7 @@
    "ats": "workday",
    "tenant": "geico",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Danaher",
@@ -496,11 +363,7 @@
    "ats": "workday",
    "tenant": "danaher",
    "wd": "wd1",
-   "site": "DanaherJobs",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "DanaherJobs"
   },
   {
    "name": "Salesforce",
@@ -509,11 +372,7 @@
    "ats": "workday",
    "tenant": "salesforce",
    "wd": "wd12",
-   "site": "External_Career_Site",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "External_Career_Site"
   },
   {
    "name": "CrowdStrike",
@@ -522,10 +381,7 @@
    "ats": "workday",
    "tenant": "crowdstrike",
    "wd": "wd5",
-   "site": "crowdstrikecareers",
-   "sets": [
-    "tech"
-   ]
+   "site": "crowdstrikecareers"
   },
   {
    "name": "Mastercard",
@@ -534,11 +390,7 @@
    "ats": "workday",
    "tenant": "mastercard",
    "wd": "wd1",
-   "site": "CorporateCareers",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "CorporateCareers"
   },
   {
    "name": "Visa",
@@ -547,11 +399,7 @@
    "ats": "workday",
    "tenant": "visa",
    "wd": "wd5",
-   "site": "Visa",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "Visa"
   },
   {
    "name": "NVIDIA",
@@ -561,10 +409,7 @@
    "tenant": "nvidia",
    "wd": "wd5",
    "site": "NVIDIAExternalCareerSite",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Intel",
@@ -573,10 +418,7 @@
    "ats": "workday",
    "tenant": "intel",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "tech"
-   ]
+   "site": "External"
   },
   {
    "name": "Adobe",
@@ -585,10 +427,7 @@
    "ats": "workday",
    "tenant": "adobe",
    "wd": "wd5",
-   "site": "external_experienced",
-   "sets": [
-    "tech"
-   ]
+   "site": "external_experienced"
   },
   {
    "name": "Workday",
@@ -597,11 +436,7 @@
    "ats": "workday",
    "tenant": "workday",
    "wd": "wd5",
-   "site": "Workday",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "Workday"
   },
   {
    "name": "Motorola Solutions",
@@ -610,10 +445,7 @@
    "ats": "workday",
    "tenant": "motorolasolutions",
    "wd": "wd5",
-   "site": "Careers",
-   "sets": [
-    "tech"
-   ]
+   "site": "Careers"
   },
   {
    "name": "Clarivate",
@@ -622,10 +454,7 @@
    "ats": "workday",
    "tenant": "clarivate",
    "wd": "wd3",
-   "site": "Clarivate_Careers",
-   "sets": [
-    "tech"
-   ]
+   "site": "Clarivate_Careers"
   },
   {
    "name": "Anthropic",
@@ -633,10 +462,7 @@
    "sector": "AI",
    "ats": "greenhouse",
    "token": "anthropic",
-   "ai_track": "lab",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "lab"
   },
   {
    "name": "OpenAI",
@@ -644,20 +470,14 @@
    "sector": "AI",
    "ats": "ashby",
    "token": "openai",
-   "ai_track": "lab",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "lab"
   },
   {
    "name": "Cloudflare",
    "tier": "dmv_office",
    "sector": "Infrastructure / security",
    "ats": "greenhouse",
-   "token": "cloudflare",
-   "sets": [
-    "tech"
-   ]
+   "token": "cloudflare"
   },
   {
    "name": "Databricks",
@@ -665,210 +485,147 @@
    "sector": "Data / AI",
    "ats": "greenhouse",
    "token": "databricks",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Snowflake",
    "tier": "dmv_office",
    "sector": "Data cloud",
    "ats": "ashby",
-   "token": "snowflake",
-   "sets": [
-    "tech"
-   ]
+   "token": "snowflake"
   },
   {
    "name": "Okta",
    "tier": "dmv_office",
    "sector": "Identity / security",
    "ats": "greenhouse",
-   "token": "okta",
-   "sets": [
-    "tech"
-   ]
+   "token": "okta"
   },
   {
    "name": "Zscaler",
    "tier": "dmv_office",
    "sector": "Cybersecurity",
    "ats": "greenhouse",
-   "token": "zscaler",
-   "sets": [
-    "tech"
-   ]
+   "token": "zscaler"
   },
   {
    "name": "MongoDB",
    "tier": "dmv_office",
    "sector": "Database",
    "ats": "greenhouse",
-   "token": "mongodb",
-   "sets": [
-    "tech"
-   ]
+   "token": "mongodb"
   },
   {
    "name": "Datadog",
    "tier": "dmv_office",
    "sector": "Observability",
    "ats": "greenhouse",
-   "token": "datadog",
-   "sets": [
-    "tech"
-   ]
+   "token": "datadog"
   },
   {
    "name": "Elastic",
    "tier": "remote_first",
    "sector": "Search / security",
    "ats": "greenhouse",
-   "token": "elastic",
-   "sets": [
-    "tech"
-   ]
+   "token": "elastic"
   },
   {
    "name": "GitLab",
    "tier": "remote_first",
    "sector": "DevSecOps",
    "ats": "greenhouse",
-   "token": "gitlab",
-   "sets": [
-    "tech"
-   ]
+   "token": "gitlab"
   },
   {
    "name": "SpaceX",
    "tier": "dmv_office",
    "sector": "Space",
    "ats": "greenhouse",
-   "token": "spacex",
-   "sets": [
-    "tech"
-   ]
+   "token": "spacex"
   },
   {
    "name": "Stripe",
    "tier": "remote_friendly",
    "sector": "Fintech",
    "ats": "greenhouse",
-   "token": "stripe",
-   "sets": [
-    "tech"
-   ]
+   "token": "stripe"
   },
   {
    "name": "Coinbase",
    "tier": "remote_first",
    "sector": "Crypto",
    "ats": "greenhouse",
-   "token": "coinbase",
-   "sets": [
-    "tech"
-   ]
+   "token": "coinbase"
   },
   {
    "name": "Samsara",
    "tier": "remote_friendly",
    "sector": "IoT",
    "ats": "greenhouse",
-   "token": "samsara",
-   "sets": [
-    "tech"
-   ]
+   "token": "samsara"
   },
   {
    "name": "Twilio",
    "tier": "remote_first",
    "sector": "Communications",
    "ats": "greenhouse",
-   "token": "twilio",
-   "sets": [
-    "tech"
-   ]
+   "token": "twilio"
   },
   {
    "name": "Tailscale",
    "tier": "remote_first",
    "sector": "Networking",
    "ats": "greenhouse",
-   "token": "tailscale",
-   "sets": [
-    "tech"
-   ]
+   "token": "tailscale"
   },
   {
    "name": "Chainguard",
    "tier": "remote_first",
    "sector": "Supply chain security",
    "ats": "greenhouse",
-   "token": "chainguard",
-   "sets": [
-    "tech"
-   ]
+   "token": "chainguard"
   },
   {
    "name": "Abnormal Security",
    "tier": "remote_friendly",
    "sector": "Cybersecurity",
    "ats": "greenhouse",
-   "token": "abnormalsecurity",
-   "sets": [
-    "tech"
-   ]
+   "token": "abnormalsecurity"
   },
   {
    "name": "Vanta",
    "tier": "remote_friendly",
    "sector": "Security compliance",
    "ats": "ashby",
-   "token": "vanta",
-   "sets": [
-    "tech"
-   ]
+   "token": "vanta"
   },
   {
    "name": "Drata",
    "tier": "remote_first",
    "sector": "Security compliance",
    "ats": "ashby",
-   "token": "drata",
-   "sets": [
-    "tech"
-   ]
+   "token": "drata"
   },
   {
    "name": "1Password",
    "tier": "remote_first",
    "sector": "Security",
    "ats": "ashby",
-   "token": "1password",
-   "sets": [
-    "tech"
-   ]
+   "token": "1password"
   },
   {
    "name": "Bitwarden",
    "tier": "remote_first",
    "sector": "Security",
    "ats": "greenhouse",
-   "token": "bitwarden",
-   "sets": [
-    "tech"
-   ]
+   "token": "bitwarden"
   },
   {
    "name": "Grafana Labs",
    "tier": "remote_first",
    "sector": "Observability",
    "ats": "greenhouse",
-   "token": "grafanalabs",
-   "sets": [
-    "tech"
-   ]
+   "token": "grafanalabs"
   },
   {
    "name": "CoreWeave",
@@ -876,10 +633,7 @@
    "sector": "AI cloud",
    "ats": "greenhouse",
    "token": "coreweave",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Crusoe",
@@ -887,10 +641,7 @@
    "sector": "AI cloud",
    "ats": "ashby",
    "token": "crusoe",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Lambda",
@@ -898,10 +649,7 @@
    "sector": "AI cloud",
    "ats": "ashby",
    "token": "lambda",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Cohere",
@@ -909,10 +657,7 @@
    "sector": "AI",
    "ats": "ashby",
    "token": "cohere",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Sierra",
@@ -920,10 +665,7 @@
    "sector": "AI agents",
    "ats": "ashby",
    "token": "sierra",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Harvey",
@@ -931,10 +673,7 @@
    "sector": "AI / legal",
    "ats": "ashby",
    "token": "harvey",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Writer",
@@ -942,80 +681,56 @@
    "sector": "AI",
    "ats": "ashby",
    "token": "writer",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Ramp",
    "tier": "remote_friendly",
    "sector": "Fintech",
    "ats": "ashby",
-   "token": "ramp",
-   "sets": [
-    "tech"
-   ]
+   "token": "ramp"
   },
   {
    "name": "Plaid",
    "tier": "remote_friendly",
    "sector": "Fintech",
    "ats": "ashby",
-   "token": "plaid",
-   "sets": [
-    "tech"
-   ]
+   "token": "plaid"
   },
   {
    "name": "Temporal",
    "tier": "remote_first",
    "sector": "Dev infrastructure",
    "ats": "ashby",
-   "token": "temporal",
-   "sets": [
-    "tech"
-   ]
+   "token": "temporal"
   },
   {
    "name": "ClickHouse",
    "tier": "remote_first",
    "sector": "Database",
    "ats": "ashby",
-   "token": "clickhouse",
-   "sets": [
-    "tech"
-   ]
+   "token": "clickhouse"
   },
   {
    "name": "Fivetran",
    "tier": "remote_friendly",
    "sector": "Data",
    "ats": "greenhouse",
-   "token": "fivetran",
-   "sets": [
-    "tech"
-   ]
+   "token": "fivetran"
   },
   {
    "name": "Snyk",
    "tier": "remote_friendly",
    "sector": "Security",
    "ats": "ashby",
-   "token": "snyk",
-   "sets": [
-    "tech"
-   ]
+   "token": "snyk"
   },
   {
    "name": "Sentry",
    "tier": "remote_friendly",
    "sector": "Dev tools",
    "ats": "ashby",
-   "token": "sentry",
-   "sets": [
-    "tech"
-   ]
+   "token": "sentry"
   },
   {
    "name": "Amazon / AWS",
@@ -1027,9 +742,6 @@
     "Washington, District of Columbia, USA",
     "McLean, Virginia, USA",
     "Reston, Virginia, USA"
-   ],
-   "sets": [
-    "tech"
    ]
   },
   {
@@ -1038,11 +750,7 @@
    "sector": "FFRDC / research",
    "ats": "phenom",
    "url": "https://careers.mitre.org/widgets",
-   "refnum": "MITRUS",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "refnum": "MITRUS"
   },
   {
    "name": "Fearless",
@@ -1050,10 +758,7 @@
    "sector": "Gov tech",
    "ats": "phenom",
    "url": "https://jobs.fearless.com/widgets",
-   "refnum": "FMDFABUS",
-   "sets": [
-    "tech"
-   ]
+   "refnum": "FMDFABUS"
   },
   {
    "name": "Navy Federal Credit Union",
@@ -1061,22 +766,14 @@
    "sector": "Finance",
    "ats": "oracle",
    "base": "https://jobs.navyfederal.org",
-   "site": "nfcu",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "site": "nfcu"
   },
   {
    "name": "Cvent",
    "tier": "dmv_hq",
    "sector": "Event tech SaaS",
    "ats": "jibe",
-   "base": "https://careers.cvent.com",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "base": "https://careers.cvent.com"
   },
   {
    "name": "Ad Hoc",
@@ -1084,20 +781,14 @@
    "sector": "Gov tech",
    "ats": "clearcompany",
    "url": "https://careers-api.clearcompany.com/v1/b6cd7f4b-f4c2-30e4-4b6a-0db2527e4e44",
-   "board": "https://adhoc.team/join/",
-   "sets": [
-    "tech"
-   ]
+   "board": "https://adhoc.team/join/"
   },
   {
    "name": "ZeroFox",
    "tier": "dmv_hq",
    "sector": "Cybersecurity",
    "ats": "rippling",
-   "token": "zerofox-careers",
-   "sets": [
-    "tech"
-   ]
+   "token": "zerofox-careers"
   },
   {
    "name": "GDIT",
@@ -1106,10 +797,7 @@
    "ats": "workday",
    "tenant": "gdit",
    "wd": "wd5",
-   "site": "External_Career_Site",
-   "sets": [
-    "tech"
-   ]
+   "site": "External_Career_Site"
   },
   {
    "name": "Vantor (Maxar)",
@@ -1118,10 +806,7 @@
    "ats": "workday",
    "tenant": "maxar",
    "wd": "wd1",
-   "site": "Vantor",
-   "sets": [
-    "tech"
-   ]
+   "site": "Vantor"
   },
   {
    "name": "Accenture Federal Services",
@@ -1131,112 +816,77 @@
    "tenant": "accenture",
    "wd": "wd103",
    "site": "AccentureCareers",
-   "search": "Accenture Federal Services",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "search": "Accenture Federal Services"
   },
   {
    "name": "ServiceNow",
    "tier": "dmv_office",
    "sector": "SaaS / public sector",
    "ats": "smartrecruiters",
-   "token": "ServiceNow",
-   "sets": [
-    "tech",
-    "ops"
-   ]
+   "token": "ServiceNow"
   },
   {
    "name": "Strategy (MicroStrategy)",
    "tier": "dmv_hq",
    "sector": "Analytics software",
    "ats": "smartrecruiters",
-   "token": "MicroStrategy1",
-   "sets": [
-    "tech"
-   ]
+   "token": "MicroStrategy1"
   },
   {
    "name": "Tenable",
    "tier": "dmv_hq",
    "sector": "Cybersecurity",
    "ats": "greenhouse",
-   "token": "tenableinc",
-   "sets": [
-    "tech"
-   ]
+   "token": "tenableinc"
   },
   {
    "name": "Chainalysis",
    "tier": "dmv_office",
    "sector": "Blockchain intel",
    "ats": "ashby",
-   "token": "chainalysis-careers",
-   "sets": [
-    "tech"
-   ]
+   "token": "chainalysis-careers"
   },
   {
    "name": "Second Front Systems",
    "tier": "dmv_hq",
    "sector": "Defense software",
    "ats": "ashby",
-   "token": "Second-Front-Systems",
-   "sets": [
-    "tech"
-   ]
+   "token": "Second-Front-Systems"
   },
   {
    "name": "Strider Technologies",
    "tier": "dmv_office",
    "sector": "Strategic intel",
    "ats": "ashby",
-   "token": "strider-technologies",
-   "sets": [
-    "tech"
-   ]
+   "token": "strider-technologies"
   },
   {
    "name": "Skylight",
    "tier": "remote_first",
    "sector": "Gov tech",
    "ats": "greenhouse",
-   "token": "skylighthq",
-   "sets": [
-    "tech"
-   ]
+   "token": "skylighthq"
   },
   {
    "name": "Truss",
    "tier": "remote_first",
    "sector": "Gov tech",
    "ats": "greenhouse",
-   "token": "trussworksinc",
-   "sets": [
-    "tech"
-   ]
+   "token": "trussworksinc"
   },
   {
    "name": "Istari Digital",
    "tier": "dmv_office",
    "sector": "Defense engineering software",
    "ats": "lever",
-   "token": "istaridigital.ai",
-   "sets": [
-    "tech"
-   ]
+   "token": "istaridigital.ai"
   },
   {
    "name": "Applied Intuition",
    "tier": "dmv_office",
    "sector": "Autonomy / defense",
    "ats": "ashby",
-   "token": "applied",
-   "sets": [
-    "tech"
-   ]
+   "token": "applied"
   },
   {
    "name": "xAI",
@@ -1244,10 +894,7 @@
    "sector": "AI lab",
    "ats": "greenhouse",
    "token": "xai",
-   "ai_track": "lab",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "lab"
   },
   {
    "name": "Thinking Machines",
@@ -1255,10 +902,7 @@
    "sector": "AI lab",
    "ats": "ashby",
    "token": "thinkingmachines",
-   "ai_track": "lab",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "lab"
   },
   {
    "name": "Reflection AI",
@@ -1266,10 +910,7 @@
    "sector": "AI lab",
    "ats": "ashby",
    "token": "reflectionai",
-   "ai_track": "lab",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "lab"
   },
   {
    "name": "Perplexity",
@@ -1277,10 +918,7 @@
    "sector": "AI",
    "ats": "ashby",
    "token": "perplexity",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Glean",
@@ -1288,10 +926,7 @@
    "sector": "AI / enterprise search",
    "ats": "greenhouse",
    "token": "gleanwork",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Cursor",
@@ -1299,10 +934,7 @@
    "sector": "AI / dev tools",
    "ats": "ashby",
    "token": "cursor",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Cognition",
@@ -1310,10 +942,7 @@
    "sector": "AI / dev tools",
    "ats": "ashby",
    "token": "cognition",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Together AI",
@@ -1321,10 +950,7 @@
    "sector": "AI cloud",
    "ats": "greenhouse",
    "token": "togetherai",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "LangChain",
@@ -1332,10 +958,7 @@
    "sector": "AI / dev tools",
    "ats": "ashby",
    "token": "langchain",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Snorkel AI",
@@ -1343,10 +966,7 @@
    "sector": "AI / data",
    "ats": "greenhouse",
    "token": "snorkelai",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "ElevenLabs",
@@ -1354,10 +974,7 @@
    "sector": "AI / voice",
    "ats": "ashby",
    "token": "elevenlabs",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Decagon",
@@ -1365,10 +982,7 @@
    "sector": "AI agents",
    "ats": "ashby",
    "token": "decagon",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Baseten",
@@ -1376,10 +990,7 @@
    "sector": "AI cloud",
    "ats": "ashby",
    "token": "baseten",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Modal",
@@ -1387,10 +998,7 @@
    "sector": "AI cloud",
    "ats": "ashby",
    "token": "modal",
-   "ai_track": "ai",
-   "sets": [
-    "tech"
-   ]
+   "ai_track": "ai"
   },
   {
    "name": "Ciena",
@@ -1399,10 +1007,7 @@
    "ats": "workday",
    "tenant": "ciena",
    "wd": "wd5",
-   "site": "Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Careers"
   },
   {
    "name": "Iron Mountain",
@@ -1411,10 +1016,7 @@
    "ats": "workday",
    "tenant": "ironmountain",
    "wd": "wd5",
-   "site": "iron-mountain-jobs",
-   "sets": [
-    "ops"
-   ]
+   "site": "iron-mountain-jobs"
   },
   {
    "name": "FINRA",
@@ -1423,10 +1025,7 @@
    "ats": "workday",
    "tenant": "finra",
    "wd": "wd1",
-   "site": "FINRA",
-   "sets": [
-    "ops"
-   ]
+   "site": "FINRA"
   },
   {
    "name": "Truist",
@@ -1435,10 +1034,7 @@
    "ats": "workday",
    "tenant": "truist",
    "wd": "wd1",
-   "site": "Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Careers"
   },
   {
    "name": "PNC",
@@ -1447,10 +1043,7 @@
    "ats": "workday",
    "tenant": "pnc",
    "wd": "wd5",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Accenture",
@@ -1459,10 +1052,7 @@
    "ats": "workday",
    "tenant": "accenture",
    "wd": "wd103",
-   "site": "AccentureCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "AccentureCareers"
   },
   {
    "name": "PwC",
@@ -1471,10 +1061,7 @@
    "ats": "workday",
    "tenant": "pwc",
    "wd": "wd3",
-   "site": "Global_Experienced_Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Global_Experienced_Careers"
   },
   {
    "name": "Huron Consulting",
@@ -1483,10 +1070,7 @@
    "ats": "workday",
    "tenant": "huron",
    "wd": "wd1",
-   "site": "huroncareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "huroncareers"
   },
   {
    "name": "CoStar Group",
@@ -1495,10 +1079,7 @@
    "ats": "workday",
    "tenant": "costar",
    "wd": "wd1",
-   "site": "CoStarCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "CoStarCareers"
   },
   {
    "name": "Warner Bros. Discovery",
@@ -1507,10 +1088,7 @@
    "ats": "workday",
    "tenant": "warnerbros",
    "wd": "wd5",
-   "site": "global",
-   "sets": [
-    "ops"
-   ]
+   "site": "global"
   },
   {
    "name": "Sallie Mae",
@@ -1520,10 +1098,7 @@
    "tenant": "sallie_mae",
    "wd": "wd5",
    "site": "Careers",
-   "host": "sallie-mae.wd5.myworkdayjobs.com",
-   "sets": [
-    "ops"
-   ]
+   "host": "sallie-mae.wd5.myworkdayjobs.com"
   },
   {
    "name": "PBS",
@@ -1533,11 +1108,7 @@
    "tenant": "vhr_pbs",
    "wd": "wd115",
    "site": "PBSCareers",
-   "host": "vhr-pbs.wd115.myworkdayjobs.com",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "host": "vhr-pbs.wd115.myworkdayjobs.com"
   },
   {
    "name": "BDO USA",
@@ -1546,10 +1117,7 @@
    "ats": "workday",
    "tenant": "bdo",
    "wd": "wd3",
-   "site": "BDO",
-   "sets": [
-    "ops"
-   ]
+   "site": "BDO"
   },
   {
    "name": "Brookfield Properties",
@@ -1558,10 +1126,7 @@
    "ats": "workday",
    "tenant": "brookfield",
    "wd": "wd5",
-   "site": "brookfieldproperties",
-   "sets": [
-    "ops"
-   ]
+   "site": "brookfieldproperties"
   },
   {
    "name": "Gartner",
@@ -1570,10 +1135,7 @@
    "ats": "workday",
    "tenant": "gartner",
    "wd": "wd5",
-   "site": "EXT",
-   "sets": [
-    "ops"
-   ]
+   "site": "EXT"
   },
   {
    "name": "Host Hotels & Resorts",
@@ -1582,10 +1144,7 @@
    "ats": "workday",
    "tenant": "hosthotels",
    "wd": "wd5",
-   "site": "HostHotels",
-   "sets": [
-    "ops"
-   ]
+   "site": "HostHotels"
   },
   {
    "name": "M&T Bank",
@@ -1594,10 +1153,7 @@
    "ats": "workday",
    "tenant": "mtb",
    "wd": "wd5",
-   "site": "MTB",
-   "sets": [
-    "ops"
-   ]
+   "site": "MTB"
   },
   {
    "name": "Metropolitan Washington Airports Authority",
@@ -1606,10 +1162,7 @@
    "ats": "workday",
    "tenant": "mwaa",
    "wd": "wd1",
-   "site": "MWAA",
-   "sets": [
-    "ops"
-   ]
+   "site": "MWAA"
   },
   {
    "name": "Nexstar Media Group",
@@ -1618,10 +1171,7 @@
    "ats": "workday",
    "tenant": "nexstar",
    "wd": "wd5",
-   "site": "nexstar",
-   "sets": [
-    "ops"
-   ]
+   "site": "nexstar"
   },
   {
    "name": "Wells Fargo",
@@ -1630,10 +1180,7 @@
    "ats": "workday",
    "tenant": "wf",
    "wd": "wd1",
-   "site": "WellsFargoJobs",
-   "sets": [
-    "ops"
-   ]
+   "site": "WellsFargoJobs"
   },
   {
    "name": "AES Corporation",
@@ -1642,10 +1189,7 @@
    "ats": "workday",
    "tenant": "aes",
    "wd": "wd1",
-   "site": "AES_US",
-   "sets": [
-    "ops"
-   ]
+   "site": "AES_US"
   },
   {
    "name": "Ankura",
@@ -1654,10 +1198,7 @@
    "ats": "workday",
    "tenant": "ankura",
    "wd": "wd5",
-   "site": "Ankura",
-   "sets": [
-    "ops"
-   ]
+   "site": "Ankura"
   },
   {
    "name": "AvalonBay Communities",
@@ -1666,10 +1207,7 @@
    "ats": "workday",
    "tenant": "avalonbay",
    "wd": "wd5",
-   "site": "AVBExternal",
-   "sets": [
-    "ops"
-   ]
+   "site": "AVBExternal"
   },
   {
    "name": "Baker Tilly",
@@ -1678,10 +1216,7 @@
    "ats": "workday",
    "tenant": "bakertilly",
    "wd": "wd5",
-   "site": "BTCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "BTCareers"
   },
   {
    "name": "Boeing",
@@ -1690,10 +1225,7 @@
    "ats": "workday",
    "tenant": "boeing",
    "wd": "wd1",
-   "site": "EXTERNAL_CAREERS",
-   "sets": [
-    "ops"
-   ]
+   "site": "EXTERNAL_CAREERS"
   },
   {
    "name": "The Carlyle Group",
@@ -1702,10 +1234,7 @@
    "ats": "workday",
    "tenant": "carlyle",
    "wd": "wd1",
-   "site": "Carlyle",
-   "sets": [
-    "ops"
-   ]
+   "site": "Carlyle"
   },
   {
    "name": "Choice Hotels",
@@ -1714,10 +1243,7 @@
    "ats": "workday",
    "tenant": "choicehotels",
    "wd": "wd5",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Crowe",
@@ -1726,10 +1252,7 @@
    "ats": "workday",
    "tenant": "crowe",
    "wd": "wd12",
-   "site": "External_Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "External_Careers"
   },
   {
    "name": "FTI Consulting",
@@ -1738,10 +1261,7 @@
    "ats": "workday",
    "tenant": "fticonsulting",
    "wd": "wd108",
-   "site": "FTIConsultingCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "FTIConsultingCareers"
   },
   {
    "name": "Bank of America",
@@ -1750,10 +1270,7 @@
    "ats": "workday",
    "tenant": "ghr",
    "wd": "wd1",
-   "site": "Lateral-US",
-   "sets": [
-    "ops"
-   ]
+   "site": "Lateral-US"
   },
   {
    "name": "NRECA",
@@ -1762,11 +1279,7 @@
    "ats": "workday",
    "tenant": "nreca",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Protiviti",
@@ -1775,10 +1288,7 @@
    "ats": "workday",
    "tenant": "roberthalf",
    "wd": "wd1",
-   "site": "ProtivitiNA",
-   "sets": [
-    "ops"
-   ]
+   "site": "ProtivitiNA"
   },
   {
    "name": "RSM US",
@@ -1787,10 +1297,7 @@
    "ats": "workday",
    "tenant": "rsm",
    "wd": "wd1",
-   "site": "RSMCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "RSMCareers"
   },
   {
    "name": "T. Rowe Price",
@@ -1799,10 +1306,7 @@
    "ats": "workday",
    "tenant": "troweprice",
    "wd": "wd5",
-   "site": "TRowePrice",
-   "sets": [
-    "ops"
-   ]
+   "site": "TRowePrice"
   },
   {
    "name": "The Washington Post",
@@ -1811,10 +1315,7 @@
    "ats": "workday",
    "tenant": "washpost",
    "wd": "wd5",
-   "site": "washingtonpostcareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "washingtonpostcareers"
   },
   {
    "name": "Washington Gas (AltaGas)",
@@ -1823,10 +1324,7 @@
    "ats": "workday",
    "tenant": "wgl",
    "wd": "wd5",
-   "site": "AltaGas",
-   "sets": [
-    "ops"
-   ]
+   "site": "AltaGas"
   },
   {
    "name": "Federal Reserve System (incl. Board of Governors)",
@@ -1835,10 +1333,7 @@
    "ats": "workday",
    "tenant": "rb",
    "wd": "wd5",
-   "site": "FRS",
-   "sets": [
-    "ops"
-   ]
+   "site": "FRS"
   },
   {
    "name": "Transurban North America",
@@ -1847,10 +1342,7 @@
    "ats": "workday",
    "tenant": "transurban",
    "wd": "wd3",
-   "site": "TU_US",
-   "sets": [
-    "ops"
-   ]
+   "site": "TU_US"
   },
   {
    "name": "JLL",
@@ -1859,10 +1351,7 @@
    "ats": "workday",
    "tenant": "jll",
    "wd": "wd1",
-   "site": "jllcareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "jllcareers"
   },
   {
    "name": "Nelnet",
@@ -1871,21 +1360,14 @@
    "ats": "workday",
    "tenant": "nelnet",
    "wd": "wd1",
-   "site": "MyNelnet",
-   "sets": [
-    "ops"
-   ]
+   "site": "MyNelnet"
   },
   {
    "name": "NPR",
    "tier": "dmv_hq",
    "sector": "Public Media HQ",
    "ats": "greenhouse",
-   "token": "nationalpublicradioinc",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "token": "nationalpublicradioinc"
   },
   {
    "name": "Elevance Health",
@@ -1894,10 +1376,7 @@
    "ats": "workday",
    "tenant": "elevancehealth",
    "wd": "wd1",
-   "site": "ANT",
-   "sets": [
-    "ops"
-   ]
+   "site": "ANT"
   },
   {
    "name": "RAND Corporation",
@@ -1906,11 +1385,7 @@
    "ats": "workday",
    "tenant": "rand",
    "wd": "wd5",
-   "site": "External_Career_Site",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "External_Career_Site"
   },
   {
    "name": "American Red Cross",
@@ -1919,11 +1394,7 @@
    "ats": "workday",
    "tenant": "americanredcross",
    "wd": "wd1",
-   "site": "American_Red_Cross_Careers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "American_Red_Cross_Careers"
   },
   {
    "name": "University of Maryland, College Park",
@@ -1932,11 +1403,7 @@
    "ats": "workday",
    "tenant": "umd",
    "wd": "wd1",
-   "site": "UMCP",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "UMCP"
   },
   {
    "name": "Georgetown University",
@@ -1945,11 +1412,7 @@
    "ats": "workday",
    "tenant": "georgetown",
    "wd": "wd1",
-   "site": "Georgetown_Admin_Careers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "Georgetown_Admin_Careers"
   },
   {
    "name": "Howard University",
@@ -1958,11 +1421,7 @@
    "ats": "workday",
    "tenant": "howard",
    "wd": "wd1",
-   "site": "HU",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "HU"
   },
   {
    "name": "National Geographic Society",
@@ -1971,11 +1430,7 @@
    "ats": "workday",
    "tenant": "ngs",
    "wd": "wd1",
-   "site": "ngs_external_career_site",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "ngs_external_career_site"
   },
   {
    "name": "Children's National Hospital",
@@ -1984,10 +1439,7 @@
    "ats": "workday",
    "tenant": "childrensnational",
    "wd": "wd108",
-   "site": "CN_Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "CN_Careers"
   },
   {
    "name": "Adventist HealthCare",
@@ -1996,10 +1448,7 @@
    "ats": "workday",
    "tenant": "adventisthealthcare",
    "wd": "wd1",
-   "site": "AdventistHealthCareCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "AdventistHealthCareCareers"
   },
   {
    "name": "AAMC (Association of American Medical Colleges)",
@@ -2008,11 +1457,7 @@
    "ats": "workday",
    "tenant": "aamc",
    "wd": "wd5",
-   "site": "AAMC",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "AAMC"
   },
   {
    "name": "The Nature Conservancy",
@@ -2021,11 +1466,7 @@
    "ats": "workday",
    "tenant": "nature",
    "wd": "wd108",
-   "site": "ExternalCareers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "ExternalCareers"
   },
   {
    "name": "The Pew Charitable Trusts",
@@ -2034,11 +1475,7 @@
    "ats": "workday",
    "tenant": "pewtrusts",
    "wd": "wd5",
-   "site": "TrustsExternal",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "TrustsExternal"
   },
   {
    "name": "Pew Research Center",
@@ -2047,11 +1484,7 @@
    "ats": "workday",
    "tenant": "pewtrusts",
    "wd": "wd5",
-   "site": "CenterExternal",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "CenterExternal"
   },
   {
    "name": "World Resources Institute",
@@ -2060,11 +1493,7 @@
    "ats": "workday",
    "tenant": "wri",
    "wd": "wd501",
-   "site": "WRI",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "WRI"
   },
   {
    "name": "American University",
@@ -2073,11 +1502,7 @@
    "ats": "workday",
    "tenant": "american",
    "wd": "wd1",
-   "site": "AU",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "AU"
   },
   {
    "name": "National Academies of Sciences, Engineering, and Medicine",
@@ -2086,11 +1511,7 @@
    "ats": "workday",
    "tenant": "nas",
    "wd": "wd1",
-   "site": "NAS_Careers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "NAS_Careers"
   },
   {
    "name": "National Education Association",
@@ -2099,11 +1520,7 @@
    "ats": "workday",
    "tenant": "nea",
    "wd": "wd1",
-   "site": "ExternalCareers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "ExternalCareers"
   },
   {
    "name": "American Bankers Association",
@@ -2112,11 +1529,7 @@
    "ats": "workday",
    "tenant": "aba",
    "wd": "wd1",
-   "site": "ABA",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "ABA"
   },
   {
    "name": "International Monetary Fund",
@@ -2125,11 +1538,7 @@
    "ats": "workday",
    "tenant": "imf",
    "wd": "wd5",
-   "site": "IMF",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "IMF"
   },
   {
    "name": "Chemonics International",
@@ -2138,11 +1547,7 @@
    "ats": "workday",
    "tenant": "chemonics",
    "wd": "wd108",
-   "site": "chemonics_careers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "chemonics_careers"
   },
   {
    "name": "Trinity Health (incl. Holy Cross Health, Silver Spring)",
@@ -2151,10 +1556,7 @@
    "ats": "workday",
    "tenant": "trinityhealth",
    "wd": "wd1",
-   "site": "Jobs",
-   "sets": [
-    "ops"
-   ]
+   "site": "Jobs"
   },
   {
    "name": "Sentara Health (Northern Virginia)",
@@ -2163,10 +1565,7 @@
    "ats": "workday",
    "tenant": "sentara",
    "wd": "wd1",
-   "site": "SCS",
-   "sets": [
-    "ops"
-   ]
+   "site": "SCS"
   },
   {
    "name": "Gallaudet University",
@@ -2175,11 +1574,7 @@
    "ats": "workday",
    "tenant": "gallaudet",
    "wd": "wd1",
-   "site": "GUCareers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "GUCareers"
   },
   {
    "name": "Urban Institute",
@@ -2188,11 +1583,7 @@
    "ats": "workday",
    "tenant": "urban",
    "wd": "wd115",
-   "site": "Urban-Careers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "Urban-Careers"
   },
   {
    "name": "American Cancer Society",
@@ -2201,11 +1592,7 @@
    "ats": "workday",
    "tenant": "acs",
    "wd": "wd5",
-   "site": "ACSCareers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "ACSCareers"
   },
   {
    "name": "Mary Washington Healthcare",
@@ -2214,72 +1601,49 @@
    "ats": "workday",
    "tenant": "marywashingtonhealthcare",
    "wd": "wd5",
-   "site": "Externalcareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Externalcareers"
   },
   {
    "name": "American Institutes for Research (AIR)",
    "tier": "dmv_hq",
    "sector": "Research institute",
    "ats": "greenhouse",
-   "token": "americaninstitutesforresearch",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "token": "americaninstitutesforresearch"
   },
   {
    "name": "Gallup",
    "tier": "dmv_office",
    "sector": "Research / consulting",
    "ats": "greenhouse",
-   "token": "gallup",
-   "sets": [
-    "ops"
-   ]
+   "token": "gallup"
   },
   {
    "name": "Aledade",
    "tier": "dmv_hq",
    "sector": "Health care services",
    "ats": "lever",
-   "token": "aledade",
-   "sets": [
-    "ops"
-   ]
+   "token": "aledade"
   },
   {
    "name": "Privia Health",
    "tier": "dmv_hq",
    "sector": "Health care services",
    "ats": "smartrecruiters",
-   "id": "priviahealth",
-   "sets": [
-    "ops"
-   ]
+   "id": "priviahealth"
   },
   {
    "name": "United Way Worldwide",
    "tier": "dmv_hq",
    "sector": "Nonprofit",
    "ats": "smartrecruiters",
-   "id": "unitedwayworldwide",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "id": "unitedwayworldwide"
   },
   {
    "name": "National Council on Aging (NCOA)",
    "tier": "dmv_hq",
    "sector": "Nonprofit / aging",
    "ats": "adp",
-   "cid": "8efa0a0b-5556-4fc4-83b9-32d6d0dbab79",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "8efa0a0b-5556-4fc4-83b9-32d6d0dbab79"
   },
   {
    "name": "Volunteers of America",
@@ -2288,10 +1652,7 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "VOL1002VANS",
-   "board": "019c4665-65f0-47f9-b618-b4e0fdf4fb0e",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "019c4665-65f0-47f9-b618-b4e0fdf4fb0e"
   },
   {
    "name": "Alzheimer's Association",
@@ -2300,10 +1661,7 @@
    "ats": "ukg",
    "host": "recruiting2.ultipro.com",
    "tenant": "ALZ1000ALZD",
-   "board": "8fe6e004-a2b4-4c6f-b43f-6275765c4462",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "8fe6e004-a2b4-4c6f-b43f-6275765c4462"
   },
   {
    "name": "American Association for the Advancement of Science (AAAS)",
@@ -2312,20 +1670,14 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "AME1123ASEM",
-   "board": "07f12c2c-f20e-42f2-b442-dbab6fe420be",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "07f12c2c-f20e-42f2-b442-dbab6fe420be"
   },
   {
    "name": "Goodwill of Greater Washington",
    "tier": "dmv_hq",
    "sector": "Nonprofit / workforce",
    "ats": "icims",
-   "base": "https://careers-dcgoodwill.icims.com",
-   "sets": [
-    "nonprofit"
-   ]
+   "base": "https://careers-dcgoodwill.icims.com"
   },
   {
    "name": "Habitat for Humanity International",
@@ -2334,20 +1686,14 @@
    "ats": "workday",
    "tenant": "habitat",
    "wd": "wd12",
-   "site": "External",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "External"
   },
   {
    "name": "Asbury Communities",
    "tier": "dmv_hq",
    "sector": "Senior living nonprofit",
    "ats": "smartrecruiters",
-   "token": "AsburyCommunities",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "AsburyCommunities"
   },
   {
    "name": "Erickson Senior Living",
@@ -2356,11 +1702,7 @@
    "ats": "workday",
    "tenant": "erickson",
    "wd": "wd108",
-   "site": "External",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "March of Dimes",
@@ -2369,20 +1711,14 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "MAR1021",
-   "board": "e2a89250-2962-4e67-ac8a-28b568062a9d",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "e2a89250-2962-4e67-ac8a-28b568062a9d"
   },
   {
    "name": "American Lung Association",
    "tier": "dmv_office",
    "sector": "Nonprofit / health",
    "ats": "adp",
-   "cid": "7a358090-87fa-4b88-894c-c8241573392d",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "7a358090-87fa-4b88-894c-c8241573392d"
   },
   {
    "name": "National Wildlife Federation",
@@ -2391,10 +1727,7 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "NAT1047NWF",
-   "board": "1ca8346a-33cc-401d-90d9-d7f752fdfd7d",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "1ca8346a-33cc-401d-90d9-d7f752fdfd7d"
   },
   {
    "name": "American Hospital Association",
@@ -2403,10 +1736,7 @@
    "ats": "workday",
    "tenant": "aha",
    "wd": "wd501",
-   "site": "AHA",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "AHA"
   },
   {
    "name": "SEIU",
@@ -2415,10 +1745,7 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "SER1005SEIU",
-   "board": "e131b2ae-a5ce-4fb1-a93c-84c36a485721",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "e131b2ae-a5ce-4fb1-a93c-84c36a485721"
   },
   {
    "name": "American Council on Education",
@@ -2427,10 +1754,7 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "AME1073",
-   "board": "3ab22f45-0d00-7f95-def8-c8ca6a23d48f",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "3ab22f45-0d00-7f95-def8-c8ca6a23d48f"
   },
   {
    "name": "American Academy of Family Physicians",
@@ -2439,90 +1763,63 @@
    "ats": "workday",
    "tenant": "aafp",
    "wd": "wd5",
-   "site": "AAFP_Careers",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "AAFP_Careers"
   },
   {
    "name": "AHIP",
    "tier": "dmv_hq",
    "sector": "Association / health insurance",
    "ats": "adp",
-   "cid": "fca23eab-9c41-4ed0-805b-403b3ad8650f",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "fca23eab-9c41-4ed0-805b-403b3ad8650f"
   },
   {
    "name": "American Public Health Association (APHA)",
    "tier": "dmv_hq",
    "sector": "Association / health",
    "ats": "greenhouse",
-   "token": "americanpublichealthassociation",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "americanpublichealthassociation"
   },
   {
    "name": "NAACP",
    "tier": "dmv_hq",
    "sector": "Nonprofit / civil rights",
    "ats": "adp",
-   "cid": "17fb7309-3861-4b47-8413-7fd2090ce526",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "17fb7309-3861-4b47-8413-7fd2090ce526"
   },
   {
    "name": "Bread for the City",
    "tier": "dmv_hq",
    "sector": "Nonprofit / human services",
    "ats": "adp",
-   "cid": "57076ac9-8551-4771-83bd-cd067a0c8348",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "57076ac9-8551-4771-83bd-cd067a0c8348"
   },
   {
    "name": "National Alliance for Care at Home",
    "tier": "dmv_hq",
    "sector": "Association / aging & hospice",
    "ats": "adp",
-   "cid": "b94efb3b-1334-4af3-b044-7261daddf7b7",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "b94efb3b-1334-4af3-b044-7261daddf7b7"
   },
   {
    "name": "National Association of Counties (NACo)",
    "tier": "dmv_hq",
    "sector": "Association / government",
    "ats": "adp",
-   "cid": "1722deca-7937-48af-8450-d92d4e1c7c82",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "1722deca-7937-48af-8450-d92d4e1c7c82"
   },
   {
    "name": "N Street Village",
    "tier": "dmv_hq",
    "sector": "Nonprofit / human services",
    "ats": "adp",
-   "cid": "83384701-85e7-4fa9-a5c1-7f137f3ca14a",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "83384701-85e7-4fa9-a5c1-7f137f3ca14a"
   },
   {
    "name": "Whitman-Walker Health",
    "tier": "dmv_hq",
    "sector": "Community health center",
    "ats": "adp",
-   "cid": "6c21e150-66fc-4492-a689-beacefbdce66",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "6c21e150-66fc-4492-a689-beacefbdce66"
   },
   {
    "name": "Catholic Charities of Baltimore",
@@ -2531,70 +1828,49 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "CAT1002CC",
-   "board": "c709ab38-ff71-4cc1-9c24-5a3e75528c74",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "c709ab38-ff71-4cc1-9c24-5a3e75528c74"
   },
   {
    "name": "Boys & Girls Clubs of Greater Washington",
    "tier": "dmv_hq",
    "sector": "Nonprofit / youth",
    "ats": "adp",
-   "cid": "e2fffc49-a186-4e2a-bc37-63cabb34d353",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "e2fffc49-a186-4e2a-bc37-63cabb34d353"
   },
   {
    "name": "Iona Senior Services",
    "tier": "dmv_hq",
    "sector": "Nonprofit / aging",
    "ats": "adp",
-   "cid": "b63d7c76-c306-40aa-96a4-8365ba5cdb6b",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "b63d7c76-c306-40aa-96a4-8365ba5cdb6b"
   },
   {
    "name": "National Trust for Historic Preservation",
    "tier": "dmv_hq",
    "sector": "Nonprofit / preservation",
    "ats": "adp",
-   "cid": "e05ad6ef-fa12-4dd0-86a1-44423561d486",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "e05ad6ef-fa12-4dd0-86a1-44423561d486"
   },
   {
    "name": "National Association of Home Builders (NAHB)",
    "tier": "dmv_hq",
    "sector": "Association / trade",
    "ats": "adp",
-   "cid": "69f9c81f-c48a-43a4-a3b0-b63a02e212b9",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "69f9c81f-c48a-43a4-a3b0-b63a02e212b9"
   },
   {
    "name": "American Petroleum Institute",
    "tier": "dmv_hq",
    "sector": "Association / trade",
    "ats": "adp",
-   "cid": "1a24f36f-f740-4396-81f5-7319e3dee147",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "1a24f36f-f740-4396-81f5-7319e3dee147"
   },
   {
    "name": "American Trucking Associations",
    "tier": "dmv_hq",
    "sector": "Association / trade",
    "ats": "adp",
-   "cid": "8a8a86c0-5d38-407c-9bec-56dbea85547d",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "8a8a86c0-5d38-407c-9bec-56dbea85547d"
   },
   {
    "name": "National Restaurant Association",
@@ -2603,100 +1879,70 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "NAT1030",
-   "board": "09a1b648-97bf-40dd-b3df-e884e92fc6b7",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "09a1b648-97bf-40dd-b3df-e884e92fc6b7"
   },
   {
    "name": "Consumer Technology Association (CTA)",
    "tier": "dmv_hq",
    "sector": "Association / trade",
    "ats": "adp",
-   "cid": "f6281961-94a1-468a-8b53-78b84cc3a14c",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "f6281961-94a1-468a-8b53-78b84cc3a14c"
   },
   {
    "name": "National Association of Broadcasters",
    "tier": "dmv_hq",
    "sector": "Association / trade",
    "ats": "adp",
-   "cid": "3c15ba90-b1db-4de1-aca0-0ec948cd1f73",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "3c15ba90-b1db-4de1-aca0-0ec948cd1f73"
   },
   {
    "name": "American Institute of Physics",
    "tier": "dmv_hq",
    "sector": "Association / science",
    "ats": "adp",
-   "cid": "cde167d2-561e-44db-8dab-df2fc7648b26",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "cde167d2-561e-44db-8dab-df2fc7648b26"
   },
   {
    "name": "American Gastroenterological Association",
    "tier": "dmv_hq",
    "sector": "Association / health",
    "ats": "adp",
-   "cid": "393248ac-3167-467c-9b2d-101c2e3256ba",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "393248ac-3167-467c-9b2d-101c2e3256ba"
   },
   {
    "name": "National Women's Law Center",
    "tier": "dmv_hq",
    "sector": "Nonprofit / advocacy",
    "ats": "greenhouse",
-   "token": "nationalwomenslawcenter",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "nationalwomenslawcenter"
   },
   {
    "name": "UnidosUS",
    "tier": "dmv_hq",
    "sector": "Nonprofit / advocacy",
    "ats": "greenhouse",
-   "token": "unidosus",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "unidosus"
   },
   {
    "name": "National Disability Rights Network",
    "tier": "dmv_hq",
    "sector": "Nonprofit / disability",
    "ats": "adp",
-   "cid": "37b46abf-c9f8-46e2-adaf-5fdf6003dab4",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "37b46abf-c9f8-46e2-adaf-5fdf6003dab4"
   },
   {
    "name": "DC Central Kitchen",
    "tier": "dmv_hq",
    "sector": "Nonprofit / food",
    "ats": "adp",
-   "cid": "34e9fbd8-1da9-47af-b612-15979135e211",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "34e9fbd8-1da9-47af-b612-15979135e211"
   },
   {
    "name": "Pathways to Housing DC",
    "tier": "dmv_hq",
    "sector": "Nonprofit / homelessness",
    "ats": "adp",
-   "cid": "c205eca1-50ba-4cd5-8c7b-72c0fe13bd8f",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "c205eca1-50ba-4cd5-8c7b-72c0fe13bd8f"
   },
   {
    "name": "Mary's Center",
@@ -2705,30 +1951,21 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "MAR1048MARY",
-   "board": "88f33d62-f5a4-4f55-b429-d203a9b78da7",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "88f33d62-f5a4-4f55-b429-d203a9b78da7"
   },
   {
    "name": "Sasha Bruce Youthwork",
    "tier": "dmv_hq",
    "sector": "Nonprofit / youth",
    "ats": "adp",
-   "cid": "7ecc8bdb-2e13-45fd-94dd-bec51a7363c8",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "7ecc8bdb-2e13-45fd-94dd-bec51a7363c8"
   },
   {
    "name": "Housing Up",
    "tier": "dmv_hq",
    "sector": "Nonprofit / housing",
    "ats": "adp",
-   "cid": "623cfe3a-c2f7-4c57-846a-89d672ab77c3",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "623cfe3a-c2f7-4c57-846a-89d672ab77c3"
   },
   {
    "name": "Melwood",
@@ -2737,20 +1974,14 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "mel1004mhtc",
-   "board": "b8f4da25-0200-45af-94ee-7c14263588ad",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "b8f4da25-0200-45af-94ee-7c14263588ad"
   },
   {
    "name": "St. Coletta of Greater Washington",
    "tier": "dmv_hq",
    "sector": "Nonprofit / disability",
    "ats": "adp",
-   "cid": "4b9ef2e5-6ccf-4b0b-be13-ea02ead73c45",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "4b9ef2e5-6ccf-4b0b-be13-ea02ead73c45"
   },
   {
    "name": "Enterprise Community Partners",
@@ -2760,10 +1991,7 @@
    "tenant": "enterprisecommunity",
    "wd": "wd5",
    "site": "EnterpriseCareers",
-   "host": "wd5.myworkdaysite.com",
-   "sets": [
-    "nonprofit"
-   ]
+   "host": "wd5.myworkdaysite.com"
   },
   {
    "name": "NeighborWorks America",
@@ -2772,20 +2000,14 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "NEI1005NBRHD",
-   "board": "c58dc448-fca7-a66b-3fac-cd04ed0dac4c",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "c58dc448-fca7-a66b-3fac-cd04ed0dac4c"
   },
   {
    "name": "National Park Foundation",
    "tier": "dmv_hq",
    "sector": "Nonprofit / parks",
    "ats": "adp",
-   "cid": "c77264ea-0378-4b2a-b88d-d06bed974763",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "c77264ea-0378-4b2a-b88d-d06bed974763"
   },
   {
    "name": "Special Olympics International",
@@ -2794,130 +2016,91 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "SPE1016SPOL",
-   "board": "48c569fb-e342-71d0-cf2c-f3622cec1d24",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "48c569fb-e342-71d0-cf2c-f3622cec1d24"
   },
   {
    "name": "The Leadership Conference on Civil and Human Rights",
    "tier": "dmv_hq",
    "sector": "Nonprofit / civil rights",
    "ats": "adp",
-   "cid": "ba821a90-e753-4ec4-9091-b5f2221bd576",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "ba821a90-e753-4ec4-9091-b5f2221bd576"
   },
   {
    "name": "Humane Rescue Alliance",
    "tier": "dmv_hq",
    "sector": "Nonprofit / animal welfare",
    "ats": "adp",
-   "cid": "c3a30086-df4c-4fd3-9714-0ec6f4ee91a1",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "c3a30086-df4c-4fd3-9714-0ec6f4ee91a1"
   },
   {
    "name": "Legal Services Corporation",
    "tier": "dmv_hq",
    "sector": "Nonprofit / legal aid",
    "ats": "adp",
-   "cid": "7c7ecfd3-4082-4ef7-8d1d-c9d0d8597c59",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "7c7ecfd3-4082-4ef7-8d1d-c9d0d8597c59"
   },
   {
    "name": "CWI Works (formerly Senior Service America)",
    "tier": "dmv_hq",
    "sector": "Nonprofit / aging",
    "ats": "adp",
-   "cid": "37e0b825-ec9c-434b-8632-bf7ed8e75ac3",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "37e0b825-ec9c-434b-8632-bf7ed8e75ac3"
   },
   {
    "name": "Catholic Charities of the Archdiocese of Washington",
    "tier": "dmv_hq",
    "sector": "Nonprofit",
    "ats": "paylocity",
-   "id": "75a752f6-1bb2-4a49-a9f1-a864b4eea977",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "75a752f6-1bb2-4a49-a9f1-a864b4eea977"
   },
   {
    "name": "Friendship Place",
    "tier": "dmv_hq",
    "sector": "Nonprofit",
    "ats": "paylocity",
-   "id": "e8587833-ac2a-4748-9d9e-e9060d27c962",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "e8587833-ac2a-4748-9d9e-e9060d27c962"
   },
   {
    "name": "Miriam's Kitchen",
    "tier": "dmv_hq",
    "sector": "Nonprofit",
    "ats": "paylocity",
-   "id": "102517dc-20ab-4b97-8435-046ee9b7946d",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "102517dc-20ab-4b97-8435-046ee9b7946d"
   },
   {
    "name": "Community of Hope",
    "tier": "dmv_hq",
    "sector": "Nonprofit",
    "ats": "paylocity",
-   "id": "c7715d17-7ca7-4d19-a671-8d88b037193d",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "c7715d17-7ca7-4d19-a671-8d88b037193d"
   },
   {
    "name": "Consumer Brands Association",
    "tier": "dmv_hq",
    "sector": "Nonprofit",
    "ats": "paylocity",
-   "id": "7c05f4fd-600f-4007-817f-11381db6bfc0",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "7c05f4fd-600f-4007-817f-11381db6bfc0"
   },
   {
    "name": "Legal Aid DC",
    "tier": "dmv_hq",
    "sector": "Nonprofit",
    "ats": "paylocity",
-   "id": "7c220d91-fa76-450a-bc02-babc092e0cdb",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "7c220d91-fa76-450a-bc02-babc092e0cdb"
   },
   {
    "name": "Montgomery County Coalition for the Homeless",
    "tier": "dmv_hq",
    "sector": "Nonprofit",
    "ats": "paylocity",
-   "id": "898adfe4-a10b-4a31-8386-0781c64ab8bb",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "898adfe4-a10b-4a31-8386-0781c64ab8bb"
   },
   {
    "name": "Insight Memory Care Center",
    "tier": "dmv_hq",
    "sector": "Nonprofit",
    "ats": "paylocity",
-   "id": "79010459-a3c6-4e86-84a8-d2ad66be9a66",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "79010459-a3c6-4e86-84a8-d2ad66be9a66"
   },
   {
    "name": "Save the Children",
@@ -2926,10 +2109,7 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "SAV1002STCF",
-   "board": "7d92e82b-af74-464d-859b-c5b8cba6e92e",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "7d92e82b-af74-464d-859b-c5b8cba6e92e"
   },
   {
    "name": "FHI 360",
@@ -2938,40 +2118,28 @@
    "ats": "workday",
    "tenant": "fhi",
    "wd": "wd1",
-   "site": "FHI_360_External_Career_Portal",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "FHI_360_External_Career_Portal"
   },
   {
    "name": "HealthX Partners (PSI + Elizabeth Glaser Pediatric AIDS Foundation)",
    "tier": "dmv_hq",
    "sector": "Global health",
    "ats": "smartrecruiters",
-   "token": "HealthXPartners",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "HealthXPartners"
   },
   {
    "name": "Jhpiego",
    "tier": "dmv_hq",
    "sector": "Global health",
    "ats": "icims",
-   "base": "https://jobs-jhpiego.icims.com",
-   "sets": [
-    "nonprofit"
-   ]
+   "base": "https://jobs-jhpiego.icims.com"
   },
   {
    "name": "Pact",
    "tier": "dmv_hq",
    "sector": "International development",
    "ats": "icims",
-   "base": "https://careers-pactworld.icims.com",
-   "sets": [
-    "nonprofit"
-   ]
+   "base": "https://careers-pactworld.icims.com"
   },
   {
    "name": "IREX",
@@ -2980,51 +2148,35 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "INT1065INRE",
-   "board": "86f30819-0126-446a-84bb-cf37a5e878c1",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "86f30819-0126-446a-84bb-cf37a5e878c1"
   },
   {
    "name": "DAI Global",
    "tier": "dmv_hq",
    "sector": "International development",
    "ats": "adp",
-   "cid": "5745ed7b-7f8d-47a9-9161-d975aa7f3314",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "5745ed7b-7f8d-47a9-9161-d975aa7f3314"
   },
   {
    "name": "RTI International",
    "tier": "dmv_office",
    "sector": "Research institute",
    "ats": "jibe",
-   "base": "https://careers.rti.org",
-   "sets": [
-    "nonprofit"
-   ]
+   "base": "https://careers.rti.org"
   },
   {
    "name": "Brookings Institution",
    "tier": "dmv_hq",
    "sector": "Think tank",
    "ats": "icims",
-   "base": "https://careers-brookings.icims.com",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "base": "https://careers-brookings.icims.com"
   },
   {
    "name": "American Enterprise Institute",
    "tier": "dmv_hq",
    "sector": "Think tank",
    "ats": "icims",
-   "base": "https://careers-aei.icims.com",
-   "sets": [
-    "nonprofit"
-   ]
+   "base": "https://careers-aei.icims.com"
   },
   {
    "name": "Gates Foundation",
@@ -3033,10 +2185,7 @@
    "ats": "workday",
    "tenant": "gatesfoundation",
    "wd": "wd1",
-   "site": "Gates",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "Gates"
   },
   {
    "name": "Open Society Foundations",
@@ -3045,40 +2194,28 @@
    "ats": "workday",
    "tenant": "osfglobal",
    "wd": "wd5",
-   "site": "OSF",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "OSF"
   },
   {
    "name": "Rockefeller Foundation",
    "tier": "dmv_office",
    "sector": "Foundation",
    "ats": "adp",
-   "cid": "24726181-f57f-46a1-824d-3c8a89c3328a",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "24726181-f57f-46a1-824d-3c8a89c3328a"
   },
   {
    "name": "ACLU",
    "tier": "dmv_office",
    "sector": "Advocacy / civil liberties",
    "ats": "greenhouse",
-   "token": "aclu",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "aclu"
   },
   {
    "name": "Amnesty International USA",
    "tier": "dmv_office",
    "sector": "Human rights advocacy",
    "ats": "adp",
-   "cid": "c6fdd7c6-1b63-450d-ba2b-c679abf65f53",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "c6fdd7c6-1b63-450d-ba2b-c679abf65f53"
   },
   {
    "name": "Abt Global",
@@ -3086,32 +2223,21 @@
    "sector": "Research / international development",
    "ats": "oracle",
    "base": "https://egpy.fa.us2.oraclecloud.com",
-   "site": "JoinAbt",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "JoinAbt"
   },
   {
    "name": "Child Trends",
    "tier": "dmv_hq",
    "sector": "Research",
    "ats": "adp",
-   "cid": "70c1bbee-a65c-4b42-bb04-9dcb8a73868a",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "70c1bbee-a65c-4b42-bb04-9dcb8a73868a"
   },
   {
    "name": "Catholic University of America",
    "tier": "dmv_hq",
    "sector": "University",
    "ats": "icims",
-   "base": "https://staff-cua.icims.com",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "base": "https://staff-cua.icims.com"
   },
   {
    "name": "International Rescue Committee",
@@ -3120,40 +2246,28 @@
    "ats": "workday",
    "tenant": "theirc",
    "wd": "wd1",
-   "site": "External_Careers",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "External_Careers"
   },
   {
    "name": "Planned Parenthood Federation of America",
    "tier": "dmv_office",
    "sector": "Advocacy / reproductive health",
    "ats": "lever",
-   "token": "ppfa",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "ppfa"
   },
   {
    "name": "Winrock International",
    "tier": "dmv_office",
    "sector": "International development",
    "ats": "greenhouse",
-   "token": "winrock",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "winrock"
   },
   {
    "name": "Sierra Club",
    "tier": "dmv_office",
    "sector": "Conservation advocacy",
    "ats": "lever",
-   "token": "sierraclub",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "sierraclub"
   },
   {
    "name": "Catholic Relief Services",
@@ -3161,20 +2275,14 @@
    "sector": "Humanitarian / international development",
    "ats": "oracle",
    "base": "https://eipn.fa.us2.oraclecloud.com",
-   "site": "CX_1",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "CX_1"
   },
   {
    "name": "Oxfam America",
    "tier": "dmv_office",
    "sector": "Humanitarian / advocacy",
    "ats": "smartrecruiters",
-   "token": "OxfamAmerica2",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "OxfamAmerica2"
   },
   {
    "name": "TechnoServe",
@@ -3183,10 +2291,7 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "TEC1006TESER",
-   "board": "18180d88-ced0-4361-bd09-d5eef66dab24",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "18180d88-ced0-4361-bd09-d5eef66dab24"
   },
   {
    "name": "Howard Hughes Medical Institute",
@@ -3195,10 +2300,7 @@
    "ats": "workday",
    "tenant": "hhmi",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "External"
   },
   {
    "name": "National Audubon Society",
@@ -3207,10 +2309,7 @@
    "ats": "workday",
    "tenant": "audubon",
    "wd": "wd503",
-   "site": "Audubon",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "Audubon"
   },
   {
    "name": "RMI",
@@ -3219,20 +2318,14 @@
    "ats": "workday",
    "tenant": "rockymountain",
    "wd": "wd1",
-   "site": "RMI",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "RMI"
   },
   {
    "name": "Brady",
    "tier": "dmv_hq",
    "sector": "Advocacy",
    "ats": "adp",
-   "cid": "7a02ea3b-66b4-42c1-bdad-903a9fbcd893",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "7a02ea3b-66b4-42c1-bdad-903a9fbcd893"
   },
   {
    "name": "PATH",
@@ -3241,10 +2334,7 @@
    "ats": "workday",
    "tenant": "path",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "External"
   },
   {
    "name": "University of Maryland Baltimore",
@@ -3252,10 +2342,7 @@
    "sector": "University",
    "ats": "oracle",
    "base": "https://efzv.fa.us6.oraclecloud.com",
-   "site": "CX_1",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "CX_1"
   },
   {
    "name": "Bowie State University",
@@ -3264,10 +2351,7 @@
    "ats": "workday",
    "tenant": "marylandconnect",
    "wd": "wd1",
-   "site": "BSU_Careers",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "BSU_Careers"
   },
   {
    "name": "Coppin State University",
@@ -3276,80 +2360,56 @@
    "ats": "workday",
    "tenant": "marylandconnect",
    "wd": "wd1",
-   "site": "CSU_Careers",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "CSU_Careers"
   },
   {
    "name": "Global Communities",
    "tier": "dmv_hq",
    "sector": "International development",
    "ats": "adp",
-   "cid": "b5499531-3dcf-47e8-a051-b12d365cb034",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "b5499531-3dcf-47e8-a051-b12d365cb034"
   },
   {
    "name": "ONE Campaign",
    "tier": "dmv_hq",
    "sector": "Advocacy / global development",
    "ats": "greenhouse",
-   "token": "onecampaign",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "onecampaign"
   },
   {
    "name": "Ashoka",
    "tier": "dmv_hq",
    "sector": "Nonprofit / social entrepreneurship",
    "ats": "lever",
-   "token": "ashoka",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "ashoka"
   },
   {
    "name": "Accion",
    "tier": "dmv_hq",
    "sector": "International development / financial inclusion",
    "ats": "icims",
-   "base": "https://jobs-accion.icims.com",
-   "sets": [
-    "nonprofit"
-   ]
+   "base": "https://jobs-accion.icims.com"
   },
   {
    "name": "Omidyar Network",
    "tier": "dmv_office",
    "sector": "Foundation / philanthropy",
    "ats": "greenhouse",
-   "token": "omidyarnetwork",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "omidyarnetwork"
   },
   {
    "name": "NRDC",
    "tier": "dmv_office",
    "sector": "Environmental advocacy",
    "ats": "icims",
-   "base": "https://careers-nrdc.icims.com",
-   "sets": [
-    "nonprofit"
-   ]
+   "base": "https://careers-nrdc.icims.com"
   },
   {
    "name": "Common Cause",
    "tier": "dmv_hq",
    "sector": "Advocacy",
    "ats": "lever",
-   "token": "commoncause",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "commoncause"
   },
   {
    "name": "Loyola University Maryland",
@@ -3358,11 +2418,7 @@
    "ats": "workday",
    "tenant": "loyola",
    "wd": "wd5",
-   "site": "External",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Marymount University",
@@ -3371,11 +2427,7 @@
    "ats": "workday",
    "tenant": "marymount",
    "wd": "wd5",
-   "site": "Careers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "Careers"
   },
   {
    "name": "Management Sciences for Health",
@@ -3384,10 +2436,7 @@
    "ats": "workday",
    "tenant": "msh",
    "wd": "wd503",
-   "site": "External",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "External"
   },
   {
    "name": "Pathfinder International",
@@ -3396,20 +2445,14 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "PAT1012PATH",
-   "board": "39cd1fd5-010e-4cba-b70e-a30ea3163220",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "39cd1fd5-010e-4cba-b70e-a30ea3163220"
   },
   {
    "name": "U.S. Committee for Refugees and Immigrants",
    "tier": "dmv_hq",
    "sector": "Refugee services",
    "ats": "adp",
-   "cid": "95b1fb83-92bd-4515-841c-8cadfdb3dc44",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "95b1fb83-92bd-4515-841c-8cadfdb3dc44"
   },
   {
    "name": "International Justice Mission",
@@ -3418,40 +2461,28 @@
    "ats": "workday",
    "tenant": "ijm",
    "wd": "wd5",
-   "site": "careers-ijm",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "careers-ijm"
   },
   {
    "name": "World Relief",
    "tier": "dmv_hq",
    "sector": "Humanitarian / refugee services",
    "ats": "lever",
-   "token": "wr",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "wr"
   },
   {
    "name": "Stand Together",
    "tier": "dmv_hq",
    "sector": "Philanthropy / policy",
    "ats": "lever",
-   "token": "standtogether",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "standtogether"
   },
   {
    "name": "EMILYs List",
    "tier": "dmv_hq",
    "sector": "Political advocacy",
    "ats": "lever",
-   "token": "emilyslist",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "emilyslist"
   },
   {
    "name": "AIPAC",
@@ -3460,20 +2491,14 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "AME1071",
-   "board": "0ef31e79-3786-dcf1-5756-a5fc7f17ce54",
-   "sets": [
-    "nonprofit"
-   ]
+   "board": "0ef31e79-3786-dcf1-5756-a5fc7f17ce54"
   },
   {
    "name": "Campaign for Tobacco-Free Kids",
    "tier": "dmv_hq",
    "sector": "Public health advocacy",
    "ats": "adp",
-   "cid": "f7d09a68-17c0-4f1b-a1d9-9f2a46429adf",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "f7d09a68-17c0-4f1b-a1d9-9f2a46429adf"
   },
   {
    "name": "Teach For America",
@@ -3482,10 +2507,7 @@
    "ats": "workday",
    "tenant": "teachforamerica",
    "wd": "wd1",
-   "site": "TFA_Careers",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "TFA_Careers"
   },
   {
    "name": "College Board",
@@ -3494,20 +2516,14 @@
    "ats": "workday",
    "tenant": "collegeboard",
    "wd": "wd1",
-   "site": "Careers",
-   "sets": [
-    "nonprofit"
-   ]
+   "site": "Careers"
   },
   {
    "name": "Notre Dame of Maryland University",
    "tier": "dmv_hq",
    "sector": "University",
    "ats": "adp",
-   "cid": "ac3ea3a3-1795-4ceb-80c1-668296dbec35",
-   "sets": [
-    "nonprofit"
-   ]
+   "cid": "ac3ea3a3-1795-4ceb-80c1-668296dbec35"
   },
   {
    "name": "Environmental Defense Fund",
@@ -3517,40 +2533,28 @@
    "tenant": "osv_edf",
    "wd": "wd5",
    "site": "EDF_External_Careers",
-   "host": "osv-edf.wd5.myworkdayjobs.com",
-   "sets": [
-    "nonprofit"
-   ]
+   "host": "osv-edf.wd5.myworkdayjobs.com"
   },
   {
    "name": "Kids in Need of Defense",
    "tier": "dmv_hq",
    "sector": "Refugee / legal services",
    "ats": "lever",
-   "token": "supportkind",
-   "sets": [
-    "nonprofit"
-   ]
+   "token": "supportkind"
   },
   {
    "name": "Arnold Ventures",
    "tier": "dmv_office",
    "sector": "Foundation",
    "ats": "paylocity",
-   "id": "17519654-d224-4f10-9a5f-2b7ad3cd5a77",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "17519654-d224-4f10-9a5f-2b7ad3cd5a77"
   },
   {
    "name": "Chesapeake Bay Foundation",
    "tier": "dmv_hq",
    "sector": "Conservation",
    "ats": "paylocity",
-   "id": "a12b95f9-0f3c-43ee-bd08-aa807872c199",
-   "sets": [
-    "nonprofit"
-   ]
+   "id": "a12b95f9-0f3c-43ee-bd08-aa807872c199"
   },
   {
    "name": "Target",
@@ -3559,10 +2563,7 @@
    "ats": "workday",
    "tenant": "target",
    "wd": "wd5",
-   "site": "targetcareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "targetcareers"
   },
   {
    "name": "CVS Health / Aetna",
@@ -3571,10 +2572,7 @@
    "ats": "workday",
    "tenant": "cvshealth",
    "wd": "wd1",
-   "site": "CVS_Health_Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "CVS_Health_Careers"
   },
   {
    "name": "Cigna Group / Evernorth",
@@ -3583,10 +2581,7 @@
    "ats": "workday",
    "tenant": "cigna",
    "wd": "wd5",
-   "site": "cignacareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "cignacareers"
   },
   {
    "name": "Humana",
@@ -3595,10 +2590,7 @@
    "ats": "workday",
    "tenant": "humana",
    "wd": "wd5",
-   "site": "Humana_External_Career_Site",
-   "sets": [
-    "ops"
-   ]
+   "site": "Humana_External_Career_Site"
   },
   {
    "name": "Centene",
@@ -3607,10 +2599,7 @@
    "ats": "workday",
    "tenant": "centene",
    "wd": "wd5",
-   "site": "Centene_External",
-   "sets": [
-    "ops"
-   ]
+   "site": "Centene_External"
   },
   {
    "name": "Prudential Financial",
@@ -3619,10 +2608,7 @@
    "ats": "workday",
    "tenant": "pru",
    "wd": "wd5",
-   "site": "Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Careers"
   },
   {
    "name": "Travelers",
@@ -3631,10 +2617,7 @@
    "ats": "workday",
    "tenant": "travelers",
    "wd": "wd5",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Johnson & Johnson",
@@ -3643,10 +2626,7 @@
    "ats": "workday",
    "tenant": "jj",
    "wd": "wd5",
-   "site": "JJ",
-   "sets": [
-    "ops"
-   ]
+   "site": "JJ"
   },
   {
    "name": "Merck (MSD)",
@@ -3655,10 +2635,7 @@
    "ats": "workday",
    "tenant": "msd",
    "wd": "wd5",
-   "site": "SearchJobs",
-   "sets": [
-    "ops"
-   ]
+   "site": "SearchJobs"
   },
   {
    "name": "Pfizer",
@@ -3667,10 +2644,7 @@
    "ats": "workday",
    "tenant": "pfizer",
    "wd": "wd1",
-   "site": "PfizerCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "PfizerCareers"
   },
   {
    "name": "AstraZeneca (Gaithersburg)",
@@ -3679,10 +2653,7 @@
    "ats": "workday",
    "tenant": "astrazeneca",
    "wd": "wd3",
-   "site": "Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Careers"
   },
   {
    "name": "Abbott",
@@ -3691,10 +2662,7 @@
    "ats": "workday",
    "tenant": "abbott",
    "wd": "wd5",
-   "site": "abbottcareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "abbottcareers"
   },
   {
    "name": "Medtronic",
@@ -3703,10 +2671,7 @@
    "ats": "workday",
    "tenant": "medtronic",
    "wd": "wd1",
-   "site": "MedtronicCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "MedtronicCareers"
   },
   {
    "name": "Thermo Fisher Scientific",
@@ -3715,10 +2680,7 @@
    "ats": "workday",
    "tenant": "thermofisher",
    "wd": "wd5",
-   "site": "ThermoFisherCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "ThermoFisherCareers"
   },
   {
    "name": "GSK (Rockville)",
@@ -3727,10 +2689,7 @@
    "ats": "workday",
    "tenant": "gsk",
    "wd": "wd5",
-   "site": "GSKCareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "GSKCareers"
   },
   {
    "name": "Gilead Sciences / Kite (Frederick)",
@@ -3739,10 +2698,7 @@
    "ats": "workday",
    "tenant": "gilead",
    "wd": "wd1",
-   "site": "gileadcareers",
-   "sets": [
-    "ops"
-   ]
+   "site": "gileadcareers"
   },
   {
    "name": "BD (Becton Dickinson)",
@@ -3751,10 +2707,7 @@
    "ats": "workday",
    "tenant": "bdx",
    "wd": "wd1",
-   "site": "EXTERNAL_CAREER_SITE_USA",
-   "sets": [
-    "ops"
-   ]
+   "site": "EXTERNAL_CAREER_SITE_USA"
   },
   {
    "name": "United Therapeutics",
@@ -3764,10 +2717,7 @@
    "tenant": "vhr_unither",
    "wd": "wd5",
    "site": "External",
-   "host": "vhr-unither.wd5.myworkdayjobs.com",
-   "sets": [
-    "ops"
-   ]
+   "host": "vhr-unither.wd5.myworkdayjobs.com"
   },
   {
    "name": "Labcorp",
@@ -3776,10 +2726,7 @@
    "ats": "workday",
    "tenant": "labcorp",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Quest Diagnostics (Chantilly lab)",
@@ -3787,10 +2734,7 @@
    "sector": "Diagnostics",
    "ats": "oracle",
    "base": "https://hdox.fa.us6.oraclecloud.com",
-   "site": "CX_1",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX_1"
   },
   {
    "name": "Coca-Cola Company",
@@ -3799,10 +2743,7 @@
    "ats": "workday",
    "tenant": "coke",
    "wd": "wd1",
-   "site": "coca-cola-careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "coca-cola-careers"
   },
   {
    "name": "Procter & Gamble",
@@ -3811,20 +2752,14 @@
    "ats": "workday",
    "tenant": "pg",
    "wd": "wd5",
-   "site": "1000",
-   "sets": [
-    "ops"
-   ]
+   "site": "1000"
   },
   {
    "name": "PepsiCo",
    "tier": "dmv_office",
    "sector": "Consumer goods",
    "ats": "jibe",
-   "base": "https://www.pepsicojobs.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://www.pepsicojobs.com"
   },
   {
    "name": "Mars Inc",
@@ -3833,10 +2768,7 @@
    "ats": "workday",
    "tenant": "mars",
    "wd": "wd3",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Lowe's",
@@ -3845,10 +2777,7 @@
    "ats": "workday",
    "tenant": "lowes",
    "wd": "wd5",
-   "site": "LWS_External_CS",
-   "sets": [
-    "ops"
-   ]
+   "site": "LWS_External_CS"
   },
   {
    "name": "Home Depot",
@@ -3857,20 +2786,14 @@
    "ats": "workday",
    "tenant": "homedepot",
    "wd": "wd5",
-   "site": "CareerDepot",
-   "sets": [
-    "ops"
-   ]
+   "site": "CareerDepot"
   },
   {
    "name": "Costco",
    "tier": "dmv_office",
    "sector": "Retail",
    "ats": "jibe",
-   "base": "https://careers.costco.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers.costco.com"
   },
   {
    "name": "GE Aerospace",
@@ -3879,10 +2802,7 @@
    "ats": "workday",
    "tenant": "geaerospace",
    "wd": "wd5",
-   "site": "GE_ExternalSite",
-   "sets": [
-    "ops"
-   ]
+   "site": "GE_ExternalSite"
   },
   {
    "name": "GE Vernova",
@@ -3891,10 +2811,7 @@
    "ats": "workday",
    "tenant": "gevernova",
    "wd": "wd5",
-   "site": "Vernova_ExternalSite",
-   "sets": [
-    "ops"
-   ]
+   "site": "Vernova_ExternalSite"
   },
   {
    "name": "GE HealthCare",
@@ -3903,10 +2820,7 @@
    "ats": "workday",
    "tenant": "gehc",
    "wd": "wd5",
-   "site": "GEHC_ExternalSite",
-   "sets": [
-    "ops"
-   ]
+   "site": "GEHC_ExternalSite"
   },
   {
    "name": "Honeywell",
@@ -3914,20 +2828,14 @@
    "sector": "Industrial / aerospace",
    "ats": "oracle",
    "base": "https://ibqbjb.fa.ocs.oraclecloud.com",
-   "site": "Honeywell",
-   "sets": [
-    "ops"
-   ]
+   "site": "Honeywell"
   },
   {
    "name": "General Dynamics Mission Systems",
    "tier": "dmv_hq",
    "sector": "Defense",
    "ats": "icims",
-   "base": "https://careers-gdms.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers-gdms.icims.com"
   },
   {
    "name": "Verizon",
@@ -3936,10 +2844,7 @@
    "ats": "workday",
    "tenant": "verizon",
    "wd": "wd12",
-   "site": "verizon-careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "verizon-careers"
   },
   {
    "name": "AT&T",
@@ -3948,10 +2853,7 @@
    "ats": "workday",
    "tenant": "att",
    "wd": "wd1",
-   "site": "ATTGeneral",
-   "sets": [
-    "ops"
-   ]
+   "site": "ATTGeneral"
   },
   {
    "name": "Comcast",
@@ -3960,10 +2862,7 @@
    "ats": "workday",
    "tenant": "comcast",
    "wd": "wd115",
-   "site": "Comcast_Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Comcast_Careers"
   },
   {
    "name": "T-Mobile",
@@ -3972,10 +2871,7 @@
    "ats": "workday",
    "tenant": "tmobile",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "PayPal",
@@ -3984,10 +2880,7 @@
    "ats": "workday",
    "tenant": "paypal",
    "wd": "wd1",
-   "site": "jobs",
-   "sets": [
-    "ops"
-   ]
+   "site": "jobs"
   },
   {
    "name": "American Express",
@@ -3995,10 +2888,7 @@
    "sector": "Payments",
    "ats": "oracle",
    "base": "https://egug.fa.us2.oraclecloud.com",
-   "site": "CX_1",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX_1"
   },
   {
    "name": "JPMorgan Chase",
@@ -4006,10 +2896,7 @@
    "sector": "Bank",
    "ats": "oracle",
    "base": "https://jpmc.fa.oraclecloud.com",
-   "site": "CX_1001",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX_1001"
   },
   {
    "name": "Citi",
@@ -4018,10 +2905,7 @@
    "ats": "workday",
    "tenant": "citi",
    "wd": "wd5",
-   "site": "2",
-   "sets": [
-    "ops"
-   ]
+   "site": "2"
   },
   {
    "name": "Morgan Stanley (Baltimore)",
@@ -4030,10 +2914,7 @@
    "ats": "workday",
    "tenant": "ms",
    "wd": "wd5",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Nasdaq (Rockville)",
@@ -4042,10 +2923,7 @@
    "ats": "workday",
    "tenant": "nasdaq",
    "wd": "wd1",
-   "site": "Global_External_Site",
-   "sets": [
-    "ops"
-   ]
+   "site": "Global_External_Site"
   },
   {
    "name": "S&P Global",
@@ -4054,10 +2932,7 @@
    "ats": "workday",
    "tenant": "spgi",
    "wd": "wd5",
-   "site": "SPGI_Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "SPGI_Careers"
   },
   {
    "name": "Chubb",
@@ -4065,10 +2940,7 @@
    "sector": "Insurance",
    "ats": "oracle",
    "base": "https://fa-ewgu-saasfaprod1.fa.ocs.oraclecloud.com",
-   "site": "CX_2001",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX_2001"
   },
   {
    "name": "Marsh McLennan",
@@ -4077,20 +2949,14 @@
    "ats": "workday",
    "tenant": "mmc",
    "wd": "wd1",
-   "site": "MMC",
-   "sets": [
-    "ops"
-   ]
+   "site": "MMC"
   },
   {
    "name": "Aon",
    "tier": "dmv_office",
    "sector": "Insurance broker / consulting",
    "ats": "jibe",
-   "base": "https://jobs.aon.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://jobs.aon.com"
   },
   {
    "name": "Cisco",
@@ -4099,10 +2965,7 @@
    "ats": "workday",
    "tenant": "cisco",
    "wd": "wd5",
-   "site": "Cisco_Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Cisco_Careers"
   },
   {
    "name": "Oracle",
@@ -4110,10 +2973,7 @@
    "sector": "Tech",
    "ats": "oracle",
    "base": "https://eeho.fa.us2.oraclecloud.com",
-   "site": "CX_45001",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX_45001"
   },
   {
    "name": "HP Inc",
@@ -4122,10 +2982,7 @@
    "ats": "workday",
    "tenant": "hp",
    "wd": "wd5",
-   "site": "ExternalCareerSite",
-   "sets": [
-    "ops"
-   ]
+   "site": "ExternalCareerSite"
   },
   {
    "name": "Hewlett Packard Enterprise",
@@ -4134,10 +2991,7 @@
    "ats": "workday",
    "tenant": "hpe",
    "wd": "wd5",
-   "site": "Jobsathpe",
-   "sets": [
-    "ops"
-   ]
+   "site": "Jobsathpe"
   },
   {
    "name": "Micron Technology (Manassas fab)",
@@ -4146,10 +3000,7 @@
    "ats": "workday",
    "tenant": "micron",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "DXC Technology",
@@ -4158,10 +3009,7 @@
    "ats": "workday",
    "tenant": "dxctechnology",
    "wd": "wd1",
-   "site": "DXCJobs",
-   "sets": [
-    "ops"
-   ]
+   "site": "DXCJobs"
   },
   {
    "name": "Equinix (Ashburn)",
@@ -4170,10 +3018,7 @@
    "ats": "workday",
    "tenant": "equinix",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Marriott International",
@@ -4181,10 +3026,7 @@
    "sector": "Hospitality HQ",
    "ats": "oracle",
    "base": "https://ejwl.fa.us2.oraclecloud.com",
-   "site": "CX",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX"
   },
   {
    "name": "Hilton",
@@ -4192,30 +3034,21 @@
    "sector": "Hospitality HQ",
    "ats": "oracle",
    "base": "https://efet.fa.us2.oraclecloud.com",
-   "site": "CX_1",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX_1"
   },
   {
    "name": "Constellation Energy",
    "tier": "dmv_hq",
    "sector": "Energy",
    "ats": "jibe",
-   "base": "https://jobs.constellationenergy.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://jobs.constellationenergy.com"
   },
   {
    "name": "Exelon (Pepco / BGE)",
    "tier": "dmv_office",
    "sector": "Utility",
    "ats": "jibe",
-   "base": "https://jobs.exeloncorp.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://jobs.exeloncorp.com"
   },
   {
    "name": "Sinclair",
@@ -4223,20 +3056,14 @@
    "sector": "Media",
    "ats": "oracle",
    "base": "https://edyy.fa.us2.oraclecloud.com",
-   "site": "CX_2002",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX_2002"
   },
   {
    "name": "Federal Realty",
    "tier": "dmv_hq",
    "sector": "Real estate (REIT)",
    "ats": "icims",
-   "base": "https://careers-federalrealty.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers-federalrealty.icims.com"
   },
   {
    "name": "Amentum",
@@ -4245,60 +3072,42 @@
    "ats": "workday",
    "tenant": "pae",
    "wd": "wd1",
-   "site": "Amentum_Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Amentum_Careers"
   },
   {
    "name": "Peraton",
    "tier": "dmv_hq",
    "sector": "Defense / government services",
    "ats": "icims",
-   "base": "https://careers-peraton.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers-peraton.icims.com"
   },
   {
    "name": "V2X",
    "tier": "dmv_hq",
    "sector": "Defense / government services",
    "ats": "jibe",
-   "base": "https://careers.gov2x.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers.gov2x.com"
   },
   {
    "name": "Iridium Communications",
    "tier": "dmv_hq",
    "sector": "Satellite communications",
    "ats": "icims",
-   "base": "https://careers-iridium.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers-iridium.icims.com"
   },
   {
    "name": "Allegis Group",
    "tier": "dmv_hq",
    "sector": "Staffing HQ",
    "ats": "icims",
-   "base": "https://careers-allegisgroup.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers-allegisgroup.icims.com"
   },
   {
    "name": "Actalent (Allegis Group)",
    "tier": "dmv_hq",
    "sector": "Staffing / engineering services",
    "ats": "icims",
-   "base": "https://careers-actalentservices.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers-actalentservices.icims.com"
   },
   {
    "name": "Qiagen",
@@ -4307,10 +3116,7 @@
    "ats": "workday",
    "tenant": "qiagen",
    "wd": "wd502",
-   "site": "QIAGEN",
-   "sets": [
-    "ops"
-   ]
+   "site": "QIAGEN"
   },
   {
    "name": "Novavax",
@@ -4319,10 +3125,7 @@
    "ats": "workday",
    "tenant": "novavax",
    "wd": "wd1",
-   "site": "Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Careers"
   },
   {
    "name": "MacroGenics",
@@ -4331,20 +3134,14 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "MAC1011MGEN",
-   "board": "89a052a3-e089-4f02-bcf1-3175048463c9",
-   "sets": [
-    "ops"
-   ]
+   "board": "89a052a3-e089-4f02-bcf1-3175048463c9"
   },
   {
    "name": "REGENXBIO",
    "tier": "dmv_hq",
    "sector": "Biotech",
    "ats": "lever",
-   "token": "regenxbio",
-   "sets": [
-    "ops"
-   ]
+   "token": "regenxbio"
   },
   {
    "name": "Evolent",
@@ -4353,10 +3150,7 @@
    "ats": "workday",
    "tenant": "evolent",
    "wd": "wd1",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Comscore",
@@ -4365,70 +3159,49 @@
    "ats": "workday",
    "tenant": "comscore",
    "wd": "wd5",
-   "site": "External",
-   "sets": [
-    "ops"
-   ]
+   "site": "External"
   },
   {
    "name": "Ellucian",
    "tier": "dmv_hq",
    "sector": "Software (higher-ed)",
    "ats": "jibe",
-   "base": "https://careers.ellucian.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers.ellucian.com"
   },
   {
    "name": "Alarm.com",
    "tier": "dmv_hq",
    "sector": "Software / IoT",
    "ats": "greenhouse",
-   "token": "alarmcom",
-   "sets": [
-    "ops"
-   ]
+   "token": "alarmcom"
   },
   {
    "name": "Unanet",
    "tier": "dmv_hq",
    "sector": "Software (GovCon ERP)",
    "ats": "greenhouse",
-   "token": "unanet",
-   "sets": [
-    "ops"
-   ]
+   "token": "unanet"
   },
   {
    "name": "BigBear.ai",
    "tier": "dmv_hq",
    "sector": "Defense AI / analytics",
    "ats": "jibe",
-   "base": "https://careers.bigbear.ai",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers.bigbear.ai"
   },
   {
    "name": "Arcfield",
    "tier": "dmv_hq",
    "sector": "Defense / government services",
    "ats": "jibe",
-   "base": "https://careers.arcfield.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers.arcfield.com"
   },
   {
    "name": "Sev1Tech",
    "tier": "dmv_hq",
    "sector": "Government IT services",
    "ats": "icims",
-   "base": "https://careers-sev1tech.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers-sev1tech.icims.com"
   },
   {
    "name": "Sunrise Senior Living",
@@ -4437,10 +3210,7 @@
    "ats": "workday",
    "tenant": "sunriseseniorliving",
    "wd": "wd12",
-   "site": "SUNRISE_EXT_CAREERS",
-   "sets": [
-    "ops"
-   ]
+   "site": "SUNRISE_EXT_CAREERS"
   },
   {
    "name": "Walker & Dunlop",
@@ -4449,20 +3219,14 @@
    "ats": "workday",
    "tenant": "walkerdunlop",
    "wd": "wd1",
-   "site": "WD",
-   "sets": [
-    "ops"
-   ]
+   "site": "WD"
   },
   {
    "name": "JBG SMITH",
    "tier": "dmv_hq",
    "sector": "REIT",
    "ats": "icims",
-   "base": "https://careers-jbgsmith.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers-jbgsmith.icims.com"
   },
   {
    "name": "HITT Contracting",
@@ -4471,10 +3235,7 @@
    "ats": "workday",
    "tenant": "hitt",
    "wd": "wd503",
-   "site": "HITT",
-   "sets": [
-    "ops"
-   ]
+   "site": "HITT"
   },
   {
    "name": "Brown Advisory",
@@ -4483,20 +3244,14 @@
    "ats": "workday",
    "tenant": "brownadvisory",
    "wd": "wd1",
-   "site": "Brown",
-   "sets": [
-    "ops"
-   ]
+   "site": "Brown"
   },
   {
    "name": "Farmer Mac",
    "tier": "dmv_hq",
    "sector": "GSE / finance",
    "ats": "adp",
-   "cid": "324a4031-59fe-4b64-b9a3-ec4705312baf",
-   "sets": [
-    "ops"
-   ]
+   "cid": "324a4031-59fe-4b64-b9a3-ec4705312baf"
   },
   {
    "name": "Atlantic Union Bank (incl. Sandy Spring)",
@@ -4505,20 +3260,14 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "UNI1046UFMB",
-   "board": "d8f90aad-672e-4f0a-bbc1-a17aa8cf1111",
-   "sets": [
-    "ops"
-   ]
+   "board": "d8f90aad-672e-4f0a-bbc1-a17aa8cf1111"
   },
   {
    "name": "Capital Bank",
    "tier": "dmv_hq",
    "sector": "Bank",
    "ats": "greenhouse",
-   "token": "capitalbank",
-   "sets": [
-    "ops"
-   ]
+   "token": "capitalbank"
   },
   {
    "name": "Graham Holdings - Kaplan",
@@ -4527,30 +3276,21 @@
    "ats": "workday",
    "tenant": "ghc",
    "wd": "wd1",
-   "site": "Kaplan_Careers",
-   "sets": [
-    "ops"
-   ]
+   "site": "Kaplan_Careers"
   },
   {
    "name": "Urban One",
    "tier": "dmv_hq",
    "sector": "Media",
    "ats": "adp",
-   "cid": "ec7ee775-68fd-42a7-89a5-d8e1ff330cbf",
-   "sets": [
-    "ops"
-   ]
+   "cid": "ec7ee775-68fd-42a7-89a5-d8e1ff330cbf"
   },
   {
    "name": "Monumental Sports & Entertainment",
    "tier": "dmv_hq",
    "sector": "Sports / entertainment",
    "ats": "greenhouse",
-   "token": "monumentalsports",
-   "sets": [
-    "ops"
-   ]
+   "token": "monumentalsports"
   },
   {
    "name": "Inova Health System",
@@ -4558,40 +3298,28 @@
    "sector": "Health system",
    "ats": "oracle",
    "base": "https://elar.fa.us2.oraclecloud.com",
-   "site": "CX_1",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX_1"
   },
   {
    "name": "MedStar Health",
    "tier": "dmv_hq",
    "sector": "Health system",
    "ats": "jibe",
-   "base": "https://careers.medstarhealth.org",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers.medstarhealth.org"
   },
   {
    "name": "VHC Health (Virginia Hospital Center)",
    "tier": "dmv_hq",
    "sector": "Health system",
    "ats": "icims",
-   "base": "https://careers-vhchealth.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers-vhchealth.icims.com"
   },
   {
    "name": "Luminis Health",
    "tier": "dmv_hq",
    "sector": "Health system",
    "ats": "greenhouse",
-   "token": "luminishealth",
-   "sets": [
-    "ops"
-   ]
+   "token": "luminishealth"
   },
   {
    "name": "GBMC HealthCare",
@@ -4600,20 +3328,14 @@
    "ats": "workday",
    "tenant": "gbmc",
    "wd": "wd1",
-   "site": "gbmc",
-   "sets": [
-    "ops"
-   ]
+   "site": "gbmc"
   },
   {
    "name": "Mercy Medical Center (Baltimore)",
    "tier": "dmv_hq",
    "sector": "Health system",
    "ats": "jibe",
-   "base": "https://careers.mdmercy.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers.mdmercy.com"
   },
   {
    "name": "Frederick Health",
@@ -4622,30 +3344,21 @@
    "ats": "ukg",
    "host": "recruiting.ultipro.com",
    "tenant": "FRE1010FRHS",
-   "board": "776a147e-2e0b-43d0-844e-bbd49deeb24d",
-   "sets": [
-    "ops"
-   ]
+   "board": "776a147e-2e0b-43d0-844e-bbd49deeb24d"
   },
   {
    "name": "Kennedy Krieger Institute",
    "tier": "dmv_hq",
    "sector": "Health system / pediatric",
    "ats": "icims",
-   "base": "https://jobs-kennedykrieger.icims.com",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://jobs-kennedykrieger.icims.com"
   },
   {
    "name": "Johns Hopkins Applied Physics Laboratory",
    "tier": "dmv_hq",
    "sector": "Research lab (UARC)",
    "ats": "jibe",
-   "base": "https://careers.jhuapl.edu",
-   "sets": [
-    "ops"
-   ]
+   "base": "https://careers.jhuapl.edu"
   },
   {
    "name": "WMATA",
@@ -4653,10 +3366,7 @@
    "sector": "Transit",
    "ats": "oracle",
    "base": "https://ibpbjb.fa.ocs.oraclecloud.com",
-   "site": "CX_2011",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX_2011"
   },
   {
    "name": "DC Water",
@@ -4664,10 +3374,7 @@
    "sector": "Water utility",
    "ats": "oracle",
    "base": "https://elxb.fa.us2.oraclecloud.com",
-   "site": "CX",
-   "sets": [
-    "ops"
-   ]
+   "site": "CX"
   },
   {
    "name": "University of Maryland Global Campus",
@@ -4676,11 +3383,7 @@
    "ats": "workday",
    "tenant": "umgc",
    "wd": "wd1",
-   "site": "umgc_Careers",
-   "sets": [
-    "nonprofit",
-    "ops"
-   ]
+   "site": "umgc_Careers"
   },
   {
    "name": "A. Morton Thomas and Associates",
@@ -4688,9 +3391,6 @@
    "sector": "Engineering",
    "ats": "lever",
    "token": "amtengineering",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -4699,9 +3399,6 @@
    "sector": "",
    "ats": "paycom",
    "key": "5921B7CB5AF10D6525A941324055D129",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -4712,9 +3409,6 @@
    "tenant": "aero",
    "wd": "wd5",
    "site": "External",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -4725,9 +3419,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "AFR1000AFWI",
    "board": "20e4eecc-c532-4e6a-bb5f-39ea79059f29",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4736,9 +3427,6 @@
    "sector": "Gov services / IT",
    "ats": "lever",
    "token": "agile-defense",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -4747,9 +3435,6 @@
    "sector": "Nonprofit / Education",
    "ats": "adp",
    "cid": "95acc384-9df6-44bd-becc-be83eee92b3f",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4758,9 +3443,6 @@
    "sector": "Nonprofit / Other",
    "ats": "icims",
    "base": "https://jobs-alpa.icims.com",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4769,9 +3451,6 @@
    "sector": "Nonprofit / Community development",
    "ats": "jazzhr",
    "token": "ahri",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4780,9 +3459,6 @@
    "sector": "Gov services",
    "ats": "jibe",
    "base": "https://careers.akima.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -4791,9 +3467,6 @@
    "sector": "Real estate",
    "ats": "adp",
    "cid": "be43e903-a90b-415c-b3df-e272bd862a5c",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -4803,9 +3476,6 @@
    "ats": "saashr",
    "host": "secure7.saashr.com",
    "cid": "6195637",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -4814,9 +3484,6 @@
    "sector": "Nonprofit / Other",
    "ats": "bamboohr",
    "token": "justice",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4825,9 +3492,6 @@
    "sector": "Nonprofit / Public policy / society",
    "ats": "adp",
    "cid": "7f5baef3-9cee-4681-85f2-7d738f673786",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4837,9 +3501,6 @@
    "ats": "dayforce",
    "ns": "aba",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -4848,9 +3509,6 @@
    "sector": "Nonprofit / Community development",
    "ats": "greenhouse",
    "token": "americancleanpowerassociationacp",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4860,9 +3518,6 @@
    "ats": "oracle",
    "base": "https://ibyrjb.fa.ocs.oraclecloud.com",
    "site": "ACCJobs",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4871,9 +3526,6 @@
    "sector": "Nonprofit / Health",
    "ats": "greenhouse",
    "token": "acog",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4884,9 +3536,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "AME1066ACOR",
    "board": "25e10ebc-c736-4f40-ae00-4e85d2c38840",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4895,9 +3544,6 @@
    "sector": "International education",
    "ats": "paycom",
    "key": "58AA089E0E2C786B7FE4217373F3BCBD",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -4907,9 +3553,6 @@
    "ats": "saashr",
    "host": "secure7.saashr.com",
    "cid": "6148957",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -4918,9 +3561,6 @@
    "sector": "Nonprofit / Food / agriculture",
    "ats": "paycom",
    "key": "4A4769032E64A4A7D44E8F65984C2E4B",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4929,9 +3569,6 @@
    "sector": "Nonprofit / Science / technology",
    "ats": "paycom",
    "key": "59DC7BB56B27E6FE0BAEFCC26247152E",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4940,9 +3577,6 @@
    "sector": "Nonprofit / Other",
    "ats": "workable",
    "token": "american-hoteland-lodging-association",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4951,9 +3585,6 @@
    "sector": "Nonprofit / Animals",
    "ats": "jazzhr",
    "token": "americanhumane",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -4963,9 +3594,6 @@
    "ats": "saashr",
    "host": "secure4.saashr.com",
    "cid": "6162608",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4974,9 +3602,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "8aa77bca-e0ae-4e12-a8d6-b79f70f2dd72",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -4985,9 +3610,6 @@
    "sector": "Nonprofit / Mental health",
    "ats": "paylocity",
    "id": "4c38dcb1-0e29-46df-842a-6b5a01b3a732",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -4996,9 +3618,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "bamboohr",
    "token": "americanrivers",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5009,9 +3628,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "AME1097AMESO",
    "board": "20f80d94-2e8b-41f1-81bd-2808157c95e1",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5020,9 +3636,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "f5688abd-7893-4349-9948-f60b3bdf7a5d",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5031,9 +3644,6 @@
    "sector": "Nonprofit / Other",
    "ats": "icims",
    "base": "https://careers-ashp.icims.com",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5042,9 +3652,6 @@
    "sector": "Nonprofit / Health / disease",
    "ats": "adp",
    "cid": "bc002d8b-1838-439f-8332-ce36a63cb229",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5053,9 +3660,6 @@
    "sector": "Nonprofit / Science / technology",
    "ats": "icims",
    "base": "https://careers-atcc.icims.com",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5064,9 +3668,6 @@
    "sector": "Nonprofit / Health / disease",
    "ats": "jazzhr",
    "token": "alsassociation",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5075,9 +3676,6 @@
    "sector": "Gov services / consulting",
    "ats": "icims",
    "base": "https://careers-amyx.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5086,9 +3684,6 @@
    "sector": "Nonprofit / Science / technology",
    "ats": "greenhouse",
    "token": "analyticservicesinc",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5097,9 +3692,6 @@
    "sector": "Gov services / intelligence",
    "ats": "lever",
    "token": "anavationllc",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5108,9 +3700,6 @@
    "sector": "Credit union",
    "ats": "paycom",
    "key": "94B6F066E7140D762CF5BCD63EC3DA30",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5119,9 +3708,6 @@
    "sector": "Nonprofit / Philanthropy",
    "ats": "adp",
    "cid": "1a6a5063-9544-409a-9a5d-ff8284532335",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5130,9 +3716,6 @@
    "sector": "Credit union",
    "ats": "adp",
    "cid": "02fdfd76-6c27-4e21-b0d8-592faacbd1a5",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5143,9 +3726,6 @@
    "tenant": "appliedis",
    "wd": "wd5",
    "site": "AIS_Careers",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5154,9 +3734,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paycom",
    "key": "3430197EE5A5B0413C71AB80B6332033",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5165,9 +3742,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "4851f881-72de-4a39-941b-93f8b6ff5fc3",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5176,9 +3750,6 @@
    "sector": "Software / energy data",
    "ats": "lever",
    "token": "arcadia",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5187,9 +3758,6 @@
    "sector": "Gov services / digital",
    "ats": "greenhouse",
    "token": "ardentmc",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5200,9 +3768,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "ARD1000ADMO",
    "board": "b9c60dae-cb1c-4f01-a73f-58810ffde77c",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5211,9 +3776,6 @@
    "sector": "Gov services",
    "ats": "workable",
    "token": "aretum",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5222,9 +3784,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "paycom",
    "key": "936C08AB0A8F6B207CFAE9F4C430FAF3",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5233,9 +3792,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "42ba49d0-dfe6-4093-be9c-0a1517a3f2b5",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5244,9 +3800,6 @@
    "sector": "Nonprofit / Community development",
    "ats": "jibe",
    "base": "https://careers.arrow.org",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5256,9 +3809,6 @@
    "ats": "saashr",
    "host": "secure7.saashr.com",
    "cid": "6217373",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5267,9 +3817,6 @@
    "sector": "Nonprofit / Other",
    "ats": "lever",
    "token": "arundellodge",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5279,9 +3826,6 @@
    "ats": "dayforce",
    "ns": "asrcfh",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5291,9 +3835,6 @@
    "ats": "dayforce",
    "ns": "associated",
    "board": "ASSOCANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5303,9 +3844,6 @@
    "ats": "dayforce",
    "ns": "aui",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5316,9 +3854,6 @@
    "host": "recruiting2.ultipro.com",
    "tenant": "SPA1004AURA",
    "board": "57b96f30-6a4b-42cc-8f73-d417a17b54e9",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5327,9 +3862,6 @@
    "sector": "Health consulting",
    "ats": "greenhouse",
    "token": "atiadvisory",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5338,9 +3870,6 @@
    "sector": "Think tank",
    "ats": "paycom",
    "key": "1B8B05965A36F1ED6E136AA0A0907656",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -5349,9 +3878,6 @@
    "sector": "Nonprofit / Health / disease",
    "ats": "jazzhr",
    "token": "autismspeaks",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5360,9 +3886,6 @@
    "sector": "Health consulting",
    "ats": "lever",
    "token": "avalerehealth",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5371,9 +3894,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "314574b3-596c-4ea4-9e5f-5a543b5653cc",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5382,9 +3902,6 @@
    "sector": "Real estate / hospitality",
    "ats": "lever",
    "token": "bfsaul",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5393,9 +3910,6 @@
    "sector": "Nonprofit / Philanthropy",
    "ats": "jazzhr",
    "token": "baltimorecivicfund",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5404,9 +3918,6 @@
    "sector": "Nonprofit / Housing",
    "ats": "adp",
    "cid": "a6b80804-9670-43dd-905e-0d64b344019c",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5415,9 +3926,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paycom",
    "key": "A15AEF4691E2E01F0016518C47919805",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5426,9 +3934,6 @@
    "sector": "International development",
    "ats": "icims",
    "base": "https://careers-banyanglobal.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5437,9 +3942,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "92a346d6-ac3c-47e3-bcd7-12245b1c7791",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5450,9 +3952,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "BEH1003BHSB",
    "board": "53e60eca-8a8b-438c-b09c-9cac8732ebf5",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5463,9 +3962,6 @@
    "tenant": "bloomberg",
    "wd": "wd1",
    "site": "Bloombergindustrygroup_External_Career_Site",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5475,9 +3971,6 @@
    "ats": "oracle",
    "base": "https://ebwh.fa.us2.oraclecloud.com",
    "site": "CX_4001",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5486,9 +3979,6 @@
    "sector": "Nonprofit / Youth development",
    "ats": "greenhouse",
    "token": "bbyo",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5499,9 +3989,6 @@
    "tenant": "bonterra",
    "wd": "wd1",
    "site": "bonterratech",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5510,9 +3997,6 @@
    "sector": "Gov services",
    "ats": "icims",
    "base": "https://bowheadcareers-uicalaska.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5521,9 +4005,6 @@
    "sector": "Engineering",
    "ats": "jibe",
    "base": "https://careers.bowman.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5532,9 +4013,6 @@
    "sector": "Real estate",
    "ats": "greenhouse",
    "token": "bozzuto",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5543,9 +4021,6 @@
    "sector": "Association services",
    "ats": "jazzhr",
    "token": "brightkeyinc",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5554,9 +4029,6 @@
    "sector": "Senior living",
    "ats": "icims",
    "base": "https://associates-brightviewseniorliving.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5565,9 +4037,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "greenhouse",
    "token": "broadmead",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5576,9 +4045,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "7659FF86D353D48629C578C67EDF6280",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5587,9 +4053,6 @@
    "sector": "Banking",
    "ats": "adp",
    "cid": "23ec8a6d-6221-4669-82f8-82a873119838",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -5598,9 +4061,6 @@
    "sector": "Nonprofit / Community development",
    "ats": "adp",
    "cid": "caf69f5f-59d6-4f34-a533-04d5603ed4e3",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5609,9 +4069,6 @@
    "sector": "Nonprofit / Food / agriculture",
    "ats": "paycom",
    "key": "3AADCD4945A964C4145BE87EE89BE12E",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5620,9 +4077,6 @@
    "sector": "Nonprofit / Public policy / society",
    "ats": "workable",
    "token": "capital-impact-partners-1",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5631,9 +4085,6 @@
    "sector": "Nonprofit / Education",
    "ats": "adp",
    "cid": "199260cf-4b15-410c-9970-1d94a408c2d5",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5642,9 +4093,6 @@
    "sector": "Real estate",
    "ats": "paycom",
    "key": "8D9BC96D3ED3FD3E76DB6663DFDA9A36",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5653,9 +4101,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "paycom",
    "key": "17C0B45A92F696ABE39B9ACE4F5653EF",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5664,9 +4109,6 @@
    "sector": "Gov services / cyber",
    "ats": "adp",
    "cid": "244ae70f-13c8-4ab6-b68a-c2964191a80a",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5675,9 +4117,6 @@
    "sector": "Political data",
    "ats": "lever",
    "token": "catalist",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5688,9 +4127,6 @@
    "tenant": "catalyte",
    "wd": "wd503",
    "site": "catalyte",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5699,9 +4135,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "jazzhr",
    "token": "centerforglobaldevelopment",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5711,9 +4144,6 @@
    "ats": "dayforce",
    "ns": "uschamber",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5722,9 +4152,6 @@
    "sector": "Nonprofit / Health / disease",
    "ats": "adp",
    "cid": "3593e8a8-103e-4a34-a45c-e7fa7e9fd3c8",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5733,9 +4160,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "09f363c8-2393-42f4-bf6d-1674cac02c7f",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5744,9 +4168,6 @@
    "sector": "Nonprofit / Other",
    "ats": "bamboohr",
    "token": "cbaytrust",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5756,9 +4177,6 @@
    "ats": "dayforce",
    "ns": "ceiwc",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5767,9 +4185,6 @@
    "sector": "Health / physician group",
    "ats": "greenhouse",
    "token": "uug",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5778,9 +4193,6 @@
    "sector": "Nonprofit / Other",
    "ats": "smartrecruiters",
    "token": "chevychaseclub",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5789,9 +4201,6 @@
    "sector": "Advocacy",
    "ats": "paycom",
    "key": "4BFFF54087AF34EC7146536A0F101EA3",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -5800,9 +4209,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "paycom",
    "key": "54A1B5238E106133791F7F2A5C9D797F",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5813,9 +4219,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "CHI1001CHIM",
    "board": "72cbb0b0-0593-4f9a-8317-11391b3533d8",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5824,9 +4227,6 @@
    "sector": "Banking",
    "ats": "paylocity",
    "id": "1f1e50cb-c6cc-4b03-85be-835343a8c0f9",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5836,9 +4236,6 @@
    "ats": "saashr",
    "host": "secure7.saashr.com",
    "cid": "6202589",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5847,9 +4244,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "00DFA2458AC47176034D9560DF4B98BA",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5858,9 +4252,6 @@
    "sector": "Gov services / digital",
    "ats": "greenhouse",
    "token": "clarityinnovates",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5871,9 +4262,6 @@
    "tenant": "clark",
    "wd": "wd503",
    "site": "ClarkExternal",
-   "sets": [
-    "ops"
-   ],
    "size": null
   },
   {
@@ -5882,9 +4270,6 @@
    "sector": "Nonprofit / Arts & culture",
    "ats": "adp",
    "cid": "2e8375c7-a9c9-4c50-a2b5-3719d5c985a9",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5893,9 +4278,6 @@
    "sector": "Nonprofit / Other",
    "ats": "bamboohr",
    "token": "cna",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5904,9 +4286,6 @@
    "sector": "Think tank",
    "ats": "bamboohr",
    "token": "cnas",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -5917,9 +4296,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "KEN1007KENDL",
    "board": "636dc1f8-40b1-4ef5-b27c-79d08571fd2e",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5929,9 +4305,6 @@
    "ats": "dayforce",
    "ns": "camd",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5940,9 +4313,6 @@
    "sector": "Education nonprofit",
    "ats": "workable",
    "token": "commonapp",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -5951,9 +4321,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paycom",
    "key": "4AE7B5A125FCE0B29A904A045F174DAF",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -5962,9 +4329,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "2f8a1c46-5af1-411b-beae-ccc335caa022",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5973,9 +4337,6 @@
    "sector": "Nonprofit / Health / disease",
    "ats": "adp",
    "cid": "b292568a-1157-478b-a3d4-b72b96780e9a",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -5984,9 +4345,6 @@
    "sector": "Real estate",
    "ats": "greenhouse",
    "token": "comstock",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -5996,9 +4354,6 @@
    "ats": "dayforce",
    "ns": "csbs",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6009,9 +4364,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "COR1012COP",
    "board": "36e286e9-3982-4577-abc5-a64834ea7aa1",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6020,9 +4372,6 @@
    "sector": "Gov services / consulting",
    "ats": "jazzhr",
    "token": "corneralliance",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6031,9 +4380,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paycom",
    "key": "6137059DE1B50387A8FB52E545839D13",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6042,9 +4388,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "paycom",
    "key": "CA7829DDAB24F99BF2074D7845D18E29",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6053,9 +4396,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paylocity",
    "id": "a0126687-5295-4fea-ba28-358f2aedf6f5",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6064,9 +4404,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "adp",
    "cid": "e149d12e-6723-4721-92c0-8fce901fb56d",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6075,9 +4412,6 @@
    "sector": "Gov services",
    "ats": "workable",
    "token": "credence",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6087,9 +4421,6 @@
    "ats": "saashr",
    "host": "secure7.saashr.com",
    "cid": "6211780",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6098,9 +4429,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paylocity",
    "id": "b55a370b-735d-4e17-af58-69b05116be75",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6109,9 +4437,6 @@
    "sector": "Law firm",
    "ats": "greenhouse",
    "token": "crowellmoring",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6120,9 +4445,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paylocity",
    "id": "046682da-1c50-4bef-a6bb-92e94461d31e",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6131,9 +4453,6 @@
    "sector": "Nonprofit / Education",
    "ats": "greenhouse",
    "token": "dcprep",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6142,9 +4461,6 @@
    "sector": "Gov services / IT",
    "ats": "greenhouse",
    "token": "devtechnology",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6153,9 +4469,6 @@
    "sector": "International development / tech",
    "ats": "breezy",
    "token": "development-gateway",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6164,9 +4477,6 @@
    "sector": "Engineering",
    "ats": "icims",
    "base": "https://careers-dewberry.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6175,9 +4485,6 @@
    "sector": "International development",
    "ats": "greenhouse",
    "token": "dexisconsultinggroup",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6186,9 +4493,6 @@
    "sector": "Gov services / IT",
    "ats": "icims",
    "base": "https://careers-dminc.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6197,9 +4501,6 @@
    "sector": "Nonprofit / Education",
    "ats": "greenhouse",
    "token": "districtofcolumbiainternationalschool",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6208,9 +4509,6 @@
    "sector": "Real estate",
    "ats": "icims",
    "base": "https://jobs-donohoe.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6219,9 +4517,6 @@
    "sector": "Edtech / research",
    "ats": "greenhouse",
    "token": "eab",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6230,9 +4525,6 @@
    "sector": "Consulting",
    "ats": "paycom",
    "key": "9BC727FFD9BDD9CB60ED6876692A75B3",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6241,9 +4533,6 @@
    "sector": "Banking",
    "ats": "icims",
    "base": "https://careers-eaglebankcorp.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6252,9 +4541,6 @@
    "sector": "Gov services / cyber",
    "ats": "greenhouse",
    "token": "electrosoft",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6263,9 +4549,6 @@
    "sector": "Gov services / AI",
    "ats": "icims",
    "base": "https://careers-empowerai.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6274,9 +4557,6 @@
    "sector": "Nonprofit / Science / technology",
    "ats": "bamboohr",
    "token": "etcmd",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6285,9 +4565,6 @@
    "sector": "Consulting / knowledge mgmt",
    "ats": "workable",
    "token": "enterprise-knowledge",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6296,9 +4573,6 @@
    "sector": "Nonprofit / Mental health",
    "ats": "paycom",
    "key": "C0B5222A333F38B3A707F61C808AB3AB",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6307,9 +4581,6 @@
    "sector": "Nonprofit / International",
    "ats": "workable",
    "token": "evidence-action",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6318,9 +4589,6 @@
    "sector": "Gov services / tech consulting",
    "ats": "greenhouse",
    "token": "excella",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6329,9 +4597,6 @@
    "sector": "Gov services / data",
    "ats": "breezy",
    "token": "expression-networks",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6340,9 +4605,6 @@
    "sector": "Nonprofit / International",
    "ats": "jazzhr",
    "token": "fas",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6351,9 +4613,6 @@
    "sector": "Gov services",
    "ats": "icims",
    "base": "https://careers-fedwriters.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6362,9 +4621,6 @@
    "sector": "Video games",
    "ats": "greenhouse",
    "token": "firaxis",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6373,9 +4629,6 @@
    "sector": "Nonprofit / Education",
    "ats": "bamboohr",
    "token": "firstbook",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6384,9 +4637,6 @@
    "sector": "Research / consulting",
    "ats": "breezy",
    "token": "fors-marsh-group",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6395,9 +4645,6 @@
    "sector": "Nonprofit / Education",
    "ats": "breezy",
    "token": "foundation-for-advanced-education-in-the-sciences-inc",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6406,9 +4653,6 @@
    "sector": "Nonprofit / Medical research",
    "ats": "paycom",
    "key": "BFFEFEF0151216F871FDA32CD359CE3F",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6417,9 +4661,6 @@
    "sector": "Nonprofit / Education",
    "ats": "icims",
    "base": "https://careers-friendshipschools.icims.com",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6428,9 +4669,6 @@
    "sector": "Nonprofit / Community development",
    "ats": "bamboohr",
    "token": "fsisac",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6439,9 +4677,6 @@
    "sector": "Fintech / real estate",
    "ats": "lever",
    "token": "fundrise",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6450,9 +4685,6 @@
    "sector": "Senior care",
    "ats": "icims",
    "base": "https://careers-futurecarehealth.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6461,9 +4693,6 @@
    "sector": "Banking",
    "ats": "adp",
    "cid": "dd2d9520-d3a0-45e8-a1ac-9faf2e0d1fbc",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6472,9 +4701,6 @@
    "sector": "Medtech",
    "ats": "smartrecruiters",
    "token": "galenrobotics",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6484,9 +4710,6 @@
    "ats": "dayforce",
    "ns": "gannett",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "ops"
-   ],
    "size": null
   },
   {
@@ -6495,9 +4718,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "52884ED968D407BEBAFF6E6CBDBBD7D7",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6506,9 +4726,6 @@
    "sector": "Real estate",
    "ats": "greenhouse",
    "token": "gateshudsonassociates",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6517,9 +4734,6 @@
    "sector": "Nonprofit / Education",
    "ats": "adp",
    "cid": "8d99a0ba-8d79-483d-813c-ac5b7d1346b6",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6528,9 +4742,6 @@
    "sector": "Nonprofit / International",
    "ats": "paylocity",
    "id": "43d988e3-6446-4a25-8e28-28602ea60858",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6539,9 +4750,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "21733CEC62D44854728331EF7E4878C4",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6550,9 +4758,6 @@
    "sector": "",
    "ats": "paycom",
    "key": "1CD74B85C94EA045E5B37B61E569827B",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -6561,9 +4766,6 @@
    "sector": "Nonprofit / Other",
    "ats": "bamboohr",
    "token": "gbta",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6572,9 +4774,6 @@
    "sector": "Nonprofit / International",
    "ats": "paycom",
    "key": "C551B94FE5DB7F30C933A0DBE6F4D57F",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -6585,9 +4784,6 @@
    "tenant": "goodwillaz",
    "wd": "wd1",
    "site": "GoodwillAZ",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6596,9 +4792,6 @@
    "sector": "Law firm",
    "ats": "paylocity",
    "id": "53175594-50bf-4f75-b1b1-76751c74e530",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6607,9 +4800,6 @@
    "sector": "Gov services / IT",
    "ats": "jibe",
    "base": "https://careers.govcio.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6618,9 +4808,6 @@
    "sector": "Software / gov tech",
    "ats": "icims",
    "base": "https://careers-granicus.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6629,9 +4816,6 @@
    "sector": "Hospitality / restaurants",
    "ats": "adp",
    "cid": "fed62f4f-e187-4567-b74f-208620d547fa",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6640,9 +4824,6 @@
    "sector": "Nonprofit / Health",
    "ats": "adp",
    "cid": "16fcfcf1-c694-4006-a6ae-e0b8a1803bb5",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6651,9 +4832,6 @@
    "sector": "Nonprofit / Health",
    "ats": "adp",
    "cid": "55719b9f-72c5-440e-9fc4-db6a9ad0d4fc",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6662,9 +4840,6 @@
    "sector": "Nonprofit / Philanthropy",
    "ats": "paylocity",
    "id": "1ad8c1c2-6c68-424c-8c78-a609596c54bc",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6673,9 +4848,6 @@
    "sector": "Nonprofit / Health",
    "ats": "adp",
    "cid": "dd7a2ce7-c888-4d4e-869d-c672cef34647",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6684,9 +4856,6 @@
    "sector": "Gov services / IT",
    "ats": "paylocity",
    "id": "08741992-5802-4419-a6eb-fbb58d6ac948",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6695,9 +4864,6 @@
    "sector": "Nonprofit / Housing",
    "ats": "adp",
    "cid": "ce916be6-da81-4647-ba3f-011ea17010dc",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6706,9 +4872,6 @@
    "sector": "Banking",
    "ats": "adp",
    "cid": "58083538-4510-47cf-82e8-494db6cb300c",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6717,9 +4880,6 @@
    "sector": "Insurance",
    "ats": "paycom",
    "key": "DA1F0353DF40AEF4913949E3C99E8711",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6728,9 +4888,6 @@
    "sector": "Nonprofit / Public policy / society",
    "ats": "jazzhr",
    "token": "heritage",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6739,9 +4896,6 @@
    "sector": "Architecture",
    "ats": "jazzhr",
    "token": "hickokcole",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6750,9 +4904,6 @@
    "sector": "Software",
    "ats": "greenhouse",
    "token": "higherlogic",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6761,9 +4912,6 @@
    "sector": "Nonprofit / Religion",
    "ats": "greenhouse",
    "token": "hillel",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6772,9 +4920,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "2B3B313B30F49671682894E670278337",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6783,9 +4928,6 @@
    "sector": "Nonprofit / Workforce",
    "ats": "adp",
    "cid": "a3ebe319-c72a-476e-93f5-cc8a6f5b247e",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6796,9 +4938,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "HOO1003HOODC",
    "board": "58a51caa-edd5-4489-a43e-478413a6c821",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6807,9 +4946,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paycom",
    "key": "D1B7A2D90887DD4FEC6334C3BE27DA11",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6819,9 +4955,6 @@
    "ats": "saashr",
    "host": "secure6.saashr.com",
    "cid": "6198659",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6830,9 +4963,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paylocity",
    "id": "58f6a769-631f-48b9-aa5a-874b6f41aaae",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6841,9 +4971,6 @@
    "sector": "Satellite",
    "ats": "jibe",
    "base": "https://jobs.dish.com",
-   "sets": [
-    "ops"
-   ],
    "size": null
   },
   {
@@ -6853,9 +4980,6 @@
    "ats": "saashr",
    "host": "secure6.saashr.com",
    "cid": "6170001",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6865,9 +4989,6 @@
    "ats": "dayforce",
    "ns": "humaneworld",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6876,9 +4997,6 @@
    "sector": "Gov services / IT",
    "ats": "paycom",
    "key": "E1A0680E04342A7963EB151965A729EC",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6887,9 +5005,6 @@
    "sector": "Entertainment",
    "ats": "paycom",
    "key": "92E008E318E81EDDCCF0B49394F28F59",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6898,9 +5013,6 @@
    "sector": "Nonprofit / International",
    "ats": "icims",
    "base": "https://careers-iqt.icims.com",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6909,9 +5021,6 @@
    "sector": "Nonprofit / Education",
    "ats": "workable",
    "token": "indiancreekschool",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6920,9 +5029,6 @@
    "sector": "Nonprofit / Education",
    "ats": "greenhouse",
    "token": "ingenuityprep",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6931,9 +5037,6 @@
    "sector": "Health tech",
    "ats": "ashby",
    "token": "inovalon",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -6942,9 +5045,6 @@
    "sector": "Nonprofit / Public policy / society",
    "ats": "icims",
    "base": "https://careers-ibts.icims.com",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6954,9 +5054,6 @@
    "ats": "dayforce",
    "ns": "ihs",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -6965,9 +5062,6 @@
    "sector": "Nonprofit / Civil rights / advocacy",
    "ats": "jazzhr",
    "token": "instituteforjustice",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -6976,9 +5070,6 @@
    "sector": "Gov services / IT",
    "ats": "icims",
    "base": "https://apply-intelligentwaves.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -6989,9 +5080,6 @@
    "tenant": "icmarc",
    "wd": "wd108",
    "site": "MissionSquare",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7002,9 +5090,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "INT1048",
    "board": "201c19d1-4b06-d159-bba4-6a102267f555",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7013,9 +5098,6 @@
    "sector": "Nonprofit / Arts & culture",
    "ats": "smartrecruiters",
    "token": "internationalspymuseum",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7024,9 +5106,6 @@
    "sector": "Gov IT",
    "ats": "greenhouse",
    "token": "ironbowtechnologies",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -7035,9 +5114,6 @@
    "sector": "Digital agency",
    "ats": "smartrecruiters",
    "token": "istrategylabs",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7046,9 +5122,6 @@
    "sector": "Gov services / IT",
    "ats": "jibe",
    "base": "https://careers.kentro.us",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7057,9 +5130,6 @@
    "sector": "Advocacy",
    "ats": "bamboohr",
    "token": "jstreet",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -7068,9 +5138,6 @@
    "sector": "Nonprofit / Philanthropy",
    "ats": "adp",
    "cid": "a2a886c3-7b7f-4f96-be23-448351902e37",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7080,9 +5147,6 @@
    "ats": "dayforce",
    "ns": "jssa",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7091,9 +5155,6 @@
    "sector": "Banking",
    "ats": "paylocity",
    "id": "8ff2cbb6-1f26-4a44-ba86-ea1dcdeafb24",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7102,9 +5163,6 @@
    "sector": "Hospitality / restaurants",
    "ats": "paylocity",
    "id": "57220ab9-5cb3-4227-a6e7-e7a40ef9d385",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -7113,9 +5171,6 @@
    "sector": "",
    "ats": "rippling",
    "token": "jubilee-housing",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -7124,9 +5179,6 @@
    "sector": "Gov services / IT",
    "ats": "icims",
    "base": "https://apply-karsun-llc.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7135,9 +5187,6 @@
    "sector": "Gov services / accounting",
    "ats": "jibe",
    "base": "https://careers.kearneyco.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -7146,9 +5195,6 @@
    "sector": "Gov services / cyber",
    "ats": "jazzhr",
    "token": "thekenjyatrusantgroup",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7157,9 +5203,6 @@
    "sector": "Real estate",
    "ats": "icims",
    "base": "https://careers-kettler.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -7168,9 +5211,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paycom",
    "key": "3A065D6D35DB779EC97235E55AB1EBBD",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -7179,9 +5219,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "D90A5FA1450A37213D0CDDE0A06781AF",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -7190,9 +5227,6 @@
    "sector": "",
    "ats": "bamboohr",
    "token": "kff",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -7201,9 +5235,6 @@
    "sector": "Nonprofit / Education",
    "ats": "jazzhr",
    "token": "kippdc",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7213,9 +5244,6 @@
    "ats": "dayforce",
    "ns": "kgs",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -7224,9 +5252,6 @@
    "sector": "Gov services",
    "ats": "smartrecruiters",
    "token": "kyrasolutions",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7235,9 +5260,6 @@
    "sector": "Credit union",
    "ats": "paylocity",
    "id": "d391ff8b-bec2-4176-973d-07f8564dc989",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7246,9 +5268,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paylocity",
    "id": "65bb5c33-182b-4986-8a9c-f98d8a8fdec6",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7257,9 +5276,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "paycom",
    "key": "81F05B0D54FD760BA11EEEE2155DCEA6",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -7268,9 +5284,6 @@
    "sector": "Training",
    "ats": "adp",
    "cid": "522eaeb4-94f4-476f-9b75-a42316394309",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7279,9 +5292,6 @@
    "sector": "Defense",
    "ats": "smartrecruiters",
    "token": "leonardodrs",
-   "sets": [
-    "ops"
-   ],
    "size": null
   },
   {
@@ -7290,9 +5300,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "E3FA3501CCB1DA7A96A909B3C7CDA320",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -7301,9 +5308,6 @@
    "sector": "Gov services / consulting",
    "ats": "icims",
    "base": "https://careers-lmi.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -7312,9 +5316,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "paycom",
    "key": "B234CBB293FB58F50B02F44507E5E595",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7323,9 +5324,6 @@
    "sector": "Communications agency",
    "ats": "rippling",
    "token": "mr",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7334,9 +5332,6 @@
    "sector": "Gov services / aviation ISR",
    "ats": "icims",
    "base": "https://careers-magaero.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -7345,9 +5340,6 @@
    "sector": "Banking",
    "ats": "paylocity",
    "id": "9b14a297-fc0e-4566-9584-c53304de1bab",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7356,9 +5348,6 @@
    "sector": "International development",
    "ats": "jazzhr",
    "token": "makingcentsintl",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7367,9 +5356,6 @@
    "sector": "Nonprofit / Other",
    "ats": "smartrecruiters",
    "token": "managedfundsassociation",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7378,9 +5364,6 @@
    "sector": "Nonprofit / Education",
    "ats": "lever",
    "token": "ml4t",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7389,9 +5372,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "5c89f4c1-eb30-4d10-b2ab-8b43dedaf700",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7402,9 +5382,6 @@
    "tenant": "mica",
    "wd": "wd5",
    "site": "Student",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7413,9 +5390,6 @@
    "sector": "Nonprofit / Justice / legal",
    "ats": "adp",
    "cid": "9156664a-1a51-4897-90b5-51213a0ce138",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7424,9 +5398,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paylocity",
    "id": "d1fc6e79-d54d-48a8-8c24-bcbe5dd86628",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7435,9 +5406,6 @@
    "sector": "Hospitality / restaurants",
    "ats": "adp",
    "cid": "1b123a48-520a-4cc6-ad87-ec01be3fdf07",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7446,9 +5414,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "5A4CDDEC762367D5D4B4EB4EEC757CA7",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7457,9 +5422,6 @@
    "sector": "Construction",
    "ats": "adp",
    "cid": "33719718-bd74-496b-9eb7-d8baee2c8ea7",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7470,9 +5432,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "GEO1005MFA",
    "board": "f6b52a60-fc74-4815-9879-71d8a80a8c2c",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7482,9 +5441,6 @@
    "ats": "saashr",
    "host": "secure6.saashr.com",
    "cid": "6188727",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7493,9 +5449,6 @@
    "sector": "Nonprofit / Social science / policy",
    "ats": "bamboohr",
    "token": "mercatus",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7504,9 +5457,6 @@
    "sector": "Nonprofit / International",
    "ats": "paylocity",
    "id": "b6272a0b-2088-45ba-a793-cf584e4d1de6",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7515,9 +5465,6 @@
    "sector": "Nonprofit / Public policy / society",
    "ats": "paylocity",
    "id": "f10f407c-5d30-4557-bf2a-0055971a1946",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7526,9 +5473,6 @@
    "sector": "Gov services / health IT",
    "ats": "jazzhr",
    "token": "microhealthllc",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7537,9 +5481,6 @@
    "sector": "Digital agency",
    "ats": "greenhouse",
    "token": "mindgrub",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7548,9 +5489,6 @@
    "sector": "Health services",
    "ats": "breezy",
    "token": "mindoula-health-inc",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7559,9 +5497,6 @@
    "sector": "Digital agency",
    "ats": "jazzhr",
    "token": "mothershipstrategiesllc",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7570,9 +5505,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "88F0FA7A8E28AA702ED59B1F6C67C844",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7582,9 +5514,6 @@
    "ats": "saashr",
    "host": "secure6.saashr.com",
    "cid": "6157311",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7593,9 +5522,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paylocity",
    "id": "444fcd7c-e2e6-42f4-b889-f881846ab855",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7606,9 +5532,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "NAT1020NAQUA",
    "board": "807a3c85-8038-7ec5-5c50-4abbbd08029e",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7617,9 +5540,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "8b980a2d-a069-488e-a294-a4382103a408",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7629,9 +5549,6 @@
    "ats": "dayforce",
    "ns": "nasw",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7641,9 +5558,6 @@
    "ats": "dayforce",
    "ns": "ncmec",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7652,9 +5566,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paycom",
    "key": "EAAD80B517A1574E7F0981BF813C661D",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7663,9 +5574,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "adp",
    "cid": "aaa87a74-59db-4af1-8171-b0d8f5d5b12b",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7674,9 +5582,6 @@
    "sector": "Nonprofit / Health",
    "ats": "paylocity",
    "id": "e17d268e-1abe-4e11-8fa8-bc9215bce4c0",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7685,9 +5590,6 @@
    "sector": "Democracy / international development",
    "ats": "rippling",
    "token": "ndi_careers",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -7696,9 +5598,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paylocity",
    "id": "1c157f1b-8b6a-420f-b4f3-836cf411cbc4",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7707,9 +5606,6 @@
    "sector": "Nonprofit / Public policy / society",
    "ats": "adp",
    "cid": "f2a07ead-ba9a-4ba0-b713-c8c25ed4edcb",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7718,9 +5614,6 @@
    "sector": "Nonprofit / Animals",
    "ats": "adp",
    "cid": "29f3c179-537a-4b50-b69a-83ed4ff3b6ae",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7729,9 +5622,6 @@
    "sector": "Nonprofit / Housing",
    "ats": "greenhouse",
    "token": "nationallutheraninc",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -7740,9 +5630,6 @@
    "sector": "Nonprofit / Health / disease",
    "ats": "adp",
    "cid": "15a9575c-0efc-4038-8aa9-4e74e985d0b8",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -7751,9 +5638,6 @@
    "sector": "Nonprofit / Science / technology",
    "ats": "adp",
    "cid": "1010f989-100b-4455-8dd7-e7df090ab84f",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -7762,9 +5646,6 @@
    "sector": "Gov services / IT",
    "ats": "jazzhr",
    "token": "navitas",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7774,9 +5655,6 @@
    "ats": "saashr",
    "host": "secure6.saashr.com",
    "cid": "6026459",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7785,9 +5663,6 @@
    "sector": "Nonprofit / Public policy / society",
    "ats": "adp",
    "cid": "35192981-dbb4-47f3-81a4-c922c2ea04ea",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7796,9 +5671,6 @@
    "sector": "Nonprofit / Health",
    "ats": "smartrecruiters",
    "token": "neighborhoodhealth",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7807,9 +5679,6 @@
    "sector": "Gov services / digital",
    "ats": "icims",
    "base": "https://careers-netimpactstrategies.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7818,9 +5687,6 @@
    "sector": "Nonprofit / Other",
    "ats": "jazzhr",
    "token": "newamerica",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7829,9 +5695,6 @@
    "sector": "Consulting",
    "ats": "greenhouse",
    "token": "nexightgroup",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7840,9 +5703,6 @@
    "sector": "Nonprofit / Science / technology",
    "ats": "lever",
    "token": "noblereach",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7851,9 +5711,6 @@
    "sector": "Gov services / research",
    "ats": "jibe",
    "base": "https://careers.noblis.org",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -7862,9 +5719,6 @@
    "sector": "Nonprofit / Community development",
    "ats": "adp",
    "cid": "763ab4b5-fa9c-4fbd-a3df-9e642ec1d02f",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7875,9 +5729,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "NOR1025NORVI",
    "board": "32cdcf9c-5e9a-45b5-8aa9-8561665cc68e",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7886,9 +5737,6 @@
    "sector": "Gov services / IT",
    "ats": "workable",
    "token": "northramp",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7897,9 +5745,6 @@
    "sector": "Gov services / intelligence",
    "ats": "greenhouse",
    "token": "ntconcepts",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7908,9 +5753,6 @@
    "sector": "Gov services / IT",
    "ats": "icims",
    "base": "https://careers-obxtek.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7919,9 +5761,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "adp",
    "cid": "4786a4ca-9800-4db8-98cb-8bc9baad2b0d",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7930,9 +5769,6 @@
    "sector": "Law firm",
    "ats": "breezy",
    "token": "offit-kurman",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7941,9 +5777,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "breezy",
    "token": "american-coatings-association",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7954,9 +5787,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "PAN1010PADF",
    "board": "6653db0e-77c4-4ff9-873d-4746a2327353",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7966,9 +5796,6 @@
    "ats": "dayforce",
    "ns": "f305",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -7977,9 +5804,6 @@
    "sector": "Nonprofit / Medical research",
    "ats": "paycom",
    "key": "E4BB2B46BD8F408A820031169560DC4E",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -7988,9 +5812,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "paylocity",
    "id": "6d83ef7e-5520-4ca0-8d6f-601b2779d2d4",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8001,9 +5822,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "PEN1019PMOI",
    "board": "9c2e3b43-1929-4405-b387-470097c98b4a",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8012,9 +5830,6 @@
    "sector": "Communications agency",
    "ats": "lever",
    "token": "pentagrp",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8023,9 +5838,6 @@
    "sector": "Nonprofit / Mental health",
    "ats": "adp",
    "cid": "6a1a2c4d-441c-486d-99df-c1e34adacdfa",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8034,9 +5846,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "9822F5FA8AE4EF541582881AA127C719",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8045,9 +5854,6 @@
    "sector": "",
    "ats": "rippling",
    "token": "ppmw",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -8058,9 +5864,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "POL1006",
    "board": "c0e3f015-388f-2bf6-e3ac-af081fcad685",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8071,9 +5874,6 @@
    "tenant": "politico",
    "wd": "wd108",
    "site": "politico",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8082,9 +5882,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "93B2AD01F33A432A92A9F1ACEB33A70B",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8093,9 +5890,6 @@
    "sector": "Biotech",
    "ats": "adp",
    "cid": "6234bed9-c686-4ee7-84ed-1be1cc671e56",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8104,9 +5898,6 @@
    "sector": "Gov services / IT",
    "ats": "adp",
    "cid": "bb701725-cfbd-420b-854c-683a7c2b8761",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8115,9 +5906,6 @@
    "sector": "Communications agency",
    "ats": "breezy",
    "token": "precision-strategies",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8126,9 +5914,6 @@
    "sector": "Nonprofit / Justice / legal",
    "ats": "jazzhr",
    "token": "prisonfellowship",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8137,9 +5922,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "bamboohr",
    "token": "projectredirect",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8148,9 +5930,6 @@
    "sector": "Nonprofit / Civil rights / advocacy",
    "ats": "recruitee",
    "token": "protectdemocracy",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8159,9 +5938,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "AA9D8A34E654F72647EF7554CB3A2D15",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8170,9 +5946,6 @@
    "sector": "Nonprofit / Public policy / society",
    "ats": "jazzhr",
    "token": "publiccitizen",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8181,9 +5954,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "0ed8ef89-cf1f-4cd1-a731-a3640b756319",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8192,9 +5962,6 @@
    "sector": "Communications agency",
    "ats": "greenhouse",
    "token": "purplestrategies",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8203,9 +5970,6 @@
    "sector": "Gov services / IT",
    "ats": "paylocity",
    "id": "89765493-da79-415c-a082-0ed3668501bc",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8214,9 +5978,6 @@
    "sector": "Nonprofit / Arts & culture",
    "ats": "icims",
    "base": "https://careers-rfacareers.icims.com",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8225,9 +5986,6 @@
    "sector": "Gov services / software",
    "ats": "greenhouse",
    "token": "raft",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8236,9 +5994,6 @@
    "sector": "Construction",
    "ats": "adp",
    "cid": "0beaa32c-bc9a-4c6b-aa22-4d86ce22333e",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8247,9 +6002,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "icims",
    "base": "https://careers-rare.icims.com",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8258,9 +6010,6 @@
    "sector": "Gov services / data",
    "ats": "lever",
    "token": "redhorsecorp",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8269,9 +6018,6 @@
    "sector": "Gov services / IT",
    "ats": "icims",
    "base": "https://careers-reisystems.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8280,9 +6026,6 @@
    "sector": "Software / AI",
    "ats": "adp",
    "cid": "86e68749-0311-4187-875b-9884bbc57a8d",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8291,9 +6034,6 @@
    "sector": "Gov services / health",
    "ats": "paycom",
    "key": "01200F8CCC6A40E50E097FFE354744C5",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8302,9 +6042,6 @@
    "sector": "Nonprofit / Health",
    "ats": "greenhouse",
    "token": "resolvetosavelives",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8314,9 +6051,6 @@
    "ats": "dayforce",
    "ns": "richcroft",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8325,9 +6059,6 @@
    "sector": "Gov services / consulting",
    "ats": "workable",
    "token": "the-ripple-way",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8336,9 +6067,6 @@
    "sector": "Gov services / IT",
    "ats": "greenhouse",
    "token": "rivasolutionsinc",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8347,9 +6075,6 @@
    "sector": "Nonprofit / Medical research",
    "ats": "icims",
    "base": "https://careers-riversideresearch.icims.com",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8358,9 +6083,6 @@
    "sector": "Nonprofit / Other",
    "ats": "adp",
    "cid": "92cd0fe5-dc90-462e-8ac6-934bd31e61d0",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8369,9 +6091,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paycom",
    "key": "9625868BC92E17AD013DC33D17704491",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8380,9 +6099,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "adp",
    "cid": "01259f6f-1aa6-4917-9643-9eae010c5c35",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8391,9 +6107,6 @@
    "sector": "Hospitality",
    "ats": "adp",
    "cid": "8956dae8-9488-4d3f-9c19-b8ecedab3a59",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8404,9 +6117,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "SCH1020SCHG",
    "board": "32dd4149-e41d-45e4-afe3-e24f7220d3bf",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8415,9 +6125,6 @@
    "sector": "Software",
    "ats": "ashby",
    "token": "sciencelogic",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8428,9 +6135,6 @@
    "host": "sfrgorg.rec.pro.ukg.net",
    "tenant": "SEA1506SFCG",
    "board": "4cbb4f6e-0c88-42f6-86d6-6570baa7090b",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8439,9 +6143,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "adp",
    "cid": "8a78f2f2-4de9-4177-a028-48fdebd3cf13",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8452,9 +6153,6 @@
    "host": "serviceinc.rec.pro.ukg.net",
    "tenant": "SER1502SCNI",
    "board": "31ee9cb0-7493-4dcb-a6b8-027d63b30ca1",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8465,9 +6163,6 @@
    "tenant": "servicesourceinc",
    "wd": "wd1",
    "site": "ServiceSource_Staff",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8478,9 +6173,6 @@
    "host": "recruiting.ultipro.com",
    "tenant": "SGF1000SGFS",
    "board": "f17ad3bf-408a-4157-8fb3-305b2cca9616",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8489,9 +6181,6 @@
    "sector": "Gov services / IT",
    "ats": "smartrecruiters",
    "token": "sierra7",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8500,9 +6189,6 @@
    "sector": "Communications agency",
    "ats": "icims",
    "base": "https://careers-skdk.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8511,9 +6197,6 @@
    "sector": "Software agency",
    "ats": "workable",
    "token": "smartlogic",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8522,9 +6205,6 @@
    "sector": "International development",
    "ats": "smartrecruiters",
    "token": "socialimpact",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8533,9 +6213,6 @@
    "sector": "Nonprofit / Medical research",
    "ats": "adp",
    "cid": "8b6d41ce-5cc2-495d-a05b-f868a0835315",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8544,9 +6221,6 @@
    "sector": "Gov services / digital",
    "ats": "greenhouse",
    "token": "triafederal",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8555,9 +6229,6 @@
    "sector": "Fitness",
    "ats": "lever",
    "token": "solidcore",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8566,9 +6237,6 @@
    "sector": "Engineering",
    "ats": "adp",
    "cid": "83dc9318-3388-4a8d-a7f8-86616a806a8b",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8577,9 +6245,6 @@
    "sector": "Gov services / health IT",
    "ats": "greenhouse",
    "token": "sparksoftcorporation",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8588,9 +6253,6 @@
    "sector": "Gov services / IT",
    "ats": "paylocity",
    "id": "ce35ef51-5752-4310-b3bc-cd8d405a1de1",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8599,9 +6261,6 @@
    "sector": "Space / data",
    "ats": "greenhouse",
    "token": "spire",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8610,9 +6269,6 @@
    "sector": "Nonprofit / International",
    "ats": "adp",
    "cid": "9d364228-b53e-4047-b8d2-f5af4df7d8c0",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8621,9 +6277,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "jazzhr",
    "token": "springdellcenter",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8632,9 +6285,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "paycom",
    "key": "8AF48E2F8032EF941D2B59B9928DA70D",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8643,9 +6293,6 @@
    "sector": "Nonprofit / Civil rights / advocacy",
    "ats": "paylocity",
    "id": "989bd500-cfa5-43b3-8f63-c198bd614eac",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8654,9 +6301,6 @@
    "sector": "Gov services / digital",
    "ats": "icims",
    "base": "https://careers-steampunk.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8667,9 +6311,6 @@
    "tenant": "strayer",
    "wd": "wd1",
    "site": "SEI",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8680,9 +6321,6 @@
    "tenant": "strideinc",
    "wd": "wd1",
    "site": "SK",
-   "sets": [
-    "ops"
-   ],
    "size": null
   },
   {
@@ -8691,9 +6329,6 @@
    "sector": "Nonprofit / Other",
    "ats": "bamboohr",
    "token": "thesca",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8704,9 +6339,6 @@
    "host": "supernus.rec.pro.ukg.net",
    "tenant": "SUP1013SUPR",
    "board": "0ba1c63b-6f87-401f-a48b-9dc4fbd8561a",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8715,9 +6347,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paylocity",
    "id": "4de8b305-e9be-435c-8f23-8000eb318292",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8726,9 +6355,6 @@
    "sector": "Hospitality / restaurants",
    "ats": "greenhouse",
    "token": "sweetgreen",
-   "sets": [
-    "ops"
-   ],
    "size": null
   },
   {
@@ -8737,9 +6363,6 @@
    "sector": "Gov services / defense analysis",
    "ats": "jibe",
    "base": "https://spa.jibeapply.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8748,9 +6371,6 @@
    "sector": "Nonprofit / Civil rights / advocacy",
    "ats": "paylocity",
    "id": "463124e8-99ca-452f-9863-cd27e1231bc8",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8759,9 +6379,6 @@
    "sector": "Media",
    "ats": "greenhouse",
    "token": "tegnainc",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8770,9 +6387,6 @@
    "sector": "Gov services / IT",
    "ats": "icims",
    "base": "https://careers-teksynap.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8781,9 +6395,6 @@
    "sector": "Wireless distribution",
    "ats": "greenhouse",
    "token": "tessco",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8792,9 +6403,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paycom",
    "key": "EEF95033D38FE6D6DBCEDE3499C5B673",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8803,9 +6411,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "paycom",
    "key": "E04C5104E0EB0FA80CA70BDEB1BEB0D0",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8816,9 +6421,6 @@
    "tenant": "atlanticmedia",
    "wd": "wd1",
    "site": "Careers",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8827,9 +6429,6 @@
    "sector": "Consulting / change mgmt",
    "ats": "paylocity",
    "id": "f049998c-d9ff-4d28-8a61-7eff46667d52",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8838,9 +6437,6 @@
    "sector": "Nonprofit / Education",
    "ats": "paylocity",
    "id": "5dec1514-fd97-4294-a3d8-42ed460a5e1f",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8849,9 +6445,6 @@
    "sector": "Hospitality",
    "ats": "lever",
    "token": "bfsaulhotels",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8860,9 +6453,6 @@
    "sector": "Nonprofit / Philanthropy",
    "ats": "bamboohr",
    "token": "shalomdc",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8871,9 +6461,6 @@
    "sector": "Media / financial",
    "ats": "greenhouse",
    "token": "themotleyfool",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8882,9 +6469,6 @@
    "sector": "Nonprofit / Arts & culture",
    "ats": "greenhouse",
    "token": "thebaltimorebanner",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8893,9 +6477,6 @@
    "sector": "Media",
    "ats": "adp",
    "cid": "1f5b023b-c65b-4362-8428-80ce776c73cd",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8904,9 +6485,6 @@
    "sector": "Nonprofit / Civil rights / advocacy",
    "ats": "recruitee",
    "token": "thirdway",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8915,9 +6493,6 @@
    "sector": "Accounting",
    "ats": "bamboohr",
    "token": "tgccpa",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8926,9 +6501,6 @@
    "sector": "Hospitality / food service",
    "ats": "jibe",
    "base": "https://careers.thompsonhospitality.com",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -8937,9 +6509,6 @@
    "sector": "Digital agency",
    "ats": "bamboohr",
    "token": "threespot",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8948,9 +6517,6 @@
    "sector": "Gov services / health IT",
    "ats": "jibe",
    "base": "https://careers.tistatech.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8959,9 +6525,6 @@
    "sector": "Gov services / IT",
    "ats": "jibe",
    "base": "https://careers.tracesystems.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -8970,9 +6533,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "rippling",
    "token": "trees",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -8981,9 +6541,6 @@
    "sector": "Nonprofit / Mental health",
    "ats": "jazzhr",
    "token": "truthinitiative",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -8992,9 +6549,6 @@
    "sector": "Nonprofit / Mental health",
    "ats": "adp",
    "cid": "3e7ab84d-22e9-40c4-bd1c-3215c4d30164",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -9003,9 +6557,6 @@
    "sector": "Defense tech",
    "ats": "greenhouse",
    "token": "twosixtechnologies",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -9014,9 +6565,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "adp",
    "cid": "8d661a1d-66d3-4337-be21-bf05f238bb42",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9025,9 +6573,6 @@
    "sector": "Nonprofit / Education",
    "ats": "adp",
    "cid": "4e62b4af-f091-4c6e-808b-6107e3ea5d4b",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9036,9 +6581,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "smartrecruiters",
    "token": "unitedplanningorganization",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9047,9 +6589,6 @@
    "sector": "Nonprofit / International",
    "ats": "greenhouse",
    "token": "usaforunhcr",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9058,9 +6597,6 @@
    "sector": "Nonprofit / Philanthropy",
    "ats": "adp",
    "cid": "1c855259-2e9a-41b6-bae7-a5e5db263080",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9069,9 +6605,6 @@
    "sector": "Nonprofit / Science / technology",
    "ats": "adp",
    "cid": "f03960f2-20cd-4828-9ae5-415eefc7072e",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9080,9 +6613,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "adp",
    "cid": "76dd43dd-5757-401e-9ef5-65813f73b552",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9091,9 +6621,6 @@
    "sector": "Homebuilding / real estate",
    "ats": "greenhouse",
    "token": "vanmetre",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -9102,9 +6629,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "rippling",
    "token": "verra-opportunities",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9113,9 +6637,6 @@
    "sector": "Digital agency",
    "ats": "lever",
    "token": "viget",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -9124,9 +6645,6 @@
    "sector": "Gov services / cloud",
    "ats": "jazzhr",
    "token": "vivsofttechnologiesfa",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -9135,9 +6653,6 @@
    "sector": "",
    "ats": "bamboohr",
    "token": "walmart",
-   "sets": [
-    "ops"
-   ],
    "size": null
   },
   {
@@ -9146,9 +6661,6 @@
    "sector": "Law firm",
    "ats": "adp",
    "cid": "23c016dd-585c-458f-8259-c7988d00a63b",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -9157,9 +6669,6 @@
    "sector": "Nonprofit / Environment",
    "ats": "ashby",
    "token": "windward",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9168,9 +6677,6 @@
    "sector": "Nonprofit / Arts & culture",
    "ats": "paycom",
    "key": "8C8DD61BF1AC64C540603ED66B8CD134",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9179,9 +6685,6 @@
    "sector": "Nonprofit / Other",
    "ats": "paycom",
    "key": "A70925B493A7823EAA53605A0BA0A8F7",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9190,9 +6693,6 @@
    "sector": "Nonprofit / International",
    "ats": "workable",
    "token": "world-central-kitchen",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9201,9 +6701,6 @@
    "sector": "Humanitarian",
    "ats": "paycom",
    "key": "6ED1E3726339263C2EBCEB0DFF31FE4C",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -9213,9 +6710,6 @@
    "ats": "dayforce",
    "ns": "worldvisionus",
    "board": "CANDIDATEPORTALEXT",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -9224,9 +6718,6 @@
    "sector": "Manufacturing marketplace",
    "ats": "greenhouse",
    "token": "xometry",
-   "sets": [
-    "ops"
-   ],
    "size": "mid"
   },
   {
@@ -9236,9 +6727,6 @@
    "ats": "dayforce",
    "ns": "ymcametrowash",
    "board": "CANDIDATEPORTAL",
-   "sets": [
-    "nonprofit"
-   ],
    "size": null
   },
   {
@@ -9247,9 +6735,6 @@
    "sector": "Nonprofit / Community development",
    "ats": "jazzhr",
    "token": "yogaalliance",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "small"
   },
   {
@@ -9258,9 +6743,6 @@
    "sector": "Nonprofit / Youth development",
    "ats": "paycom",
    "key": "21A3B2BD6E9855D4C4C0ED23FA8FD695",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   },
   {
@@ -9269,9 +6751,6 @@
    "sector": "Gov services / IT",
    "ats": "icims",
    "base": "https://careers-zemitek.icims.com",
-   "sets": [
-    "ops"
-   ],
    "size": "small"
   },
   {
@@ -9280,9 +6759,6 @@
    "sector": "Nonprofit / Human services",
    "ats": "greenhouse",
    "token": "zerotothree",
-   "sets": [
-    "nonprofit"
-   ],
    "size": "mid"
   }
  ]

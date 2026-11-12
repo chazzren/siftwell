@@ -1079,7 +1079,7 @@ SCREENS.board = {
     const findText = f.remote_only
       ? `Claude also searches the web for about ${f.size} employers anywhere in the US that hire remotely for your kind of work, using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your employers. Takes ${esc(f.estimate)}.`
       : `Claude also searches the web for about ${f.size} employers within ${f.radius} miles that the directory may not have (big employers, hospitals, universities, government, nonprofits, startups and more), using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your employers. Takes ${esc(f.estimate)}.`;
-    const lists = p.companies ? `the ${p.companies.toLocaleString()} ${p.companies === 1 ? "company" : "companies"} in your lists` : "your companies";
+    const lists = p.companies ? `the ${p.companies.toLocaleString()} ${p.companies === 1 ? "company" : "companies"} you already watch` : "your companies";
     let findBox = "";
     if (f.possible) {
       const sub = (f.prior ? `An earlier Claude search already found employers for you. ` : "") + `Optional: uses your Claude plan and takes ${esc(f.estimate)}. The free directory above is usually enough to start.`;
@@ -1328,7 +1328,7 @@ const Mock = {
       else out = {running: false, options: [
         {name: "Operations leadership", target_text: "Director-level operations or program leadership at a mission-driven organization.", scope: "all", why: "Nine years running programs and vendors maps straight onto operations director roles.", pay: "$150k–$190k", odds_now: "strong", prep: "none"},
         {name: "Health tech product", target_text: "Product management at a health technology company.", scope: "all", why: "Your health-sector program work is the domain knowledge product teams hire for.", pay: "$155k–$205k", odds_now: "possible", prep: "A short product course and one shipped side project."},
-        {name: "AI program management", target_text: "Technical program management at an AI company.", scope: "ai", why: "AI companies are hiring program managers who can run cross-team delivery.", pay: "$170k–$240k", odds_now: "needs prep", prep: "Get hands-on with LLM tools; 2–3 months."},
+        {name: "Hospital operations", target_text: "Operations or office management at a hospital or clinic.", scope: "all", why: "Health systems near you hire steadily for people who keep a busy office running.", pay: "$60k–$85k", odds_now: "needs prep", prep: "Learn a scheduling or records system; 2–3 months."},
       ]};
     } else if (path === "/api/questions") { t.q = now; out = {key: "general"}; }
     else if (path === "/api/questions/general") {
