@@ -591,6 +591,30 @@ def pick_order(j):
     rel = j.get("rel")
     return (-(rel if rel is not None else 0), -j.get("appeal", 0), j["id"])
 
+# The exploration share of an automatic run: Relevance goes by titles, so a job whose title the person's sheet doesn't
+# name is never rated first, and Claude's ratings (which Relevance learns from, lookfor.learn_from_ratings) can't show
+# what the titles miss. This share of the quick checks goes to the jobs just below the cut with the strongest other
+# signals (lookfor's job["rel_x"]: an employer the person saved or applied at, title words that come with high Match,
+# posting text like the highly rated ones; then Appeal). Inside RUN_LIMITS: it replaces picks, never adds any.
+EXPLORE_SHARE = 0.10
+
+def explore_key(j):
+    return (-((j.get("rel_x") or 0) + 0.3 * (j.get("appeal") or 0) + 0.3 * (j.get("rel") or 0)), j["id"])
+
+def pick_haiku(cands, n, explore=0.0):
+    """The n jobs a run gives quick checks: by pick_order, except a share `explore` (0-1) of them, which goes to the
+    best of the rest by explore_key (only jobs with some signal: rel_x > 0). Never more than n; the same jobs as plain
+    pick_order when there are n or fewer, or nothing to explore."""
+    order = sorted(cands, key=pick_order)
+    k = int(n * max(0.0, min(0.5, explore)))
+    if k <= 0 or len(order) <= n:
+        return order[:n]
+    main, rest = order[:n - k], order[n - k:]
+    extra = sorted((j for j in rest if (j.get("rel_x") or 0) > 0), key=explore_key)[:k]
+    got = {j["id"] for j in extra}
+    fill = [j for j in rest if j["id"] not in got][:k - len(extra)]
+    return main + sorted(extra + fill, key=pick_order)
+
 def _prepare(jobs, eligible):
     """Shared set-up for a rating run: info + fingerprints, this profile's cache, the eligible pool, and answers
     narrowed to their distinctive words."""
@@ -636,7 +660,7 @@ def mark_state(jobs, pool, cache, inf):
         j["ai_bb"] = bestbets(j.get("appeal", 0), rank_match(e, BEST_AVAILABLE))
 
 def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print, tiers=None, force=False, pick="funnel",
-               only_ids=None, prepare=None):
+               only_ids=None, prepare=None, explore=0.0):
     """One rating run, within RUN_LIMITS: Haiku on up to 500 eligible jobs (most relevant first, then best Appeal:
     pick_order; prepare(jobs), if given, is called with the picked jobs first, to fetch any posting text still missing), Sonnet on up to 100
     of the best jobs that already have a rating, Opus on up to 50 of the top ones (+ up to 25 saved jobs, the most
@@ -649,6 +673,7 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
     Re-rate panel options: tiers (which models run), force (rate the picked jobs again even if current; only when the
     person asks), pick="best" (rank by Best bets with the best available Match instead of the funnel's per-step
     ranking), only_ids (Haiku only looks at these jobs: the automatic check of new listings).
+    explore: the share of the Haiku picks that goes to exploration (pick_haiku; automatic runs pass EXPLORE_SHARE).
     Every finished batch is saved right away, so a stopped run keeps what it got."""
     import claude_cli as _cc
     import math
@@ -695,7 +720,7 @@ def run_funnel(jobs, budgets, refresh=False, saved=(), eligible=None, log=print,
         #    or "Rate more")
         if "haiku" in tiers:
             hpool = pool if only_ids is None else [j for j in pool if j["id"] in only_ids]
-            todo = sorted((j for j in hpool if need(j, "haiku")), key=pick_order)[:n_haiku]
+            todo = pick_haiku([j for j in hpool if need(j, "haiku")], n_haiku, explore if pick == "funnel" and not force else 0.0)
             if prepare and todo:
                 try:
                     prepare(todo, log)
