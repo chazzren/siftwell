@@ -419,6 +419,13 @@ tri = next(t for t in T3.d.values() if t["c"].get("tenant") == "trinityhealth")
 check("the board of a multi-state system is named after its local part in that state only",
       build.list_name(dict(tri, read=build.today(), places=[[39.96, -83.0, 30, "Columbus, OH", "OH"], [42.3, -83.7, 300, "Ann Arbor, MI", "MI"]]), "OH") == "Mount Carmel Health System"
       and build.list_name(dict(tri, read=build.today(), places=[[39.96, -83.0, 30, "Columbus, OH", "OH"], [42.3, -83.7, 300, "Ann Arbor, MI", "MI"]])) == "")
+ol = next(t for t in T3.d.values() if t["c"].get("sub") == "olentangy")
+check("a resolved board remembers where its employer is (Olentangy: Lewis Center, OH)", (ol.get("lplace") or [0, 0, ""])[2:] == ["Lewis Center, OH", "OH"])
+_read = readers.read
+readers.read = lambda c, details=0: {"name": None, "jobs": 7, "remote": 1, "locs": {"Oak Creek Elementary": 4, "District Office": 3}, "sample": False}
+build.read_tenant(ol)
+readers.read = _read
+check("... and a district whose postings name only its schools is placed there", ol["places"] and ol["places"][0][2:] == [6, "Lewis Center, OH", "OH"])
 oh = next(t for t in T3.d.values() if t["c"].get("tenant") == "ohiohealth")
 check("best_name: the public list's name comes first (after a pack)", build.best_name(dict(oh, dname="OH Riverside Methodist Hospital")) == "OhioHealth")
 from index_build import seed as seedmod

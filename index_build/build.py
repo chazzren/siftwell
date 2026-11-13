@@ -134,15 +134,20 @@ class Tenants:
                     t["hints"].append(hint)
         return k
 
-    def add_listed(self, cfg, src, name, state, ident):
+    def add_listed(self, cfg, src, name, state, ident, city=None):
         """A board a public list's employer resolved to (resolve.py): the employer's name as the list (or its own home
         page) gives it, the state it is in ("lnames": {name: [states]}), and which list entries led here ("lids"), so
-        best_name can use the name where that employer is the board's own (list_name)."""
+        best_name can use the name where that employer is the board's own (list_name). city: where the employer is,
+        the board's place when its postings name none the directory can place ("lplace": a district's postings name
+        its schools, not towns)."""
         k = self.add(cfg, src, hint=f"state:{state}" if state else None)
         if k is None:
             return None
+        p = place_of(f"{city}, {state}") if city and state and not self.d[k].get("lplace") else None
         with self.lock:
             t = self.d[k]
+            if p and p[2] == state:
+                t["lplace"] = [p[0], p[1], p[3], p[2]]
             ln = t.setdefault("lnames", {})
             sts = ln.setdefault(name[:80], [])
             if state and state not in sts:
@@ -640,7 +645,11 @@ def read_tenant(t, title_budget=None):
     name = pick_name(t, s)
     kind = "staffing" if STAFFING.search(name or "") else ""
     hints = [h.split(":", 1)[1] for h in t.get("hints", []) if ":" in h]
-    t.update(read=today(), fail=0, jobs=s["jobs"], remote=s["remote"], places=board_places(s["locs"], hints, bool(kind)),
+    places = board_places(s["locs"], hints, bool(kind))
+    lp = t.get("lplace")
+    if not places and lp and s["jobs"] > s["remote"]:       # (a public list's employer whose postings name no town: its own)
+        places = [[lp[0], lp[1], s["jobs"] - s["remote"], lp[2], lp[3]]]
+    t.update(read=today(), fail=0, jobs=s["jobs"], remote=s["remote"], places=places,
              sample=bool(s.get("sample")), name=name, bname=s.get("name"), secs=s.get("secs"), kind=kind)
     t.pop("err", None)
     t.pop("rest_until", None)

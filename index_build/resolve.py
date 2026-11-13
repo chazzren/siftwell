@@ -798,4 +798,4 @@ def _add(T, e, r):
     cfg, _ = netsafe.clean_config(dict(r["c"]))
     if cfg:
         for st in e.get("states") or [e["state"]]:
-            T.add_listed(cfg, "res", r.get("n") or e["name"], st, e["id"])
+            T.add_listed(cfg, "res", r.get("n") or e["name"], st, e["id"], e.get("city") if st == e["state"] else None)
