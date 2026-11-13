@@ -37,6 +37,7 @@ from . import net, systems
 RECHECK_DAYS = {"hit": 120, "miss": 60, "nohome": 90, "err": 14}
 MAX_PAGES = 10           # pages one employer may cost (home page, careers pages, one level below, careers./jobs. guesses)
 GUESS_GETS = 6           # guessed home pages actually opened (after the DNS check) for one hospital
+EMP_SECS = 120           # time one employer may take (a slow site gets the rest at its next look-up)
 THREADS = 24             # employers looked up side by side (each on its own site)
 
 SOURCES = {
@@ -531,6 +532,8 @@ def detect_page(url, page):
         if c:
             return c
     for probe in DETECTORS:
+        if _over_time():
+            break               # (this employer has had its time: the slower checks are left for its next look-up)
         try:
             cfg = probe(url, page)
         except Exception:
@@ -553,9 +556,16 @@ class _Budget:
         return True
 
 
+_tl = threading.local()
+
+
+def _over_time():
+    return time.time() > getattr(_tl, "until", float("inf"))
+
+
 def _get(url, budget, timeout=20):
-    """(text, final url) of a page within this employer's page budget, or (None, None)."""
-    if not budget.take():
+    """(text, final url) of a page within this employer's page budget and time, or (None, None)."""
+    if _over_time() or not budget.take():
         return None, None
     try:
         return fetch(url, timeout)
@@ -623,6 +633,7 @@ def resolve(ent):
     """{"s": "hit" / "miss" / "nohome", "c": config or None, "h": home address, "u": careers page, "n": the name to use,
     "how": "list" / "guess"} for one employer."""
     budget = _Budget(MAX_PAGES)
+    _tl.until = time.time() + EMP_SECS
     page, home, how = find_home(ent, budget)
     if not page:
         return {"s": "nohome"}
