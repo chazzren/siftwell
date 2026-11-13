@@ -653,7 +653,7 @@ def prefix_name(prefix, texts, need=0.1, tail=None):
         docs = collections.Counter({k: v for k, v in docs.items() if fits(k)})
     if not docs:
         return None
-    two = {k: v for k, v in docs.items() if len(k.split()) == 2}
+    two = {k: v for k, v in docs.items() if len([w for w in k.split() if w not in ("of", "and", "&")]) == 2}   # ("Volunteers of America")
     if not two:
         return None
     base, n = max(two.items(), key=lambda kv: kv[1])

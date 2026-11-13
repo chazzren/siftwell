@@ -153,6 +153,8 @@ class Tenants:
             if ident not in ids:
                 ids.append(ident)
                 del ids[:-12]
+                cnt = t.setdefault("lcount", {})      # (how many of the list's employers carry each name)
+                cnt[name[:80]] = int(cnt.get(name[:80], 0)) + 1
         return k
 
     def carry(self, old, k):
@@ -173,6 +175,9 @@ class Tenants:
             for n, sts in (old.get("lnames") or {}).items():
                 cur = t.setdefault("lnames", {}).setdefault(n, [])
                 cur.extend(x for x in sts if x not in cur)
+            cnt = t.setdefault("lcount", {})
+            for n, v in (old.get("lcount") or {}).items():
+                cnt[n] = int(cnt.get(n, 0)) + int(v or 0)
             for n in old.get("lsys") or []:
                 if n not in t.setdefault("lsys", []):
                     t["lsys"].append(n)
@@ -508,7 +513,12 @@ def list_name(t, state=None):
         # a health system and one of its local parts both lead here: in that state, the local part's name (Trinity
         # Health's board is "Mount Carmel Health System" in Ohio)
         local = [n for n in pick if n not in (t.get("lsys") or [])]
-        pick = local if len(local) == 1 else pick
+        pick = local if local else pick
+        if len(pick) > 1:       # (Mount Carmel's four hospitals outweigh one other hospital on the same board)
+            cnt = t.get("lcount") or {}
+            pick.sort(key=lambda n: -int(cnt.get(n, 0)))
+            if int(cnt.get(pick[0], 0)) > int(cnt.get(pick[1], 0)):
+                pick = pick[:1]
     if len(pick) > 1:
         sl = set(names.slugs(t["c"]))
         pick = [n for n in pick if names._norm(n) in sl]
@@ -741,6 +751,23 @@ def distinct_boards(live):
         ident = systems.key(t["c"]).lower()
         if ident not in best or ("pack" in t["src"], int(t.get("jobs") or 0), k) > ("pack" in live[best[ident]]["src"], int(live[best[ident]].get("jobs") or 0), best[ident]):
             best[ident] = k
+    # the same board under two spellings of its address ("ENE1003ENENG" / "ene1003eneng"): what one of them learnt about
+    # the employer's name is kept on the one published
+    for k, t in live.items():
+        kb = best[systems.key(t["c"]).lower()]
+        if kb != k:
+            keep = live[kb]
+            for f in ("pack_name", "dname", "bname", "tname", "gov_name", "seed_name"):
+                if t.get(f) and not keep.get(f):
+                    keep[f] = t[f]
+            for n, sts in (t.get("lnames") or {}).items():
+                cur = keep.setdefault("lnames", {}).setdefault(n, [])
+                cur.extend(x for x in sts if x not in cur)
+            for n in t.get("lsys") or []:
+                if n not in keep.setdefault("lsys", []):
+                    keep["lsys"].append(n)
+            for n, v in (t.get("lcount") or {}).items():
+                keep.setdefault("lcount", {}).setdefault(n, int(v or 0))
     groups = {}
     for k in best.values():
         c = live[k]["c"]
