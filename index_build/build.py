@@ -532,6 +532,12 @@ def best_name(t, bname=None, state=None):
     is tidied by names.derive's rules (no postings needed). "" when only a code is known (the app then describes it)."""
     import company_add, names
     c = t["c"]
+    if state and t.get("lnames") and t.get("pack_name"):
+        # a state's own employer beats a pack's nationwide name in that state's file ("Mount Carmel Health System" for
+        # Trinity Health's board in Ohio, not the pack's "Trinity Health (incl. Holy Cross Health, Silver Spring)")
+        local = list_name(t, state)
+        if local and local not in (t.get("lsys") or []):
+            return local
     if t.get("pack_name"):
         n = company_add.readable_name(t["pack_name"], {}, "")
         if n:

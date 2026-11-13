@@ -697,6 +697,8 @@ def display_name(ent, page):
     the listed name written the way people write it."""
     import names
     listed = ent["name"]
+    if ent["src"] == "ipeds":     # ("Ohio State University-Main Campus" -> "Ohio State University")
+        listed = re.sub(r"\s*-\s*(?:Main\s+)?Campus$", "", listed)
     if ent["src"] in ("ipeds", "dotgov"):
         return listed[:60]
     sn = site_name(page)

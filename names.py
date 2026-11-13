@@ -108,7 +108,7 @@ def is_slug(name, cfg=None):
     return False
 
 
-_JOB_TAIL = ("career", "careers", "jobs", "hiring")
+_JOB_TAIL = ("career", "careers", "jobs", "hiring", "hcm")
 
 
 # ---------------------------------------------------------------- "(...)" after a name
@@ -123,7 +123,8 @@ SYSTEMS = {"taleo", "workday", "myworkdayjobs", "adp", "adpworkforcenow", "workf
            "governmentjobs", "cornerstone", "csod", "silkroad", "linkedin", "indeed", "careerbuilder", "equest", "glassdoor",
            "ziprecruiter", "monster", "handshake", "tmp", "symphonytalent"}
 _JOB_WORDS = {"career", "careers", "careersite", "job", "jobs", "external", "internal", "site", "sites", "board", "boards", "portal",
-              "page", "hotjob", "hotjobs", "search", "apply", "opportunities", "recruiting", "recruitment", "llc", "inc", "corp"}
+              "page", "hotjob", "hotjobs", "search", "apply", "opportunities", "recruiting", "recruitment", "llc", "inc", "corp",
+              "employer", "payroll"}
 _JOB_ENDS = r"(?:careers?|careersite|jobs?|external|internal|hotjobs?)"
 _COUNTRY = re.compile(r"(?i)^(?:u\.?s\.?(?:a\.?)?|united states(?: of america)?)$")
 _CFG_CODES = ("site", "section", "token", "tenant", "slug", "sub", "ns", "board", "id", "cid", "key", "search")
@@ -300,6 +301,10 @@ def poor(name, cfg=None):
         return "generic"
     if strip_country(n) != n:
         return "country"
+    if strip_job_tail(n) != n:
+        return "generic"
+    if complete_truncated(n) != n:
+        return "truncated"
     if _short_code(n, cfg):
         return "abbrev"
     if _slogan(n):
@@ -348,9 +353,32 @@ def strip_country(n):
     return n
 
 
+_JOB_TAIL_RX = re.compile(r"(?i)[\s,\-|:]+(?:careers?(?: (?:site|page|portal|center))?|jobs|job openings|job board|human resources|hr|"
+                          r"talent acquisition|recruiting|recruitment|hiring|now hiring|employment(?: opportunities)?|opportunities)$")
+
+
+def strip_job_tail(n):
+    """"Clearsulting Careers" -> "Clearsulting", "Anomatic Human Resources" -> "Anomatic": the job board's own words behind
+    the employer's name. Kept when they are the whole name or part of it ("Jobs for the Future", "Human Resources
+    Department of X" do not end that way; "Career Education Corp" neither)."""
+    n = str(n or "").strip()
+    m = _JOB_TAIL_RX.search(n)
+    if not m:
+        return n
+    head = n[:m.start()].strip(" ,-|:")
+    if len(re.sub(r"[^A-Za-z]", "", head)) < 2 or head.lower() in GENERIC or re.search(r"(?i)\b(?:of|for|and|&)$", head):
+        return n
+    return head
+
+
 _TRUNC_WORDS = sorted(set(BUSINESS_WORDS) | {"services", "service", "advisory", "association", "administration", "department",
                                              "corporation", "incorporated", "laboratories", "pharmaceuticals", "communications",
-                                             "certified", "operations", "operating", "partnership", "behavioral", "physicians"}, key=len)
+                                             "certified", "operations", "operating", "partnership", "behavioral", "physicians"}
+                      - {"careers", "jobs", "inc", "llc", "corp", "usa"}, key=len)
+# real words a name can end in that start like a business word ("Primary Care", "Senior Life")
+_WHOLE_WORDS = {"care", "home", "life", "land", "park", "bank", "art", "law", "lab", "med", "pro", "tech", "trans", "sun", "con",
+                "com", "net", "new", "first", "fed", "con", "eco", "bio", "ins", "inter", "auto", "air", "all", "one", "west",
+                "east", "north", "south", "fin", "cap", "res", "pharm", "health", "hosp", "food", "stores", "mart", "con"}
 
 
 def complete_truncated(n):
@@ -362,7 +390,7 @@ def complete_truncated(n):
     if not m or len(n) < 24 or len(m.group(1).split()) < 2:
         return n
     w = m.group(2).lower()
-    if w in _TRUNC_WORDS:
+    if w in _TRUNC_WORDS or w in _WHOLE_WORDS:
         return n
     comp = [x for x in _TRUNC_WORDS if x.startswith(w) and len(x) > len(w)]
     if not comp:
@@ -469,7 +497,7 @@ def clean_display(name, texts=None, cfg=None):
     m = re.match(r"^(.+?),\s*The$", n)
     if m:
         n = "The " + m.group(1)
-    n = strip_country(n)
+    n = complete_truncated(strip_job_tail(strip_country(n)))
     return n[:60].strip()
 
 
@@ -588,10 +616,12 @@ _PREFIX_STOP = {"all", "the", "our", "you", "your", "this", "that", "with", "wil
                 "job", "full", "part", "pay", "per", "may", "can", "any", "new", "one", "two", "who", "why", "how", "what", "when"}
 
 
-def prefix_name(prefix, texts, need=0.1):
+def prefix_name(prefix, texts, need=0.1, tail=None):
     """UKG addresses a board by a code that starts with the first three letters of the employer's name ("ALL1029AECR"
     is ALL Crane Rental, "ACE1005APMI" Ace Parking, "UNI1101UDFI" United Dairy Farmers). The capitalised phrase
-    starting with those letters that most postings share is the name; None when there is no such phrase."""
+    starting with those letters that most postings share is the name; None when there is no such phrase. tail: the
+    letters at the end of the code ("CRWL"), which follow the name's initials (Crane WorldWide Logistics): a phrase
+    whose initials don't ("Crane SOPs") is not the name."""
     pre = re.sub(r"[^a-z]", "", str(prefix or "").lower())[:3]
     if len(pre) < 3 or not texts:
         return None
@@ -610,6 +640,11 @@ def prefix_name(prefix, texts, need=0.1):
                 found.add(ph.lower())
                 forms.setdefault(ph.lower(), collections.Counter())[ph] += 1
         docs.update(found)
+    tl = re.sub(r"[^a-z]", "", str(tail or "").lower())
+    if len(tl) >= 2:
+        def fits(ph):
+            return all(w[0] in tl for w in ph.split()[1:] if w not in ("of", "and", "&", "the"))
+        docs = collections.Counter({k: v for k, v in docs.items() if fits(k)})
     if not docs:
         return None
     two = {k: v for k, v in docs.items() if len(k.split()) == 2}
@@ -624,6 +659,11 @@ def prefix_name(prefix, texts, need=0.1):
             best = k
     form = forms[best].most_common(1)[0][0]
     return _tidy(form)[:60]
+
+
+def ukg_tail(cfg):
+    m = re.match(r"[A-Za-z]{3}\d{3,}([A-Za-z]{2,})$", str((cfg or {}).get("tenant") or "")) if (cfg or {}).get("ats") == "ukg" else None
+    return m.group(1) if m else None
 
 
 def ukg_prefix(cfg):
@@ -689,7 +729,8 @@ def derive(name, cfg=None, texts=None, board_title=None, employer=None):
         # a one-word name the postings write as two ("Microcenter" -> "Micro Center") or with other capitals
         if cur and " " not in cur and len(texts) >= 3:
             sp = split_slug(_norm(cur), texts, min_share=0.3)
-            if sp and sp != cur and _norm(sp) == _norm(cur) and not poor(sp, cfg):
+            # (not for a curly apostrophe instead of a straight one: "Lowe's" stays as it is)
+            if sp and sp.replace("’", "'") != cur.replace("’", "'") and _norm(sp) == _norm(cur) and not poor(sp, cfg):
                 return sp[:60]
         return None
     ok = lambda n: bool(n) and not poor(n, cfg) and n != cur
@@ -722,7 +763,7 @@ def derive(name, cfg=None, texts=None, board_title=None, employer=None):
         # what the postings and the board's own address say, else the initials written as initials
         if strong or spelled or title:
             return (strong or spelled or title)[:60]
-        pn = prefix_name(ukg_prefix(cfg), texts) if ukg_prefix(cfg) else None
+        pn = prefix_name(ukg_prefix(cfg), texts, tail=ukg_tail(cfg)) if ukg_prefix(cfg) else None
         if ok(pn):
             return pn[:60]
         mined, share = mine_name(texts)
@@ -745,7 +786,7 @@ def derive(name, cfg=None, texts=None, board_title=None, employer=None):
         return spelled[:60]
     if title:
         return title[:60]
-    pn = prefix_name(ukg_prefix(cfg), texts) if ukg_prefix(cfg) else None
+    pn = prefix_name(ukg_prefix(cfg), texts, tail=ukg_tail(cfg)) if ukg_prefix(cfg) else None
     if ok(pn):
         return pn[:60]
     mined, share = mine_name(texts)

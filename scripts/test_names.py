@@ -254,6 +254,9 @@ for n, c in (("Bjakcareer", {"ats": "workable", "token": "bjakcareer"}), ("Crane
     check(f"poor: {n!r}", bool(N.poor(n, c)), N.poor(n, c))
 eq("a country tacked on comes off; one plain USA stays", [N.clean_display(x) for x in ("ICR United States USA", "Acme Corp, United States", "Comfort Systems USA", "T-Mobile USA")],
    ["ICR", "Acme Corp", "Comfort Systems USA", "T-Mobile USA"])
+eq("the job board's own words behind a name come off", [N.clean_display(x) for x in ("Clearsulting Careers", "Anomatic Human Resources", "Acme - Careers",
+   "Jobs for the Future", "Career Education Corp", "Human Resources")], ["Clearsulting", "Anomatic", "Acme", "Jobs for the Future", "Career Education Corp", "Human Resources"])
+check("...and such names count as poor until then", N.poor("Clearsulting Careers") and N.poor("Corporatehcm") and not N.poor("Jobs for the Future"))
 eq("a ledger's cut-off last word is finished; short names are left alone", [N.complete_truncated(x) for x in
    ("PricewaterhouseCoopers Advisory Ser", "CenterWell Certified Healt", "Nationwide Mutual Insurance Comp", "Acme Home", "The Ohio State University")],
    ["PricewaterhouseCoopers Advisory Services", "CenterWell Certified Health", "Nationwide Mutual Insurance Company", "Acme Home", "The Ohio State University"])
@@ -265,6 +268,8 @@ eq("a job-site word run into the address comes off when nothing else is known", 
 CRW = ["Warehouse Associate\nCrane Worldwide Logistics is hiring. Crane Worldwide Logistics is an equal opportunity employer.",
        "Driver\nAbout Crane Worldwide Logistics: we move freight. Crane Worldwide Logistics offers benefits.", "Clerk\nJoin Crane Worldwide Logistics today."]
 eq("'Craneww' -> the name its postings use (UKG's code starts with it)", N.derive("Craneww", UKGC("CRA1009CRWL"), CRW), "Crane Worldwide Logistics")
+CRS = [t + "\nFollow the Crane SOPs at all times. Crane SOPs apply." for t in CRW] + ["Loader\nFollow Crane SOPs. Crane SOPs matter."]
+eq("...not a phrase the code's letters rule out ('Crane SOPs' for CRA...CRWL)", N.derive("Craneww", UKGC("CRA1009CRWL"), CRS), "Crane Worldwide Logistics")
 LMH = ["RN\nLicking Memorial Health Systems is an equal opportunity employer.", "LPN\nAbout Licking Memorial Health Systems: care close to home.",
        "Tech\nJoin Licking Memorial Health Systems today."]
 eq("'Lmhealth' -> 'Licking Memorial Health Systems'", N.derive("Lmhealth", UKGC("LIC1000LMHS"), LMH), "Licking Memorial Health Systems")
