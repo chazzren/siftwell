@@ -316,15 +316,39 @@ def preference_rules():
 def slug(job_id):
     return re.sub(r"[^a-z0-9]+", "-", job_id.lower()).strip("-")[:80]
 
-def contact_header(resume_text):
-    """Name/contact lines as written at the top of the resume (kept verbatim, never sent anywhere but Claude)."""
-    lines = [l.strip() for l in resume_text.splitlines() if l.strip()]
+def contact_header(resume_text, prof=None):
+    """Name/contact lines as written at the top of the resume (kept verbatim, never sent anywhere but Claude).
+    A profile filled in by hand has no resume text: its name, location and contact fields (email, phone, LinkedIn, when
+    given) are used instead, in the same shape (name, then one line), so the Resume PDF contact toggles apply to them."""
+    lines = [l.strip() for l in (resume_text or "").splitlines() if l.strip()]
     head = []
     for l in lines[:6]:
         if re.fullmatch(r"[A-Z][A-Z &/]{3,}", l) or l.upper() in ("EDUCATION", "EXPERIENCE", "SUMMARY", "PROFESSIONAL EXPERIENCE"):
             break
         head.append(l)
-    return head[:4]
+    return head[:4] or profile_contact(prof)
+
+def profile_contact(prof):
+    """[name, "location | email | phone | linkedin"] from a profile's own fields (a hand-filled one), or []."""
+    if not prof:
+        return []
+    c = prof.get("contact") if isinstance(prof.get("contact"), dict) else {}
+    name = " ".join(str(prof.get("name") or "").split())
+    bits = [" ".join(str(x or "").split()) for x in (prof.get("location"), c.get("email"), c.get("phone"), c.get("linkedin"))]
+    bits = [b for b in bits if b]
+    if not name and not bits:
+        return []
+    return [name or "Resume"] + ([" | ".join(bits)] if bits else [])
+
+def contact_of(t):
+    """The contact lines a tailored resume is drawn with: its own, or (made from a hand-filled profile before it kept
+    any) the profile's."""
+    if t.get("contact"):
+        return t["contact"]
+    try:
+        return profile_contact(resume.load_active())
+    except Exception:
+        return []
 
 def tailor(job, description):
     prof = resume.load_active()
@@ -337,7 +361,7 @@ def tailor(job, description):
               f"CANDIDATE PROFILE\n{resume.profile_text(prof)}")
     out = claude_cli.run_json(SYSTEM + "\n\n" + preference_rules(), prompt, SCHEMA, effort="medium", timeout=900)
     out["job"] = {k: job.get(k) for k in ("id", "title", "company", "url", "locations")}
-    out["contact"] = contact_header(rtext)
+    out["contact"] = contact_header(rtext, prof)
     out["created"] = dt.datetime.now().isoformat(timespec="minutes")
     fact_check(out, prof)      # copy the facts back from the profile, look up every source, flag what has none
     os.makedirs(OUT(), exist_ok=True)
@@ -502,7 +526,7 @@ def render_html(s):
         ft = f' ({e(x["functional_title"])})' if x.get("functional_title") else ""
         exp += f'<div class="role"><div><b>{e(x["employer"])}</b>{"  |  " + e(x["location"]) if x.get("location") else ""}</div><div><i>{e(x["title"])}{ft}</i>  |  {e(x["dates"])}</div><ul>{bl}</ul></div>'
     lst = lambda items: "".join(f"<li>{e(i)}</li>" for i in items) or "<li>None</li>"
-    contact = "".join(f'<div class="{"name" if i == 0 else "ct"}">{e(c)}</div>' for i, c in enumerate(t.get("contact", [])))
+    contact = "".join(f'<div class="{"name" if i == 0 else "ct"}">{e(c)}</div>' for i, c in enumerate(contact_of(t)))
     j = t["job"]
     import netsafe
     link = netsafe.clean_link(j.get("url"))  # (http/https only)
@@ -635,7 +659,7 @@ def resolve(t, pr=None, fit=0):
     {"p": text} / {"lines": [...]} / {"groups": [(label, items)]} / {"roles": [...]}; empty sections are left out."""
     import people
     pr = pr or {k: d for k, (d, _) in people.PREF_SCHEMA.items()}
-    name, bits = _contact_bits(t.get("contact") or [])
+    name, bits = _contact_bits(contact_of(t))
     bits = [b for b in bits if _keep_contact(b, pr)]
     body_font, head_font, accent = STYLES.get(pr["resume.style"], STYLES["classic"])
     L = {k: v for k, v in (t.get("layout") or {}).items() if v and v != "default"}  # Claude's per-resume overrides
@@ -840,6 +864,6 @@ def _trims(t0, pr):
 
 def pdf_filename(s):
     t = json.load(open(os.path.join(OUT(), s + ".json")))
-    name = (t.get("contact") or ["Resume"])[0]
+    name = (contact_of(t) or ["Resume"])[0]
     co = re.sub(r"[^\w .&-]", "", (t.get("job") or {}).get("company", "")).strip()
     return re.sub(r"\s+", " ", f"{name} - Resume - {co}".strip(" -")) + ".pdf"

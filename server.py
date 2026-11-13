@@ -87,8 +87,11 @@ def empty_board(pid):
                   "profile": None, "companies": [], "jobs": []}, people.pdir("report.html", pid=pid))
 
 def _people_list():
-    """The household for /api/people: id, name, and whether the person has an approved resume profile yet."""
-    return [dict(p, profile=os.path.exists(people.pdir("profile.json", pid=p["id"]))) for p in people.load_index()]
+    """The household for /api/people: id, name, whether the person has an approved resume profile yet, and whether
+    their setup is unfinished (setup: true; the profile menus and Settings > Profiles offer "Finish setting up")."""
+    import setup_flow
+    return [dict(p, profile=os.path.exists(people.pdir("profile.json", pid=p["id"])), setup=setup_flow.needs_setup(p["id"]))
+            for p in people.load_index()]
 
 
 _BOARD_COUNTS = {}   # pid -> (mtime, size, counts): jobs.json is big, so it is read again only when it changes
@@ -1203,7 +1206,7 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, setup_flow.get_state(pid, ps()["resume"]))
         if path in ("/", "/index.html"):
             import setup_flow
-            if setup_flow.needs_setup(pid):
+            if setup_flow.needs_setup(pid) and not setup_flow.put_off(pid):   # (Finish later: their board, with a way back)
                 self.send_response(303); self.send_header("Location", "/setup"); self.end_headers(); return
             rp = people.pdir("report.html")
             if not os.path.exists(rp):  # no board yet: an empty one, whose Jobs tab offers Start your job search
@@ -1506,7 +1509,7 @@ class H(BaseHTTPRequestHandler):
             people.save_settings({}, pid=new)
             empty_board(new)
             import setup_flow
-            setup_flow.start(new)
+            setup_flow.start(new, came_from=pid)
             return self._send_cookie({"ok": True, "id": new}, new)
         if path == "/api/highlights":
             import highlights
@@ -1535,6 +1538,11 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True, "state": out})
             except ValueError as e:
                 return self._send(400, {"error": str(e), "field": getattr(e, "field", None)})
+        if path == "/api/setup/later":   # setup's Finish later: back to the profile that was being viewed, else Settings
+            import setup_flow
+            out = setup_flow.later(pid)
+            self._act("setup put off", pid)
+            return self._send_cookie(out, out["person"]) if out["person"] else self._send(200, out)
         if path == "/api/setup/finish":
             import setup_flow
             try:

@@ -341,6 +341,9 @@ const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtK = n => n == null || n === "" ? "" : "$" + Math.round(n / 1000) + "k";
+// one of the person's own pay amounts (stored per year) the way they entered it: "$35/hr" or "$72,800 a year"
+const payTxt = (n, u) => n == null || n === "" ? "" : u === "hour" ? "$" + (Math.round(n / 2080 * 100) / 100).toLocaleString(undefined, {maximumFractionDigits: 2}) + "/hr"
+  : "$" + Math.round(n).toLocaleString() + " a year";
 const clone = o => JSON.parse(JSON.stringify(o));
 
 // Steps and how they map onto the nine progress dots (the highlights screen shares the resume dot).
@@ -474,6 +477,14 @@ function footer(o){
   $("foot").hidden = o.hide === true;
   $("later").hidden = cur === "board";
 }
+// Finish later: setup stays unfinished but stops being the start page; back to the profile that was being viewed (or
+// Settings > Profiles when there is none). "Finish setting up" in the profile menu and on Settings > Profiles resumes it.
+$("later").addEventListener("click", async e => {
+  if (MOCK) return;
+  e.preventDefault();
+  try { const d = await api("POST", "/api/setup/later", {}); location.href = (d && d.go) || "/settings#profiles"; }
+  catch (err) { location.href = "/settings#profiles"; }
+});
 function busy(on, label){
   $("next").disabled = on; $("back").disabled = on; $("skip").disabled = on;
   if (on) $("next").innerHTML = `<span class="spin" aria-hidden="true"></span>${esc(label || "Saving")}`;
@@ -791,7 +802,7 @@ const payRead = (s, u) => { s = String(s || "").replace(/[$,\s]/g, ""); if (!s) 
 SCREENS.pay = {
   title: "Pay",
   html: () => {
-    const m = S.market, u = local.unit || "year", hr = u === "hour";
+    const m = S.market, u = local.unit || V.pay_unit || "year", hr = u === "hour";
     const ph = v => !m ? "—" : hr ? String(Math.round(v / HOURS)) : toK(v);
     const box = (id, field, v, place, auto) => `<span class="affix" data-field="${field}"><span>$</span><input id="${id}" inputmode="decimal" value="${esc(payShow(v, u))}" placeholder="${place}" aria-describedby="err-${field}"${auto ? " data-autofocus" : ""}><span>${hr ? "/hr" : "k"}</span></span>`;
     return `
@@ -820,12 +831,13 @@ SCREENS.pay = {
     ["floor", "target", "curbase"].forEach(id => $(id).addEventListener("input", e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ""); }));
     document.querySelectorAll('input[name="unit"]').forEach(r => r.addEventListener("change", () => {
       // keep what was typed: work it out per year in the old unit, show it in the new one
-      const old = local.unit || "year", d = this.collect(old);
+      const old = local.unit || V.pay_unit || "year", d = this.collect(old);
       ["salary_floor", "salary_target", "current_base"].forEach(k => { const v = d[k]; V[k] = v === "" ? null : (old === "year" && Number(v) < 2000 ? Number(v) * 1000 : Number(v)); });
       local.unit = r.value; render(); const f = document.querySelector(`input[name="unit"][value="${r.value}"]`); if (f) f.focus();
     }));
   },
-  collect(u){ u = u || local.unit || "year"; return {salary_floor: payRead($("floor").value, u), salary_target: payRead($("target").value, u), current_base: payRead($("curbase").value, u)}; },
+  // (pay_unit: how they typed it, kept as their display preference so their pay is shown per hour wherever it's summed up)
+  collect(u){ u = u || local.unit || V.pay_unit || "year"; return {salary_floor: payRead($("floor").value, u), salary_target: payRead($("target").value, u), current_base: payRead($("curbase").value, u), pay_unit: u}; },
 };
 
 SCREENS.level = {
@@ -1164,8 +1176,8 @@ SCREENS.board = {
     if (f.possible && this.findOn) steps.push([findTitle, findText]);
     const found = d.possible || (f.possible && this.findOn);
     steps.push(["Check career pages for openings", `Siftwell visits the job pages of ${p.companies ? lists + (found ? " plus the employers just added" : "") : found ? "the employers it just added" : lists}, the ones with the most ${d.remote_only ? "remote openings" : "openings near you"} first. The first jobs reach your board within a few minutes and it keeps filling in.`]);
-    steps.push(["Keep the jobs that fit", `Jobs ${where}${v.salary_floor ? `, paying at least ${fmtK(v.salary_floor)}` : ""}${v.seniority_mine ? ", around your level" : ""}, minus your dealbreakers.`]);
-    if (cl) steps.push(["Rate the best matches", "Claude reads the jobs most relevant to your work against your resume and gives each a Match rating, using your Claude plan: up to 500 jobs in one go. The rest show — until you press Rate more on your board."]);
+    steps.push(["Keep the jobs that fit", `Jobs ${where}${v.salary_floor ? `, paying at least ${payTxt(v.salary_floor, v.pay_unit)}` : ""}${v.seniority_mine ? ", around your level" : ""}, minus your dealbreakers.`]);
+    if (cl) steps.push(["Rate the best matches", "Claude reads the jobs most relevant to your work against your resume and gives each a Match rating, using your Claude plan: up to 500 jobs in one go. The rest show — until you press Rate jobs on your board."]);
     const none = !this.canStart();
     $("bBody").innerHTML = `
       <p class="eyebrow">Last step</p>
@@ -1382,7 +1394,7 @@ const Mock = {
     if (step === "pay") {
       const c = this.money(d.current_base, "current_base", "your current base", true), f = this.money(d.salary_floor, "salary_floor", "the lowest base you’d take", true), t = this.money(d.salary_target, "salary_target", "your target", true);
       if (t != null && f != null && t < f) this.err("Your target should be at or above your floor.", "salary_target");
-      Object.assign(v, {current_base: c, salary_floor: f, salary_target: t});
+      Object.assign(v, {current_base: c, salary_floor: f, salary_target: t, pay_unit: d.pay_unit || "year"});
     }
     if (step === "level") {
       if (d.seniority_mine === "any") Object.assign(v, {seniority_mine: null, band: [-1, 0, 1]});

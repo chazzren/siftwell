@@ -13,12 +13,13 @@ CSS = """
 .mp label.f small{font-weight:400;color:var(--muted)}
 .mp input[type=text],.mp input[type=number],.mp textarea,.mp select{width:100%;min-width:0;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit;font-weight:400}
 .mp textarea{min-height:5em;resize:vertical}
+.mp input[type=file]{max-width:100%;min-width:0;font:inherit;font-size:13px}
 .mp .mp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .mp .mp-pre{border:1px dashed var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
 .mp .mp-pre p,.mp .mp-note{margin:0;font-size:13px;color:var(--muted)}
 .mp .mp-pre details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:13px}
 .mp .mp-role{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
-.mp .mp-row3{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,2fr) minmax(0,1.3fr);gap:8px}
+.mp .mp-row3,.mp .mp-ct{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,2fr) minmax(0,1.3fr);gap:8px}
 .mp h3{margin:2px 0 0;font-size:14px}
 .mp .mp-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .mp .mp-msg{font-size:13px;color:var(--muted)}.mp .mp-msg.err{color:var(--bad)}.mp .mp-msg.ok{color:var(--good)}
@@ -30,7 +31,7 @@ CSS = """
 .mp .mp-yn{display:flex;gap:16px}
 .mp .mp-yn label{display:inline-flex;align-items:center;gap:6px;font-size:14px;min-height:32px;cursor:pointer}
 .mp .mp-yn input{width:18px;height:18px;margin:0}
-@media (max-width:560px){.mp .mp-grid,.mp .mp-row3{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:560px){.mp .mp-grid,.mp .mp-row3,.mp .mp-ct{grid-template-columns:minmax(0,1fr)}}
 """
 
 JS = r"""
@@ -40,7 +41,7 @@ window.ManualProfile = (function(){
   const CLR = [["Public Trust", "Public Trust"], ["Secret", "Secret"], ["Top Secret", "Top Secret"], ["TS/SCI", "TS/SCI"], ["TS/SCI + poly", "TS/SCI + polygraph"]];
   const blankRole = () => ({title: "", employer: "", dates: "", highlights: ""});
   const blank = () => ({name: "", location: "", current_title: "", years_experience: "", summary: "", experience: [blankRole()],
-                        skills: "", education: "", certifications: "", clearance: ""});
+                        skills: "", education: "", certifications: "", clearance: "", email: "", phone: "", linkedin: ""});
   const lines = v => Array.isArray(v) ? v.join("\n") : (v || "");
   let D = blank(), root = null, opts = {}, msg = {t: "", cls: ""}, hasClr = null;   // hasClr: null until answered
 
@@ -50,6 +51,8 @@ window.ManualProfile = (function(){
     ["name", "location", "current_title", "summary", "clearance"].forEach(k => t(k, src[k]));
     if (src.years_experience != null) t("years_experience", src.years_experience);
     ["skills", "education", "certifications"].forEach(k => t(k, lines(src[k])));
+    const ct = src.contact && typeof src.contact === "object" ? src.contact : {};
+    ["email", "phone", "linkedin"].forEach(k => t(k, ct[k]));
     if ((src.clearances || []).length && !D.clearance) D.clearance = src.clearances[0];
     if ((src.experience || []).length) D.experience = src.experience.map(e => ({title: e.title || "", employer: e.employer || "", dates: e.dates || "", highlights: lines(e.highlights)}));
     if (!D.experience.length) D.experience = [blankRole()];
@@ -78,6 +81,8 @@ window.ManualProfile = (function(){
       <div class="mp-grid">${f("name", "Full name", inp("name"), "As it should appear on your resume.")}${f("location", "Location", inp("location", "City, ST"))}
         ${f("current_title", "Current job title", inp("current_title", "Your job title"), "This is what Siftwell searches for first.")}
         ${f("years_experience", "Years of experience", inp("years_experience", "", "number"), "Optional. Worked out from your roles if blank.")}</div>
+      <div class="mp-ct">${f("email", "Email", inp("email"))}${f("phone", "Phone", inp("phone"))}${f("linkedin", "LinkedIn", inp("linkedin", "linkedin.com/in/…"))}</div>
+      <p class="mp-note" style="margin-top:-6px">Optional. Printed at the top of the resumes Siftwell tailors for you (Settings → Resume PDF chooses which); not sent to Claude.</p>
       ${f("summary", "Summary", ta("summary", 4, "Two or three sentences about what you do best."))}
       <h3>Experience</h3><div id="mpRoles">${D.experience.map(role).join("")}</div>
       <div><button type="button" class="mp-b" data-act="addrole">+ Add a role</button></div>
@@ -133,7 +138,8 @@ window.ManualProfile = (function(){
     return {name: D.name, location: D.location, current_title: D.current_title, summary: D.summary,
       years_experience: D.years_experience === "" ? null : D.years_experience,
       experience: D.experience.map(r => ({title: r.title, employer: r.employer, dates: r.dates, highlights: split(r.highlights)})),
-      skills: splitList(D.skills), education: split(D.education), certifications: splitCreds(D.certifications), clearance: D.clearance};
+      skills: splitList(D.skills), education: split(D.education), certifications: splitCreds(D.certifications), clearance: D.clearance,
+      contact: {email: D.email, phone: D.phone, linkedin: D.linkedin}};
   }
   function submit(){
     return fetch("/api/profile/manual", {method: "POST", headers: {"Content-Type": "application/json", "X-Jobboard": "1"}, body: JSON.stringify({profile: payload()})})

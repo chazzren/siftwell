@@ -346,6 +346,11 @@ a.iconBtn{text-decoration:none}
 .rrmsg{color:var(--accent)!important;font-weight:600}
 .rrmsg.bad{color:var(--bad)!important}
 @media (max-width:640px){.rrpop{left:0!important;right:0!important;top:auto!important;bottom:0;width:auto;max-height:85vh;border-radius:var(--r-lg) var(--r-lg) 0 0;padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}}
+.utoast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom,0px));z-index:60;display:flex;gap:10px;align-items:center;max-width:calc(100vw - 32px);background:var(--ink);color:var(--surface);border-radius:var(--r-lg);padding:8px 8px 8px 14px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:var(--fs-sm)}
+.utoast[hidden]{display:none}
+.utoast span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.utoast .btn{min-height:32px;flex:none}
+.banner a:not(.btn){display:inline-block;padding:7px 0;line-height:18px}   /* (a 32px touch target) */
 .banner.gsbn{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);color:var(--ink)}
 .banner.gsbn span{flex:1 1 220px}
 .updbn .updnotes{flex:1 1 100%;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;margin:4px 0 0;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);font-size:var(--fs-sm);line-height:1.45}
@@ -389,7 +394,7 @@ ol.rows{gap:0;background:var(--surface);border:1px solid var(--line);border-radi
 .racts button[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
 .detail{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--fbar,0px) + 12px);max-height:calc(100dvh - env(safe-area-inset-top,0px) - var(--fbar,0px) - 24px);overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);min-width:0}
 .dpane{padding:20px 22px 28px;display:flex;flex-direction:column;gap:18px}
-.dback{display:none;align-self:flex-start;border:0;background:none;color:var(--accent);font-weight:600;padding:0;cursor:pointer;font-size:var(--fs-lg)}
+.dback{display:none;align-self:flex-start;align-items:center;min-height:36px;border:0;background:none;color:var(--accent);font-weight:600;padding:0 8px 0 0;cursor:pointer;font-size:var(--fs-lg)}
 .dtitle{font-size:var(--fs-xl);font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
 .dco{display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--muted);font-size:var(--fs-md);margin-top:6px;align-items:center}
 .dco .coname{color:var(--ink)}
@@ -510,7 +515,7 @@ nav.tabs .tabext{margin-left:auto;color:var(--accent);font-weight:600}
   .moresheet [aria-current="page"]{color:var(--accent);font-weight:700}
   nav.tabs{display:none}
 }
-@media (max-width:480px){.fl-new{display:none}header.top .findBtn{padding:0 12px}}
+@media (max-width:480px){header.top .findBtn{padding:0 10px}}   /* (the full name, "Find new jobs", on phones too) */
 /* the app's own dialog (appConfirm) and the destructive / strong button styles every page uses */
 dialog.appdlg{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);color:var(--ink);padding:20px;width:min(440px,calc(100vw - 32px))}
 dialog.appdlg::backdrop{background:rgba(0,0,0,.45)}
@@ -631,8 +636,14 @@ CONFIRM_JS = r"""window.appConfirm = function(o, okLabel){
     var no = document.createElement("button"); no.type = "button"; no.className = "btn"; no.textContent = o.cancel || "Cancel";
     var yes = document.createElement("button"); yes.type = "button"; yes.className = "btn " + (o.danger ? "danger" : "primary"); yes.textContent = o.ok || "OK";
     row.appendChild(no); row.appendChild(yes); d.appendChild(row); document.body.appendChild(d);
-    var back = document.activeElement;
-    var done = function(v){ try { d.close(); } catch(e) {} d.remove(); try { if (back && back.focus) back.focus(); } catch(e) {} resolve(v); };
+    var back = o.opener || document.activeElement;
+    // focus goes back to what opened the dialog, after the browser's own focus handling (and once more on the next tick,
+    // in case a page handler moved it while the dialog closed)
+    var refocus = function(){ try { if (back && back !== document.body && back.isConnected && back.focus) back.focus(); } catch(e) {} };
+    var closed = false;
+    var done = function(v){ if (closed) return; closed = true; try { d.close(); } catch(e) {} d.remove(); refocus(); setTimeout(refocus, 0); resolve(v); };
+    // Escape belongs to the dialog: the page's own Escape handlers (closing a sheet or menu) must not see it
+    d.addEventListener("keydown", function(e){ if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); done(false); } });
     no.addEventListener("click", function(){ done(false); }); yes.addEventListener("click", function(){ done(true); });
     d.addEventListener("cancel", function(e){ e.preventDefault(); done(false); });
     d.addEventListener("click", function(e){ if (e.target === d) { var r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) done(false); } });
@@ -1036,13 +1047,17 @@ function mySearchOk(j){
 }
 function msSay(t, err){ $("msState").textContent = t; $("msState").classList.toggle("err", !!err); }
 // The card's one-line summary: "43215 · 35 mi · on-site, hybrid · remote anywhere in the US · $60k+ · any level"
+// the person's own pay (stored per year) the way they entered it: "$35/hr" when they chose per hour (display.pay_unit),
+// else "$60k", or "$72,800" when it isn't whole thousands
+const ownPay = y => PREFS["display.pay_unit"] === "hour" ? "$" + (Math.round(y / 2080 * 100) / 100).toLocaleString(undefined, {maximumFractionDigits: 2}) + "/hr"
+  : y % 1000 ? "$" + Math.round(y).toLocaleString() : fmt(y);
 function msSummary(){
   if (!MYS) return;
   const s = MYS, wpN = {onsite: "on-site", hybrid: "hybrid", remote: "remote"}, wps = (s.workplaces || []).map(w => wpN[w] || w);
   const remoteOnly = wps.length === 1 && wps[0] === "remote", home = String(s.home_zip || "").trim();
   const trv = {none: "no travel", light: "light travel", moderate: "some travel"}[s.travel_max];
   const parts = [remoteOnly ? "" : home ? `${home} · ${s.radius_miles || 35} mi` : "No home ZIP yet", wps.join(", "),
-    s.remote_us && !remoteOnly ? "remote anywhere in the US" : "", s.salary_floor ? fmt(s.salary_floor) + "+" : "any pay",
+    s.remote_us && !remoteOnly ? "remote anywhere in the US" : "", s.salary_floor ? ownPay(s.salary_floor) + "+" : "any pay",
     s.seniority_mine ? LVN[s.seniority_mine] || "" : "any level", trv || ""];
   $("msSum").textContent = parts.filter(Boolean).join(" · ");
 }
@@ -1404,9 +1419,28 @@ function act(e){
   const tb = e.target.closest("button[data-tailor]");
   if (tb) { tailorJob(id, tb); return true; }
   const b = e.target.closest("button[data-k]"); if (!b) return false;
-  const k = b.dataset.k;
+  const k = b.dataset.k, was = status[id] || "";
   status[id] = status[id] === k ? "" : k; if (!status[id]) delete status[id];
-  saveStatus(id); render(); return true;
+  saveStatus(id); render();
+  if (k === "hidden" && status[id] === "hidden") undoToast(id, was);
+  return true;
+}
+// "Not for me" takes a job off the list at once: a short note at the bottom offers to put it back
+function undoToast(id, was){
+  let t = $("undoToast");
+  if (!t) {
+    t = document.createElement("div"); t.id = "undoToast"; t.className = "utoast"; t.setAttribute("role", "status"); t.setAttribute("aria-live", "polite");
+    document.body.appendChild(t);
+  }
+  const j = jobs.find(x => x.id === id) || OFF.find(x => x.id === id) || {};
+  t.innerHTML = `<span>Hidden: ${esc(j.title || "this job")}</span><button type="button" class="btn sm">Undo</button>`;
+  t.hidden = false;
+  clearTimeout(undoToast.t); undoToast.t = setTimeout(() => { t.hidden = true; }, 8000);
+  t.querySelector("button").onclick = () => {
+    clearTimeout(undoToast.t); t.hidden = true;
+    if (was) status[id] = was; else delete status[id];
+    saveStatus(id); render();
+  };
 }
 $("detail").addEventListener("click", e => {
   if (e.target.closest("#dBack")) { closeDetail(); return; }
@@ -1540,8 +1574,9 @@ function nlDraw(total){
   if (c.min_salary) parts.push("$" + Math.round(c.min_salary / 1000) + "k+");
   const fb = !!(NL.raw && NL.raw.fallback);  // no Claude: a plain keyword search
   $("nlBar").className = "nlbar"; $("nlBar").hidden = false;
-  $("nlBar").innerHTML = `<span>${fb ? "Keyword search for" : "Claude searched for"} <b>${esc(c.summary)}</b>: ${n.toLocaleString()} match${n === 1 ? "" : "es"}${hid > 0 ? `, ${hid.toLocaleString()} hidden by your filters` : ""}.</span>` +
-    (hid > 0 ? `<button type="button" class="linkbtn" data-nl="all">Show all matches</button>` : "") +
+  $("nlBar").innerHTML = `<span>${fb ? "Keyword search for" : "Claude searched for"} <b>${esc(c.summary)}</b>: ${n.toLocaleString()} match${n === 1 ? "" : "es"}.</span>` +
+    // (how many are hidden is said once, in the count line's "N hidden"; here just the way to see them all)
+    (hid > 0 ? `<button type="button" class="linkbtn" data-nl="all">Show all ${n.toLocaleString()} matches</button>` : "") +
     `<button type="button" class="linkbtn" data-nl="clear">Clear search</button>` +
     (fb ? `<span class="nlterms">${esc(NL.raw.note || "")} ${NOAI_LINK}</span>` : parts.length ? `<span class="nlterms">Matching on: ${esc(parts.join(", "))}</span>` : "");
 }
@@ -1624,9 +1659,9 @@ document.addEventListener("click", e => {
 });
 if (SERVED) clPost({action: "status"}).then(({d}) => {
   const ready = !!d.logged_in && d.installed !== false;
-  if (!ready && !NOAI) { NOAI = true; applyNoAI(!!d.installed); }  // Claude went away since this board was built
+  if (!ready && !NOAI) { NOAI = true; applyNoAI(!!d.installed); rrSmallSay(); }  // Claude went away since this board was built
   else if (!ready && d.installed && NOAI) noClaudeBanner(true);  // installed but signed out: offer the sign-in button
-  else if (ready && NOAI) { NOAI = false; applyNoAI(false); $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude is connected. Use Find new jobs (at the top) or Rate jobs to get Match ratings."; }
+  else if (ready && NOAI) { NOAI = false; applyNoAI(false); rrSmallSay(); $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude is connected. Use Find new jobs (at the top) or Rate jobs to get Match ratings."; }
   if (d.logged_in && (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out")) $("aiBanner").textContent = "Claude Code is signed in. Ratings pick up again the next time you find new jobs (Find new jobs, at the top).";
 }).catch(() => {});
 // Settings gear badge: number of missing required Get started items (hidden when none); settings_page.py has the same logic.
@@ -1864,7 +1899,7 @@ if (SERVED && !jobs.length) (function(){
     else fixes.push(`<a href="/profile#search">Add more job titles</a> (My profile, then Job search): only jobs with a title like yours are kept.`);
     fixes.push(`<a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (<a href="/profile#search">My profile, Job search</a>). Siftwell then offers the employers in the wider area.`);
     fixes.push(`<a href="/catalog#find">Find more employers with Claude</a>: Claude looks up employers in your area${p.claude ? "" : " (needs Claude)"}, and you add the ones Siftwell can read.`);
-    fixes.push(`<a href="/catalog#companies">Add an employer by its careers link</a>.`);
+    fixes.push(`<a href="/catalog#add">Add an employer by its careers link</a>.`);
     show(`<h2 id="scTitle">${p.companies ? "No jobs matched your search" : "There are no employers to check yet"}</h2>
       <p>${esc(s.why_empty || "None of your employers’ openings fit your search right now.")} Things that usually help:</p>
       ${note}<ul>${fixes.map(x => `<li>${x}</li>`).join("")}</ul>${err}`);
@@ -1982,6 +2017,9 @@ function activeFilters(){
   if ($("st").value !== "active") out.push(["st", "Show: " + optText("st")]);
   for (const [id, t] of [["paidonly", "Pay listed"], ["nowide", "No wide pay bands"], ["newonly", "New"], ["reqall", "Including requirements I don't meet"]]) if ($(id).checked) out.push([id, t]);
   if (gapSel) out.push(["gap", "Gap: " + gapSel]);
+  // what a Show in the count line's "N hidden" let back in, like "Including requirements I don't meet"
+  if (offShown && mode !== "pivot") out.push(["offlist", "Including titles not on my list"]);
+  if (lvlShown) out.push(["lvl", "Including other levels"]);
   return out;
 }
 function drawChips(){
@@ -1994,6 +2032,8 @@ $("fChips").addEventListener("click", e => {
   const id = b.dataset.f;
   if (id === "wp") wp = "all";
   else if (id === "gap") { gapSel = ""; if (mode === "pivot") drawPivotPanel(); }
+  else if (id === "offlist") offShown = false;
+  else if (id === "lvl") lvlShown = false;
   else if ($(id).type === "checkbox") $(id).checked = false;
   else $(id).value = id === "st" ? "active" : "all";
   shown = 100; render();
@@ -2004,7 +2044,7 @@ $("fReset").addEventListener("click", () => {
   const d = FDEF(); Object.entries(d).forEach(([k, v]) => $(k).value = v);
   ["paidonly", "nowide", "newonly", "reqall"].forEach(id => $(id).checked = false);
   CF_IDS.forEach(id => $(id).value = "all");
-  wp = "all"; gapSel = ""; lvlShown = false;
+  wp = "all"; gapSel = ""; lvlShown = false; offShown = false;
   shown = 100; if (mode === "pivot") drawPivotPanel(); render();
 });
 
@@ -2046,9 +2086,15 @@ function noClaudeBanner(signIn){
     (signIn && SERVED ? ` <button class="btn sm primary" type="button" data-cl="start">Sign in to Claude</button>` : "");
 }
 // Re-applies everything that depends on whether Claude is connected (also when the live check disagrees with the board).
+// the Rate jobs button's screen-reader words (#rrSmall), again whenever Claude connects or goes away
+function rrSmallSay(){
+  const RR = D.ratings || {}, need = NOAI ? 0 : (RR.stale || 0) + (RR.unrated || 0), el = $("rrSmall");
+  if (el) el.textContent = NOAI ? "needs Claude" : need ? `${need} of your top ${RR.top} not rated or out of date` : "all top jobs current";
+}
 function applyNoAI(signIn){
-  ["odds", "odds_later"].forEach(v => { const o = $("sort").querySelector(`option[value=${v}]`); o.hidden = o.disabled = NOAI && !hasMatch; });
-  if (NOAI && !hasMatch && ["score", "odds", "odds_later"].includes($("sort").value)) $("sort").value = NOMATCH_SORT();
+  // the Best Match sorts are about Claude's rating: gone without Claude (older ratings still count in Best bets)
+  ["odds", "odds_later"].forEach(v => { const o = $("sort").querySelector(`option[value=${v}]`); o.hidden = o.disabled = NOAI; });
+  if (NOAI && (["odds", "odds_later"].includes($("sort").value) || (!hasMatch && $("sort").value === "score"))) $("sort").value = NOMATCH_SORT();
   if (NOAI) noClaudeBanner(signIn);
   const panel = $("rrPanel");
   [...panel.children].forEach(c => {
@@ -2126,7 +2172,9 @@ if (SERVED) {
     PREFS = d.prefs || PREFS; msLoaded(d.settings); applyDisplayDefaults();
     const me = d.people.find(p => p.id === d.current) || {};
     $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
-    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
+    // setup put off with Finish later: the board shows, with one plain way back
+    if (me.setup) { $("aiBanner").hidden = false; $("aiBanner").innerHTML = `Setup isn’t finished yet. <a href="/setup">Finish setting up ${esc(me.name || "this profile")}</a>`; }
+    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + d.people.filter(p => p.setup).map(p => `<button role="menuitem" data-person="__setup:${esc(p.id)}">Finish setting up ${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
   }).catch(() => {});
   $("avatarBtn").addEventListener("click", e => { e.stopPropagation(); const h = $("amenu").hidden; $("amenu").hidden = !h; $("avatarBtn").setAttribute("aria-expanded", h); });
   document.addEventListener("click", e => { if (!e.target.closest(".menuWrap")) { $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false"); } });
@@ -2135,6 +2183,7 @@ if (SERVED) {
     $("amenu").hidden = true;
     const v = b.dataset.person; if (!v) return;
     if (v === "__manage") { location.href = "/settings#profiles"; return; }
+    if (v.startsWith("__setup:")) { fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v.slice(8)})}).then(() => { location.href = "/setup"; }); return; }   // an unfinished setup (Finish later)
     if (v === "__add") { location.href = "/people/new"; return; }   // the one Add a person form (welcome_page.py)
     if (v === curPerson) return;
     fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => { location.hash = ""; location.reload(); });
@@ -2499,7 +2548,7 @@ if (SERVED) {
   })();
   const RR = D.ratings || {};
   const need = NOAI ? 0 : (RR.stale || 0) + (RR.unrated || 0);
-  $("rrSmall").textContent = NOAI ? "needs Claude" : need ? `${need} of your top ${RR.top} not rated or out of date` : "all top jobs current";
+  rrSmallSay();
   $("rerateBtn").title = "Rate jobs: choose how Claude rates your jobs (no new listings)" + (need ? ` (${need} of your top ${RR.top} not rated or out of date)` : " (all top jobs current)");
   if (need) { $("rrBadge").hidden = false; $("rrBadge").textContent = need > 99 ? "99+" : need; }
   // ---- Rate jobs panel. One main action (rate the jobs that need it, within the per-run limits) and the single steps
@@ -2558,15 +2607,24 @@ if (SERVED) {
     $("rrHN").textContent = nf(hNeed);
     $("rrSN").textContent = pct ? `= ${plural(sTop.length, "job")}` : "(1 to 100)";
     $("rrSNn").textContent = nf(sNeed);
-    $("rrON").textContent = top ? `${oSaved.length ? `+ ${nf(oSaved.length)} saved ` : ""}= ${plural(oPick.length, "job")}` : "(1 to 2,000)";
+    // (the jobs marked Applied are rated with the saved ones, as the server does: each is counted under its own word)
+    const oSv = oSaved.filter(j => status[j.id] === "saved").length, oAp = oSaved.length - oSv;
+    $("rrON").textContent = top ? `${oSv ? `+ ${nf(oSv)} saved ` : ""}${oAp ? `+ ${nf(oAp)} applied ` : ""}= ${plural(oPick.length, "job")}` : "(1 to 2,000)";
     $("rrONn").textContent = nf(oNeed);
     document.querySelectorAll(".rrhint").forEach(e => e.hidden = !(hNeed >= Math.max(10, ratePool.length * 0.2)));
     // what one run would really do: never more than the per-run limits (ai_score.RUN_LIMITS)
     const h = Math.min(RLIM.haiku, $("rrHNeed").checked ? hNeed : ratePool.length), s = Math.min(RLIM.sonnet, $("rrSNeed").checked ? sNeed : sTop.length), o = oRun($("rrONeed").checked);
     const hb = Math.min(hNeed, RLIM.haiku, +(PREFS["claude.haiku_per_night"] || RLIM.haiku));
-    const full = reqs(hb, "haiku") + reqs(Math.min(sNeed, RLIM.sonnet), "sonnet") + reqs(oRun(true), "opus");
+    // The main action runs all three steps in one go (ai_score.run_funnel): the jobs its quick check rates for the first
+    // time join the ranking before the careful look and best judgment pick theirs, so count them in (in proportion to
+    // where they could land), within the same per-run limits and batch sizes the run uses.
+    const fresh = Math.min(hb, ratePool.length - rated.length), R2 = rated.length + fresh;
+    const sFull = pct ? Math.min(RLIM.sonnet, Math.ceil(R2 * pct / 100), sNeed + Math.ceil(fresh * pct / 100)) : 0;
+    const oFull = top ? Math.min(RLIM.opus, top, oTop.filter(j => stale(j, 2)).length + (R2 ? Math.ceil(fresh * Math.min(top, R2) / R2) : 0))
+                        + Math.min(RLIM.saved, oSaved.filter(j => stale(j, 2)).length) : 0;
+    const full = reqs(hb, "haiku") + reqs(sFull, "sonnet") + reqs(oFull, "opus");
     $("rrGo").textContent = full ? `Rate the jobs that need it · about ${plural(full, "request")}` : "Everything is rated";
-    $("rrEstFull").textContent = full ? `A quick check of up to ${nf(Math.min(hb, RLIM.haiku))} jobs (the most relevant first), then a careful look at your best ${pct || "?"}% of rated jobs and best judgment on your top ${top ? nf(top) : "?"}. Only missing ratings and ones made with older info are done; fewer requests if little has changed.` : "Nothing to do right now.";
+    $("rrEstFull").textContent = full ? `A quick check of up to ${nf(Math.min(hb, RLIM.haiku))} jobs (the most relevant first), then a careful look at your best ${pct || "?"}% of rated jobs and best judgment on your top ${top ? nf(top) : "?"} (about ${nf(reqs(hb, "haiku"))} + ${nf(reqs(sFull, "sonnet"))} + ${nf(reqs(oFull, "opus"))} requests). Only missing ratings and ones made with older info are done; fewer requests if little has changed.` : "Nothing to do right now.";
     $("rrEst").textContent = `Claude requests for these: Quick check ${nf(reqs(h, "haiku"))} · Careful look ${pct ? nf(reqs(s, "sonnet")) : "?"} · Best judgment ${top ? nf(reqs(o, "opus")) : "?"} (a request rates ${RB.haiku} jobs in a quick check, ${RB.sonnet} in a careful look or best judgment). Uses your Claude plan.`;
     // without Claude nothing here can run: the buttons are off and the panel says how to connect it
     document.querySelectorAll("#rrPanel [data-rr]").forEach(b => { b.disabled = NOAI || (b.dataset.rr === "full" ? !full : b.dataset.rr !== "haiku" && !(pct && top)); b.title = NOAI ? "Needs Claude" : ""; });
@@ -2574,9 +2632,13 @@ if (SERVED) {
   }
   let rrFrom = null;   // the button that opened the panel (the header's Rate jobs, or the one in the count line)
   function rrPlace(){
+    // under the button that opened it, its right edge at the button's when there is room, and always wholly on screen
+    // (the count line's button sits on the left: the panel then starts at the left margin). Phones: a bottom sheet (CSS).
     const p = $("rrPanel"), r = (rrFrom && rrFrom.offsetParent ? rrFrom : $("rerateBtn")).getBoundingClientRect();
-    p.style.top = Math.round(r.bottom + 8) + "px";
-    p.style.right = Math.max(8, Math.round(innerWidth - r.right - 8)) + "px"; p.style.left = "auto";
+    const w = p.offsetWidth || Math.min(440, innerWidth - 16), h = p.offsetHeight || 0;
+    p.style.right = "auto";
+    p.style.left = Math.round(Math.max(8, Math.min(r.right - w, innerWidth - w - 8))) + "px";
+    p.style.top = Math.round(Math.max(8, Math.min(r.bottom + 8, innerHeight - h - 8))) + "px";
   }
   function rrOpen(e){
     if (!$("rrPanel").hidden) return rrClose();
@@ -2586,7 +2648,7 @@ if (SERVED) {
     if ($("rrTop").value === "") $("rrTop").value = PREFS["claude.opus_top"] || 50;
     document.querySelectorAll(".rrTgt").forEach(e => e.hidden = !D.pivot_enabled);
     $("rrMsg").textContent = ""; $("rrMsg").classList.remove("bad");
-    rrCalc(); rrPlace(); $("rrPanel").hidden = false; rrFrom.setAttribute("aria-expanded", "true");
+    rrCalc(); $("rrPanel").hidden = false; rrPlace(); rrFrom.setAttribute("aria-expanded", "true");
     (NOAI || $("rrGo").disabled ? $("rrClose") : $("rrGo")).focus();   // (without Claude the panel explains itself: #rrNo)
   }
   function rrClose(){ $("rrPanel").hidden = true; ["rerateBtn", "rateMore"].forEach(id => $(id).setAttribute("aria-expanded", "false")); }

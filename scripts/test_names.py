@@ -188,6 +188,14 @@ check("...its listings keep their ids", ids(got) == before and len(before) == 3 
 eq("...running it again changes nothing", [N.learn(got, log=quiet), N.learn(got, log=quiet), N.learn("Schneider", log=quiet)], [got, got, "Schneider"])
 check("...and both are settled", cfg_of(got).get("nm") == 2 and cfg_of("Schneider").get("nm") == 2)
 
+# a snapshot source of the directory (directory_jobs) is named by Siftwell and never renamed; nothing after a colon is a
+# job board's label (pre-release 0.5.0 finding: "Hacker News: Who is hiring" became "Hacker News: Who is")
+eq("nothing after a colon is cut ('Hacker News: Who is hiring')", [N.clean_display("Hacker News: Who is hiring"), N.strip_job_tail("Hacker News: Who is hiring")],
+   ["Hacker News: Who is hiring", "Hacker News: Who is hiring"])
+company("Hacker News: Who is", ats="directory_jobs", source="hn", tier="national")
+eq("learn: a directory source an older version had cut gets its whole name back, once", [N.learn("Hacker News: Who is", log=quiet), N.learn("Hacker News: Who is hiring", log=quiet)],
+   ["Hacker News: Who is hiring", "Hacker News: Who is hiring"])
+
 company("Accenture (AccentureCareers)", **ACC)
 store("Accenture (AccentureCareers)", jobs("a"))
 eq("learn: 'Accenture (AccentureCareers)' -> 'Accenture' when that is free", N.learn("Accenture (AccentureCareers)", log=quiet), "Accenture")

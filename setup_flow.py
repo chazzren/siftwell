@@ -288,6 +288,7 @@ def get_state(pid, ingest=None):
             "current_base": s.get("current_base"),
             "salary_floor": s.get("salary_floor") or None,
             "salary_target": s.get("salary_target"),
+            "pay_unit": pr.get("display.pay_unit", "year"),
             "seniority_mine": mine,
             "band": _band_offsets(mine, s.get("seniority_band")) if mine else [-1, 0, 1],
             "direction": direction,
@@ -389,6 +390,8 @@ def validate(step, data):
         if tgt is not None and tgt < floor:
             raise SetupError("Your target should be at or above your floor.", "salary_target")
         up = {"current_base": cur, "salary_floor": floor, "salary_target": tgt}
+        if d.get("pay_unit") in ("year", "hour"):   # how they typed it: shown that way (stored per year all the same)
+            extra["prefs"] = {**extra.get("prefs", {}), "display.pay_unit": d["pay_unit"]}
     elif step == "level":
         if "recent_title" in d:   # asked on the same screen: the most recent job title (the what-to-look-for sheet)
             extra["recent_title"] = re.sub(r"\s+", " ", str(d.get("recent_title") or "")).strip()[:80]
@@ -526,9 +529,24 @@ def finish(pid):
             "kick": {"interpret_target": bool((s.get("target_text") or "").strip()), "update": True},
             "settings": {**SETUP_DEFAULTS, **people._with_defaults(raw)}}
 
-def start(pid):
-    """Call right after people.add(): marks the new profile as needing setup."""
-    _write(pid, {"setup_done": False, "setup_step": "welcome"})
+def start(pid, came_from=None):
+    """Call right after people.add(): marks the new profile as needing setup. came_from: the profile that was being
+    viewed when this one was added (where Finish later goes back to)."""
+    _write(pid, {"setup_done": False, "setup_step": "welcome", "setup_from": came_from or "", "setup_later": False})
+
+def later(pid):
+    """Finish later: setup stays unfinished (it can be resumed from the profile menu or Settings > Profiles), but / no
+    longer sends this profile back to /setup. Returns where to go: {"person": id to view, or None, "go": url}: the
+    profile that was being viewed when this one was added (or another one that is set up), else Settings > Profiles."""
+    _write(pid, {"setup_later": True})
+    others = [p["id"] for p in people.load_index() if p["id"] != pid and not needs_setup(p["id"])]
+    prev = _raw(pid).get("setup_from")
+    back = prev if prev in others else (others[0] if others else None)
+    return {"person": back, "go": "/" if back else "/settings#profiles"}
+
+def put_off(pid):
+    """True when this unfinished profile's setup was put off with Finish later (so / shows its board, not /setup)."""
+    return bool(_raw(pid).get("setup_later"))
 
 def needs_setup(pid):
     """True when / should send this profile to /setup: a profile created after start(), not yet finished.

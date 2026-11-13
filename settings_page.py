@@ -73,18 +73,18 @@ CATEGORIES = [
     ("claude", "Ratings & Claude", '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', [
         ("How much Claude rates in one run", "A run is one automatic rating after Find new jobs, one scheduled night (its Find new jobs and "
          "the rating after it count as one run together), or one press of Rate jobs. The limits are per run and the same "
-         "for all of them; they don't grow with the number of jobs in your area. Jobs over a limit keep a — for Match until the next run. The three kinds of rating have the same names everywhere in Siftwell, each with the Claude model it uses: Quick check (Haiku), "
-         "Careful look (Sonnet) and Best judgment (Opus). Applies from the next run.", [
-            ("number", "claude.haiku_per_night", "Quick checks per run", "New jobs that get a quick check (Haiku), the ones most relevant to your work first. 0 to 500."),
-            ("number", "claude.sonnet_pct", "Careful look: best % of rated jobs", "The best-rated share of your rated jobs get a careful look (Sonnet), at most 100 per run. 0 to 50."),
-            ("number", "claude.opus_top", "Best judgment: your top jobs", "How many of your best jobs get Claude's best judgment (Opus), at most 50 new per run, plus up to 25 jobs you saved (the latest first). 0 to 1,000."),
+         "for all of them; they don't grow with the number of jobs in your area. Jobs over a limit keep a — for Match until the next run. The three kinds of rating have the same names everywhere in Siftwell: "
+         "a quick check (fast, for many jobs), a careful look (more thorough) and best judgment (Claude's most capable model, for your top jobs). Applies from the next run.", [
+            ("number", "claude.haiku_per_night", "Quick checks per run", "New jobs that get a quick check, the ones most relevant to your work first. 0 to 500."),
+            ("number", "claude.sonnet_pct", "Careful look: best % of rated jobs", "The best-rated share of your rated jobs get a careful look, at most 100 per run. 0 to 50."),
+            ("number", "claude.opus_top", "Best judgment: how far down your top jobs", "Best judgment works down your best jobs from the top and stops at this one. One run rates at most 50 new ones (plus up to 25 jobs you saved, the latest first), so 50 is covered in one run; a bigger number lets the next runs carry on further down. 0 to 1,000."),
             ("number", "claude.per_update", "Target-tab ratings per run", "Jobs rated for your Target tab in one run. 0 to 50."),
         ]),
         ("Automatic rating", "", [
             ("toggle", "claude.auto_rate", "Rate new jobs when Siftwell finds them", ""),
             ("toggle", "claude.auto_rerate", "Rate jobs again overnight when my info changes", "Within the same limits per run as above."),
         ]),
-        ("Company facts", "Each time Siftwell finds new jobs, Claude (Haiku, with web search) looks up facts such as size, funding, "
+        ("Company facts", "Each time Siftwell finds new jobs, Claude (a quick check, with web search) looks up facts such as size, funding, "
          "layoffs and Glassdoor rating for a few companies that are on someone's board, the ones with the best-ranked jobs "
          "first, and looks each one up again after about six months. Companies that are on nobody's board are never looked "
          "up. Facts are shared by everyone in the household, so Siftwell uses the highest number any profile sets here.", [
@@ -151,7 +151,7 @@ NAV_GROUPS = [
 DEFAULT_CAT = "get-started"   # what Settings opens on (at desktop width, with no #section in the address)
 
 
-def _render_parts(name="", clearance=True):
+def _render_parts(name="", clearance=True, claude=True):
     nav, panes = [], []
     every = {c[0]: c for c in [GS_CAT + ("checklist",), PROF_CAT + ("profiles",)] + CATEGORIES +
              [UPDATES_CAT + ("updates",), directory.CAT + ("directory",), ABOUT_CAT + ("about",), BACKUP_CAT + ("backup",), KEY_CAT + (None,)]}
@@ -195,6 +195,9 @@ def _render_parts(name="", clearance=True):
         else:
             if not clearance:
                 groups = [(t, f, [r for r in rows if r[1] != "display.clearance"]) for t, f, rows in groups]
+            if not claude:   # without Claude there is no Match to sort by (the board hides these sorts too)
+                groups = [(t, f, [r[:3] + ([c for c in r[3] if c[0] not in ("odds", "odds_later")],) + r[4:] if r[1] == "display.sort" else r
+                                  for r in rows]) for t, f, rows in groups]
             body = "".join(_group(t, f, [_row(f'<label for="{c_id}">{e(lbl)}</label>', hlp, ctl) for c_id, lbl, hlp, ctl in map(_control, rows)])
                            for t, f, rows in groups)
             if cid == "claude":
@@ -220,7 +223,8 @@ def render_settings_html(pid=None) -> str:
     import setup_flow
     name = e(people.name(pid))
     p = people.prefs(pid)
-    nav, panes = _render_parts(people.name(pid), clearance=setup_flow.clearance_relevant(pid))
+    import claude_cli
+    nav, panes = _render_parts(people.name(pid), clearance=setup_flow.clearance_relevant(pid), claude=claude_cli.claude_ready())
     tools = report.TOOLS.replace('id="prefsBtn" href="/settings"', 'id="prefsBtn" href="/settings" aria-current="page"')
     head = report.HEAD.replace("<title>Siftwell</title>", "<title>Settings · Siftwell</title>")
     body = (BODY.replace("__TITLE__", "Settings").replace("__SUBTITLE__", f"{name}’s settings, and the ones for everyone in this household")
@@ -388,7 +392,8 @@ $("rerateBtn").title = "Rate jobs (opens the board's Rate jobs panel): choose ho
   fetch("/api/status").then(r => r.json()).then(s => {
     const pg = s.progress || {active: !!s.running, line: "Finding new jobs…"};
     let b = $("runBanner");
-    if (!b && $("updBanner")) { b = document.createElement("div"); b.id = "runBanner"; b.className = "banner gsbn"; b.setAttribute("role", "status"); b.hidden = true; $("updBanner").after(b); }
+    // (under the update banner on Settings; above the status strip on My profile)
+    if (!b && ($("updBanner") || $("pstrip"))) { b = document.createElement("div"); b.id = "runBanner"; b.className = "banner gsbn"; b.setAttribute("role", "status"); b.hidden = true; if ($("updBanner")) $("updBanner").after(b); else $("pstrip").before(b); }
     if (b) { b.hidden = !pg.active; if (pg.active) b.innerHTML = `<span>${esc(pg.line)}</span><a class="btn sm ghost" href="/#jobs">Go to my board</a>`; }
     const busy = !!pg.active && pg.blocking !== false;   // (building the directory doesn't hold Find new jobs up)
     $("updateBtn").disabled = busy; $("updateBtn").classList.toggle("busy", busy);
@@ -408,7 +413,7 @@ function loadPeople(){
     curPerson = d.current; PEOPLE = d.people;
     const me = d.people.find(p => p.id === d.current) || {};
     $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
-    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
+    $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + d.people.filter(p => p.setup).map(p => `<button role="menuitem" data-person="__setup:${esc(p.id)}">Finish setting up ${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
     if (typeof onPeople === "function") onPeople(d);
   }).catch(() => {});
 }
@@ -418,6 +423,7 @@ $("amenu").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false");
   const v = b.dataset.person; if (!v) return;
+  if (v.startsWith("__setup:")) { fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v.slice(8)})}).then(() => { location.href = "/setup"; }); return; }   // an unfinished setup (Finish later)
   if (v === "__add") { location.href = "/people/new"; return; }   // the same form as the welcome page
   if (v === "__manage") { location.href = "/settings#profiles"; return; }
   if (v === curPerson) return;
@@ -544,7 +550,7 @@ load(false);
 // ---- Profiles pane: rename inline, remove after a yes in the app's dialog (the server keeps the folder in people_removed)
 const profMsg = (t, bad) => { const m = $("profMsg"); m.textContent = t || ""; m.style.color = bad ? "var(--bad)" : ""; };
 function renderProfiles(){
-  $("profList").innerHTML = PEOPLE.map(p => `<div class="srow" data-id="${esc(p.id)}"><div class="slab"><span>${esc(p.name)}${p.id === curPerson ? " (viewing now)" : ""}</span><small>${p.profile ? "Resume and profile set up" : "No resume yet"}</small></div><div class="sctl pbtns"><button class="btn sm" type="button" data-rn>Rename</button><button class="btn sm danger rmbtn" type="button" data-rm>Remove</button></div></div>`).join("");
+  $("profList").innerHTML = PEOPLE.map(p => `<div class="srow" data-id="${esc(p.id)}"><div class="slab"><span>${esc(p.name)}${p.id === curPerson ? " (viewing now)" : ""}</span><small>${p.setup ? "Setup not finished" : p.profile ? "Resume and profile set up" : "No resume yet"}</small></div><div class="sctl pbtns">${p.setup ? `<button class="btn sm primary" type="button" data-setup>Finish setting up ${esc(p.name)}</button>` : ""}<button class="btn sm" type="button" data-rn>Rename</button><button class="btn sm danger rmbtn" type="button" data-rm>Remove</button></div></div>`).join("");
 }
 function profPost(url, body){
   return fetch(url, {method: "POST", headers: H, body: JSON.stringify(body)}).then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error || "Something went wrong."); return d; }));
@@ -552,7 +558,10 @@ function profPost(url, body){
 $("profList").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   const row = b.closest(".srow"), id = row.dataset.id, p = PEOPLE.find(x => x.id === id) || {};
-  if (b.hasAttribute("data-rn")) {
+  if (b.hasAttribute("data-setup")) {   // an unfinished setup (Finish later): view that profile and carry on where it stopped
+    b.disabled = true;
+    profPost("/api/person", {id}).then(() => { location.href = "/setup"; }).catch(err => { b.disabled = false; profMsg(err instanceof TypeError ? "Couldn't reach Siftwell." : err.message, true); });
+  } else if (b.hasAttribute("data-rn")) {
     profMsg("");
     row.querySelector(".slab").innerHTML = `<input type="text" class="pinput" maxlength="40" value="${esc(p.name)}" aria-label="Name">`;
     row.querySelector(".sctl").innerHTML = `<button class="btn sm primary" type="button" data-rnsave>Save</button><button class="btn sm" type="button" data-rncancel>Cancel</button>`;

@@ -514,13 +514,14 @@ function fillOne(el){
   s.innerHTML = `<option value="">Any level</option>` + (PS0.level_choices || []).concat(mine && !(PS0.level_choices || []).includes(+mine) ? [+mine] : [])
     .sort((a, b) => a - b).map(n => `<option value="${n}">${esc(L[n] || n)}</option>`).join("");
 })();
-// Pay: typed per year or per hour, stored per year (2,080 hours), the other unit shown underneath
+// Pay: typed per year or per hour, stored per year (2,080 hours), the other unit shown underneath. The unit the person
+// chose is kept as their display preference (display.pay_unit), so their pay reads the way they think of it everywhere
+// (the board's "Your search" line, setup's summary); the three boxes share it.
 const HOURS = 2080, money = v => "$" + Math.round(v).toLocaleString(), money2 = v => "$" + (Math.round(v * 100) / 100).toLocaleString(undefined, {minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2});
 const payUnit = {};
 function fillPay(k){
   const inp = $("pay-" + k); if (!inp) return;
-  let saved_u = null; try { saved_u = localStorage.getItem("jb.payunit." + k); } catch(e) {}
-  const y = +SET[k] || 0, u = payUnit[k] || saved_u || "year";
+  const y = +SET[k] || 0, u = payUnit[k] || PREFS["display.pay_unit"] || "year";
   payUnit[k] = u; $("payu-" + k).value = u;
   if (document.activeElement !== inp) inp.value = !y ? "" : u === "hour" ? (Math.round(y / HOURS * 100) / 100).toString() : String(Math.round(y));
   $("payeq-" + k).textContent = !y ? "" : u === "hour" ? `Saved as ${money(y)} a year.` : `About ${money2(y / HOURS)} an hour.`;
@@ -578,7 +579,17 @@ function savePS(el, settings){
 }
 document.querySelector(".spanes").addEventListener("change", async e => {
   const pu = e.target.closest("[data-payu]");
-  if (pu) { payUnit[pu.dataset.payu] = pu.value; try { localStorage.setItem("jb.payunit." + pu.dataset.payu, pu.value); } catch(e) {} const inp = $("pay-" + pu.dataset.payu); if (inp.value.trim()) inp.dispatchEvent(new Event("change", {bubbles: true})); else fillPay(pu.dataset.payu); return; }
+  if (pu) {
+    const k = pu.dataset.payu, inp = $("pay-" + k), y = +SET[k] || 0, was = payUnit[k] || "year";
+    // a number typed but not saved yet (e.g. turned down as "looks like an hourly amount") is read again in the new
+    // unit; a saved amount is simply shown in it
+    const shown = !y ? "" : was === "hour" ? (Math.round(y / HOURS * 100) / 100).toString() : String(Math.round(y));
+    const typed = !!inp.value.trim() && inp.value.trim() !== shown;
+    ["salary_floor", "salary_target", "current_base"].forEach(x => { payUnit[x] = pu.value; if (x !== k || !typed) fillPay(x); });
+    jpost("/api/prefs", {prefs: {"display.pay_unit": pu.value}}).then(({ok, d}) => { if (ok) PREFS = d.prefs || PREFS; }).catch(() => {});
+    if (typed) inp.dispatchEvent(new Event("change", {bubbles: true}));
+    return;
+  }
   const pa = e.target.closest("[data-pay]");
   if (pa) { const r = readPay(pa.dataset.pay); if (r.err) { saveState(pa, r.err, true); psSay(r.err, true); return; } savePS(pa, {[pa.dataset.pay]: r.v}); return; }
   if (e.target.id === "ps-clearance") {

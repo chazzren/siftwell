@@ -491,6 +491,36 @@ old = json.loads(json.dumps(T)); old.pop("contact"); old["contact"] = T["contact
 check("a resume tailored before this version (no Certifications, no checks) still renders, PDF and Word alike",
       "Certifications" not in pdf_heads(old, pr_all) and tailor.write_docx(old, out, pr_all) is None and "Check before you send" not in tailor.checks_html(old.get("checks")))
 
+# a profile filled in by hand has no resume text: the tailored resume's name and contact block come from its own fields,
+# and the Resume PDF contact toggles apply to them (pre-release 0.5.0 finding: there was no name at all)
+HPHONE = "(937) 555-" + "0142"   # (made up; put together so the release leak scan sees no phone number)
+hand = people.add("Hana")
+people.set_current(hand, process_wide=True)
+resume.save_manual({"name": "Hana Hand", "location": "Dayton, OH", "current_title": "Office Manager", "skills": ["QuickBooks"],
+                    "experience": [{"title": "Office Manager", "employer": "Maple Street Dental Associates", "dates": "2019 - Present", "highlights": ["Ran the front office"]}],
+                    "contact": {"email": "hana@example.com", "phone": HPHONE, "linkedin": "linkedin.com/in/hanahand"}})
+check("the hand-filled contact fields are kept on the profile, and stay out of what Claude reads and of the rating key",
+      resume.load_active().get("contact", {}).get("email") == "hana@example.com" and "hana@example.com" not in resume.profile_text(resume.load_active())
+      and "contact" not in resume.PROFILE_HASH_KEYS)
+claude_cli.run_json = lambda system, prompt, schema, **kw: json.loads(json.dumps({k: T[k] for k in tailor.SCHEMA["properties"] if k in T}))
+try:
+    hs = tailor.tailor({"id": "J::hand", "title": "Office Manager", "company": "Bright Smiles", "url": "", "locations": []}, "posting text")
+finally:
+    claude_cli.run_json = real_rj
+ht = json.load(open(os.path.join(tailor.OUT(), hs + ".json")))
+check("a resume tailored from a hand-filled profile starts with the name and contact line",
+      ht["contact"] == ["Hana Hand", f"Dayton, OH | hana@example.com | {HPHONE} | linkedin.com/in/hanahand"], str(ht["contact"]))
+people.save_prefs({"resume.contact_phone": False}, pid=hand)
+hw = word_text(tailor.make_docx(hs))
+check("...in the Word file, with the Resume PDF contact toggles applied (phone off)",
+      hw[0] == "Hana Hand" and "hana@example.com" in hw[1] and "Dayton, OH" in hw[1] and "linkedin.com/in/hanahand" in hw[1] and "555-0142" not in hw[1], str(hw[:3]))
+hp = tailor.render_print(ht, people.prefs(hand))
+check("...and in the PDF layout alike", "Hana Hand" in hp and "hana@example.com" in hp and "555-0142" not in hp)
+noct = dict(ht, contact=[])
+check("a resume tailored before this fix (no contact saved) is drawn with the profile's name and contact",
+      "Hana Hand" in tailor.render_print(noct, people.prefs(hand)))
+people.set_current(pid, process_wide=True)
+
 # keyword coverage and when to stop reworking
 POST = ("About Bright Smiles\nWe are a family dental group with amazing culture and amazing benefits. Amazing culture matters.\n\n"
         "Requirements\n- Dental office management experience with Dentrix or Eaglesoft\n- Insurance verification and insurance claims follow-up\n"

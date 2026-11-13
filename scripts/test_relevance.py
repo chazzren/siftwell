@@ -158,8 +158,10 @@ lt = {x["t"]: x["tier"] for x in ls["titles"]}
 check("single catch-all words carried over from old title words are dropped (Engineer, Architect, Manager, Project, security)",
       not {"Engineer", "Architect", "Manager", "Project", "security", "manager"} & set(lt) and lt.get("Technical Program Manager") == "wanted" and lt.get("mendix") == "keyword", str(lt))
 check("roles the resume reader's reframings open are related roles", lt.get("Solutions Consultant") == "related", str(lt))
-check("skills are the person's own, written the way postings write them ('(Mendix)' -> Mendix, 'Agile/Scrum' -> Agile, Scrum, certifications)",
-      {"mendix", "agile", "scrum", "certified scrum master", "case management"} <= {x["t"].lower() for x in ls["skills"]}, str([x["t"] for x in ls["skills"]]))
+check("skills are the person's own, written the way postings write them ('(Mendix)' -> Mendix, 'Agile/Scrum' -> Agile, Scrum)",
+      {"mendix", "agile", "scrum", "case management"} <= {x["t"].lower() for x in ls["skills"]}, str([x["t"] for x in ls["skills"]]))
+check("...and a certification is no skill chip ('Certified Scrum Master' stays with the person's credentials)",
+      "certified scrum master" not in {x["t"].lower() for x in ls["skills"]}, str([x["t"] for x in ls["skills"]]))
 lsc = lookfor.Scorer(ls, {})
 check("own titles in order: most recent 100, a title they search for 90, the job before 82, the one before that 66; a bare 'Architect' is nothing",
       [T(lsc, t) for t in ("Management Consultant", "Technical Program Manager", "Operations Manager", "Front Desk Supervisor")] == [100, 90, 82, 66]

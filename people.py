@@ -98,6 +98,9 @@ PREF_SCHEMA = {
     # (display.level, the board's old Seniority filter default, is gone: "Your level" in the board's My search decides it.)
     "display.clearance": ("all", ["all", "none", "nopoly", "secret"]),   # "Any" for everyone (see _clearance_any)
     "display.theme": ("system", ["system", "light", "dark"]),
+    # how this person entered their pay (setup, My profile > Job search): it is always STORED per year, and shown in
+    # this unit ("$35/hr") wherever their own pay is summed up
+    "display.pay_unit": ("year", ["year", "hour"]),
 }
 
 CLEARANCE_ANY = "prefs_clearance_any"   # settings.json marker: the clearance filter's old default was set back to Any once

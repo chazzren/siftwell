@@ -72,6 +72,17 @@ ADD_BODY = """<div class="wrap"><main class="welcome">
 """
 
 SCRIPT = r"""<script>
+// "‹ Profiles" on Add a person goes back where the person came from (the board, Employers, My profile...); from
+// Settings, or with no page to go back to, it stays Settings > Profiles.
+(function(){
+  const bk = document.querySelector(".welcome .back"); if (!bk) return;
+  try {
+    const r = document.referrer ? new URL(document.referrer) : null;
+    if (!r || r.origin !== location.origin || r.pathname === location.pathname || r.pathname.startsWith("/settings") || r.pathname.startsWith("/setup")) return;
+    const names = {"/": "‹ Back to the board", "/catalog": "‹ Employers", "/profile": "‹ My profile"};
+    bk.href = r.pathname + r.search; bk.textContent = names[r.pathname] || "‹ Back";
+  } catch (e) {}
+})();
 document.getElementById("addForm").addEventListener("submit", e => {
   e.preventDefault();
   const msg = document.getElementById("msg"), name = document.getElementById("name").value.trim();

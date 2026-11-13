@@ -152,13 +152,34 @@ check("...and someone with no nursing degree is told 'Associate's in Nursing', n
 v = lookfor.view(pid)
 skills = [x["t"] for x in v["skills"]]
 titles = {k: [x["t"] for x in v[k]] for k in ("same", "up", "related", "past")}
-check("'RN license; BLS; ACLS' is three skills on the sheet", all(s in skills for s in ("RN license", "BLS", "ACLS")) and not any(";" in s for s in skills), str(skills))
+check("licenses and certifications are not skills on the sheet ('RN license; BLS; ACLS')", not any(s in skills for s in ("RN license", "BLS", "ACLS")) and not any(";" in s for s in skills), str(skills))
 check("a state typed among the skills ('Ohio') is not a skill", not any(s.lower() == "ohio" for s in skills), str(skills))
 check("...real skills stay", all(s in skills for s in ("Patient care", "Epic", "IV therapy")), str(skills))
 check("no related role 'rn, medical-surgical'", not any("medical" in t.lower() for t in titles["related"] + titles["same"] + titles["up"]), str(titles))
 check("the role line 'Staff RN, Medical-Surgical' is on the sheet as the title 'Staff RN'",
       "Staff RN" in titles["same"] + titles["past"] and not any("," in t for ts in titles.values() for t in ts), str(titles))
 check("...and its specialty is a skill", "Medical-Surgical" in skills, str(skills))
+# a license with its state in brackets, typed among the skills or the certifications, never makes the chips
+# "RN license" and "Ohio" (pre-release 0.5.0 finding)
+LIC = dict(NURSE, skills=["Patient care", "RN license (Ohio)", "Columbus, OH", "Certified Wound Care Nurse", "Epic"],
+           certifications=["RN license (Ohio)"])
+lic = people.add("Lena")
+people.set_current(lic)
+lp = resume.save_manual(LIC)
+check("a license typed among the skills moves to the certifications; a place there is dropped",
+      lp["skills"] == ["Patient care", "Epic"] and lp["certifications"] == ["RN license (Ohio)", "Certified Wound Care Nurse"], str((lp["skills"], lp["certifications"])))
+lv = [x["t"].lower() for x in lookfor.build(lic, lp)["skills"]]
+check("'RN license (Ohio)' makes neither an 'Ohio' nor an 'RN license' skill chip", not any(s in lv for s in ("ohio", "rn license", "rn license (ohio)")), str(lv))
+lv2 = [x["t"].lower() for x in lookfor.build(lic, dict(lp, skills=["Wound care (Ohio)", "Epic"]))["skills"]]
+check("...and a place in a skill's brackets is no chip of its own", "ohio" not in lv2 and "wound care" in lv2, str(lv2))
+NPHONE = "(614) 555-" + "0100"   # (made up; put together so the release leak scan sees no phone number)
+pf = resume.prefill_from_text("NORA TEST\nColumbus, OH | nora@example.com | " + NPHONE + " | linkedin.com/in/noratest\n\n"
+                               "SKILLS AND LICENSES\nPatient care, Epic, RN License, Ohio\n\nEXPERIENCE\nStaff RN, Riverside Hospital\n2019 - Present\n- Cared for patients\n")
+check("reading a resume: licenses in a skills section go to certifications, places are dropped, contact fields are read",
+      pf["skills"] == ["Patient care", "Epic"] and "RN License" in pf["certifications"]
+      and pf["contact"] == {"email": "nora@example.com", "phone": NPHONE, "linkedin": "linkedin.com/in/noratest"}, str((pf["skills"], pf["certifications"], pf["contact"])))
+people.set_current(pid)
+
 S = highlights.split_items
 check("split: commas, semicolons and new lines", S("BLS, ACLS; PALS\nNRP") == ["BLS", "ACLS", "PALS", "NRP"])
 check("split: nothing inside brackets", S("Low-code tools (Mendix, Appian), SQL") == ["Low-code tools (Mendix, Appian)", "SQL"])
@@ -221,6 +242,31 @@ check("an error is put on the page once (its box is the alert; no copy in the li
       'role="alert"' in P and "\n  say(msg);\n}" not in P.replace("\r\n", "\n"))
 check("Continue / Back pass over a step that is left out", "go(nextStep || nextOf(step))" in P and "let p = prevOf(cur)" in P)
 check("the form splits credentials at semicolons", "certifications: splitCreds(D.certifications)" in manual_profile.JS)
+
+# pay typed per hour stays per hour where it is shown (stored per year all the same)
+setup_flow._write(pid, {"setup_step": "pay"})
+st = setup_flow.save_step(pid, "pay", {"salary_floor": "72800", "salary_target": "", "current_base": "", "pay_unit": "hour"})
+check("setup: pay typed per hour is stored per year, and the unit is kept as the display preference",
+      people.settings(pid)["salary_floor"] == 72800 and people.prefs(pid)["display.pay_unit"] == "hour" and st["values"]["pay_unit"] == "hour",
+      str((people.settings(pid)["salary_floor"], people.prefs(pid)["display.pay_unit"])))
+check("...and the summaries show it that way ('$35/hr', '$72,800 a year')", "payTxt(v.salary_floor, v.pay_unit)" in P and 'u === "hour"' in P)
+setup_flow.save_step(pid, "pay", {"salary_floor": "", "salary_target": "", "current_base": "", "pay_unit": "year"})
+
+# Finish later: setup stays unfinished but no longer traps the person; back to the profile that was being viewed
+done_pid = people.add("Dora")
+setup_flow._write(done_pid, {"setup_done": True})
+later_pid = people.add("Liam")
+setup_flow.start(later_pid, came_from=done_pid)
+check("a new profile needs setup, and / sends it there", setup_flow.needs_setup(later_pid) and not setup_flow.put_off(later_pid))
+go = setup_flow.later(later_pid)
+check("Finish later: back to the profile that was being viewed; setup stays unfinished but is put off",
+      go == {"person": done_pid, "go": "/"} and setup_flow.needs_setup(later_pid) and setup_flow.put_off(later_pid), str(go))
+setup_flow._write(done_pid, {"setup_done": False})
+for p_ in people.load_index():
+    if p_["id"] != later_pid:
+        setup_flow._write(p_["id"], {"setup_done": False})
+check("...with no profile that is set up, to Settings > Profiles", setup_flow.later(later_pid) == {"person": None, "go": "/settings#profiles"})
+check("the setup page's Finish later asks the server where to go", '"/api/setup/later"' in P)
 
 try:
     log = open(os.path.join(DATA, "forbidden_claude_calls.log")).read().strip()

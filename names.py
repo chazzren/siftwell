@@ -362,10 +362,11 @@ _JOB_TAIL_RX = re.compile(r"(?i)[\s,\-|:]+(?:careers?(?: (?:site|page|portal|cen
 def strip_job_tail(n):
     """"Clearsulting Careers" -> "Clearsulting", "Anomatic Human Resources" -> "Anomatic": the job board's own words behind
     the employer's name. Kept when they are the whole name or part of it ("Jobs for the Future", "Human Resources
-    Department of X" do not end that way; "Career Education Corp" neither)."""
+    Department of X" do not end that way; "Career Education Corp" neither). Nothing after a colon is cut: there the
+    words are a title ("Hacker News: Who is hiring"), not a job board's label."""
     n = str(n or "").strip()
     m = _JOB_TAIL_RX.search(n)
-    if not m:
+    if not m or ":" in n:
         return n
     head = n[:m.start()].strip(" ,-|:")
     if len(re.sub(r"[^A-Za-z]", "", head)) < 2 or head.lower() in GENERIC or re.search(r"(?i)\b(?:of|for|and|&)$", head):
@@ -1030,6 +1031,21 @@ def learn(company, board_title=None, log=lambda m: print(m, flush=True)):
         if not row:
             return company
         cfg = json.loads(row["cfg"])
+        src = (cfg.get("source") or "") if cfg.get("ats") == "directory_jobs" else None
+    if src is not None:
+        # a snapshot source ("Federal jobs (USAJOBS)", "Hacker News: Who is hiring"): named by Siftwell, never renamed.
+        # An older version cut "hiring" off the HN one ("Hacker News: Who is"): that cut is put back, once.
+        try:
+            import directory
+            full = directory._source_name(src) if src else ""
+        except Exception:
+            full = ""
+        if full and full != company and full.startswith(company + " ") and catalog.rename_company(company, full):
+            log(f"  {company} is now called {full}")
+            _follow_rename(company, full)
+            return full
+        return company
+    with catalog.db() as con:
         base, suf = split_suffix(company)
         placeholder = poor(company, cfg) == "placeholder"
         badsuf = bool(suf) and (_bad_suffix(suf, base, cfg) or bool(re.search(r"\(" + re.escape(suf) + r"\)$", base)))

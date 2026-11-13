@@ -335,7 +335,10 @@ def _years_from(experience):
 def build_manual_profile(f):
     """The same profile.json structure the resume reader produces, from the "Fill in my profile myself" form.
     f: name, location, current_title, years_experience, summary, experience [{title, employer, dates, highlights}],
-    skills, education, certifications, clearance (one of CLEARANCE_LEVELS or ""). Raises ValueError on an empty form."""
+    skills, education, certifications, clearance (one of CLEARANCE_LEVELS or ""), contact {email, phone, linkedin} (all
+    optional: printed on tailored resumes only, never part of profile_text or the rating key). Raises ValueError on an
+    empty form. A license or certification typed among the skills moves to the certifications, and a skill that is only
+    a place ("Ohio") is dropped: neither is a skill."""
     f = f or {}
     clr = str(f.get("clearance") or "").strip()
     p = clean_edits({k: f[k] for k in ("summary", "location", "skills", "education", "certifications", "experience", "years_experience")
@@ -351,14 +354,33 @@ def build_manual_profile(f):
     years = p.get("years_experience")
     if years is None:
         years = _years_from(exp)
-    skills = p.get("skills") or []
+    skills, creds = split_credentials(p.get("skills") or [], p.get("location", ""))
+    certs = p.get("certifications", []) + [c for c in creds if c.lower() not in {x.lower() for x in p.get("certifications", [])}]
+    ct = f.get("contact") if isinstance(f.get("contact"), dict) else {}
+    contact = {k: " ".join(str(ct.get(k) or "").split())[:120] for k in ("email", "phone", "linkedin")}
     prof = {"name": " ".join(str(f.get("name") or "").split())[:80], "summary": p.get("summary", ""), "location": p.get("location", ""),
             "years_experience": years if years is not None else 0,
             "clearances": [clr] if clr and clr.lower() != "none" else [], "education": p.get("education", []),
-            "certifications": p.get("certifications", []), "skills": skills, "languages": [], "experience": exp,
+            "certifications": certs, "skills": skills, "languages": [], "experience": exp,
             "reframings": [], "hard_limits": [], "target_roles": roles[:15], "title_keywords": _title_keywords(roles),
             "fit_keywords": [s.lower() for s in skills][:30], "notes": ""}
+    if any(contact.values()):
+        prof["contact"] = {k: v for k, v in contact.items() if v}
     return prof
+
+CREDENTIAL = re.compile(r"(?i)\b(?:licen[cs]e[ds]?|licensure|certifi(?:ed|cation|cations|cate|cates))\b")
+
+def split_credentials(items, home=""):
+    """(skills, credentials) from a skills list: "RN license (Ohio)" or "Certified Scrum Master" is a credential, not a
+    skill, and an item that is only a place ("Ohio", "Columbus, OH") is neither (dropped)."""
+    import highlights
+    skills, creds = [], []
+    for x in items or []:
+        x = " ".join(str(x or "").split())
+        if not x or highlights.just_place(x, home):
+            continue
+        (creds if CREDENTIAL.search(x) else skills).append(x)
+    return skills, creds
 
 def save_manual(f):
     """Make the hand-filled profile the approved, active one (replacing any draft). Returns the profile."""
@@ -416,7 +438,9 @@ def _split_head(text):
 
 def prefill_from_text(text):
     """Best-effort fields for the "Fill in my profile myself" form from the plain text of a resume (no AI): headings,
-    date ranges and bullets. Phone numbers, emails and links are dropped. The person checks everything."""
+    date ranges and bullets. Phone numbers, emails and links are kept out of every field but the contact ones (email,
+    phone, LinkedIn from the resume's top lines). Licenses listed among skills go to certifications. The person checks
+    everything."""
     lines = [l.rstrip() for l in (text or "").replace("\r", "\n").split("\n")]
     head, sec, cur = [], {k: [] for k in _HEADS}, "head"
     for l in lines:
@@ -487,10 +511,16 @@ def prefill_from_text(text):
             p = _scrub(p).strip(" .")
             if p and len(p) <= 40 and p.lower() not in [x.lower() for x in sk]:
                 sk.append(p)
+    sk, creds = split_credentials(sk, out["location"])
     out["skills"] = sk[:60]
     def plain(ls):
         return [_scrub(_BULLET.match(l).group(1) if _BULLET.match(l) else l) for l in ls if _scrub(l)][:15]
     out["education"], out["certifications"] = plain(sec["education"]), plain(sec["certifications"])
+    out["certifications"] += [c for c in creds if c.lower() not in {x.lower() for x in out["certifications"]}][:15]
+    hb = " ".join(head[:8])
+    em, ph, li = _EMAIL.search(hb), _PHONE.search(hb), re.search(r"(?:https?://)?(?:www\.)?linkedin\.com/\S+", hb, re.I)
+    out["contact"] = {"email": em.group(0) if em else "", "phone": ph.group(0).strip() if ph else "",
+                      "linkedin": li.group(0).rstrip(".,;|") if li else ""}
     blob = " ".join(lines)
     if re.search(r"ts\s*/\s*sci.{0,40}poly|poly.{0,40}ts\s*/\s*sci|full[- ]scope", blob, re.I):
         out["clearance"] = "TS/SCI + poly"

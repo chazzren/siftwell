@@ -17,6 +17,7 @@ Data comes from /api/catalog/* (catalog_api.py) and /api/directory*; each sectio
 import html
 import json
 
+import claude_cli
 import directory
 import getting_started
 import people
@@ -172,7 +173,7 @@ def render(pid=None) -> str:
             "<script>(function(){var t=" + json.dumps(p.get("display.theme")) +
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + settings_page.CSS + CSS + "</head><body>" + body +
-            "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") + ";window.__ME__=" + json.dumps({"id": pid, "name": people.name(pid)}).replace("</", "<\\/") +
+            "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") + ";window.__ME__=" + json.dumps({"id": pid, "name": people.name(pid), "claude": claude_cli.claude_ready()}).replace("</", "<\\/") +
             ";</script>\n" + SCRIPT.replace("/*__THEME__*/", report.THEME_JS)
             .replace("/*__ALIASES__*/{}", json.dumps(ALIASES)) + directory.ADD_SCRIPT + report.DOWN_SCRIPT + "</body></html>")
 
@@ -282,6 +283,8 @@ const phone = () => matchMedia("(max-width:720px)").matches;
 const n = x => (x || 0).toLocaleString();
 const pl = (k, one, many) => `${n(k)} ${k === 1 ? one : many}`;
 const ME = window.__ME__ || {};
+const CLR = ME.claude !== false;   // Claude connected (claude_cli.claude_ready when the page was made): no rating words without it
+if (!CLR && $("allEst")) $("allEst").textContent = "For everyone in the household.";
 const MINE = new URLSearchParams(location.search).get("mine") === "1";
 const ask = o => window.appConfirm(o);   // {title, text, ok, danger} -> Promise<bool> (report.CONFIRM_JS, in the header)
 let NAMES = {};                       // profile id -> name, for what people read (history, ratings)
@@ -386,7 +389,7 @@ function pollStatus(){
     $("allDet").hidden = !s.running; if (!run) $("allDet").open = false;
     $("allLine").textContent = s.running ? (s.lines || []).filter(Boolean).slice(-8).join("\n") : "";
     const e = s.estimate && s.estimate.all;
-    if (e) $("allEst").textContent = `${n(e.companies)} employer${e.companies === 1 ? "" : "s"}, for everyone in the household: ${e.text}. Claude then rates the new listings for each person (uses your Claude plan).`;
+    if (e) $("allEst").textContent = `${n(e.companies)} employer${e.companies === 1 ? "" : "s"}, for everyone in the household: ${e.text}.` + (CLR ? " Claude then rates the new listings for each person (uses your Claude plan)." : "");
     window.__EST = e || window.__EST;
     $("fetchAll").disabled = run; $("fetchAll").textContent = run ? "Running…" : "Find new jobs now";
     $("updateBtn").disabled = run; $("updateBtn").classList.toggle("busy", run);
@@ -601,7 +604,7 @@ $("allStop").addEventListener("click", () => {
 });
 $("fetchAll").addEventListener("click", async () => {
   const e = window.__EST;
-  if (!await ask({title: "Find new jobs now?", ok: "Find new jobs", text: (e ? `Checks all ${n(e.companies)} employers for new and removed jobs, for everyone in the household. That takes ${e.text}.` : "Checks every employer for new and removed jobs, for everyone in the household.") + " Claude then rates the new listings for each person, which uses your Claude plan."})) return;
+  if (!await ask({title: "Find new jobs now?", ok: "Find new jobs", text: (e ? `Checks all ${n(e.companies)} employers for new and removed jobs, for everyone in the household. That takes ${e.text}.` : "Checks every employer for new and removed jobs, for everyone in the household.") + (CLR ? " Claude then rates the new listings for each person, which uses your Claude plan." : "")})) return;
   fetch("/api/update", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error === "already running" ? "Siftwell is already finding new jobs." : d.error); }))
     .then(() => { wasRunning = true; pollStatus(); }).catch(err => { $("allBar").hidden = false; $("allTitle").textContent = errText(err); });
 });
@@ -625,7 +628,8 @@ function loadRating(){
       return `<section class="sgsec rcard"><h3 class="sgtitle">${esc(p.name)}${p.id === d.current ? " (viewing now)" : ""}</h3><div class="sgroup">
         ${s ? `<div class="rgrid">${stats}</div>` : `<div class="srow"><span class="note">${p.profile ? "No board yet." : "No resume yet, so Claude can't rate jobs for " + esc(p.name) + "."}</span></div>`}
         ${s ? `<div class="srow"><small class="note">${esc(tiers)}${s.generated ? " · board built " + esc(when(s.generated)) : ""}</small></div>` : ""}${live}
-        <div class="srow"><span class="note">Rate jobs lets you choose how carefully Claude rates.</span><button class="btn sm" type="button" data-rr="${esc(p.id)}"${p.profile ? "" : " disabled"}>Rate jobs for ${esc(p.name)}</button></div>
+        ${CLR ? `<div class="srow"><span class="note">Rate jobs lets you choose how carefully Claude rates.</span><button class="btn sm" type="button" data-rr="${esc(p.id)}"${p.profile ? "" : " disabled"}>Rate jobs for ${esc(p.name)}</button></div>`
+              : `<div class="srow"><span class="note">Connect Claude to get Match ratings: <a href="/settings#get-started">Settings → Get started</a>.</span></div>`}
       </div></section>`;
     }).join("");
   }).catch(err => { $("rateCards").innerHTML = `<p class="note">${esc(errText(err))}</p>`; });
@@ -857,7 +861,7 @@ fetch("/api/people").then(r => r.json()).then(d => {
   $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
   $("lsWho").insertAdjacentHTML("beforeend", d.people.map(p => `<option value="${esc(p.id)}">On ${esc(p.name)}'s board</option>`).join(""));
   NAMES = Object.fromEntries(d.people.map(p => [p.id, p.name])); if (loaded.runs) loadRuns();
-  $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
+  $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + d.people.filter(p => p.setup).map(p => `<button role="menuitem" data-person="__setup:${esc(p.id)}">Finish setting up ${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
 }).catch(() => {});
 $("avatarBtn").addEventListener("click", ev => { ev.stopPropagation(); const h = $("amenu").hidden; $("amenu").hidden = !h; $("avatarBtn").setAttribute("aria-expanded", h); });
 document.addEventListener("click", ev => { if (!ev.target.closest(".menuWrap")) { $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false"); } });
@@ -865,6 +869,7 @@ $("amenu").addEventListener("click", ev => {
   const b = ev.target.closest("button"); if (!b) return;
   $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false");
   const v = b.dataset.person; if (!v) return;
+  if (v.startsWith("__setup:")) { fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v.slice(8)})}).then(() => { location.href = "/setup"; }); return; }   // an unfinished setup (Finish later)
   if (v === "__add") { location.href = "/people/new"; return; }   // the same form as the welcome page
   if (v === "__manage") { location.href = "/settings#profiles"; return; }
   if (v === ME.id) return;

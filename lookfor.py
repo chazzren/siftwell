@@ -463,24 +463,15 @@ def _auto_recent(prof):
             or clean_title(next(iter(p.get("target_roles") or []), "")))
 
 
-BUILD = 3   # the way the automatic part is made. A new number rebuilds every sheet once (own chips and removals kept, no Claude),
-            # and every board once at the next server start (server.recount_old_boards): 3 = learning from Claude's ratings.
+BUILD = 4   # the way the automatic part is made. A new number rebuilds every sheet once (own chips and removals kept, no Claude),
+            # and every board once at the next server start (server.recount_old_boards): 3 = learning from Claude's ratings,
+            # 4 = licenses, certifications and places are never skills.
 
 
 def _facts(pid):
     try:
         d = json.load(open(people.pdir("facts.json", pid=pid), encoding="utf-8"))
         return [f for f in d if isinstance(f, dict)] if isinstance(d, list) else []
-    except Exception:
-        return []
-
-
-def _licenses(pid):
-    """License / certification names the person confirmed (highlights.json), if any."""
-    try:
-        import highlights
-        h = highlights.get(pid) or {}
-        return [clean_title(x.get("name")) for x in h.get("licenses") or [] if isinstance(x, dict) and x.get("name")]
     except Exception:
         return []
 
@@ -566,6 +557,23 @@ def _items(s, home=""):
         return [str(s)]
 
 
+_CREDENTIAL = re.compile(r"(?i)\b(?:licen[cs]e[ds]?|licensure|certifi(?:ed|cation|cations|cate|cates))\b")
+
+
+def _credential(s):
+    """True for a license or certification ("RN license (Ohio)", "Certified Scrum Master"): those are kept as the
+    person's credentials (profile, highlights), never as skill chips."""
+    return bool(_CREDENTIAL.search(str(s or "")))
+
+
+def _just_place(s, home=""):
+    try:
+        import highlights
+        return highlights.just_place(s, home)
+    except Exception:
+        return False
+
+
 def _generic_word(t):
     """One plain word that names hundreds of different jobs ("Engineer", "Manager", "Project"): too loose to rank by."""
     p = phrase(t)
@@ -600,8 +608,9 @@ def build(pid=None, prof=None):
     catch-alls ("Engineer", "Manager") carried over from older title-word lists are left out. Occupations: only the
     one(s) that list the most recent title by name (find_occupations), and their plainly related neighbours.
     A title from the profile with a specialty after a comma ("Staff RN, Medical-Surgical") goes on as the title alone;
-    the specialty of a job they held becomes a skill (_title_core).
-    Skills: only what the person has: their profile's skills and certifications, licenses they confirmed, answers they
+    the specialty of a job they held becomes a skill (_title_core). A license or certification ("RN license (Ohio)")
+    is never a skill chip, and neither is a place (a bracketed "(Ohio)", a skill typed as "Columbus, OH").
+    Skills: only what the person has: their profile's skills, answers they
     gave (yes / some), Claude's reading of their resume, and the match words the resume reader noted. The occupation
     list's typical tools and task words are NOT added: they describe the occupation, not the person (they put "mentions
     python" on a thousand jobs for people who never used it, and words like "family" or "status" matched everything)."""
@@ -668,9 +677,12 @@ def build(pid=None, prof=None):
     home = str(p.get("location") or "")
     def skill(s, src, w=None):
         for item in _items(s, home):      # typed with commas or semicolons: one chip each; "Ohio" alone is no skill
+            if _credential(item):         # "RN license (Ohio)": a license or certification is not a skill
+                continue
             for form in _skill_forms(item):
-                skills.append({"t": form, "src": src, **({"w": w} if w else {})})
-    for s in (p.get("skills") or []) + (p.get("certifications") or []) + _licenses(pid) + specialties:
+                if not _just_place(form, home):   # nor a place in its brackets ("Ohio")
+                    skills.append({"t": form, "src": src, **({"w": w} if w else {})})
+    for s in (p.get("skills") or []) + specialties:
         skill(s, "profile")
     for f in _facts(pid):
         if f.get("level") in ("yes", "some") and f.get("requirement"):
@@ -843,7 +855,7 @@ LOOK_RULES = """"look_for" describes what jobs to search for, for someone in ANY
 - "same_titles": 4 to 10 other names employers use for that same job at the same level (e.g. "Registered Nurse": "RN", "Staff Nurse").
 - "step_up_titles": 3 to 6 titles one step up from it that this person could realistically be hired into next.
 - "related_roles": 5 to 10 different roles they could plausibly move into with the experience they have.
-- "key_skills": 10 to 20 concrete skills, tools, licenses or methods from their experience, each written the way job postings write it (1 to 3 words).
+- "key_skills": 10 to 20 concrete skills, tools or methods from their experience (no licenses or certifications), each written the way job postings write it (1 to 3 words).
 - "field": their field or industry in 1 to 4 plain words."""
 LOOK_SYSTEM = "You help a job search tool decide which job postings are relevant to one person. Use only what they tell you.\n\n" + LOOK_RULES
 MODEL = "claude-haiku-5-5"

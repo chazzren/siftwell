@@ -38,7 +38,7 @@ Later, **Find new jobs** (the blue button at the top) checks your employers agai
 - Filters by distance from your home, remote or in person, pay, seniority, travel and requirements.
 - Scores every job on **Relevant** (how close it is to the work you do), **Appeal** (how good it is for you) and, with Claude, **Match** (how well your resume fits).
 - Plain-English search, saved and applied tracking, and resume tailoring (PDF or Word).
-- A free, weekly-updated [employer directory](docs/GUIDE.md#the-siftwell-employer-directory) finds employers near you (only state-level files are downloaded; Claude can optionally find more), and you can share company lists with friends. Siftwell can also build that directory on your own computer, so it doesn't depend on this project staying online.
+- A free, weekly-updated [employer directory](docs/GUIDE.md#the-siftwell-employer-directory) finds employers near you (only state-level files are downloaded; Claude can optionally find more), and you can share your employers with friends. Siftwell can also build that directory on your own computer, so it doesn't depend on this project staying online.
 - Works on your phone over your home Wi-Fi, and tells you when a new version is out (the installed version updates itself).
 
 ## What you need
@@ -52,7 +52,7 @@ Your resumes, profiles, saved jobs and ratings live only on your PC, never in th
 
 ## More
 
-- **[User guide](docs/GUIDE.md)**: starts with a ten-line Quick start, then every page and setting.
+- **[User guide](docs/GUIDE.md)**: starts with a five-step Quick start, then every page and setting.
 - [Install details](docs/GUIDE.md#install) · [Using it without Claude](docs/GUIDE.md#using-siftwell-without-claude) · [Updating](docs/GUIDE.md#updating-siftwell) · [Backups & moving computers](docs/GUIDE.md#moving-to-another-computer--backups)
 - **[More options & troubleshooting](docs/ADVANCED.md)**: portable version, ZIP, uninstalling, where files are kept, troubleshooting.
 - License: [MIT](LICENSE)
