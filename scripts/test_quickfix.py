@@ -99,6 +99,14 @@ check("new profile: no pay floor, no level, no shared lists, own-titles rule",
       s["salary_floor"] == 0 and s["seniority_mine"] is None and s["seniority_band"] == [1, 7] and "company_sets" not in s
       and s["title_rule"] == "own", str({k: s[k] for k in ("salary_floor", "seniority_mine", "seniority_band", "title_rule")}))
 check("new profile watches only its own lists", people.company_sets(new) == {f"own-{new}", f"near-{new}", "all"})
+import setup_flow
+check("industries-to-skip ideas assume no line of work", not {"Defense & weapons", "Government contracting", "Crypto", "Adtech", "Payday lending"}
+      & set(setup_flow.INDUSTRY_IDEAS), str(setup_flow.INDUSTRY_IDEAS))
+check("clearance jobs are shown unless the person chooses (and asked about only when they matter)",
+      people.prefs(new)["display.clearance"] == "all" and not setup_flow.clearance_relevant(new))
+check("level names are neutral and map onto the same stored 1-7",
+      setup_flow.LEVEL_LABELS[1] == "Entry" and setup_flow.LEVEL_LABELS[7] == "Executive" and sorted(setup_flow.LEVEL_LABELS) == list(range(1, 8))
+      and setup_flow.level_choices(5) == [1, 2, 3, 4, 5, 6, 7] and 5 not in setup_flow.level_choices())
 
 # a profile as an earlier version left it: a settings file that never heard of the new keys / an old explicit file
 old = "old-person"

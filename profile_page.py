@@ -1,12 +1,13 @@
 """The My profile page (GET /profile): everything about the person, in the same two-pane layout as Settings.
 
-Left: a section list (Resume, About you, Highlights & answers, Job search, Target, Companies). Right: the selected
+Left: a section list (Resume, About you, Facts & answers, Job search, Target, Employers). Right: the selected
 section. The selection lives in the URL hash (/profile#search); at phone width it is a drill-down with a "‹ My profile"
 back control. A status strip on top shows what is read, approved and rated, and what is missing, with links.
 
 Layout CSS, pane helpers and the shared script pieces (router, header icons, profile menu, "Saved" text) come from
-settings_page.py. Controls save themselves on change: job search, target and company settings go through
-POST /api/person/settings (which re-checks the board and queues the automatic quick check), edits to the approved
+settings_page.py. Controls save themselves on change: job search (every saved search setting: where, pay, level, what to
+look for, dealbreakers, goals) and target settings go through POST /api/person/settings (which re-checks the board and
+queues the automatic quick check), edits to the approved
 profile through POST /api/profile/edit. A freshly read resume is a draft: it is checked and approved on About you
 (POST /api/profile/approve)."""
 import html
@@ -19,16 +20,16 @@ import report
 import settings_page
 from settings_page import _SVG, _group, _pane_head, _row, e
 
-# Set to the Catalog page's path ("/catalog") when that page exists; the Companies section then links to it.
+# The Employers page; the Employers section links there.
 CATALOG_HREF = "/catalog"
 
 CATEGORIES = [
     ("resume", "Resume", '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>'),
     ("about", "About you", '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
-    ("highlights", "Highlights & answers", '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 17.8 5.8 21.1 7 14.2 2 9.3l6.9-1z"/>'),
+    ("highlights", "Facts & answers", '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 17.8 5.8 21.1 7 14.2 2 9.3l6.9-1z"/>'),
     ("search", "Job search", '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/>'),
     ("target", "Target", '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
-    ("companies", "Companies", '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>'),
+    ("companies", "Employers", '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>'),
 ]
 
 FILE_TYPES = ".pdf,.doc,.docx,.rtf,.odt,.txt,.md,.html,.png,.jpg,.jpeg,.heic,.webp"
@@ -76,14 +77,14 @@ def _pane_about():
                                                  '<input type="text" id="ab-name" maxlength="40" autocomplete="off">')]) +
             '<div class="hlbanner" id="abDraft" style="margin-top:18px" hidden><span>Claude read your resume and drafted this. Fix anything that is wrong, then approve: '
             'it decides which jobs you see and what tailored resumes may claim. Nothing is saved until you approve.</span>'
-            '<span class="row"><button class="btn primary sm" type="button" id="rvApprove">Approve and re-score jobs</button>'
+            '<span class="row"><button class="btn primary sm" type="button" id="rvApprove">Approve and re-rate jobs</button>'
             '<button class="btn sm" type="button" id="rvDiscard">Discard draft</button></span></div>'
             '<div id="abBody"></div>'
             '<p class="note pnote" id="abNote" role="status" aria-live="polite"></p>')
 
 
 def _pane_highlights():
-    return (_group("What we pulled from your resume",
+    return (_group("What Siftwell read from your resume",
                    "Jobs that require a degree or license you don't have are hidden (you can still show them from Filters). "
                    "Fix anything that's wrong and the board re-checks itself.", [_pad(
                        '<div class="hlbanner" id="hlBanner" hidden><span>Please check these are right. They decide which jobs are hidden.</span>'
@@ -93,23 +94,72 @@ def _pane_highlights():
                        '<div class="row"><button class="btn sm" type="button" id="hlEditBtn">Edit</button>'
                        '<button class="btn ghost sm" type="button" id="hlRefresh">Re-read my resume</button><span class="note" id="hlMsg" role="status" aria-live="polite"></span></div>'
                        '<div class="hledit" id="hlEdit" hidden></div>')]) +
-            _group("What you've told me", 'Skills and experience your resume leaves out. Scoring and tailoring use these exactly as you stated them; "No" answers are never claimed.', [_pad(
+            _group("What you've told Siftwell", 'Skills and experience your resume leaves out. Ratings and tailoring use these exactly as you stated them; "No" answers are never claimed.', [_pad(
                 '<div class="row" style="justify-content:space-between"><span class="note" id="factCount"></span>'
                 '<button class="btn sm" type="button" id="generalQs">Answer general questions</button></div>'
                 '<div class="factlist" id="factList"></div>')]))
 
 
+def _pay(key, label, help_text):
+    """A pay amount typed per year or per hour. Stored per year, as everywhere in Siftwell (an hour = 1/2,080 of a year);
+    the line under it shows the other unit. Saved by the page script (data-pay), not by the generic data-ps handler."""
+    return ('<div class="srow stack"><div class="slab">'
+            f'<label for="pay-{key}">{e(label)}</label><small>{e(help_text)}</small></div>'
+            f'<div class="payrow"><span class="payin"><span aria-hidden="true">$</span><input type="text" inputmode="decimal" id="pay-{key}" data-pay="{key}" autocomplete="off" placeholder="None"></span>'
+            f'<select id="payu-{key}" data-payu="{key}" aria-label="{e(label)}: per year or per hour"><option value="year">a year</option><option value="hour">an hour</option></select></div>'
+            f'<small class="note payeq" id="payeq-{key}" aria-live="polite"></small></div>')
+
+
 def _pane_search():
-    # Home ZIP / radius, ways of working, remote anywhere, travel limit, pay floor and level live in the board's
-    # Filters panel (My search, report.py); this pane keeps only what Filters doesn't cover.
+    # Every saved search setting lives here (the board's Filters panel links to /profile#search). Saving goes through
+    # POST /api/person/settings with the same keys Filters and setup write (dealbreaker clearance: POST /api/prefs), and
+    # each change re-checks the board. None of these reset Claude's ratings except target pay and the dealbreakers, which
+    # Claude reads in the goals (server.py writes that line again when they change).
+    radius = [(str(r), f"{r} miles") for r in (10, 25, 35, 50, 75)]
+    travel = [("none", "None"), ("light", "Light (under 10%)"), ("moderate", "Some (up to 25%)"), ("any", "Any amount")]
+    where = [
+        _row_ps("Home ZIP or City, ST", "Jobs within your search radius of this place count as near you.", "ps-home_zip",
+                '<input type="text" id="ps-home_zip" data-ps="home_zip" placeholder="ZIP code or City, ST" autocomplete="postal-code">'),
+        '<div class="srow" id="psLegacy" hidden><small class="note">No home ZIP yet, so this profile still uses Siftwell\'s built-in '
+        'Washington, DC area list to decide which jobs are near you. Add a ZIP to use your own area instead.</small></div>',
+        _row_ps("Search radius", "", "ps-radius_miles", _select("ps-radius_miles", "radius_miles", radius)),
+        '<div class="srow stack"><div class="slab"><span id="psWpLbl">Ways of working</span><small>Pick at least one.</small></div>'
+        '<div class="pchecks" role="group" aria-labelledby="psWpLbl">'
+        '<label class="chk"><input type="checkbox" data-wp="onsite"> On-site</label>'
+        '<label class="chk"><input type="checkbox" data-wp="hybrid"> Hybrid</label>'
+        '<label class="chk"><input type="checkbox" data-wp="remote"> Remote</label></div></div>',
+        _row('<label for="ps-remote_us">Remote jobs anywhere in the US</label>', "Include remote jobs open nationwide, not just near you.",
+             '<input type="checkbox" role="switch" class="sw" id="ps-remote_us" data-ps="remote_us">'),
+    ]
     pay = [
-        _row_ps("Current base ($, optional)", "Shown on each job's pay bar.", "ps-current_base",
-                '<input type="number" inputmode="numeric" step="5000" id="ps-current_base" data-ps="current_base">'),
-        _row_ps("Current package, one line (optional)", "", "ps-current_label",
+        _pay("salary_floor", "Lowest base pay you'd take", "Jobs that clearly pay less are hidden. Blank: no lowest pay."),
+        _pay("salary_target", "Target pay", "What a great offer looks like. Claude weighs it when it rates jobs."),
+        _pay("current_base", "Current base pay", "Optional. Only shown on each job's pay bar, to compare."),
+        _row_ps("Current package, one line", "Optional.", "ps-current_label",
                 '<input type="text" id="ps-current_label" data-ps="current_label" placeholder="e.g. your pay, schedule and time off">'),
     ]
-    return ('<p class="sfoot pmoved" id="psMoved">Location, ways of working, travel, pay floor and level are set in the board\'s Filters. '
-            '<a href="/#filters">Open Filters on the board</a></p>' +
+    level = [_row_ps("Your level", "Jobs that state a level more than one step away from yours are hidden. Jobs that state no level always show.",
+                     "ps-seniority_mine", '<select id="ps-seniority_mine" data-ps="seniority_mine"></select>')]
+    deal = [
+        _row_ps("Most travel you'd do", "", "ps-travel_max", _select("ps-travel_max", "travel_max", travel)),
+        '<div class="srow stack"><div class="slab"><span>Employers to skip</span><small>For example your current employer. Claude is told about them when it rates jobs.</small></div>'
+        '<div class="lfchips" id="skEmp"></div><form class="lfadd" data-skadd="skip_employers"><input type="text" maxlength="80" placeholder="Add an employer" aria-label="Add an employer to skip">'
+        '<button class="btn sm" type="submit">Add</button></form></div>',
+        '<div class="srow stack"><div class="slab"><span>Industries to skip</span><small>For example a kind of employer you would rather not work for.</small></div>'
+        '<div class="lfchips" id="skInd"></div><div class="lfchips" id="skIdeas" aria-label="Common choices"></div>'
+        '<form class="lfadd" data-skadd="skip_industries"><input type="text" maxlength="80" placeholder="Add an industry" aria-label="Add an industry to skip">'
+        '<button class="btn sm" type="submit">Add</button></form></div>',
+        '<div id="psClrWrap" hidden>' + _row('<label for="ps-clearance">Jobs that need a security clearance</label>',
+                                             "Shown because your profile or your board has clearance jobs.",
+                                             '<select id="ps-clearance"><option value="all">Show them all</option><option value="none">Hide every one</option>'
+                                             '<option value="secret">Up to Secret</option><option value="nopoly">Anything but a polygraph</option></select>') + '</div>',
+    ]
+    return ('<p class="sfoot pmoved">Everything that decides which jobs reach your board, in one place. Each change saves by itself '
+            'and re-checks your board right away (no new listings).<span id="psAutoRate"> Jobs that newly appear get a quick Claude check automatically.</span></p>'
+            '<p class="note pnote" id="psState" role="status" aria-live="polite"></p>' +
+            _group("Where", "", where) +
+            _group("Pay", "Pay is compared per year (an hour counts as 1/2,080 of a year), so hourly and yearly jobs line up.", pay) +
+            _group("Level", "", level) +
             _group("What Siftwell looks for", "Siftwell gives every job a Relevance score from this list, with plain matching and no Claude: "
                    "a job title on the list counts most, then one step up, then related roles; your skills found in a posting add a little. "
                    "Your board shows jobs whose titles match the list (with nothing on it, every job title is shown), puts the most relevant first, "
@@ -117,10 +167,11 @@ def _pane_search():
                    [_pad('<div id="lfRoot" class="lf"><p class="note">Loading…</p></div>')]) +
             '<p class="sfoot">Other names for a job, related occupations and typical skills come from the O*NET occupation list '
             '(U.S. Department of Labor), which ships with Siftwell and works offline.</p>' +
-            _group("Goals for Claude to weigh", "Pay, commute, what to avoid. Claude reads this when it rates a job.",
-                   [_textarea("ps-goals", "goals", "Goals for Claude to weigh", 4)]) +
-            _group("Your current pay", "", pay) +
-            '<p class="sfoot">Each change re-checks your board right away (no new listings).<span id="psAutoRate"> Jobs that newly appear get a quick Claude check automatically.</span></p>')
+            _group("Dealbreakers", "Claude reads your target pay and dealbreakers when it rates jobs, so changing them can mean "
+                   "some jobs get rated again.", deal) +
+            _group("Goals for Claude to weigh", "Pay, commute, what to avoid, in your own words. Claude reads this when it rates a job "
+                   "(the \"Setup answers\" line is kept up to date from the settings above).",
+                   [_textarea("ps-goals", "goals", "Goals for Claude to weigh", 4)]))
 
 
 def _pane_target():
@@ -129,8 +180,8 @@ def _pane_target():
                    [_textarea("ps-target_text", "target_text", "Target", 4, "e.g. Office manager at a school or hospital, or a move from retail into human resources")]) +
             # (shown only to a profile that already limited its target this way in an earlier version: see fillSettings)
             '<div id="tgScopeWrap" hidden>' +
-            _group("Which companies", "", [_row_ps("Companies", "", "ps-target_scope",
-                                                   _select("ps-target_scope", "target_scope", [("all", "Every employer I watch"), ("ai", "Only the ones marked as AI companies")]))]) +
+            _group("Which employers", "", [_row_ps("Employers", "", "ps-target_scope",
+                                                   _select("ps-target_scope", "target_scope", [("all", "Every employer you watch"), ("ai", "Only the ones marked as AI companies")]))]) +
             '</div>' +
             _group("What you'd do to get there", "Time, courses, certifications, projects.",
                    [_textarea("ps-prep_text", "prep_text", "What you'd do to get there", 3, "e.g. 5 hours a week for 3 months; one certification; no degree")]) +
@@ -140,19 +191,10 @@ def _pane_target():
 
 
 def _pane_companies():
-    catalog = (f'<a href="{e(CATALOG_HREF)}">Browse every company Siftwell tracks</a>' if CATALOG_HREF
-               else '<span class="note" id="catalogSlot">A page for browsing every employer Siftwell checks is coming.</span>')
-    return ('<p class="sfoot" style="margin-top:14px"><span id="coCount"></span>Your employers come from the Siftwell employer directory near you, '
-            'the companies you add here or on the Employers page, and what Claude finds for you.</p>' +
-            _group("Add a company", "", [
-                '<form class="srow stack" id="coAddForm"><input type="url" id="coUrl" placeholder="Paste a company\'s careers or job-list link" aria-label="Careers page link">'
-                '<input type="text" id="coName" placeholder="Name (optional)" aria-label="Company name">'
-                '<select id="coScope" aria-label="Who sees it"><option value="me">Just this profile</option><option value="all">Everyone</option></select>'
-                '<div class="sbtns"><button class="btn primary" type="submit">Add company</button></div></form>',
-                '<div class="srow"><span class="note" id="coMsg" role="status" aria-live="polite"></span></div>']) +
-            _group("Employers on my own list", "Added by you, or kept from an earlier version of Siftwell.", [_pad('<div class="factlist" id="coOwn"><div class="note">Loading…</div></div>')]) +
-            # CLEAR SPOT for the Catalog link: set CATALOG_HREF above once the Catalog page exists.
-            _group("Browse all companies", "", [f'<div class="srow" id="coCatalog"><div class="slab">{catalog}</div></div>']))
+    # Employers are added and managed on the Employers page (/catalog); this section only says how many and links there.
+    return _group("", "They come from Siftwell's employer directory near you, the ones you add by link, and the ones Claude finds for you.", [
+        f'<div class="srow"><div class="slab"><span id="coCount">Your employers</span></div>'
+        f'<div class="sctl"><a class="btn sm" href="{e(CATALOG_HREF)}#companies">Add or manage on the Employers page</a></div></div>'])
 
 
 PANES = {"resume": _pane_resume, "about": _pane_about, "highlights": _pane_highlights, "search": _pane_search,
@@ -176,7 +218,10 @@ def render_profile_html(pid=None) -> str:
     tools = report.TOOLS.replace('id="resumeBtn" href="/profile"', 'id="resumeBtn" href="/profile" aria-current="page"')
     head = report.HEAD.replace("<title>Siftwell</title>", f"<title>{name}'s profile</title>")
     body = (BODY.replace("__TOOLS__", tools).replace("__NAV__", nav).replace("__PANES__", panes).replace("__NAME__", name))
-    data = {"name": people.name(pid), "settings": people.settings(pid)}
+    import setup_flow
+    st = people.settings(pid)
+    data = {"name": people.name(pid), "settings": st, "levels": setup_flow.LEVEL_LABELS, "level_choices": setup_flow.LEVEL_CHOICES,
+            "industry_ideas": setup_flow.INDUSTRY_IDEAS, "clearance_relevant": setup_flow.clearance_relevant(pid)}
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             # Apply the saved theme before first paint so the page doesn't flash the wrong colours.
@@ -189,7 +234,18 @@ def render_profile_html(pid=None) -> str:
 
 
 CSS = """<style>
-.pmoved{margin:0 14px 16px;font-size:13.5px}
+.pmoved{margin:14px 14px 4px;font-size:13.5px}
+#psState{min-height:1.2em;margin-bottom:4px}
+.payrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-width:0}
+.payin{display:inline-flex;align-items:center;gap:4px;flex:1 1 140px;min-width:0;max-width:220px;height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);padding:0 10px}
+.srow.stack .payin input[type=text]{border:0;background:none;color:var(--ink);font:inherit;width:100%;min-width:0;height:100%;padding:0;outline:none}
+.payin:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.srow.stack .payrow select{width:auto;flex:none;height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 8px;font:inherit}
+.payeq:empty{display:none}
+.pchecks{display:flex;flex-wrap:wrap;gap:6px 14px;max-width:none}
+.pchecks .chk{display:inline-flex;align-items:center;gap:6px;font-weight:500;min-height:32px}
+.srow.stack .pchecks input{width:18px;height:18px;min-width:18px;margin:0;padding:0;flex:none}
+#skIdeas:empty{display:none}
 .pstrip{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin:10px 0 0;font-size:13px}
 .pchip{display:inline-flex;gap:5px;align-items:baseline;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 11px;color:var(--muted)}
 .pchip b{color:var(--ink);font-weight:600}
@@ -307,9 +363,9 @@ function drawStrip(){
     chips.push([BOARD.jobs ? "ok" : "warn", "Board", BOARD.jobs ? `${nf(BOARD.jobs)} jobs · ${nf(BOARD.rated)} rated by Claude` : "no jobs yet"]);
     if (!BOARD.jobs && a) miss.push({href: "/", text: "Find new jobs to fill your board"});
   }
-  if (a && HL && HL.highlights && !HL.confirmed) miss.push({go: "highlights", text: a._manual ? "Check the facts in your profile" : "Check the facts we pulled from your resume"});
+  if (a && HL && HL.highlights && !HL.confirmed) miss.push({go: "highlights", text: a._manual ? "Check the facts in your profile" : "Check the facts Siftwell read from your resume"});
   const wps = SET.workplaces || ["onsite", "hybrid", "remote"];
-  if (!(SET.home_zip || "").trim() && wps.some(w => w !== "remote")) miss.push({href: "/#filters", text: "Add your home ZIP in the board's Filters (without one, Siftwell uses its built-in Washington, DC area list)"});
+  if (!(SET.home_zip || "").trim() && wps.some(w => w !== "remote")) miss.push({go: "search", text: "Add your home ZIP under Job search (without one, Siftwell uses its built-in Washington, DC area list)"});
   if (ING.error) miss.push({go: "resume", text: "Fix the resume problem"});
   $("pstrip").innerHTML = chips.map(([k, t, v]) => `<span class="pchip ${k}"><b>${t}</b> ${esc(v)}</span>`).join("") +
     `<span class="pmiss">${miss.length ? "Missing: " + miss.map(m => m.go ? `<a href="#${m.go}" data-go="${m.go}">${esc(m.text)}</a>` : `<a href="${m.href}">${esc(m.text)}</a>`).join("") : "Nothing missing."}</span>`;
@@ -329,9 +385,9 @@ function drawResume(){
   $("resumeState").textContent = ING.running ? `${st[0]} This takes about a minute${since > 5 ? ` (${since}s so far)` : ""}.`
     : ING.error ? "Couldn't use that resume: " + ING.error
     : d ? `New resume read: ${d._source_file || "resume"}, ${when(d._created)}. Check it under About you and approve it to use it.`
-    : a && a._manual ? `Active: filled in by hand, ${when(a._approved)}.` + (CL.ready ? " Claude is connected now: upload your resume above and Claude will read it to improve this profile." : "")
+    : a && a._manual ? `Active: filled in by hand, ${when(a._approved)}.` + (CL.ready ? " Claude is connected now: upload your resume below and Claude will read it to improve this profile." : "")
     : a ? `Active: ${a._source_file || "resume"}, read ${when(a._created || a._approved)}, approved ${when(a._approved)}. Upload a new one to replace it.`
-    : CL.ready ? "No resume uploaded yet. Jobs are scored against the profile set up earlier." : "No profile yet. Fill in the form below to tell Siftwell what to look for.";
+    : CL.ready ? "No resume uploaded yet. Jobs are rated against the profile set up earlier." : "No profile yet. Fill in the form below to tell Siftwell what to look for.";
   $("resProg").hidden = !ING.running; $("resBar").style.width = st[1] + "%";
   $("resPick").hidden = $("gdocForm").hidden = !!ING.running || !CL.ready;
   $("resNoClaude").hidden = CL.ready;
@@ -381,8 +437,8 @@ function drawManual(){
     ManualProfile.mount($("manualRoot"), {button: true, name: PS0.name, onSaved: () => { manualOpen = false; loadProfile().then(() => { soonBoard(); go("about"); }); }});
   }
 }
-$("manualOpen").addEventListener("click", () => {
-  if ((PROF || DRAFT) && !(PROF && PROF._manual) && !confirm("Saving the form replaces your current profile (the one Claude read). Continue?")) return;
+$("manualOpen").addEventListener("click", async () => {
+  if ((PROF || DRAFT) && !(PROF && PROF._manual) && !await ask({title: "Replace your profile?", text: "Saving the form replaces your current profile (the one Claude read).", ok: "Fill in the form", danger: true})) return;
   manualOpen = true; drawManual();
 });
 
@@ -434,7 +490,7 @@ $("rvApprove").addEventListener("click", () => {
   $("rvApprove").disabled = true; $("abNote").textContent = "Approving…";
   jpost("/api/profile/approve", {edits, rescore: true}).then(({ok, d}) => {
     if (!ok) { $("abNote").textContent = d.error || "Couldn't approve."; return; }
-    $("abNote").innerHTML = `Approved. Your board is being re-scored with it (a minute or two; no new jobs are fetched). <a href="/">Go to your board</a>.`;
+    $("abNote").innerHTML = `Approved. Your board is being re-rated with it (a minute or two; no new jobs are fetched). <a href="/">Go to your board</a>.`;
     loadProfile(); soonBoard();
   }).catch(() => { $("abNote").textContent = "Couldn't reach Siftwell."; }).finally(() => { $("rvApprove").disabled = false; });
 });
@@ -442,6 +498,7 @@ $("rvDiscard").addEventListener("click", () => jpost("/api/profile/discard", {})
 
 // ---- Job search and Target: every control saves on change
 function fillOne(el){
+  if (document.activeElement === el && el.type !== "checkbox") return;   // (never overwrite what is being typed)
   if (el.dataset.wp) { el.checked = (SET.workplaces || []).includes(el.dataset.wp); return; }
   const v = SET[el.dataset.ps];
   if (el.type === "checkbox") el.checked = !!v;
@@ -450,21 +507,111 @@ function fillOne(el){
     el.value = v == null ? "" : String(v);
   }
 }
+// Level: the six neutral names for the stored levels 1-7 (setup_flow.LEVEL_LABELS); a stored 5 keeps its own option.
+(function(){
+  const s = $("ps-seniority_mine"); if (!s) return;
+  const L = PS0.levels || {}, mine = SET.seniority_mine;
+  s.innerHTML = `<option value="">Any level</option>` + (PS0.level_choices || []).concat(mine && !(PS0.level_choices || []).includes(+mine) ? [+mine] : [])
+    .sort((a, b) => a - b).map(n => `<option value="${n}">${esc(L[n] || n)}</option>`).join("");
+})();
+// Pay: typed per year or per hour, stored per year (2,080 hours), the other unit shown underneath
+const HOURS = 2080, money = v => "$" + Math.round(v).toLocaleString(), money2 = v => "$" + (Math.round(v * 100) / 100).toLocaleString(undefined, {minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2});
+const payUnit = {};
+function fillPay(k){
+  const inp = $("pay-" + k); if (!inp) return;
+  let saved_u = null; try { saved_u = localStorage.getItem("jb.payunit." + k); } catch(e) {}
+  const y = +SET[k] || 0, u = payUnit[k] || saved_u || "year";
+  payUnit[k] = u; $("payu-" + k).value = u;
+  if (document.activeElement !== inp) inp.value = !y ? "" : u === "hour" ? (Math.round(y / HOURS * 100) / 100).toString() : String(Math.round(y));
+  $("payeq-" + k).textContent = !y ? "" : u === "hour" ? `Saved as ${money(y)} a year.` : `About ${money2(y / HOURS)} an hour.`;
+}
+function readPay(k){
+  const raw = $("pay-" + k).value.replace(/[$,\s]/g, "").replace(/k$/i, "000");
+  if (!raw) return {v: null};
+  const n = Number(raw);
+  if (!isFinite(n) || n <= 0) return {err: "Use numbers only for pay."};
+  if (payUnit[k] === "hour") { if (n > 1000) return {err: "That looks like a yearly amount. Choose \"a year\", or type pay per hour."}; return {v: Math.round(n * HOURS)}; }
+  if (n < 1000) return {err: "That looks like an hourly amount. Choose \"an hour\", or type the full yearly pay (e.g. 52000)."};
+  return {v: Math.round(n)};
+}
+// Dealbreakers: employers and industries to skip (chips), and clearance jobs (only when clearances matter to this person)
+const skList = k => (SET[k] || []).slice();
+function drawSkip(){
+  const chip = (k, t) => `<span class="lfchip"><span>${esc(t)}</span><button type="button" data-skrm="${k}" data-v="${esc(t)}" aria-label="Remove ${esc(t)}">×</button></span>`;
+  $("skEmp").innerHTML = skList("skip_employers").map(t => chip("skip_employers", t)).join("") || `<span class="note">None.</span>`;
+  $("skInd").innerHTML = skList("skip_industries").map(t => chip("skip_industries", t)).join("") || `<span class="note">None.</span>`;
+  const have = new Set(skList("skip_industries").map(x => x.toLowerCase()));
+  $("skIdeas").innerHTML = (PS0.industry_ideas || []).filter(x => !have.has(x.toLowerCase())).map(x => `<button type="button" class="btn ghost sm" data-skidea="${esc(x)}">+ ${esc(x)}</button>`).join("");
+}
+function fillLegacy(){
+  const wps = SET.workplaces || [], z = String(SET.home_zip || "").trim();
+  $("psLegacy").hidden = !!z || (wps.length === 1 && wps[0] === "remote");
+}
 const fillSettings = () => {
   document.querySelectorAll("[data-ps],[data-wp]").forEach(fillOne);
+  ["salary_floor", "salary_target", "current_base"].forEach(fillPay);
+  drawSkip(); fillLegacy();
+  if ($("ps-clearance")) { $("psClrWrap").hidden = !PS0.clearance_relevant; $("ps-clearance").value = PREFS["display.clearance"] || "all"; }
   const w = $("tgScopeWrap"); if (w && $("ps-target_scope").value === "ai") w.hidden = false;
 };
+function psSay(t, bad){ const m = $("psState"); if (!m) return; m.textContent = t || ""; m.style.color = bad ? "var(--bad)" : ""; }
+// Target pay and the dealbreakers reach Claude through the goals' "Setup answers" line (server.py rewrites it), so a change
+// makes ratings out of date. Once per visit, while there are ratings to lose, say so before saving. Out-of-date ratings
+// are redone only by Rate jobs or the overnight run (ai_score.RUN_LIMITS per run), never all at once.
+const GOALS_KEYS = ["salary_target", "skip_employers", "skip_industries"];
+let goalsOk = false;
 function savePS(el, settings){
+  if (!goalsOk && CL.ready && BOARD && BOARD.rated > 0 && Object.keys(settings).some(k => GOALS_KEYS.includes(k))) {
+    return ask({title: "Change what Claude weighs?", ok: "Save the change",
+                text: "Target pay and dealbreakers are part of your goals for Claude. After this change, jobs Claude has already rated count as out of date.\n\nThey are rated again only within the usual limits per run (when you press Rate jobs, or overnight if that is on in Settings), never all at once. New jobs still get their quick check."})
+      .then(yes => { if (!yes) { fillSettings(); return; } goalsOk = true; return savePS(el, settings); });
+  }
   saveState(el, "Saving…");
+  const inSearch = !!el.closest('[data-cat="search"]');
+  if (inSearch) psSay("Saving…");
   return saved(el, jpost("/api/person/settings", {settings})).then(d => {
     SET = Object.assign({}, SET, d.settings); saveState(el, "Saved"); drawStrip(); soonBoard();
+    if (inSearch) { psSay("Saved. Your board is re-checking (no new listings)."); fillSettings(); }
+    if ("goals" in d.settings && document.activeElement !== $("ps-goals")) $("ps-goals").value = d.settings.goals || "";
     if (d.interpreting) { TJ = {running: true}; drawTarget(); setTimeout(pollTarget, 1500); }
-  }).catch(err => { (el.dataset.wp ? document.querySelectorAll("[data-wp]") : [el]).forEach(fillOne); saveState(el, netErr(err), true); });
+  }).catch(err => { fillSettings(); saveState(el, netErr(err), true); if (inSearch) psSay(netErr(err), true); });
 }
-document.querySelector(".spanes").addEventListener("change", e => {
+document.querySelector(".spanes").addEventListener("change", async e => {
+  const pu = e.target.closest("[data-payu]");
+  if (pu) { payUnit[pu.dataset.payu] = pu.value; try { localStorage.setItem("jb.payunit." + pu.dataset.payu, pu.value); } catch(e) {} const inp = $("pay-" + pu.dataset.payu); if (inp.value.trim()) inp.dispatchEvent(new Event("change", {bubbles: true})); else fillPay(pu.dataset.payu); return; }
+  const pa = e.target.closest("[data-pay]");
+  if (pa) { const r = readPay(pa.dataset.pay); if (r.err) { saveState(pa, r.err, true); psSay(r.err, true); return; } savePS(pa, {[pa.dataset.pay]: r.v}); return; }
+  if (e.target.id === "ps-clearance") {
+    const el = e.target; saveState(el, "Saving…");
+    jpost("/api/prefs", {prefs: {"display.clearance": el.value}}).then(({ok, d}) => { if (!ok) throw new Error(d.error || "Couldn't save."); PREFS = d.prefs || PREFS; saveState(el, "Saved"); psSay("Saved. Your board uses it the next time it opens."); })
+      .catch(err => { fillSettings(); saveState(el, netErr(err), true); });
+    return;
+  }
   const el = e.target.closest("[data-ps],[data-wp]"); if (!el) return;
-  if (el.dataset.wp) { savePS(el, {workplaces: [...document.querySelectorAll("[data-wp]")].filter(x => x.checked).map(x => x.dataset.wp)}); return; }
+  if (el.dataset.wp) {
+    const wps = [...document.querySelectorAll("[data-wp]")].filter(x => x.checked).map(x => x.dataset.wp);
+    if (!wps.length) { el.checked = true; saveState(el, "Pick at least one way of working.", true); psSay("Pick at least one way of working.", true); return; }
+    savePS(el, {workplaces: wps}); return;
+  }
+  // The older built-in area (no home ZIP yet): a ZIP changes which jobs count as near you, so say so before saving.
+  if (el.dataset.ps === "home_zip" && el.value.trim() && !$("psLegacy").hidden && BOARD && BOARD.jobs
+      && !await ask({title: "Set your home ZIP?", ok: "Set my ZIP",
+                     text: "This changes which jobs count as near you. Until now Siftwell has used its built-in Washington, DC area list for this profile; with a ZIP it keeps jobs within your search radius of that place instead, so some jobs will be added to your board and some removed."})) { el.value = ""; return; }
   savePS(el, {[el.dataset.ps]: el.type === "checkbox" ? el.checked : el.value});
+});
+$("ps-home_zip").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
+document.querySelector('.spane[data-cat="search"]').addEventListener("submit", e => {
+  const f = e.target.closest("[data-skadd]"); if (!f) return;
+  e.preventDefault();
+  const k = f.dataset.skadd, inp = f.querySelector("input"), v = inp.value.trim().replace(/\s+/g, " ");
+  if (!v) return;
+  const cur = skList(k); if (!cur.some(x => x.toLowerCase() === v.toLowerCase())) cur.push(v);
+  inp.value = ""; savePS(f, {[k]: cur});
+});
+document.querySelector('.spane[data-cat="search"]').addEventListener("click", e => {
+  const rm = e.target.closest("[data-skrm]"), idea = e.target.closest("[data-skidea]");
+  if (rm) { const k = rm.dataset.skrm; savePS(rm.closest(".srow"), {[k]: skList(k).filter(x => x !== rm.dataset.v)}); return; }
+  if (idea) savePS(idea.closest(".srow"), {skip_industries: skList("skip_industries").concat([idea.dataset.skidea])});
 });
 // ---- What Siftwell looks for: the sheet behind the free Relevance score (chips; every change saves and re-checks the board)
 let LF = null, lfPoll = null;
@@ -475,9 +622,20 @@ function drawLF(){
   const sec = (title, help, chips, add) => `<div class="lfsec"><h4>${title}</h4><p class="note">${help}</p>${chips ? `<div class="lfchips">${chips}</div>` : ""}${add || ""}</div>`;
   const occNote = "A whole occupation from the O*NET list: every name employers use for it counts.";
   const lr = LF.learned || {up: [], down: []};
+  // Learned from Claude's ratings (lookfor.learn_from_claude: read from ratings Claude already made, no extra requests);
+  // each title or word can be taken off; hidden while there is nothing learned
+  const fc = LF.from_claude || {}, fcUp = fc.up || [], fcDown = fc.down || [], wUp = fc.words_up || [], wDown = fc.words_down || [];
+  const fcChip = (t, tip) => `<span class="lfchip" title="${esc(tip)}"><span>${esc(t)}</span><button type="button" data-lfrm="learned" data-v="${esc(t)}" aria-label="Remove ${esc(t)}">×</button></span>`;
+  const fcHtml = !fc.rated || !(fcUp.length || fcDown.length || wUp.length || wDown.length) ? "" :
+    `<div class="lfsec" id="lfClaude"><h4>Learned from Claude's ratings</h4><p class="note">From ${nf(fc.rated)} rated jobs. Siftwell reads the ratings Claude already made (no extra requests) and moves similar jobs up or down a little. Take off anything that's wrong.</p>` +
+    (fcUp.length ? `<p class="note"><b>Titles moved up</b></p><div class="lfchips">${fcUp.map(x => fcChip(x.t, `rated 70+ on ${x.hi} of ${x.n} jobs`)).join("")}</div>` : "") +
+    (fcDown.length ? `<p class="note"><b>Titles moved down</b></p><div class="lfchips">${fcDown.map(x => fcChip(x.t, `rated low on ${x.n} jobs, avg ${x.avg}`)).join("")}</div>` : "") +
+    (wUp.length ? `<p class="note"><b>Words in jobs Claude rated higher</b></p><div class="lfchips">${wUp.map(w => fcChip(w, "found more often in jobs Claude rated higher")).join("")}</div>` : "") +
+    (wDown.length ? `<p class="note"><b>Words in jobs Claude rated lower</b></p><div class="lfchips">${wDown.map(w => fcChip(w, "found more often in jobs Claude rated lower")).join("")}</div>` : "") +
+    `<div class="row"><button class="linkbtn" type="button" data-lfreset="claude">Forget what Claude's ratings taught Siftwell</button></div></div>`;
   r.innerHTML =
     `<div class="lfsec"><h4><label for="lfRecent">Your most recent job title</label></h4><p class="note">This one counts most. ${LF.recent ? "" : "<b>Add it</b> so Siftwell can tell which jobs are close to your work."}</p>
-      <form class="lfadd" id="lfRecentForm"><input type="text" id="lfRecent" maxlength="80" value="${esc(LF.recent)}" placeholder="e.g. Registered Nurse, Electrician, Office Manager"><button class="btn sm" type="submit">Save</button></form></div>` +
+      <form class="lfadd" id="lfRecentForm"><input type="text" id="lfRecent" maxlength="80" value="${esc(LF.recent)}" placeholder="e.g. Registered Nurse, Electrician, Office Manager" enterkeyhint="done"></form></div>` +
     sec("Job titles you’re looking for", "The same job under the names employers use, and other titles you’d take.",
         LF.same.map(x => lfChip("title", x)).join("") + LF.occs_same.map(x => lfChip("occ", x, occNote)).join(""), lfAdd("title", "Add a job title", "Add a job title")) +
     sec("One step up", "Senior, lead and supervisor versions of your titles already count. Add the titles you’d move up into.",
@@ -486,8 +644,8 @@ function drawLF(){
         LF.related.map(x => lfChip("title", x)).join("") + LF.occs_related.map(x => lfChip("occ", x, occNote)).join(""), lfAdd("related", "Add a related role", "Add a related role")) +
     sec("Skills and tools", "Found in a posting’s text, each one adds a little.", LF.skills.map(x => lfChip("skill", x)).join(""), lfAdd("skill", "Add a skill or tool", "Add a skill or tool")) +
     (LF.past.length ? sec("Jobs you held before", "From your profile. They count a little.", LF.past.map(x => lfChip("title", x)).join("")) : "") +
-    `<div class="lfsec"><h4><label for="lfField">Your field</label></h4><form class="lfadd" id="lfFieldForm"><input type="text" id="lfField" maxlength="60" value="${esc(LF.field)}" placeholder="e.g. Healthcare, Construction, Education"><button class="btn sm" type="submit">Save</button></form></div>` +
-    `<div class="lfsec"><h4>Learned from what you save and hide</h4><p class="note">${lr.n_up || lr.n_down
+    `<div class="lfsec"><h4><label for="lfField">Your field</label></h4><form class="lfadd" id="lfFieldForm"><input type="text" id="lfField" maxlength="60" value="${esc(LF.field)}" placeholder="e.g. Healthcare, Construction, Education" enterkeyhint="done"></form><p class="note">Saves by itself when you leave the box.</p></div>` +
+    fcHtml + `<div class="lfsec"><h4>Learned from what you save and hide</h4><p class="note">${lr.n_up || lr.n_down
         ? `Jobs with titles like the ${nf(lr.n_up)} you saved or applied to move up a little${lr.up.length ? ` (${esc(lr.up.slice(-4).join(", "))})` : ""}; titles like the ${nf(lr.n_down)} you hid move down a little${lr.down.length ? ` (${esc(lr.down.slice(-4).join(", "))})` : ""}. Never more than a few points.`
         : "Nothing yet. Saving a job nudges similar titles up a little; hiding one nudges similar titles down. Never more than a few points."}</p>
       <div class="row">${lr.n_up || lr.n_down ? `<button class="btn ghost sm" type="button" data-lfreset="learning">Forget what was learned</button>` : ""}
@@ -502,25 +660,42 @@ function loadLF(){
   }).catch(() => { const r = $("lfRoot"); if (r && !LF) r.innerHTML = `<p class="note">Couldn't load. Check the connection.</p>`; });
 }
 function lfOp(op){
-  const m = $("lfMsg"); if (m) m.textContent = "Saving…";
+  const m = $("lfMsg"), root = $("lfRoot"); if (m) m.textContent = "Saving…";
+  saveState(root, "Saving…"); psSay("Saving…");
   return jpost("/api/lookfor", {op}).then(({ok, d}) => {
-    if (!ok) { if ($("lfMsg")) $("lfMsg").textContent = d.error || "Couldn't save."; return; }
+    if (!ok) { const t = d.error || "Couldn't save."; if ($("lfMsg")) $("lfMsg").textContent = t; saveState(root, t, true); psSay(t, true); return; }
     LF = d.sheet; drawLF(); if ($("lfMsg")) $("lfMsg").textContent = "Saved. Your board is re-checking."; soonBoard();
+    saveState(root, "Saved"); psSay("Saved. Your board is re-checking (no new listings).");
     if ((LF.job || {}).running) lfPoll = setTimeout(loadLF, 2500);
-  }).catch(() => { if ($("lfMsg")) $("lfMsg").textContent = "Couldn't save. Check the connection."; });
+  }).catch(() => { const t = "Couldn't save. Check the connection."; if ($("lfMsg")) $("lfMsg").textContent = t; saveState(root, t, true); psSay(t, true); });
 }
 $("lfRoot").addEventListener("submit", e => {
   e.preventDefault();
   const f = e.target, inp = f.querySelector("input"), v = inp.value.trim();
-  if (f.id === "lfRecentForm") { lfOp({recent: v}); return; }
-  if (f.id === "lfFieldForm") { lfOp({field: v}); return; }
+  if (f.id === "lfRecentForm" || f.id === "lfFieldForm") { inp.blur(); return; }   // (Enter: saved by the change below)
   if (v && f.dataset.lfadd) lfOp({add: f.dataset.lfadd, text: v});
+});
+// the most recent title and the field save by themselves, like every other control on the page
+$("lfRoot").addEventListener("change", e => {
+  const id = e.target.id, v = e.target.value.trim();
+  if (id === "lfRecent" && v !== (LF.recent || "")) lfOp({recent: v});
+  if (id === "lfField" && v !== (LF.field || "")) lfOp({field: v});
 });
 $("lfRoot").addEventListener("click", e => {
   const rm = e.target.closest("[data-lfrm]");
   if (rm) { lfOp(rm.dataset.lfrm === "occ" ? {remove: "occ", code: rm.dataset.v} : {remove: rm.dataset.lfrm, text: rm.dataset.v}); return; }
   const rs = e.target.closest("[data-lfreset]");
-  if (rs) { if (rs.dataset.lfreset !== "sheet" || confirm("Start the list over from your profile? The titles and skills you added or removed here are forgotten.")) lfOp({reset: rs.dataset.lfreset}); return; }
+  if (rs) {
+    if (rs.dataset.lfreset === "claude") {
+      ask({title: "Forget what Claude's ratings taught Siftwell?", text: "The titles and words learned from Claude's ratings are cleared, and the ones you took off can come back. Siftwell learns again from the ratings the next time your board is rebuilt. No ratings are changed.", ok: "Forget it"})
+        .then(yes => { if (yes) lfOp({reset: "claude"}); });
+      return;
+    }
+    if (rs.dataset.lfreset !== "sheet") { lfOp({reset: rs.dataset.lfreset}); return; }
+    ask({title: "Start the list over from your profile?", text: "The titles and skills you added or removed here are forgotten.", ok: "Start over", danger: true})
+      .then(yes => { if (yes) lfOp({reset: "sheet"}); });
+    return;
+  }
   if (e.target.closest("#lfSuggest")) {
     jpost("/api/lookfor/suggest", {}).then(({ok, d}) => { if (!ok) { $("lfMsg").textContent = d.error || "Couldn't ask Claude."; return; } LF.job = {running: true}; drawLF(); lfPoll = setTimeout(loadLF, 2500); });
   }
@@ -558,7 +733,7 @@ $("tgSugg").addEventListener("click", e => {
   savePS($("ps-target_text"), s);
 });
 
-// ---- Highlights & answers: degrees, licenses and the answers you've given
+// ---- Facts & answers: degrees, licenses and the answers you've given
 let hlEditing = false;
 const LVL = {associate: "Associate's", bachelor: "Bachelor's", master: "Master's", doctorate: "PhD", jd: "JD", md: "MD"};
 function loadHL(){
@@ -696,22 +871,12 @@ $("qGo").addEventListener("click", () => {
     .catch(() => { $("qGo").disabled = false; });
 });
 
-// ---- Companies: lists watched, companies added, adding by link
+// ---- Employers: how many; adding and managing them is on the Employers page
 function loadCompanies(){
   return fetch("/api/companies/mine").then(r => r.json()).then(d => {
-    $("coCount").textContent = d.watched ? `Siftwell watches ${nf(d.watched)} employer${d.watched === 1 ? "" : "s"} for you. ` : "";
-    $("coOwn").innerHTML = d.own.length ? d.own.slice(0, 40).map(c => `<div class="fact"><div><b>${esc(c.name)}</b><div class="fl">${esc(c.ats)}${c.everyone ? " · everyone" : " · this profile"}</div></div></div>`).join("") + (d.own.length > 40 ? `<div class="note">And ${nf(d.own.length - 40)} more. The Catalog page lists them all.</div>` : "") : `<div class="note">None yet. Paste a careers link above.</div>`;
-  }).catch(() => { $("coOwn").innerHTML = `<div class="note">Couldn't load. Check the connection.</div>`; });
+    $("coCount").textContent = `Your employers (${nf(d.watched)})`;
+  }).catch(() => {});
 }
-$("coAddForm").addEventListener("submit", e => {
-  e.preventDefault();
-  $("coMsg").textContent = "Checking that link…";
-  jpost("/api/companies/add", {url: $("coUrl").value, name: $("coName").value, scope: $("coScope").value}).then(({ok, d}) => {
-    if (!ok) { $("coMsg").textContent = d.error || "Couldn't add it."; return; }
-    $("coMsg").textContent = `${d.existing ? "Already tracked; now on your list" : "Added"}: ${d.name} (${d.open_jobs} open jobs on its board). ` + (d.fetching ? "Fetching its jobs now; they'll appear on the board when the update bar finishes." : "An update is running; its jobs arrive with the next update.");
-    $("coUrl").value = ""; $("coName").value = ""; loadCompanies(); soonBoard();
-  }).catch(() => { $("coMsg").textContent = "Couldn't reach Siftwell. Check the connection."; });
-});
 
 fillSettings(); drawTarget(); drawStrip(); drawResume();
 loadProfile(); loadBoard(); loadHL(); loadFacts(); loadCompanies(); pollTarget(); loadPeople();

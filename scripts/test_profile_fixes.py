@@ -195,7 +195,10 @@ check("...'Nurse Manager' is Lead / Manager", bool(g) and g["level"] == 4, str(g
 # ------------------------------------------------------------------ B4 / B5 / B6 / B3. the setup steps
 check("without Claude the tailoring questions are not a step", "questions" not in setup_flow.steps_for(False)
       and setup_flow.steps_for(True) == setup_flow.STEPS and len(setup_flow.steps_for(False)) == len(setup_flow.STEPS) - 1)
-check("...Employers is followed by the last screen", setup_flow.next_step("companies", False) == "board" and setup_flow.next_step("companies", True) == "questions")
+check("...Dealbreakers is followed by the last screen", setup_flow.next_step("dealbreakers", False) == "board" and setup_flow.next_step("dealbreakers", True) == "questions")
+check("the screen with nothing to answer (Employers) is gone", "companies" not in setup_flow.STEPS)
+setup_flow._write(pid, {"setup_step": "companies", "setup_done": False})
+check("...someone who had stopped on it carries on after Dealbreakers", setup_flow.get_state(pid)["step"] == "board", setup_flow.get_state(pid)["step"])
 setup_flow._write(pid, {"setup_step": "questions", "setup_done": False})
 st = setup_flow.get_state(pid)
 check("...and someone who had stopped on that step carries on at the last one", st["step"] == "board" and "questions" not in st["active_steps"], st["step"])
@@ -208,7 +211,11 @@ except setup_flow.SetupError:
     ok = True
 check("...Continue on it still checks the answers", ok)
 P = setup_page.PAGE
-check("the stepper says Employers, like the page", '"Dealbreakers", "Employers", "Questions"' in P and '"Companies"' not in P)
+check("the stepper has no empty Employers step and never says Companies", '"Dealbreakers", "Questions"' in P and '"Companies"' not in P)
+check("the stepper dots are 32px touch targets", ".dothit{display:grid;place-items:center;min-width:32px;height:32px" in P)
+check("Direction offers Skip, and a skipped Direction saves nothing", 'skip(){ saveAndNext("direction", {skipped: true}); }' in P
+      and setup_flow.validate("direction", {"skipped": True}) == ({}, {}))
+check("the last screen starts smaller: all when under 150, else the top 100", "all.employers < 150 ? all : (o.find(x => x.limit === 100)" in P)
 check("the Where screen offers Skip", 'skip(){ saveAndNext("where", {skipped: true}); }' in P)
 check("an error is put on the page once (its box is the alert; no copy in the live region)",
       'role="alert"' in P and "\n  say(msg);\n}" not in P.replace("\r\n", "\n"))

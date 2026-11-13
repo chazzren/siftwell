@@ -34,7 +34,7 @@ REQUIRED_FILES = ["README.md", "LICENSE", "requirements.txt", "server.py", "app_
                   "assets/brand/siftwell.icns", "assets/onet/onet.json.gz", "assets/onet/NOTICE.txt",
                   "assets/directory/seed.json.gz", "index_build/__init__.py", "index_build/local.py", "localdir.py"]
 LAUNCHER_FILES = ["Start Siftwell.cmd", "Start Siftwell.command", "tools/launcher.ps1"]  # warning with --local
-PAGE_MODULES = ["report", "settings_page", "setup_page", "welcome_page", "getting_started", "catalog_page", "backup", "autoupdate", "appupdate", "directory"]  # missing = skipped
+PAGE_MODULES = ["report", "settings_page", "profile_page", "manual_profile", "setup_page", "welcome_page", "getting_started", "catalog_page", "backup", "autoupdate", "appupdate", "directory"]  # missing = skipped
 LEAK_SKIP_PREFIXES = ["assets/geo/"]
 EMAIL_ALLOW = ["noreply@anthropic.com", "@users.noreply.github.com", "@example.com", "@example.org",
                "@example.net", "@test.com", "@localhost"]

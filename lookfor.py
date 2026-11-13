@@ -463,7 +463,8 @@ def _auto_recent(prof):
             or clean_title(next(iter(p.get("target_roles") or []), "")))
 
 
-BUILD = 2   # the way the automatic part is made. A new number rebuilds every sheet once (own chips and removals kept, no Claude).
+BUILD = 3   # the way the automatic part is made. A new number rebuilds every sheet once (own chips and removals kept, no Claude),
+            # and every board once at the next server start (server.recount_old_boards): 3 = learning from Claude's ratings.
 
 
 def _facts(pid):
@@ -607,7 +608,7 @@ def build(pid=None, prof=None):
     pid = pid or people.current()
     prof = prof if prof is not None else _profile(pid)
     old = load(pid) or {}
-    removed = old.get("removed") or {"titles": [], "occs": [], "skills": []}
+    removed = old.get("removed") or {"titles": [], "occs": [], "skills": [], "learned": []}
     rm_t, rm_o, rm_s = (set(removed.get(k) or []) for k in ("titles", "occs", "skills"))
     p = prof or {}
     mine_recent = clean_title(old.get("recent")) if old.get("recent_by") == "you" else ""
@@ -691,7 +692,9 @@ def build(pid=None, prof=None):
              "basis": _basis(recent, p, pid), "claude": asked or {}, "claude_at": old.get("claude_at") or "",
              # a Claude suggestion is only ever asked for titles it has not seen: a sheet first built for a profile that
              # already existed (an upgrade) starts as "seen", so upgrading never spends a call
-             "claude_basis": old.get("claude_basis") or _claude_basis(recent, p)}
+             "claude_basis": old.get("claude_basis") or _claude_basis(recent, p),
+             # what Claude's ratings taught it (learn_from_claude) is kept; the next board rebuild redoes it anyway
+             "from_claude": old.get("from_claude") if isinstance(old.get("from_claude"), dict) else {}}
     if lf:
         sheet["claude_basis"] = _claude_basis(recent, p)
     return _save(sheet, pid)
@@ -718,17 +721,22 @@ def is_empty(sheet):
 
 # ---------------------------------------------------------------- edits (profile page, /setup)
 def edit(pid, op):
-    """One change by the person. op: {"add": "title"|"up"|"related"|"skill", "text": ...}, {"remove": "title"|"skill"|"occ",
-    "text" or "code": ...}, {"recent": "..."}, {"field": "..."}, {"reset": "learning"|"sheet"}. Returns the sheet.
+    """One change by the person. op: {"add": "title"|"up"|"related"|"skill", "text": ...}, {"remove": "title"|"skill"|"occ"|"learned",
+    "text" or "code": ...}, {"recent": "..."}, {"field": "..."}, {"reset": "learning"|"claude"|"sheet"}. Returns the sheet.
+    "remove learned" takes one entry learned from Claude's ratings off (a title or a word): it is not learned again
+    until "reset claude", which forgets those removals (the next board rebuild learns afresh).
     Removing a title also takes it out of the profile's "job titles to search for" / title words, so it stops passing
     the title filter too (those are not part of the rating key, so no rating is touched)."""
     sheet = ensure(pid)
     rm = sheet.setdefault("removed", {})
-    for k in ("titles", "occs", "skills"):
+    for k in ("titles", "occs", "skills", "learned"):
         rm.setdefault(k, [])
     if op.get("reset") == "learning":
         reset_learning(pid)
         return sheet
+    if op.get("reset") == "claude":
+        rm["learned"], sheet["from_claude"] = [], {}
+        return _save(sheet, pid)
     if op.get("reset") == "sheet":
         try:
             os.remove(path(pid))
@@ -773,6 +781,17 @@ def edit(pid, op):
         sheet["skills"] = [x for x in sheet["skills"] if x["t"].lower() != text.lower()]
         if text.lower() not in rm["skills"]:
             rm["skills"].append(text.lower())
+        return _save(sheet, pid)
+    if kind == "learned" and text:
+        low = text.lower()
+        fc = sheet.get("from_claude") if isinstance(sheet.get("from_claude"), dict) else {}
+        for k in ("up", "down"):
+            fc[k] = [x for x in fc.get(k) or [] if str(x.get("t", "")).lower() != low and x.get("k") != low]
+        low = stem(low) if " " not in low and ":" not in low else low      # (a word is kept in its plain form)
+        fc["terms"] = {w: v for w, v in (fc.get("terms") or {}).items() if w.replace("title:", "") != low}
+        if low not in rm["learned"]:
+            rm["learned"].append(low)
+        sheet["from_claude"] = fc
         return _save(sheet, pid)
     if kind == "occ" and op.get("code"):
         code = str(op["code"])
@@ -930,6 +949,174 @@ def reset_learning(pid=None):
     paths.write_atomic(_learn_path(pid), "{}")
 
 
+# ---------------------------------------------------------------- learning from Claude's own Match ratings
+# Claude's Match ratings already exist (reading them costs nothing): titles Claude rated highly on several jobs that the
+# sheet doesn't cover become "learned from Claude's ratings" entries, titles it rated low on several jobs get a small
+# push down, and the words of the postings and titles it rated higher or lower than usual move similar postings a
+# little (a plain local word count, no embeddings, no Claude). Kept on the sheet (sheet["from_claude"]), listed on the
+# profile page, each title or word removable (sheet["removed"]["learned"]), redone from the ratings at every board
+# rebuild. Never part of a rating fingerprint or cache key: it changes the ORDER of the board and which jobs are rated
+# next, nothing else. Measured on real boards with ratings held out (scripts/eval_relevance.py --split).
+CL_HI, CL_LO = 70, 35          # Match at or above CL_HI: rated highly; a title whose ratings average below CL_LO: rated low
+CL_MIN_HI, CL_MIN_LO = 2, 3    # how many jobs it takes (rated highly / rated, none of them highly)
+CL_CAP, CL_CAP_MIN = 64, 46    # a learned title's cap: CL_CAP when most of its jobs were rated highly, CL_CAP_MIN when few
+CL_DOWN = 15                   # the most a title Claude keeps rating low is pushed down
+# Words: each word's weight is how much higher (or lower) than usual Claude rated the postings that have it, in Match
+# points, shrunk towards 0 for words seen on few postings (CL_SHRINK). A posting's reading is the average of its ten
+# strongest words each way; CL_TEXT_SCALE points of that give the full lift, CL_TEXT up or down.
+CL_TEXT, CL_TEXT_SCALE, CL_SHRINK, CL_MIN_RATED, CL_KEEP = 15, 8.0, 20, 100, 150
+CL_MAX_TITLES = 25
+NUDGE_MAX_UP, NUDGE_MAX_DOWN = 18, 20   # everything learned together (marks + Claude's ratings) moves a job at most this much
+# words nearly every posting uses (the word weights also leave out any word on more than half the postings)
+_TEXT_STOP = set("""a about above after again all also am an and any are as at be because been before being below between
+both but by can could did do does doing down during each few for from further had has have having he her here hers him his
+how i if in into is it its itself just me more most my no nor not now of off on once only or other our out over own same
+she should so some such than that the their them then there these they this those through to too under until up very was
+we were what when where which while who whom why will with would you your yours job jobs work working role position team
+teams company employer employee employees candidate candidates applicant applicants opportunity opportunities experience
+experienced year years skill skills ability abilities knowledge strong excellent including include includes required
+requirement requirements preferred qualification qualifications responsibilities responsibility duty duties must may
+apply application equal status gender race color religion sex sexual orientation national origin disability veteran
+protected benefit benefits paid holiday holidays per well within across using use used make ensure provide other
+others etc please one two three us we'll you'll our""".split())
+_WORD = re.compile(r"[a-z][a-z0-9+#]{2,}")
+
+
+def text_terms(text):
+    """The set of plain words of a posting (lower case, plural folded, everyday words left out)."""
+    low = (text or "")[:8000].lower()
+    return {stem(w) for w in _WORD.findall(low) if w not in _TEXT_STOP}
+
+
+def claude_core(title):
+    """The core of a posted title as compared with the sheet (title_parts): the telling-est one when it has two."""
+    cores, _ = title_parts(title)
+    if not cores:
+        return ()
+    c = max(cores, key=lambda c: (_tw(c), -len(c)))
+    return tuple(t for i, t in enumerate(c) if i == 0 or t != c[i - 1])     # ("Manager, Project Manager": once)
+
+
+def core_text(title):
+    """The core of a posted title in readable words: 'Senior Solutions Architect - Remote (R123)' -> 'Solutions Architect'."""
+    t = _CODE.sub(" ", _PAREN.sub(" ", " ".join(str(title or "").replace("’", "'").split())))
+    segs = [s.strip(" ,;/") for s in _SEPS.split(t) if s and s.strip(" ,;/")]
+    words = (segs[0] if segs else "").split(",")[0].split()
+    while words and words[0].lower().strip(".") in LEVEL | NOISE:
+        words = words[1:]
+    while words and words[-1].lower().strip(".") in LEVEL | NOISE:
+        words = words[:-1]
+    return clean_title(" ".join(words))
+
+
+def _core_names(title):
+    """Readable forms of a title's core: as written, and turned round ("Manager, Sales Operations" -> "Sales Operations
+    Manager"), the one whose words are the core (claude_core) is used."""
+    t = _CODE.sub(" ", _PAREN.sub(" ", " ".join(str(title or "").replace("’", "'").split())))
+    segs = [x.strip(" ,;/") for x in _SEPS.split(t) if x and x.strip(" ,;/")]
+    parts = [x.strip() for x in (segs[0] if segs else "").split(",") if x.strip()]
+    out = [core_text(title)]
+    if len(parts) > 1:
+        ws = (parts[1] + " " + parts[0]).split()
+        out.append(core_text(" ".join(w for i, w in enumerate(ws) if i == 0 or w.lower() != ws[i - 1].lower())))
+    return [x for x in out if x]
+
+
+def _learnable(k):
+    """Is this core a job title that can be learned? Not one plain word that names hundreds of jobs ("Manager",
+    "Consultant"), and not a word that never ends a job name ("Technical")."""
+    if len(k) >= 2:
+        return True
+    return len(k) == 1 and _lex()["head_n"].get(k[0], 0) >= 1 and not _generic_word(k[0])
+
+
+def features(title, text):
+    """What the word weights look at: the words of the posting text and the title words ("title:<word>")."""
+    return text_terms(text) | {"title:" + w for w in claude_core(title)}
+
+
+def text_reading(feats, weights):
+    """How much higher (+) or lower (-) than usual Claude rates postings with these words, in Match points: the
+    average of the ten strongest words each way (fewer words: their sum over 20, so a short posting reads weaker)."""
+    v = sorted(weights[f] for f in feats if f in weights)
+    if len(v) > 20:
+        v = v[:10] + v[-10:]
+    return sum(v) / 20
+
+
+def learn_from_ratings(rated, sheet):
+    """What Claude's ratings say that the sheet doesn't: rated = [(title, Match, posting text)]. Returns
+    {"n": rated jobs, "hi": rated highly, "up": [{"t", "k", "n", "hi", "cap"}], "down": [{"t", "k", "n", "avg"}],
+     "terms": {word: weight}} (title words as "title:<word>").
+    up: a title (its core, see claude_core) Claude rated CL_HI+ on CL_MIN_HI+ jobs that the sheet scores below what it
+    would get here; its cap follows the share of its jobs rated highly, never above CL_CAP nor above the person's own
+    titles (Scorer.learn_ceiling). down: a title rated on CL_MIN_LO+ jobs, never highly, averaging below CL_LO, that
+    the sheet scores 25+. terms (from CL_MIN_RATED ratings on): the CL_KEEP strongest words each way (see CL_TEXT)."""
+    import collections
+    sheet = dict(sheet or {}, from_claude={})
+    sc = Scorer(sheet, {})
+    rated = [(t, m, x) for t, m, x in rated if t and m is not None]
+    out = {"n": len(rated), "hi": sum(1 for _, m, _ in rated if m >= CL_HI), "up": [], "down": [], "terms": {}}
+    if not rated or sc.empty:
+        return out
+    groups = {}
+    for t, m, _ in rated:
+        k = claude_core(t)
+        if not k:
+            continue
+        g = groups.setdefault(k, {"n": 0, "sum": 0, "hi": 0, "max": 0, "names": collections.Counter()})
+        g["n"] += 1; g["sum"] += m; g["hi"] += m >= CL_HI; g["max"] = max(g["max"], m)
+        for nm in _core_names(t):
+            g["names"][nm] += 1
+    gone = {x.lower() for x in (sheet.get("removed") or {}).get("learned") or []}
+    for k, g in groups.items():
+        name = next((n for n, _ in g["names"].most_common() if n and phrase(n) == k), "") or " ".join(k).title()
+        if name.lower() in gone or " ".join(k) in gone:
+            continue
+        now = sc.title_score(" ".join(k))[0]
+        if g["hi"] >= CL_MIN_HI and _learnable(k):
+            share = g["hi"] / (g["n"] + 2)
+            cap = round(CL_CAP_MIN + (CL_CAP - CL_CAP_MIN) * min(1.0, share / 0.5))
+            if now < cap:
+                out["up"].append({"t": name, "k": " ".join(k), "n": g["n"], "hi": g["hi"], "cap": cap})
+        elif g["hi"] < CL_MIN_HI and g["n"] >= CL_MIN_LO and g["sum"] / g["n"] < CL_LO and g["max"] < CL_HI - 15 and now >= 25:
+            out["down"].append({"t": name, "k": " ".join(k), "n": g["n"], "avg": round(g["sum"] / g["n"])})
+    out["up"].sort(key=lambda x: (-x["hi"], -x["cap"], x["t"]))
+    out["down"].sort(key=lambda x: (-x["n"], x["avg"], x["t"]))
+    out["up"], out["down"] = out["up"][:CL_MAX_TITLES], out["down"][:CL_MAX_TITLES]
+    if len(rated) >= CL_MIN_RATED:
+        mu = sum(m for _, m, _ in rated) / len(rated)
+        tot, cnt = collections.Counter(), collections.Counter()
+        for t, m, x in rated:
+            for f in features(t, x):
+                tot[f] += m - mu; cnt[f] += 1
+        n = len(rated)
+        w = sorted((tot[f] / (cnt[f] + CL_SHRINK), f) for f in cnt
+                   if cnt[f] >= 3 and cnt[f] <= n / 2 and f not in gone and f.replace("title:", "") not in gone)
+        keep = [x for x in w[:CL_KEEP] if x[0] < -0.5] + [x for x in w[-CL_KEEP:] if x[0] > 0.5]
+        out["terms"] = {f: round(v, 2) for v, f in sorted(keep, key=lambda x: -abs(x[0]))}
+    return out
+
+
+def learn_from_claude(pid, jobs):
+    """Rebuild what the sheet learned from Claude's Match ratings, from the rated jobs on this board (no Claude call).
+    Saves it on the sheet when it changed; returns True then (the caller re-scores Relevance)."""
+    sheet = load(pid)
+    if not sheet or is_empty(sheet):
+        return False
+    rated = [(j.get("title") or "", j["ai_fit"], j.get("desc") or j.get("snippet") or "") for j in jobs
+             if j.get("ai_fit") is not None]
+    new = learn_from_ratings(rated, sheet)
+    old = sheet.get("from_claude") or {}
+    strip = lambda d: {k: v for k, v in (d or {}).items() if k != "at"}
+    if strip(new) == strip(old):
+        return False
+    sheet = load(pid) or sheet          # (read again just before writing: the person may have just edited it)
+    sheet["from_claude"] = dict(new, at=dt.datetime.now().isoformat(timespec="minutes"))
+    _save(sheet, pid)
+    return True
+
+
 # ---------------------------------------------------------------- the Relevance score
 OWN_TIERS = ("same", "wanted", "same_claude", "past", "up")
 
@@ -969,20 +1156,20 @@ class Scorer:
             blocked.update(phrase(n) for n in occ_names(code))
         seen = {}
 
-        def put(title, tier, cap, loose=False):
+        def put(title, tier, cap, loose=False, label=None):
             p = phrase(title)
             w = _tw(p)
             if not p or w <= 0:
                 return
-            if tier in ("alt", "occ", "relocc") and (p in blocked or any(self._inside(g, p) for g in gone)):
+            if tier in ("alt", "occ", "relocc", "learned") and (p in blocked or any(self._inside(g, p) for g in gone)):
                 return                   # the person removed this (or the title inside it): the occupation list can't bring it back
             k = seen.get(p)
             if k is not None:
-                if self.entries[k][2] < cap:
-                    self.entries[k] = (p, w, cap, tier, clean_title(title), loose)
+                if self.entries[k][2] < cap and tier != "learned":
+                    self.entries[k] = (p, w, cap, tier, clean_title(label or title), loose)
                 return
             seen[p] = len(self.entries)
-            self.entries.append((p, w, cap, tier, clean_title(title), loose))
+            self.entries.append((p, w, cap, tier, clean_title(label or title), loose))
 
         recent = phrase(self.sheet.get("recent") or "")
         past_n = 0
@@ -1017,6 +1204,23 @@ class Scorer:
                     put(n, "alt" if close else "occ", CAPS["alt" if close else "occ"])
                 else:
                     put(n, "relocc", CAPS["relocc"])
+        # learned from Claude's ratings (learn_from_ratings): titles go on below every one of the person's own titles
+        fc = self.sheet.get("from_claude") if isinstance(self.sheet.get("from_claude"), dict) else {}
+        lgone = {str(x).lower() for x in removed.get("learned") or []}
+        self.learn_ceiling = max(30, min([CL_CAP] + [e[2] - 2 for e in self.entries if e[3] in OWN_TIERS]))
+        for x in fc.get("up") or []:
+            if x.get("k") and str(x.get("t", "")).lower() not in lgone and x["k"] not in lgone:
+                put(x["k"], "learned", min(int(x.get("cap") or CL_CAP_MIN), self.learn_ceiling), label=x.get("t"))
+        self.cdown = []
+        for x in fc.get("down") or []:
+            p = phrase(x.get("k") or "")
+            if p and str(x.get("t", "")).lower() not in lgone and x["k"] not in lgone:
+                amt = CL_DOWN * min(1.0, int(x.get("n") or 0) / 6) * min(1.0, (CL_LO - float(x.get("avg") or 0)) / 15)
+                self.cdown.append((p, _tw(p), round(max(3.0, amt), 1), clean_title(x.get("t"))))
+        self.cterms = {w: float(v) for w, v in (fc.get("terms") or {}).items()
+                       if w not in lgone and w.replace("title:", "") not in lgone}
+        self.learn_ids = {jid for jid, v in (learn or {}).items() if isinstance(v, dict) and v.get("d") == "up"}
+        self.marked_cos = set()
         for i, e in enumerate(self.entries):
             for t in set(e[0]):
                 self.index.setdefault(t, []).append(i)
@@ -1029,7 +1233,7 @@ class Scorer:
         self.own_toks |= own
         self.word_w = {}                 # word -> the best cap (0-1) of a title on the sheet that has it
         for e in self.entries:
-            if e[3] not in ("alt", "occ", "relocc"):
+            if e[3] not in ("alt", "occ", "relocc", "learned"):
                 for t in e[0]:
                     self.word_w[t] = max(self.word_w.get(t, 0.0), e[2] / 100)
         self.skills = []
@@ -1054,6 +1258,8 @@ class Scorer:
         """Weigh each skill by how telling it is on THIS board: one that a third of the postings mention ("team
         leadership") counts for nothing, one that few mention ("Epic", "conduit") counts in full. Optional; without it
         every skill counts the same."""
+        if self.learn_ids and jobs:      # employers of the jobs the person saved or applied to (exploration, see score)
+            self.marked_cos = {j.get("company") for j in jobs if j.get("id") in self.learn_ids} - {None, ""}
         if not self.skills or not jobs:
             return self
         texts = [(j.get("desc") or j.get("snippet") or "")[:8000].lower() for j in jobs]
@@ -1120,12 +1326,15 @@ class Scorer:
         return any(N[i:i + m] == E for i in range(len(N) - m + 1))
 
     def title_score(self, title):
-        """(0-100, tier, the sheet entry that matched, nudge, how close 0-1, that entry's cap) for a job title."""
+        """(0-100, tier, the sheet entry that matched, nudge from the person's marks, how close 0-1, that entry's cap,
+        on the person's own list (an entry other than a learned one matched), push down from Claude's low ratings (<= 0))
+        for a job title."""
         hit = self._cache.get(title)
         if hit is not None:
             return hit
         cores, side = title_parts(title)
         best = (0.0, 0, "", "", 0.0, SHARED_MAX + SKILL_ALONE)          # score, entry length, tier, label, factor, cap
+        sheet_best = (0.0, 0, "")         # the best without the learned entries: is the title on the person's own list?
         for C in cores:
             cand = set()
             for t in C:
@@ -1138,17 +1347,24 @@ class Scorer:
                 f = self._factor(C, e)
                 if f > 0:
                     key = (e[2] * f, len(e[0]))
+                    if e[3] != "learned" and key > sheet_best[:2]:
+                        sheet_best = (key[0], key[1], e[3])
                     if key > best[:2]:
                         best = (key[0], key[1], e[3], e[4], f, e[2])
             if not gone:
                 pts, words = self._shared(C)
                 if pts > best[0]:
                     best = (pts, 0, "shared", ", ".join(words), 0.0, SHARED_MAX + SKILL_ALONE)
+                if pts > sheet_best[0]:
+                    sheet_best = (pts, 0, "shared")
         for S in side:                   # "New Grad Nurse – RN", "Registered Nurse (RN)": only a whole title counts
             for i in self.index.get(S[-1], ()):
                 e = self.entries[i]
-                if e[0] == S and not e[5] and (e[2] * 0.92, len(S)) > best[:2]:
-                    best = (e[2] * 0.92, len(S), e[3], e[4], 0.92, e[2])
+                if e[0] == S and not e[5] and e[3] != "learned":
+                    if (e[2] * 0.92, len(S)) > sheet_best[:2]:
+                        sheet_best = (e[2] * 0.92, len(S), e[3])
+                    if (e[2] * 0.92, len(S)) > best[:2]:
+                        best = (e[2] * 0.92, len(S), e[3], e[4], 0.92, e[2])
         nudge = 0.0
         if self.up or self.down:
             jt = self._other_words(title)
@@ -1156,8 +1372,21 @@ class Scorer:
                 u = max((_tw(jt & toks) / w for toks, w in self.up), default=0.0)
                 d = max((_tw(jt & toks) / w for toks, w in self.down), default=0.0)
                 nudge = NUDGE_UP * (u if u >= 0.6 else 0) - NUDGE_DOWN * (d if d >= 0.6 else 0)
-        out = self._cache[title] = (round(best[0]), best[2], best[3], round(nudge), best[4], best[5])
+        cdown = 0.0
+        for D, w, amt, _ in self.cdown:   # a title Claude kept rating low: that title only (any level, site, unit ...)
+            if D in cores:
+                cdown = min(cdown, -amt)
+        out = self._cache[title] = (round(best[0]), best[2], best[3], round(nudge), best[4], best[5],
+                                    round(sheet_best[0]) > 0 and sheet_best[2] not in ("", "shared"), round(cdown))
         return out
+
+    def text_lean(self, job):
+        """-1 to 1: how the words of this posting and its title lean, by Claude's ratings of the postings with the same
+        words (see text_reading; 1 = CL_TEXT_SCALE Match points or more above usual)."""
+        if not self.cterms:
+            return 0.0
+        v = text_reading(features(job.get("title") or "", job.get("desc") or job.get("snippet") or ""), self.cterms)
+        return max(-1.0, min(1.0, v / CL_TEXT_SCALE))
 
     def skill_hits(self, text):
         low = (text or "")[:8000].lower()
@@ -1169,7 +1398,7 @@ class Scorer:
         if self.empty:
             job["rel"], job["rel_why"] = None, ""
             return None
-        T, tier, label, nudge, f, cap = self.title_score(job.get("title") or "")
+        T, tier, label, nudge, f, cap, _, cdown = self.title_score(job.get("title") or "")
         hits, hw = self.skill_hits(job.get("desc") or job.get("snippet") or "") if self.skills else ([], 0.0)
         S = 1 - math.exp(-hw / 1.5)
         if not self.has_skills:          # no skills on the sheet: nothing to tell postings apart by, the title counts in full
@@ -1182,17 +1411,33 @@ class Scorer:
             ctx = set(tokens((job.get("dept") or "") + " " + (job.get("sector") or "")))
             if any(t in ctx for t in self.field):
                 rel += 3
-        rel = max(0, min(100, round(rel + nudge)))
+        lean = self.text_lean(job)
+        lift = CL_TEXT * lean
+        # everything learned (the person's marks, Claude's ratings) moves a job by a bounded amount, never more
+        move = max(-NUDGE_MAX_DOWN, min(NUDGE_MAX_UP, nudge + cdown + lift))
+        rel = max(0, min(100, round(rel + move)))
         why = []
         if T >= 12 and tier == "shared":
             why.append(f"Shares words with titles on your list ({label})")
+        elif T >= 12 and tier == "learned":
+            why.append(f"{'Matches' if f >= 0.85 else 'Close to'} “{label}” (Claude rated similar jobs highly)")
         elif T >= 12 and label:
             why.append(f"{'Matches' if f >= 0.85 else 'Close to'} “{label}” ({TIER_WORDS.get(tier, 'on your list')})")
         if hits:
             why.append("mentions " + ", ".join(hits[:4]))
         if nudge:
             why.append("similar to jobs you " + ("saved" if nudge > 0 else "hid"))
+        if cdown:
+            why.append("Claude rated similar jobs low")
+        if lift >= 3:
+            why.append("worded like jobs Claude rated highly")
+        elif lift <= -3:
+            why.append("worded like jobs Claude rated low")
         job["rel"], job["rel_why"] = rel, "; ".join(why) if why else "Nothing on your list matches this title"
+        # for the exploration share of a rating run (ai_score.pick_haiku): signals the title can't show
+        words = [self.cterms.get("title:" + t, 0.0) for t in set(claude_core(job.get("title") or ""))]
+        job["rel_x"] = round(45 * (job.get("company") in self.marked_cos) + 35 * min(1.0, max(words, default=0) / CL_TEXT_SCALE)
+                             + 20 * max(0.0, lean))
         return rel
 
 
@@ -1244,6 +1489,17 @@ SRC_WORDS = {"you": "added by you", "profile": "from your profile", "claude": "s
              "answers": "from your answers"}
 
 
+def _shown_words(fc, sign, n=15):
+    """The strongest learned words one way (sign 1: Claude rates postings with them higher than usual; -1 lower), as
+    plain words (a title word and the same posting word show once)."""
+    out = []
+    for f, v in sorted((fc.get("terms") or {}).items(), key=lambda x: -x[1] * sign):
+        w = f.replace("title:", "")
+        if v * sign > 0 and w not in out:
+            out.append(w)
+    return out[:n]
+
+
 def view(pid=None):
     """What the profile page and /setup show."""
     pid = pid or people.current()
@@ -1255,6 +1511,7 @@ def view(pid=None):
         if o:
             occs.append({"code": x["code"], "t": o["t"], "tier": x.get("tier"), "names": len(o["a"]), "examples": o["a"][:6]})
     lr = learned(pid)
+    fc = sheet.get("from_claude") if isinstance(sheet.get("from_claude"), dict) else {}
     ups = list(dict.fromkeys(v["t"] for v in lr.values() if v.get("d") == "up"))
     downs = list(dict.fromkeys(v["t"] for v in lr.values() if v.get("d") == "down"))
     import claude_cli
@@ -1268,5 +1525,11 @@ def view(pid=None):
             "skills": [{"t": x["t"], "src": x.get("src", "")} for x in sheet.get("skills") or []],
             "field": sheet.get("field") or "", "empty": is_empty(sheet),
             "learned": {"up": ups[-12:], "down": downs[-12:], "n_up": len(ups), "n_down": len(downs)},
+            # learned from Claude's Match ratings (each removable: POST /api/lookfor {"op": {"remove": "learned", "text": t}})
+            "from_claude": {"up": [{"t": x["t"], "n": x.get("n"), "hi": x.get("hi")} for x in fc.get("up") or []],
+                            "down": [{"t": x["t"], "n": x.get("n"), "avg": x.get("avg")} for x in fc.get("down") or []],
+                            "words_up": _shown_words(fc, 1), "words_down": _shown_words(fc, -1),
+                            "rated": fc.get("n") or 0, "at": fc.get("at") or "",
+                            "removed": list((sheet.get("removed") or {}).get("learned") or [])},
             "claude_ready": ready, "can_suggest": ready and bool(sheet.get("recent")),
             "onet": bool(onet()["occ"]), "src_words": SRC_WORDS}

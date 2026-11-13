@@ -586,5 +586,113 @@ fake = [{"title": "Certified Registered Nurse Anesthetist (CRNA)", "tracks": ["c
 jobfinder.mark_off_list(fake, lookfor.scorer(rn), {})
 check("a job that is also there for the Target tab stays, for that tab only", fake[0]["tracks"] == ["ai"] and fake[0]["off_list"])
 
+# ------------------------------------------------------------------ 12. learning from Claude's own Match ratings
+pid = people.add("Office Learner")      # (the data folder changed in section 10: a profile of its own)
+people.set_current(pid)
+resume.save_manual({"name": "Office Learner", "current_title": "Office Manager", "skills": ["scheduling", "QuickBooks"], "experience": []})
+lookfor.build(pid)
+fpA = ai_score.fingerprints()
+keysA = pivot.cache_keys(fpA, people.settings_strict(missing_ok=True), people.read_saved_strict())
+POST = "Coordinate patient intake, insurance verification and the front desk at a busy medical clinic."
+def rj(i, title, m, text=POST):
+    return {"id": f"C::{i}", "title": title, "ai_fit": m, "desc": text, "company": "Clinic Co"}
+board = [rj(1, "Patient Services Coordinator", 82), rj(2, "Senior Patient Services Coordinator - Westside", 76),
+         rj(3, "Patient Services Coordinator (Part-time)", 55), rj(4, "Practice Administrator", 88),        # one high rating: not enough
+         rj(5, "Front Office Manager", 20, "Retail store front."), rj(6, "Front Office Manager - Mall", 25, "Retail store front."),
+         rj(7, "Front Office Manager", 18, "Retail store front."), rj(8, "Office Manager", 92), rj(9, "Office Manager", 74)]
+board += [rj(100 + i, f"Warehouse Associate {i}", 10, "Lift boxes, forklift, shipping dock, pallets.") for i in range(55)]
+board += [rj(200 + i, f"Stock Clerk {i}", 15, "Stock shelves and run the register at a retail store.") for i in range(50)]
+def rel_of(title, text=""):
+    j = {"title": title, "desc": text, "company": "Elsewhere"}
+    lookfor.scorer(pid).score(j)
+    return j
+before = {t: rel_of(t, POST)["rel"] for t in ("Patient Services Coordinator", "Practice Administrator", "Front Office Manager", "Office Manager")}
+before_fom = rel_of("Front Office Manager")["rel"]
+l1 = lookfor.learn_from_claude(pid, board)
+l2 = lookfor.learn_from_claude(pid, board)
+check("learning from the ratings on the board saves once, then finds nothing new", l1 is True and l2 is False, str((l1, l2, lookfor.load(pid).get("from_claude"))))
+fc = lookfor.load(pid)["from_claude"]
+up = {x["t"]: x for x in fc["up"]}
+check("a title Claude rated 70+ on two jobs that the sheet doesn't cover is learned (its readable core, no level or site)",
+      list(up) == ["Patient Services Coordinator"] and up["Patient Services Coordinator"]["hi"] == 2, str(fc["up"]))
+check("...one high rating is not enough, and the person's own title is never 'learned'", "Practice Administrator" not in up and "Office Manager" not in up)
+check("a title Claude rated low on three jobs is noted (down)", [x["t"] for x in fc["down"]] == ["Front Office Manager"], str(fc["down"]))
+psc = rel_of("Patient Services Coordinator", POST)
+own = rel_of("Office Manager", POST)
+cap = min(lookfor.CL_CAP, lookfor.Scorer(lookfor.load(pid), {}).learn_ceiling)
+check("a learned title lifts its jobs, says so in plain words, and stays within its bounds",
+      psc["rel"] > before["Patient Services Coordinator"] and "Claude rated similar jobs highly" in psc["rel_why"]
+      and psc["rel"] <= cap + lookfor.NUDGE_MAX_UP and lookfor.CL_CAP < 72, str((before, psc)))
+check("...and never outranks the person's own title", own["rel"] > psc["rel"] and own["rel"] >= before["Office Manager"], str((own, psc)))
+check("...it matches the title with a level or a site too", rel_of("Patient Services Coordinator II - Downtown", POST)["rel"] > before["Patient Services Coordinator"])
+fom = rel_of("Front Office Manager")
+check("a title Claude kept rating low goes down a bounded amount, and says why",
+      before_fom - lookfor.CL_DOWN <= fom["rel"] < before_fom and "Claude rated similar jobs low" in fom["rel_why"], str((before_fom, fom)))
+r_plain = rel_of("Receptionist Northside Clinic")
+lookfor.note_mark(pid, "M::1", "saved", "Receptionist Northside Clinic")
+r_both = rel_of("Receptionist Northside Clinic", POST)
+lookfor.edit(pid, {"reset": "learning"})
+check("a saved job's nudge and the posting-words lift together stay within NUDGE_MAX_UP, and both are explained",
+      r_plain["rel"] < r_both["rel"] <= r_plain["rel"] + lookfor.NUDGE_MAX_UP < r_plain["rel"] + lookfor.NUDGE_UP + lookfor.CL_TEXT
+      and "saved" in r_both["rel_why"] and "Claude rated" in r_both["rel_why"], str((r_plain, r_both)))
+sc = lookfor.scorer(pid)
+fake = [{"title": "Patient Services Coordinator", "tracks": ["current"]}]
+check("a learned title only re-orders: it does not put a job on the person's list (title filter)",
+      sc.title_score("Patient Services Coordinator")[1] == "learned" and not sc.title_score("Patient Services Coordinator")[6]
+      and jobfinder.mark_off_list(fake, sc, {}) == 1)
+check("words of the postings Claude rated higher than usual weigh up, lower than usual down",
+      all(fc["terms"].get(w, 0) > 0 for w in ("patient", "intake", "clinic")) and fc["terms"].get("forklift", 0) < 0, str(fc["terms"]))
+a, b = rel_of("Receptionist", POST), rel_of("Receptionist", "Lift boxes, forklift, shipping dock, pallets.")
+check("...a posting worded like the highly rated ones goes up, one like the low ones down, both bounded and explained",
+      0 < a["rel"] - b["rel"] <= 2 * lookfor.CL_TEXT and "worded like jobs Claude rated highly" in a["rel_why"], str((a, b)))
+check("...with fewer than CL_MIN_RATED ratings no words are learned",
+      lookfor.learn_from_ratings([(j["title"], j["ai_fit"], j["desc"]) for j in board[:lookfor.CL_MIN_RATED - 1]], lookfor.load(pid))["terms"] == {})
+v = lookfor.view(pid)["from_claude"]
+check("the profile page payload lists what was learned (titles up and down, words each way)",
+      [x["t"] for x in v["up"]] == ["Patient Services Coordinator"] and [x["t"] for x in v["down"]] == ["Front Office Manager"]
+      and "patient" in v["words_up"] and "forklift" in v["words_down"] and v["rated"] == len(board), str(v))
+lookfor.edit(pid, {"remove": "learned", "text": "Patients"})
+check("removing a learned word takes it off (plural or not) and keeps it off", "patient" not in lookfor.load(pid)["from_claude"]["terms"]
+      and lookfor.learn_from_claude(pid, board) is not None and "patient" not in lookfor.load(pid)["from_claude"]["terms"])
+lookfor.edit(pid, {"remove": "learned", "text": "Patient Services Coordinator"})
+lookfor.learn_from_claude(pid, board)
+check("removing a learned title takes it off and it is not learned again", not lookfor.load(pid)["from_claude"]["up"]
+      and rel_of("Patient Services Coordinator", POST)["rel"] < psc["rel"] and "patient services coordinator" in lookfor.load(pid)["removed"]["learned"])
+lookfor.build(pid)
+check("a sheet rebuild keeps what was learned and what was removed", lookfor.load(pid)["from_claude"].get("down")
+      and "patient services coordinator" in lookfor.load(pid)["removed"]["learned"])
+lookfor.edit(pid, {"reset": "claude"})
+check("'reset' forgets the removals and what was learned", lookfor.load(pid)["from_claude"] == {} and lookfor.load(pid)["removed"]["learned"] == []
+      and lookfor.learn_from_claude(pid, board) and lookfor.load(pid)["from_claude"]["up"])
+fpB = ai_score.fingerprints()
+keysB = pivot.cache_keys(fpB, people.settings_strict(missing_ok=True), people.read_saved_strict())
+check("learning from the ratings changes no rating fingerprint or cache key",
+      all(fpA[k] == fpB[k] for k in ("phash", "fp", "hl", "pfp", "tfp")) and keysA == keysB, str((fpA["phash"], fpB["phash"])))
+gen = lookfor.learn_from_ratings([("Manager", 80, ""), ("Manager", 75, ""), ("Technical", 90, ""), ("Technical", 88, ""),
+                                  ("Manager, Patient Access", 85, ""), ("Patient Access Manager - Eastside", 78, "")], lookfor.load(pid))
+check("a plain word that names hundreds of jobs (or none) is never learned as a title; a turned-round title gets its readable name",
+      [x["t"] for x in gen["up"]] == ["Patient Access Manager"], str(gen["up"]))
+few = [rj(1, "Patient Services Coordinator", 82)]
+check("with almost no ratings nothing is learned", lookfor.learn_from_ratings([(j["title"], j["ai_fit"], j["desc"]) for j in few], lookfor.load(pid))["up"] == [])
+
+# ------------------------------------------------------------------ 13. the exploration share of a rating run
+cands = [{"id": f"E::{i:03}", "rel": 100 - i, "appeal": 50, "rel_x": 0} for i in range(100)]
+for i in (80, 90, 95):
+    cands[i]["rel_x"] = 60
+plain = [j["id"] for j in sorted(cands, key=ai_score.pick_order)[:50]]
+got = [j["id"] for j in ai_score.pick_haiku(cands, 50, 0.10)]
+check("exploration: the run keeps its size, 90% by Relevance, the rest to strong other signals below the cut",
+      len(got) == 50 and got[:45] == plain[:45] and {"E::080", "E::090", "E::095"} <= set(got) and len(set(got)) == 50, str(got[40:]))
+check("...with nothing to explore, or room for every job, it is plain Relevance order",
+      [j["id"] for j in ai_score.pick_haiku([dict(c, rel_x=0) for c in cands], 50, 0.10)] == plain
+      and len(ai_score.pick_haiku(cands[:40], 50, 0.10)) == 40 and [j["id"] for j in ai_score.pick_haiku(cands, 50, 0.0)] == plain)
+check("...a small share (inside RUN_LIMITS: it replaces picks, never adds any)", 0 < ai_score.EXPLORE_SHARE <= 0.15
+      and len(ai_score.pick_haiku(cands, ai_score.RUN_LIMITS["haiku"], 0.5)) <= ai_score.RUN_LIMITS["haiku"])
+j = {"title": "Receptionist", "desc": POST, "company": "Clinic Co", "id": "X::1"}
+s2 = lookfor.Scorer(lookfor.load(pid), {"C::1": {"d": "up", "t": "Patient Services Coordinator"}}).fit([dict(j, id="C::1")])
+s2.score(j)
+check("...the employer of a job the person saved counts as a signal (rel_x), and rel_x never reaches the board file",
+      j["rel_x"] >= 45 and "rel_x" in jobfinder.BOARD_HIDDEN and "rel_x" in catalog.PERSON_KEYS, str(j))
+
 print("\n" + ("ALL OK" if not fails else f"{fails} FAILED"))
 sys.exit(1 if fails else 0)

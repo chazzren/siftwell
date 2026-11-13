@@ -1241,7 +1241,7 @@ _register()
 # ---------------------------------------------------------------- routes
 OFFLINE_MSG = ("Siftwell couldn’t reach its employer directory, so nothing was added. Check your internet connection and "
                "press Try the directory again.")
-NO_PLACE_MSG = "Add your home ZIP (Filters, then My search) so Siftwell knows where to look."
+NO_PLACE_MSG = "Add your home ZIP on My profile, under Job search, so Siftwell knows where to look."
 
 
 def handle_get(h, path, pid):
@@ -1339,21 +1339,34 @@ def handle_post(h, path, body, pid, server):
     return True
 
 
-# ---------------------------------------------------------------- Settings -> Employer directory
+# ---------------------------------------------------------------- Employers -> Add employers -> From the directory near me
+# (catalog_page.py shows ADD_HTML + ADD_SCRIPT); Settings -> Advanced -> Employer directory keeps only where the directory
+# comes from and Build my own directory (SOURCE_HTML + SOURCE_SCRIPT, settings_page.py).
 CAT = ("directory", "Employer directory", '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01"/><path d="M15 10h.01"/>')
 
-PANE_HTML = """<section class="sgsec"><h3 class="sgtitle">Employers near you</h3><div class="sgroup">
-<div class="srow stack"><div class="slab"><span>Siftwell employer directory</span><small id="dirState" role="status" aria-live="polite">Checking…</small></div>
+ADD_HTML = """<div class="srow stack" id="dirBox"><div class="slab"><span>From Siftwell’s employer directory</span><small id="dirState" role="status" aria-live="polite">Checking…</small></div>
 <div id="dirArea" hidden><div class="bk-btnrow" style="align-items:flex-end">
 <label class="note" style="display:flex;flex-direction:column;gap:3px">Look for employers near<input type="text" id="dirZip" placeholder="ZIP code or City, ST" autocomplete="postal-code" style="min-width:0;width:13em;max-width:100%"></label>
 <label class="note" style="display:flex;flex-direction:column;gap:3px">Within<select id="dirRadius"><option value="10">10 miles</option><option value="25">25 miles</option><option value="35">35 miles</option><option value="50">50 miles</option><option value="75">75 miles</option></select></label>
 <button class="btn" type="button" id="dirAreaSave">Use this area</button></div>
-<small class="note" style="display:block;margin-top:6px">This only chooses which employers are added. Which jobs count as near you stays exactly as it is; to change that, set your home ZIP on the board (Filters, then My search).</small></div>
+<small class="note" style="display:block;margin-top:6px">This only chooses which employers are added. Which jobs count as near you stays exactly as it is; to change that, set your home ZIP on <a href="/profile#search">My profile, under Job search</a>.</small></div>
 <div id="dirPlan" class="note" style="display:none"></div>
-<div class="bk-btnrow"><button class="btn primary" type="button" id="dirApply" style="white-space:normal;max-width:100%;height:auto;text-align:left" disabled>Add employers near me</button>
+<div class="bk-btnrow"><button class="btn primary" type="button" id="dirApply" style="white-space:normal;max-width:100%;height:auto;text-align:left" disabled>Add employers near you</button>
 <button class="btn" type="button" id="dirRetry" hidden>Try the directory again</button>
-<button class="btn" type="button" id="dirUndo" hidden>Remove the employers this added</button></div>
-<span class="note" id="dirMsg" role="status" aria-live="polite"></span></div>
+<button class="btn danger" type="button" id="dirUndo" hidden>Remove the employers this added</button></div>
+<span class="note" id="dirMsg" role="status" aria-live="polite"></span></div>"""
+
+ADD_FOOT = """<p class="sfoot">The directory is a free list of employers whose job pages Siftwell can read, with the places they hire, rebuilt every week
+from public sources (web crawl indexes, certificate logs and public employer lists). It needs no key, no account and no Claude.
+Siftwell downloads only whole-state files for the states around your home (and a remote-jobs file if you only want remote work), so
+your exact location never leaves this computer. Once a week it checks for newly listed employers near you and adds them (not if you chose
+to add only the ones with the most openings); employers you stop watching stay off. <span id="dirSources"></span>
+Where the directory comes from is under <a href="/settings#directory">Settings, Advanced, Employer directory</a>.</p>"""
+
+SOURCE_HTML = """<section class="sgsec"><div class="sgroup">
+<div class="srow"><div class="slab"><span>Add employers near you</span><small>Choosing how many employers to add (and taking them back) is on the Employers page.</small></div>
+<div class="sctl"><a class="btn sm" href="/catalog#add">Add employers near you →</a></div></div></div></section>
+<section class="sgsec"><h3 class="sgtitle">Where the directory comes from</h3><div class="sgroup">
 <div class="srow stack"><div class="slab"><label for="ldSource">Where my directory comes from</label><small id="ldOrigin" role="status" aria-live="polite">Checking…</small></div>
 <div class="bk-btnrow"><select id="ldSource" style="max-width:100%">
 <option value="shared">Siftwell’s shared directory (recommended)</option>
@@ -1364,26 +1377,19 @@ PANE_HTML = """<section class="sgsec"><h3 class="sgtitle">Employers near you</h3
 <div id="ldProg" hidden><div id="ldLine" role="status" aria-live="polite" style="font-weight:500"></div>
 <div role="progressbar" aria-label="Directory build progress" aria-valuemin="0" aria-valuemax="100" id="ldBarBox" style="height:6px;background:var(--bar);border-radius:3px;overflow:hidden;margin:6px 0"><i id="ldBar" style="display:block;height:100%;background:var(--bar-fill);width:0;transition:width .4s"></i></div>
 <small class="note" id="ldEta" style="display:block"></small></div>
-<label class="note" id="ldAddLab" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="ldAdd" checked style="width:auto;height:auto;flex:none;margin-top:3px"><span>Add the employers it finds near me to my list as it goes, and check their openings (you can take them all back afterwards)</span></label>
+<label class="note" id="ldAddLab" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="ldAdd" checked style="width:auto;height:auto;flex:none;margin-top:3px"><span>Add the employers it finds near you to your list as it goes, and check their openings (you can take them all back afterwards on the Employers page)</span></label>
 <div class="bk-btnrow"><button class="btn" type="button" id="ldStart" style="white-space:normal;max-width:100%;height:auto;min-height:var(--h);text-align:left" disabled>Build my own directory</button>
 <button class="btn" type="button" id="ldPause" hidden>Pause</button></div>
 <label class="note" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="ldDiscover" style="width:auto;height:auto;flex:none;margin-top:3px"><span><b style="font-weight:500">Also look for job sites that aren’t on the list yet</b> (optional). Siftwell then searches public web records (the Common Crawl index) from this computer during a build, slowly and at most once every 30 days, because many copies of Siftwell asking those free services at once would be unfair to them.</span></label>
 <small class="note" id="ldData" style="display:block;margin-top:8px"></small>
-<span class="note" id="ldMsg" role="status" aria-live="polite"></span></div>
-<div class="srow"><div class="slab"><span>Find more with Claude</span><small>Claude can also search the web for employers the directory doesn't have. It uses your Claude plan, and only runs when you start it.</small></div>
-<div class="sctl"><a class="btn sm" href="/catalog#find">Find employers</a></div></div></div>
-<p class="sfoot">The directory is a free list of employers whose job pages Siftwell can read, with the places they hire, rebuilt every week
-from public sources (web crawl indexes, certificate logs and public employer lists). It needs no key, no account and no Claude.
-Siftwell downloads only whole-state files for the states around your home (and a remote-jobs file if you only want remote work), so
-your exact location never leaves this computer. Once a week it checks for newly listed employers near you and adds them (not if you chose
-to add only the ones with the most openings); employers you stop watching stay off. <span id="dirSources"></span></p>
+<span class="note" id="ldMsg" role="status" aria-live="polite"></span></div></div>
 <p class="sfoot">There are two ways to get the directory, and neither uses Claude. <b>Shared</b>: Siftwell downloads one file per state from the
 Siftwell project. <b>Built on this computer</b>: Siftwell starts from the list of job sites that comes with the app and visits employers’
 public job pages itself, politely (it follows each site’s robots.txt and waits between requests), the ones last seen hiring near you
 first; with this choice alone it never contacts the shared directory. It keeps working even if the Siftwell project goes away, but takes
 hours instead of seconds, and afterwards about 40 minutes a week in the background to stay up to date.</p></section>"""
 
-PANE_JS = r"""(function(){
+ADD_JS = r"""(function(){
 const $ = id => document.getElementById(id);
 if (!$("dirApply")) return;
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -1391,6 +1397,9 @@ const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 const day = s => { try { return new Date(s).toLocaleDateString(); } catch(e) { return s; } };
 const n = x => Number(x || 0).toLocaleString();
 const post = (url, body) => fetch(url, {method: "POST", headers: H, body: JSON.stringify(body || {})}).then(r => r.json().then(d => ({ok: r.ok, d})));
+const ask = o => window.appConfirm(o);   // the app's one dialog (report.CONFIRM_JS: in the header of Settings and Employers)
+// The default choice: all of them when there are fewer than about 150, else the 100 with the most openings near the person.
+function defaultOption(o){ const all = o[o.length - 1]; return all.employers < 150 ? all : (o.find(x => x.limit === 100) || o[0]); }
 let PV = null;
 function limit(){ const s = $("dirOpt"); return s && s.value !== "all" ? Number(s.value) : null; }
 function plan(){
@@ -1398,14 +1407,14 @@ function plan(){
   const box = $("dirPlan"), pv = PV;
   if (!pv || !pv.available) {
     box.style.display = pv && (pv.reason === "offline" || pv.reason === "error") ? "block" : "none";
-    box.innerHTML = "<b>Siftwell can’t reach its employer directory right now.</b> Check your internet connection, then press Try the directory again. Or build the directory on this computer instead (Build my own directory, below).";
+    box.innerHTML = "<b>Siftwell can’t reach its employer directory right now.</b> Check your internet connection, then press Try the directory again. Or build the directory on this computer instead (<a href=\"/settings#directory\">Settings, Advanced, Employer directory</a>).";
     $("dirApply").disabled = true; $("dirRetry").hidden = !(pv && (pv.reason === "offline" || pv.reason === "error"));
     return;
   }
   $("dirRetry").hidden = !pv.offline_start;
-  if (!pv.new) { box.style.display = "block"; box.textContent = "There are no new employers to add right now. Employers you took off your list stay off."; $("dirApply").disabled = true; $("dirApply").textContent = "Add employers near me"; return; }
+  if (!pv.new) { box.style.display = "block"; box.textContent = "There are no new employers to add right now. Employers you took off your list stay off."; $("dirApply").disabled = true; $("dirApply").textContent = "Add employers near you"; return; }
   const o = pv.options, all = o[o.length - 1];
-  const def = all.employers <= 500 ? all : (o.filter(x => x.limit && x.limit <= 500).pop() || o[0]);
+  const def = defaultOption(o);   // a smaller start: all of them when there are fewer than about 150, else the top 100
   const keep = $("dirOpt") ? $("dirOpt").value : String(def.limit || "all");
   box.style.display = "block";
   box.innerHTML = `<b>${n(pv.new)} employers</b> ${pv.remote_only ? "that hire remotely" : `with openings within ${pv.radius} miles of ${esc(pv.label)}`} can be added.` +
@@ -1426,7 +1435,7 @@ function load(){
   return fetch("/api/directory").then(r => r.json()).then(d => {
     let t = d.possible ? (d.remote_only ? "Remote-friendly employers anywhere in the US." : `Employers with openings within ${d.radius} miles of ${esc(d.label)}.`)
                        : "Siftwell needs to know where to look.";
-    if (d.offline_start) t = `<b>Siftwell couldn’t reach its employer directory when it set up your search</b>, so it started with a starter list of large US employers that comes with the app${d.starters_pending ? ` (${n(d.starters_pending)} still to be checked; the ones with no jobs near you are taken off)` : ""}. Press Try the directory again to get the employers near you, or build the directory on this computer (Build my own directory, below).`;
+    if (d.offline_start) t = `<b>Siftwell couldn’t reach its employer directory when it set up your search</b>, so it started with a starter list of large US employers that comes with the app${d.starters_pending ? ` (${n(d.starters_pending)} still to be checked; the ones with no jobs near you are taken off)` : ""}. Press Try the directory again to get the employers near you, or build the directory on this computer (<a href="/settings#directory">Settings, Advanced, Employer directory</a>).`;
     else if (d.applied) t += ` ${n(d.near_list)} employers on your list were found this way` + (d.last && d.last.employers && d.last.employers < d.near_list ? ` (${n(d.last.employers)} of them in the last addition, ${day(d.last.at)}).` : `; last added ${day(d.applied)}.`);
     if (d.built && !d.offline_start) t += ` Directory updated ${day(d.built)}.`;
     $("dirState").innerHTML = t;
@@ -1447,6 +1456,7 @@ function added(d){
                               : "No new employers near you in the directory right now. Employers you took off your list stay off.";
   load();
 }
+window.dirReload = load;   // (the Employers page reloads this after other ways of adding)
 $("dirApply").addEventListener("click", () => {
   $("dirApply").disabled = true; $("dirMsg").textContent = "Adding…";
   post("/api/directory/apply", {fetch: true, limit: limit()}).then(({ok, d}) => {
@@ -1462,8 +1472,7 @@ $("dirRetry").addEventListener("click", () => {
   });
 });
 $("dirUndo").addEventListener("click", async () => {
-  const ask = window.appConfirm || (m => Promise.resolve(confirm(m)));
-  if (!await ask($("dirUndo").textContent + "?\n\nThey leave your list (their jobs leave your board). You can add them again later.", "Remove them")) return;
+  if (!await ask({title: $("dirUndo").textContent + "?", text: "They leave your list (their jobs leave your board). You can add them again later.", ok: "Remove them", danger: true})) return;
   $("dirUndo").disabled = true; $("dirMsg").textContent = "Removing…";
   post("/api/directory/undo").then(({ok, d}) => {
     $("dirUndo").disabled = false;
@@ -1479,6 +1488,20 @@ $("dirAreaSave").addEventListener("click", () => {
     if (ok) load();
   }).catch(() => { $("dirAreaSave").disabled = false; $("dirMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
 });
+// (on a page where this part is hidden at first, the page calls window.dirReload() when it is shown)
+if ($("dirBox").offsetParent !== null) load();
+})();"""
+ADD_SCRIPT = "<script>" + ADD_JS + "</script>"
+
+SOURCE_JS = r"""(function(){
+const $ = id => document.getElementById(id);
+if (!$("ldSource")) return;
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
+const day = s => { try { return new Date(s).toLocaleDateString(); } catch(e) { return s; } };
+const n = x => Number(x || 0).toLocaleString();
+const post = (url, body) => fetch(url, {method: "POST", headers: H, body: JSON.stringify(body || {})}).then(r => r.json().then(d => ({ok: r.ok, d})));
+const ask = o => window.appConfirm(o);   // the app's one dialog (report.CONFIRM_JS: in the header of Settings and Employers)
 // ---- Where my directory comes from + Build my own directory (localdir.py). One status call drives both rows.
 let LD = null, ldTimer = null;
 const SRC_NOTE = {
@@ -1506,7 +1529,7 @@ function ldDraw(d){
     const pct = d.total ? Math.round(100 * d.done / d.total) : 1;
     $("ldLine").textContent = d.line;
     $("ldBar").style.width = pct + "%"; $("ldBarBox").setAttribute("aria-valuenow", pct);
-    $("ldEta").textContent = !d.total ? "" : (d.near_eta_text ? `Employers near you: ${n(d.near_done)} of ${n(d.near_total)} job sites done, ${d.near_eta_text} to go. ` : `The job sites last seen hiring near you are done. `) + `Everything: ${d.eta_text || "a while"} to go.` + ((d.resting || []).length ? ` A job system asked Siftwell to slow down, so it is leaving it alone for a few minutes (${esc(d.resting.join(", "))}).` : "") + (d.adding ? ` Employers found near you are being added to your list (${n(d.added)} so far).` : " Nothing is added to your list by itself; use Add employers near me above.");
+    $("ldEta").textContent = !d.total ? "" : (d.near_eta_text ? `Employers near you: ${n(d.near_done)} of ${n(d.near_total)} job sites done, ${d.near_eta_text} to go. ` : `The job sites last seen hiring near you are done. `) + `Everything: ${d.eta_text || "a while"} to go.` + ((d.resting || []).length ? ` A job system asked Siftwell to slow down, so it is leaving it alone for a few minutes (${esc(d.resting.join(", "))}).` : "") + (d.adding ? ` Employers found near you are being added to your list (${n(d.added)} so far).` : " Nothing is added to your list by itself; add them on the Employers page, under Add employers.");
     $("ldWhat").textContent = "Siftwell is reading employers’ public job pages on this computer. You can keep using Siftwell, close this page, or pause; it carries on where it stopped. It uses no Claude.";
   } else if (d.running) {
     $("ldWhat").textContent = "Siftwell is doing its weekly check of your directory in the background (about 40 minutes at most). It uses no Claude.";
@@ -1515,7 +1538,7 @@ function ldDraw(d){
   } else if (d.local_complete) {
     $("ldWhat").textContent = `Your own directory is built (${n(d.local_employers)} employers with openings, across the US${d.pass_minutes ? `; it took ${n(Math.round(d.pass_minutes))} minutes` : ""}). Siftwell keeps it up to date once a week in the background${d.weekly_at ? `; last checked ${day(d.weekly_at)}` : ""}.`;
   } else {
-    $("ldWhat").textContent = d.possible ? (d.offer || "") : "Siftwell needs to know where to look first: add your home ZIP on the board (Filters, then My search).";
+    $("ldWhat").textContent = d.possible ? (d.offer || "") : "Siftwell needs to know where to look first: add your home ZIP on My profile, under Job search.";
   }
   const du = d.data || {};
   $("ldData").textContent = (du.first_mb ? `Internet data: a first build uses about ${n(du.first_mb)} MB (${du.measured ? "measured on this computer" : "measured when this version was made"}: about ${du.mb_per_1000} MB for every 1,000 job sites; Siftwell reads only the lists of openings, compressed), the weekly check a small part of that. ` : "")
@@ -1527,24 +1550,24 @@ function ldDraw(d){
   ldTimer = setTimeout(ldLoad, d.running ? 3000 : 30000);
 }
 function ldLoad(){ return fetch("/api/localdir").then(r => r.json()).then(ldDraw).catch(() => { clearTimeout(ldTimer); ldTimer = setTimeout(ldLoad, 10000); }); }
-$("ldSource").addEventListener("change", () => {
+$("ldSource").addEventListener("change", async () => {
   const v = $("ldSource").value;
-  if (v === "local" && LD && !LD.local_built && !LD.running && !confirm("Use only a directory built on this computer?\n\nSiftwell will stop downloading the shared directory. Until your own is built (press Build my own directory), new employers near you can’t be added.")) { $("ldSource").value = LD.source; return; }
+  if (v === "local" && LD && !LD.local_built && !LD.running && !await ask({title: "Use only a directory built on this computer?", text: "Siftwell will stop downloading the shared directory. Until your own is built (press Build my own directory), new employers near you can’t be added.", ok: "Use my own"})) { $("ldSource").value = LD.source; return; }
   $("ldMsg").textContent = "Saving…";
-  post("/api/localdir/prefs", {source: v}).then(({ok, d}) => { $("ldMsg").textContent = ok ? "Saved." : (d.error || "That didn’t work."); if (ok) { ldDraw(d); load(); } })
+  post("/api/localdir/prefs", {source: v}).then(({ok, d}) => { $("ldMsg").textContent = ok ? "Saved." : (d.error || "That didn’t work."); if (ok) { ldDraw(d); if (window.dirReload) window.dirReload(); } })
     .catch(() => { $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
 });
 $("ldDiscover").addEventListener("change", () => {
   post("/api/localdir/prefs", {discover: $("ldDiscover").checked}).then(({ok, d}) => { $("ldMsg").textContent = ok ? ($("ldDiscover").checked ? "Saved. It runs with the next build." : "Saved.") : (d.error || "That didn’t work."); })
     .catch(() => { $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
 });
-$("ldStart").addEventListener("click", () => {
+$("ldStart").addEventListener("click", async () => {
   const again = LD && LD.local_complete && !LD.unfinished;
-  if (again && !confirm("Build your directory again from the start?\n\nSiftwell reads every job site again (" + ((LD.estimate || {}).all_text || "a few hours") + "). The weekly check already keeps it up to date.")) return;
+  if (again && !await ask({title: "Build your directory again from the start?", text: "Siftwell reads every job site again (" + ((LD.estimate || {}).all_text || "a few hours") + "). The weekly check already keeps it up to date.", ok: "Build it again"})) return;
   const go = meteredOk => {
     $("ldStart").disabled = true; $("ldMsg").textContent = "Starting…";
     post("/api/localdir/start", {add: $("ldAdd").checked ? "all" : "none", fresh: !!again, metered_ok: !!meteredOk}).then(({ok, d}) => {
-      if (!ok && d.metered && !meteredOk) { $("ldStart").disabled = false; $("ldMsg").textContent = ""; if (confirm(d.error + "\n\nBuild anyway?")) go(true); return; }
+      if (!ok && d.metered && !meteredOk) { $("ldStart").disabled = false; $("ldMsg").textContent = ""; ask({title: "Build anyway?", text: d.error, ok: "Build anyway"}).then(yes => { if (yes) go(true); }); return; }
       $("ldMsg").textContent = ok ? "" : (d.error || "That didn’t work.");
       if (ok) ldDraw(d); else $("ldStart").disabled = false;
     }).catch(() => { $("ldStart").disabled = false; $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
@@ -1553,9 +1576,9 @@ $("ldStart").addEventListener("click", () => {
 });
 $("ldPause").addEventListener("click", () => {
   $("ldPause").disabled = true; $("ldMsg").textContent = "Pausing…";
-  post("/api/localdir/pause").then(() => { setTimeout(() => { $("ldPause").disabled = false; $("ldMsg").textContent = "Paused. Nothing it read is lost."; ldLoad(); load(); }, 2500); })
+  post("/api/localdir/pause").then(() => { setTimeout(() => { $("ldPause").disabled = false; $("ldMsg").textContent = "Paused. Nothing it read is lost."; ldLoad(); if (window.dirReload) window.dirReload(); }, 2500); })
     .catch(() => { $("ldPause").disabled = false; $("ldMsg").textContent = "Couldn’t reach Siftwell. Is it still running?"; });
 });
-load(); ldLoad();
+ldLoad();
 })();"""
-PANE_SCRIPT = "<script>" + PANE_JS + "</script>"
+SOURCE_SCRIPT = "<script>" + SOURCE_JS + "</script>"
