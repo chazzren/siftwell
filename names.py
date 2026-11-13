@@ -390,7 +390,7 @@ def complete_truncated(n):
     if not m or len(n) < 24 or len(m.group(1).split()) < 2:
         return n
     w = m.group(2).lower()
-    if w in _TRUNC_WORDS or w in _WHOLE_WORDS:
+    if w in _TRUNC_WORDS or w in _WHOLE_WORDS or w + "s" in _TRUNC_WORDS or w + "es" in _TRUNC_WORDS:   # ("Health System")
         return n
     comp = [x for x in _TRUNC_WORDS if x.startswith(w) and len(x) > len(w)]
     if not comp:
