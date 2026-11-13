@@ -18,8 +18,8 @@ def render_setup_html() -> str:
     boot = {"levels": {str(k): v for k, v in setup_flow._levels().items()},
             "radii": setup_flow.RADII, "industries": setup_flow.INDUSTRY_IDEAS, "steps": setup_flow.STEPS}
     boot["claude_ready"] = claude_cli.claude_ready()
-    import report
-    return (PAGE.replace("</body>", report.DOWN_SCRIPT + "</body>").replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
+    import report, settings_page
+    return (PAGE.replace("</body>", report.CONFIRM_SCRIPT + settings_page.ASK_SCRIPT + report.DOWN_SCRIPT + "</body>").replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
             .replace("/*__MANUAL_CSS__*/", manual_profile.CSS + connect_claude.CSS)
             .replace("/*__MANUAL_JS__*/", manual_profile.JS + connect_claude.JS))
 
@@ -72,13 +72,17 @@ button,input,textarea,select{font:inherit;color:inherit}
 .later{font-size:14px;color:var(--muted);text-decoration:none;font-weight:600;padding:6px 8px;border-radius:8px;white-space:nowrap}
 .later:hover{color:var(--accent);background:var(--accent-soft)}
 
-.dots{display:flex;justify-content:center;align-items:center;gap:8px;list-style:none;margin:18px 0 0;padding:0}
+.dots{display:flex;justify-content:center;align-items:center;gap:0;list-style:none;margin:12px 0 0;padding:0;flex-wrap:wrap}
 .dots li{display:block}
+.dothit{display:grid;place-items:center;min-width:32px;height:32px;padding:0 2px;margin:0;border:0;background:none;border-radius:8px}
+button.dothit{cursor:pointer}
 .dot{display:block;width:8px;height:8px;border-radius:4px;background:var(--line);border:0;padding:0;transition:width .3s ease,background .3s ease}
-.dot.done{background:var(--accent);opacity:.45;cursor:pointer}
-.dot.done:hover{opacity:.8}
+.dot.done{background:var(--accent);opacity:.45}
+button.dothit:hover .dot.done{opacity:.8}
 .dot.cur{width:28px;background:var(--accent)}
-.stepof{text-align:center;font-size:12.5px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums}
+.stepof{text-align:center;font-size:12.5px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+details.next{margin-top:22px;border-top:1px solid var(--line);padding-top:12px}
+details.next summary{cursor:pointer;font-weight:600;color:var(--accent);min-height:32px;display:flex;align-items:center}
 
 main{width:100%;max-width:620px;margin:0 auto;padding:clamp(24px,6vh,64px) 16px 32px}
 .stage{animation:in .35s cubic-bezier(.2,.8,.2,1) both}
@@ -339,9 +343,9 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp
 const fmtK = n => n == null || n === "" ? "" : "$" + Math.round(n / 1000) + "k";
 const clone = o => JSON.parse(JSON.stringify(o));
 
-// Steps and how they map onto the ten progress dots (the highlights screen shares the resume dot).
-const DOT = {welcome:0, resume:1, highlights:1, where:2, pay:3, level:4, direction:5, dealbreakers:6, companies:7, questions:8, board:9};
-const DOT_NAMES = ["Welcome", "Resume", "Where", "Pay", "Level", "Direction", "Dealbreakers", "Employers", "Questions", "Start your search"];
+// Steps and how they map onto the nine progress dots (the highlights screen shares the resume dot).
+const DOT = {welcome:0, resume:1, highlights:1, where:2, pay:3, level:4, direction:5, dealbreakers:6, questions:7, board:8};
+const DOT_NAMES = ["Welcome", "Resume", "Where", "Pay", "Level", "Direction", "Dealbreakers", "Questions", "Start your search"];
 const STEPS = BOOT.steps;
 
 const I = {
@@ -427,8 +431,8 @@ function renderDots(){
     const reachable = i !== curDot && i <= DOT[S.step] && cur !== "board" && S.step !== "board";
     const cls = "dot" + (i === curDot ? " cur" : i < Math.max(curDot, DOT[STEPS[furthest]] || 0) ? " done" : "");
     const label = `${n}${i === curDot ? " (current step)" : i < curDot ? " (done)" : ""}`;
-    return `<li>${reachable ? `<button type="button" class="${cls}" data-dot="${i}" aria-label="Go to ${esc(label)}"></button>`
-                            : `<span class="${cls}" role="img" aria-label="${esc(label)}"${i === curDot ? ' aria-current="step"' : ""}></span>`}</li>`;
+    return `<li>${reachable ? `<button type="button" class="dothit" data-dot="${i}" aria-label="Go to ${esc(label)}"><span class="${cls}"></span></button>`
+                            : `<span class="dothit"><span class="${cls}" role="img" aria-label="${esc(label)}"${i === curDot ? ' aria-current="step"' : ""}></span></span>`}</li>`;
   }).join("");
   $("stepof").textContent = `Step ${shown.indexOf(curDot) + 1} of ${shown.length}`;
 }
@@ -552,8 +556,8 @@ SCREENS.welcome = {
   html: () => `
     <div class="hero">${I.wave}</div>
     <h1 class="q" tabindex="-1">${(V.name || "").trim() ? `Welcome, ${esc(V.name.trim())}. Let’s set up your job board.` : "Welcome. Let’s set up your job board."}</h1>
-    <p class="lede">A few quick questions and your board will show the jobs worth your time. It takes about five minutes, and you can stop anytime: we’ll pick up where you left off.</p>
-    <div id="nameAsk"${(V.name || "").trim() ? " hidden" : ""}><label class="field"><span class="flabel">What should we call you?</span>
+    <p class="lede">A few quick questions and your board will show the jobs worth your time. It takes about five minutes, and you can stop anytime: Siftwell picks up where you left off.</p>
+    <div id="nameAsk"${(V.name || "").trim() ? " hidden" : ""}><label class="field"><span class="flabel">What should Siftwell call you?</span>
       <input class="big" id="name" data-field="name"${(V.name || "").trim() ? "" : " data-autofocus"} value="${esc(V.name)}" maxlength="40" autocomplete="given-name" aria-describedby="err-name">
       ${errBox("name")}</label></div>
     ${(V.name || "").trim() ? `<div class="alt" id="nameRow" style="justify-content:flex-start"><button type="button" class="linkbtn" id="nameChange">Use a different name</button></div>` : ""}`,
@@ -572,7 +576,7 @@ SCREENS.resume = {
         <p>Pulling out your experience, education, certifications and skills. This usually takes about a minute. You can keep this page open or come back later.</p></div>`;
     if (r.status !== "none" && !local.replace) return `
       <p class="eyebrow">Your resume</p>
-      <h1 class="q" tabindex="-1">${r.manual ? "We have your profile." : "We already have your resume."}</h1>
+      <h1 class="q" tabindex="-1">${r.manual ? "Your profile is here." : "Your resume is already here."}</h1>
       <p class="lede">${r.manual ? "You filled it in yourself. Use it as is, or change it." : "Use it as is, or upload a newer one."}</p>
       <div class="have"><span class="ico">${I.doc}</span><div><b>${esc((r.file || "Resume").replace(/^\d{8}-\d{6}_/, ""))}</b><small>${r.manual ? "Filled in by you" : "Read and ready"}</small></div></div>
       <div class="alt"><button type="button" class="linkbtn" id="replace">${r.manual ? "Change it" : "Upload a different resume"}</button></div>`;
@@ -585,13 +589,13 @@ SCREENS.resume = {
     if (NOCL() && !local.mode) return `
       <p class="eyebrow">Your resume</p>
       <h1 class="q" tabindex="-1">Add your resume.</h1>
-      <p class="lede">Claude reads your resume to build your profile, so we can match jobs to you and tailor applications later. Connect Claude here first (a couple of minutes), or skip Claude and fill in a short form.</p>
+      <p class="lede">Claude reads your resume to build your profile, so Siftwell can match jobs to you and tailor applications later. Connect Claude here first (a couple of minutes), or skip Claude and fill in a short form.</p>
       <div id="ccRoot"></div>
       <div class="alt"><button type="button" class="linkbtn" id="modeManual">Skip Claude and fill in a short form</button></div>${errBox("_")}`;
     return `
       <p class="eyebrow">Your resume</p>
       <h1 class="q" tabindex="-1">Add your resume.</h1>
-      <p class="lede">It’s how we match jobs to you, guess your level, and tailor applications later. Claude reads it to build your profile; the file is kept with your profile on this computer.</p>
+      <p class="lede">It’s how Siftwell matches jobs to you and tailors applications later. Claude reads it to build your profile; the file is kept with your profile on this computer.</p>
       ${local.mode === "paste" ? `
         <label class="field"><span class="flabel">Paste your resume text</span>
           <textarea class="big" id="paste" data-field="paste" rows="10" data-autofocus placeholder="Paste the full text of your resume here"></textarea>${errBox("paste")}</label>
@@ -696,7 +700,7 @@ SCREENS.resume = {
 };
 
 SCREENS.highlights = {
-  title: "What we read",
+  title: "What Siftwell read",
   html: () => {
     const h = S.highlights || {cards: []};
     const card = (c, i) => {
@@ -711,11 +715,11 @@ SCREENS.highlights = {
     const manual = !!(S.resume && S.resume.manual);  // filled in by hand: there is no file to have "read"
     const first = h.name ? `, ${esc(h.name.split(" ")[0])}` : "";
     const lede = manual
-      ? (h.cards.length ? "Here’s the profile you filled in. This is what we’ll match jobs against." : "You filled in your profile yourself. You can carry on and add more later on My profile.")
-      : (h.cards.length ? "A quick look at what stood out. This is what we’ll match jobs against." : "We couldn’t pull much from that file. You can carry on and fix it later on My profile.");
+      ? (h.cards.length ? "Here’s the profile you filled in. This is what Siftwell matches jobs against." : "You filled in your profile yourself. You can carry on and add more later on My profile.")
+      : (h.cards.length ? "A quick look at what stood out. This is what Siftwell matches jobs against." : "Siftwell couldn’t read much from that file. You can carry on and fix it later on My profile.");
     return `
       <p class="eyebrow">${manual ? "Your profile" : "Your resume"}</p>
-      <h1 class="q" tabindex="-1">${manual ? `Here’s your profile${first}.` : `Here’s what we read${first}.`}</h1>
+      <h1 class="q" tabindex="-1">${manual ? `Here’s your profile${first}.` : `Here’s what Siftwell read${first}.`}</h1>
       <p class="lede">${lede}</p>
       <div class="hgrid">${h.cards.map(card).join("")}</div>
       <p class="fine">Something off? You can edit your profile any time on My profile (the person icon at the top of the board). ${errBox("_")}</p>`;
@@ -733,7 +737,7 @@ SCREENS.where = {
     return `
       <p class="eyebrow">Location</p>
       <h1 class="q" tabindex="-1">Where do you want to work?</h1>
-      <p class="lede">We’ll keep on-site and hybrid jobs within your commute, and remote ones wherever you’re allowed.</p>
+      <p class="lede">Siftwell keeps on-site and hybrid jobs within your commute, and remote ones wherever you’re allowed.</p>
       <div class="choices cols3" role="group" aria-label="Ways of working" data-field="workplaces">
         ${radioCard("wp", "onsite", w.includes("onsite"), "On-site", "", {type: "checkbox", compact: true, icon: I.building})}
         ${radioCard("wp", "hybrid", w.includes("hybrid"), "Hybrid", "", {type: "checkbox", compact: true, icon: I.split})}
@@ -779,31 +783,49 @@ SCREENS.where = {
                    remote_us: $("ru").getAttribute("aria-checked") === "true"}),
 };
 
+// Pay is stored per year everywhere (an hour = 1/2,080 of a year). Typed per year it is in thousands, as before
+// ("60" = $60,000); typed per hour it is dollars ("24.50"), worked out per year here before it is sent.
+const HOURS = 2080;
+const payShow = (v, u) => v == null || v === "" ? "" : u === "hour" ? String(Math.round(v / HOURS * 100) / 100) : String(Math.round(v / 100) / 10);   // ("62.4" = $62,400, so switching units loses nothing)
+const payRead = (s, u) => { s = String(s || "").replace(/[$,\s]/g, ""); if (!s) return ""; const x = Number(s); return !isFinite(x) ? s : u === "hour" ? String(Math.round(x * HOURS)) : s; };
 SCREENS.pay = {
   title: "Pay",
   html: () => {
-    const m = S.market;
+    const m = S.market, u = local.unit || "year", hr = u === "hour";
+    const ph = v => !m ? "—" : hr ? String(Math.round(v / HOURS)) : toK(v);
+    const box = (id, field, v, place, auto) => `<span class="affix" data-field="${field}"><span>$</span><input id="${id}" inputmode="decimal" value="${esc(payShow(v, u))}" placeholder="${place}" aria-describedby="err-${field}"${auto ? " data-autofocus" : ""}><span>${hr ? "/hr" : "k"}</span></span>`;
     return `
       <p class="eyebrow">Pay</p>
       <h1 class="q" tabindex="-1">What are you looking to make?</h1>
-      <p class="lede">Base pay per year, in thousands: type 60 for $60,000. Every box here is optional; leave them blank to see jobs at any pay.</p>
-      ${m ? `<div class="hint">${I.info}<div>Similar roles list a median base of <b>${fmtK(m.median)}</b>, with most between <b>${fmtK(m.p25)}</b> and <b>${fmtK(m.p75)}</b>.<small>From ${esc(m.basis)}.</small></div></div>` : ""}
+      <div class="seg" role="radiogroup" aria-label="Pay per year or per hour" style="margin-bottom:14px;max-width:320px">
+        <label><input type="radio" name="unit" value="year"${hr ? "" : " checked"}><span>Per year</span></label>
+        <label><input type="radio" name="unit" value="hour"${hr ? " checked" : ""}><span>Per hour</span></label></div>
+      <p class="lede">${hr ? "Base pay per hour, in dollars: type 24.50 for $24.50 an hour." : "Base pay per year, in thousands: type 60 for $60,000."} Every box here is optional; leave them blank to see jobs at any pay.</p>
+      ${m ? `<div class="hint">${I.info}<div>Similar roles list a median base of <b>${fmtK(m.median)}</b>, with most between <b>${fmtK(m.p25)}</b> and <b>${fmtK(m.p75)}</b> a year.<small>From ${esc(m.basis)}.</small></div></div>` : ""}
       <label class="field"><span class="flabel">Lowest base you’d accept<span class="opt">Optional</span></span>
-        <span class="fhelp">Jobs that clearly pay less are hidden. Blank means no floor.</span>
-        <span class="affix" data-field="salary_floor"><span>$</span><input id="floor" inputmode="numeric" value="${toK(V.salary_floor)}" placeholder="${m ? toK(m.p25) : "—"}" aria-describedby="err-salary_floor" data-autofocus><span>k</span></span>
+        <span class="fhelp">Jobs that clearly pay less are hidden. Blank means no lowest pay.</span>
+        ${box("floor", "salary_floor", V.salary_floor, ph(m && m.p25), true)}
         ${errBox("salary_floor")}</label>
       <label class="field"><span class="flabel">Target base<span class="opt">Optional</span></span>
         <span class="fhelp">What a great offer looks like.</span>
-        <span class="affix" data-field="salary_target"><span>$</span><input id="target" inputmode="numeric" value="${toK(V.salary_target)}" placeholder="${m ? toK(m.p75) : "—"}" aria-describedby="err-salary_target"><span>k</span></span>
+        ${box("target", "salary_target", V.salary_target, ph(m && m.p75))}
         ${errBox("salary_target")}</label>
       <label class="field"><span class="flabel">Current base<span class="opt">Optional</span></span>
         <span class="fhelp">Only used to show raises on your board. Never shared.</span>
-        <span class="affix" data-field="current_base"><span>$</span><input id="curbase" inputmode="numeric" value="${toK(V.current_base)}" placeholder="—" aria-describedby="err-current_base"><span>k</span></span>
+        ${box("curbase", "current_base", V.current_base, "—")}
         ${errBox("current_base")}</label>
       ${errBox("_")}`;
   },
-  mount(){ ["floor", "target", "curbase"].forEach(id => $(id).addEventListener("input", e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ""); })); },
-  collect: () => ({salary_floor: $("floor").value, salary_target: $("target").value, current_base: $("curbase").value}),
+  mount(){
+    ["floor", "target", "curbase"].forEach(id => $(id).addEventListener("input", e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ""); }));
+    document.querySelectorAll('input[name="unit"]').forEach(r => r.addEventListener("change", () => {
+      // keep what was typed: work it out per year in the old unit, show it in the new one
+      const old = local.unit || "year", d = this.collect(old);
+      ["salary_floor", "salary_target", "current_base"].forEach(k => { const v = d[k]; V[k] = v === "" ? null : (old === "year" && Number(v) < 2000 ? Number(v) * 1000 : Number(v)); });
+      local.unit = r.value; render(); const f = document.querySelector(`input[name="unit"][value="${r.value}"]`); if (f) f.focus();
+    }));
+  },
+  collect(u){ u = u || local.unit || "year"; return {salary_floor: payRead($("floor").value, u), salary_target: payRead($("target").value, u), current_base: payRead($("curbase").value, u)}; },
 };
 
 SCREENS.level = {
@@ -819,16 +841,16 @@ SCREENS.level = {
       <h1 class="q" tabindex="-1">What do you do, and at what level?</h1>
       <label class="field"><span class="flabel">Your most recent job title</span>
         <input class="big" id="recentTitle" data-field="recent_title" value="${esc(local.title != null ? local.title : (V.recent_title || ""))}" maxlength="80" autocomplete="organization-title" placeholder="e.g. Registered Nurse, Electrician, Office Manager" aria-describedby="err-recent_title recentHelp">
-        <span class="fine" id="recentHelp" style="display:block;margin-top:8px">Siftwell puts jobs like this first, under every name employers use for it, and looks at related roles too. ${V.recent_title ? "We took it from your profile; change it if it’s off. " : ""}You can add more titles later on My profile.</span>
+        <span class="fine" id="recentHelp" style="display:block;margin-top:8px">Siftwell puts jobs like this first, under every name employers use for it, and looks at related roles too. ${V.recent_title ? "It comes from your profile; change it if it’s off. " : ""}You can add more titles later on My profile.</span>
         ${errBox("recent_title")}</label>
       <div class="sect">What level are you at?</div>
-      <p class="lede">We use it to skip jobs that are far too junior or too senior for you. Not sure, or open to anything? Choose every level.</p>
+      <p class="lede">Siftwell uses it to skip jobs that are far too junior or too senior for you. Not sure, or open to anything? Choose Every level.</p>
       ${g ? `<div class="hint">${I.info}<div>Going by ${esc(g.why)}, <b>${esc(g.name)}</b> might be closest. Pick whichever fits you.</div></div>` : ""}
       <div class="levels" role="radiogroup" aria-label="Your level" data-field="seniority_mine">
-        ${[1, 2, 3, 4, 5, 6, 7].map(n => radioCard("lv", n, n === m && !any, esc(nm(n)), "")).join("")}
-        ${radioCard("lv", "any", any, "Show me every level", "No level filter.")}
+        ${(S.level_choices || [1, 2, 3, 4, 6, 7]).map(n => radioCard("lv", n, n === m && !any, esc(nm(n)), "")).join("")}
+        ${radioCard("lv", "any", any, "Every level", "No level filter.")}
       </div>${errBox("seniority_mine")}
-      <div id="bandWrap"${m && !any ? "" : " hidden"}><div class="sect" style="margin-top:28px">Show me jobs that are</div>
+      <div id="bandWrap"${m && !any ? "" : " hidden"}><div class="sect" style="margin-top:28px">Show jobs that are</div>
       <div class="choices cols3" role="group" aria-label="Which levels to show" data-field="band" id="band">${m ? this_band(m, band) : ""}</div></div>
       ${errBox("band")}`;
   },
@@ -870,7 +892,7 @@ SCREENS.direction = {
       <div class="choices" role="radiogroup" aria-label="Direction" data-field="direction">
         ${radioCard("dir", "keep", d === "keep", "Keep doing what I do", "More of the same work, ideally with better pay or conditions.", {icon: I.arrow})}
         ${radioCard("dir", "specific", d === "specific", "Aim at something specific", "A role, industry or kind of company you have in mind.", {icon: I.target})}
-        ${radioCard("dir", "unsure", d === "unsure", "I’m not sure yet", NOCL() ? NEED_CL : "We’ll suggest a few directions based on your resume and what’s hiring.", {icon: I.compass, disabled: NOCL()})}
+        ${radioCard("dir", "unsure", d === "unsure", "I’m not sure yet", NOCL() ? NEED_CL : "Claude suggests a few directions based on your resume and what’s hiring.", {icon: I.compass, disabled: NOCL()})}
       </div>${errBox("direction")}
       ${NOCL() ? `<p class="fine">Without Claude, a direction you type is saved and starts working once you connect it.</p>
         <div class="alt" id="dirConnectRow"><button type="button" class="linkbtn" id="dirConnect">Connect Claude now</button></div><div id="ccRoot"></div>` : ""}
@@ -927,6 +949,9 @@ SCREENS.direction = {
     const d = radio("dir");
     return {direction: d, target_text: d === "keep" ? "" : V.target_text, target_scope: V.target_scope};
   },
+  // Not sure yet and don't want suggestions now? Skip: nothing is saved (a target can be added later on My profile).
+  foot: () => ({skip: true, skipLabel: "Skip"}),
+  skip(){ saveAndNext("direction", {skipped: true}); },
 };
 
 SCREENS.dealbreakers = {
@@ -941,46 +966,28 @@ SCREENS.dealbreakers = {
     return `
       <p class="eyebrow">Dealbreakers</p>
       <h1 class="q" tabindex="-1">Anything you’d rather not see?</h1>
-      <p class="lede">We’ll keep these off your board. Change them anytime.</p>
+      <p class="lede">Siftwell keeps these out of your way. Change them anytime on My profile, under Job search.</p>
       <div class="sect" id="trLbl">Most travel you’d do</div>
       <div class="seg" role="radiogroup" aria-labelledby="trLbl" data-field="travel_max">${tr.map(([v, t, s]) => `<label><input type="radio" name="tr" value="${v}"${V.travel_max === v ? " checked" : ""}><span>${t}${s ? `<small>${s}</small>` : ""}</span></label>`).join("")}</div>
       ${errBox("travel_max")}
       <div class="sect">Employers to skip</div>
-      ${tagInput("emps", V.skip_employers, "Add a company", "Employers to skip")}
-      ${emp && V.skip_employers.includes(emp) ? `<p class="fine" style="margin-top:8px">We added ${esc(emp)}, your current employer, so your own company’s postings stay out of the way.</p>` : ""}
+      ${tagInput("emps", V.skip_employers, "Add an employer", "Employers to skip")}
+      ${emp && V.skip_employers.includes(emp) ? `<p class="fine" style="margin-top:8px">Siftwell added ${esc(emp)}, your current employer, so your own employer’s postings stay out of the way.</p>` : ""}
       ${errBox("skip_employers")}
       <div class="sect">Industries to skip</div>
       ${tagInput("inds", V.skip_industries, "Add an industry", "Industries to skip")}
-      <div class="ideas" id="ideas" aria-label="Common choices">${S.industry_ideas.filter(x => !V.skip_industries.includes(x)).map(x => `<button type="button" class="idea" data-idea="${esc(x)}">+ ${esc(x)}</button>`).join("")}</div>
+      <div class="ideas" id="ideas" aria-label="Common choices">${(S.industry_ideas || []).filter(x => !V.skip_industries.includes(x)).map(x => `<button type="button" class="idea" data-idea="${esc(x)}">+ ${esc(x)}</button>`).join("")}</div>
       ${errBox("skip_industries")}
-      <div class="sect">Jobs that need a security clearance</div>
-      <p class="fine" style="margin:0 0 10px">Only matters if government or defense jobs come up in your search. Leave it on Any clearance if you’re not sure.</p>
+      ${S.clearance_relevant ? `<div class="sect">Jobs that need a security clearance</div>
+      <p class="fine" style="margin:0 0 10px">Asked because your profile mentions a clearance or your board has jobs that ask for one. Leave it on Any clearance if you’re not sure.</p>
       <div class="choices cols2" role="radiogroup" aria-label="Security clearance" data-field="clearance">${clr.map(([v, t, s]) => radioCard("clr", v, V.clearance === v, t, s)).join("")}</div>
-      ${errBox("clearance")}${errBox("_")}`;
+      ${errBox("clearance")}` : ""}${errBox("_")}`;
   },
   mount(){
     this.e = mountTags("emps"); this.i = mountTags("inds");
     $("ideas").addEventListener("click", e => { const b = e.target.closest("[data-idea]"); if (!b) return; this.i.add(b.dataset.idea); b.remove(); });
   },
   collect(){ return {clearance: radio("clr"), travel_max: radio("tr"), skip_employers: this.e.values(), skip_industries: this.i.values()}; },
-};
-
-SCREENS.companies = {
-  title: "Employers",
-  html: () => {
-    // No ready-made lists: employers come from where the person lives, what they add and what Claude finds.
-    return `
-      <p class="eyebrow">Employers</p>
-      <h1 class="q" tabindex="-1">Where your employers come from</h1>
-      <p class="lede">Siftwell reads the job pages on employers’ own career sites. It checks them when you press Find new jobs, or by itself every day if you turn that on in Settings (it is off to begin with).</p>
-      <ol class="plan">
-        <li><b>Employers near you</b><small>On the last screen, Siftwell adds employers that hire near you (or remotely) from its free employer directory. They become your employers.</small></li>
-        <li><b>Employers you add</b><small>Paste any employer’s careers link on the Employers page, any time, and Siftwell watches it too.</small></li>
-        <li><b>Employers Claude finds</b><small>Optional. With Claude connected, it can search the web for more employers near you.</small></li>
-      </ol>
-      ${errBox("_")}`;
-  },
-  collect: () => ({}),
 };
 
 SCREENS.questions = {
@@ -995,11 +1002,11 @@ SCREENS.questions = {
     if (!q) return `
       <p class="eyebrow">Optional</p>
       <h1 class="q" tabindex="-1">Got experience your resume doesn’t show?</h1>
-      <p class="lede">We can ask a few quick questions about skills and tools that jobs like yours ask for. Your answers make matching and tailored resumes more accurate. Skip it if you’d rather do this later.</p>
+      <p class="lede">Siftwell can ask a few quick questions about skills and tools that jobs like yours ask for. Your answers make matching and tailored resumes more accurate. Skip it if you’d rather do this later.</p>
       <div class="note">Usually 5 to 10 questions. Answer as briefly as you like. Nothing is added to your resume without your say.</div>${errBox("_")}`;
     if (q.running) return `<p class="eyebrow">Optional</p><h1 class="q" tabindex="-1">Thinking of good questions…</h1>
       <div class="working" role="status"><div class="spinner" aria-hidden="true"></div><p>Comparing your resume with what jobs like yours ask for. About a minute.</p></div>`;
-    if (q.error || !(q.questions || []).length) return `<p class="eyebrow">Optional</p><h1 class="q" tabindex="-1">${q.error ? "We couldn’t come up with questions." : "Nothing to ask right now."}</h1>
+    if (q.error || !(q.questions || []).length) return `<p class="eyebrow">Optional</p><h1 class="q" tabindex="-1">${q.error ? "No questions this time." : "Nothing to ask right now."}</h1>
       <p class="lede">${esc(q.error || "Your resume already covers what jobs like yours ask for.")} You can do this later from the board.</p>`;
     const it = q.questions[q.i], a = q.answers[q.i] || {};
     return `
@@ -1015,7 +1022,7 @@ SCREENS.questions = {
   foot(){
     const q = local.q;
     if (!q && NOCL()) return {nextLabel: "Continue"};
-    if (!q) return {nextLabel: "Ask me", skip: true, skipLabel: "Skip"};
+    if (!q) return {nextLabel: "Ask the questions", skip: true, skipLabel: "Skip"};
     if (q.running) return {next: false, skip: true, skipLabel: "Skip"};
     if (q.error || !(q.questions || []).length) return {nextLabel: "Continue"};
     const last = q.i === q.questions.length - 1;
@@ -1088,7 +1095,7 @@ SCREENS.board = {
     if (cur !== "board") return;
     this.plan = s ? s.plan : null;
     if (s && (s.running || (s.mine && s.job.phase !== "done" && s.job.running))) { this.view = "progress"; this.finished = S.done; return this.progress(s); }
-    if (!this.plan) { this.view = "summary"; $("bBody").innerHTML = `<h1 class="q" tabindex="-1">Start your job search</h1>${errBox("_")}`; footer(this.foot()); return showErr("_", "We couldn’t load your search plan. Reload the page to try again."); }
+    if (!this.plan) { this.view = "summary"; $("bBody").innerHTML = `<h1 class="q" tabindex="-1">Start your job search</h1>${errBox("_")}`; footer(this.foot()); return showErr("_", "Siftwell couldn’t load your search plan. Reload the page to try again."); }
     this.findOn = this.plan.find.default;
     if (this.plan.started_before) { this.view = "done"; return this.done(s); }   // the search already ran: don't offer "Last step" again
     this.view = "summary"; this.summary();
@@ -1114,7 +1121,7 @@ SCREENS.board = {
     const findText = f.remote_only
       ? `Claude also searches the web for about ${f.size} employers anywhere in the US that hire remotely for your kind of work, using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your employers. Takes ${esc(f.estimate)}.`
       : `Claude also searches the web for about ${f.size} employers within ${f.radius} miles that the directory may not have (big employers, hospitals, universities, government, nonprofits, startups and more), using your Claude plan. Siftwell then checks which careers pages it can read and adds those to your employers. Takes ${esc(f.estimate)}.`;
-    const lists = p.companies ? `the ${p.companies.toLocaleString()} ${p.companies === 1 ? "company" : "companies"} you already watch` : "your companies";
+    const lists = p.companies ? `the ${p.companies.toLocaleString()} ${p.companies === 1 ? "employer" : "employers"} you already watch` : "your employers";
     let findBox = "";
     if (f.possible) {
       const sub = (f.prior ? `An earlier Claude search already found employers for you. ` : "") + `Optional: uses your Claude plan and takes ${esc(f.estimate)}. The free directory above is usually enough to start.`;
@@ -1134,20 +1141,21 @@ SCREENS.board = {
     if (d.possible && bd.running) {
       steps.push(["Add employers as your directory is built", `<b>${esc(bd.line)}</b>. Siftwell is reading employers’ public job pages on this computer; the ones hiring ${d.remote_only ? "remotely" : "near you"} become your employers as it finds them. No Claude needed.`]);
     } else if (d.possible && offline) {
-      steps.push(["Add employers to check", `<b>Siftwell can’t reach its employer directory right now</b> (check your internet connection). If you start anyway, it begins with a starter list of large US employers that comes with the app and keeps the ones hiring ${d.remote_only ? "remotely" : "near you"}; you can try the directory again later from your board or Settings.${buildBox}`]);
+      steps.push(["Add employers to check", `<b>Siftwell can’t reach its employer directory right now</b> (check your internet connection). If you start anyway, it begins with a starter list of large US employers that comes with the app and keeps the ones hiring ${d.remote_only ? "remotely" : "near you"}; you can try the directory again later on the Employers page.${buildBox}`]);
     } else if (d.possible && bd.source === "local" && !bd.built) {
       steps.push(["Add employers to check", `<b>Your employer directory hasn’t been built on this computer yet.</b> When you start, Siftwell builds it and begins with a starter list of large US employers that comes with the app, keeping the ones hiring ${d.remote_only ? "remotely" : "near you"}.${buildBox}`]);
     } else if (d.possible) {
       let count = "";
       if (pvOk && pv.new) {
         const o = pv.options, all = o[o.length - 1];
-        if (this.limit === undefined) { const def = all.employers <= 500 ? all : (o.filter(x => x.limit && x.limit <= 500).pop() || o[0]); this.limit = def.limit || null; }
+        // a smaller start: all of them when there are fewer than about 150, else the 100 with the most openings
+        if (this.limit === undefined) { const def = all.employers < 150 ? all : (o.find(x => x.limit === 100) || o[0]); this.limit = def.limit || null; }
         const curO = o.find(x => (x.limit || null) === this.limit) || all;
         count = ` It has <b>${nn(pv.new)} employers</b> ${d.remote_only ? "that hire remotely" : `with openings within ${d.radius} miles`}.`;
         chooser = `<div class="choices" style="margin-top:14px" role="radiogroup" aria-label="How many employers to add">${o.map(x => radioCard("dirN", String(x.limit || "all"), x === curO,
           x.limit ? `The ${nn(x.employers)} with the most openings ${d.remote_only ? "for remote work" : "near you"}` : `All ${nn(x.employers)} employers`,
           `${x.jobs ? `About ${nn(x.jobs)} openings. ` : ""}First check: ${esc(x.first_text)}. Looking for new jobs each day afterwards: ${esc(x.daily_text)}.`)).join("")}</div>
-          <p class="fine" style="margin-top:8px">Either way your board starts filling in within a few minutes, the employers with the most openings first. You can add the rest later in Settings, under Employer directory.</p>`;
+          <p class="fine" style="margin-top:8px">Either way your board starts filling in within a few minutes, the employers with the most openings first. You can add the rest later on the Employers page.</p>`;
       } else if (pvOk) count = " It has no new employers for your search right now.";
       steps.push([d.remote_only ? "Add remote-friendly employers from the Siftwell directory" : `Add employers near ${esc(d.label)} from the Siftwell directory`,
         (d.remote_only ? "Siftwell’s free employer directory lists employers whose job pages it can read. The ones with the most remote jobs in the US become your employers."
@@ -1162,26 +1170,28 @@ SCREENS.board = {
     $("bBody").innerHTML = `
       <p class="eyebrow">Last step</p>
       <h1 class="q" tabindex="-1">Start your job search</h1>
-      <p class="lede">Siftwell doesn’t search until you say so. Here’s what happens when you press <b>Start my job search</b>:</p>
-      <ol class="plan">${steps.map(([t, d]) => `<li><b>${t}</b><small>${d}</small></li>`).join("")}</ol>
+      <p class="lede">Siftwell doesn’t search until you say so. Your employers come from Siftwell’s free directory near you, the ones you add on the Employers page, and (if you like) the ones Claude finds.</p>
       ${chooser}
       ${findBox}
-      ${none ? `<div class="hint" style="margin-top:20px">${I.info}<div><b>There are no companies to check yet.</b><small>Your employer list is empty. Add your home ZIP on the Where step so Siftwell can add employers near you, or add a company by its careers link.</small>
-        <div class="alt" style="justify-content:flex-start;margin-top:8px"><button type="button" class="linkbtn" id="toCos">Back to Employers</button><a class="linkbtn" href="/catalog#companies" style="text-decoration:none">Add a company by link</a></div></div></div>` : ""}
+      ${none ? `<div class="hint" style="margin-top:20px">${I.info}<div><b>There are no employers to check yet.</b><small>Your employer list is empty. Add your home ZIP on the Where step so Siftwell can add employers near you, or add an employer by its careers link.</small>
+        <div class="alt" style="justify-content:flex-start;margin-top:8px"><button type="button" class="linkbtn" id="toWhere2">Back to Where</button><a class="linkbtn" href="/catalog#add" style="text-decoration:none">Add an employer by link</a></div></div></div>` : ""}
       ${errBox("_")}
-      <p class="fine">You can leave this page while it runs; the search keeps going as long as Siftwell is running. Or press Skip for now and start it later from your board.</p>`;
+      <details class="next"><summary>What happens next</summary>
+        <p class="fine" style="margin:10px 0 0">Here’s what happens when you press <b>Start my job search</b>:</p>
+        <ol class="plan">${steps.map(([t, d]) => `<li><b>${t}</b><small>${d}</small></li>`).join("")}</ol>
+        <p class="fine">You can leave this page while it runs; the search keeps going as long as Siftwell is running. Or press Skip for now and start it later from your board.</p></details>`;
     footer(this.foot());
     const fb = document.querySelector('input[name="findOn"]');
     if (fb) fb.addEventListener("change", () => { this.findOn = fb.checked; this.summary(); const n = document.querySelector('input[name="findOn"]'); if (n) n.focus({preventScroll: true}); });
     wireConnect();
     document.querySelectorAll('input[name="dirN"]').forEach(r => r.addEventListener("change", () => { this.limit = r.value === "all" ? null : Number(r.value); }));
     if ($("toWhere")) $("toWhere").addEventListener("click", () => go("where", -1));
-    if ($("toCos")) $("toCos").addEventListener("click", () => go("companies", -1));
+    if ($("toWhere2")) $("toWhere2").addEventListener("click", () => go("where", -1));
     if ($("ldBuild")) $("ldBuild").addEventListener("click", async () => {
       $("ldBuild").disabled = true; $("ldBuildMsg").textContent = "Starting…";
       try {
         try { await api("POST", "/api/localdir/start", {add: "all"}); }
-        catch(e) { if (!/metered/i.test(e.message || "") || !confirm(e.message + "\n\nBuild anyway?")) throw e; await api("POST", "/api/localdir/start", {add: "all", metered_ok: true}); }
+        catch(e) { if (!/metered/i.test(e.message || "") || !await window.siftAsk({title: "Build anyway?", text: e.message, ok: "Build anyway"})) throw e; await api("POST", "/api/localdir/start", {add: "all", metered_ok: true}); }
         const s = await api("GET", "/api/search");
         if (cur === "board" && this.view === "summary") { this.plan = s.plan; this.pv = null; this.summary(); say("Siftwell is building your directory."); }
       } catch(e) { $("ldBuild").disabled = false; $("ldBuildMsg").textContent = e.message || "That didn’t work."; }
@@ -1213,7 +1223,7 @@ SCREENS.board = {
       <p class="lede" id="bLede">You can leave this page; the search keeps going as long as Siftwell is running. Your board fills in as it goes: the first jobs show up within a few minutes, so you can go to your board any time.</p>
       <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bBar"><i></i></div>
       <ol class="checklist" id="bList" aria-live="polite"></ol>${errBox("_")}
-      <p class="lede" style="margin-top:20px" id="bWait">While you wait: the Get started checklist (in <a href="/settings#get-started" style="color:var(--accent);font-weight:600">Settings</a>) checks Claude, PDFs, starting at login and phone access. Your search keeps going if you go there.</p>`;
+      <p class="lede" style="margin-top:20px" id="bWait">While you wait: the Get started checklist (in <a href="/settings#get-started" style="color:var(--accent);font-weight:600">Settings</a>) checks Claude, making PDFs, starting Siftwell when you sign in, and phone access. Your search keeps going if you go there.</p>`;
     footer(this.foot());
     const self = this, kick = this.kick || {};
     let s = s0, sawRun = false, n = 0;
@@ -1327,7 +1337,7 @@ const Mock = {
       highlights: {name: "", summary: "", cards: []},
       inferred: {level: null, current_employer: ""},
       market: null,
-      levels: BOOT.levels,
+      levels: BOOT.levels, level_choices: [1, 2, 3, 4, 6, 7], clearance_relevant: true,
       industry_ideas: BOOT.industries,
       values: {name: "", home_zip: "", radius_miles: 35, workplaces: ["onsite", "hybrid", "remote"], remote_us: true, current_base: null,
                salary_floor: null, salary_target: null, seniority_mine: null, band: [-1, 0, 1], direction: "", target_text: "", target_scope: "all",
@@ -1357,7 +1367,7 @@ const Mock = {
     let n = parseFloat(String(v).replace(/[$,k]/g, ""));
     if (isNaN(n)) this.err(`Use numbers only for ${label}.`, field);
     if (n > 0 && n < 2000) n *= 1000;
-    if (n < 20000 || n > 2000000) this.err(`${label[0].toUpperCase() + label.slice(1)} should be between $20,000 and $2,000,000.`, field);
+    if (n < 15000 || n > 2000000) this.err(`${label[0].toUpperCase() + label.slice(1)} should be between $15,000 and $2,000,000.`, field);
     return Math.round(n);
   },
   step(step, d){
@@ -1366,7 +1376,7 @@ const Mock = {
     if (step === "where" && !d.skipped) {
       if (d.home_zip && !/^\d{5}$/.test(d.home_zip)) this.err("ZIP codes are five digits.", "home_zip");
       if (!d.workplaces.length) this.err("Pick at least one way of working.", "workplaces");
-      if (!d.home_zip && !(d.workplaces.length === 1 && d.workplaces[0] === "remote")) this.err("Add your ZIP so we can measure commutes, or choose remote only.", "home_zip");
+      if (!d.home_zip && !(d.workplaces.length === 1 && d.workplaces[0] === "remote")) this.err("Add your ZIP so Siftwell can measure commutes, or choose remote only.", "home_zip");
       Object.assign(v, d, {remote_us: d.remote_us && d.workplaces.includes("remote")});
     }
     if (step === "pay") {
@@ -1379,7 +1389,7 @@ const Mock = {
       else { if (!d.seniority_mine) this.err("Pick your level, or choose to see every level.", "seniority_mine"); if (!d.band.length) this.err("Pick at least one band of jobs to see.", "band"); Object.assign(v, d); }
       v.recent_title = d.recent_title || ""; v.level_saved = true;
     }
-    if (step === "direction") {
+    if (step === "direction" && !d.skipped) {
       if (!d.direction) this.err("Choose one of the options.", "direction");
       if (d.direction !== "keep" && !String(d.target_text || "").trim()) this.err(d.direction === "specific" ? "Describe what you’re aiming for." : "Pick one of the suggestions, or describe your own.", "target_text");
       Object.assign(v, d);
@@ -1455,7 +1465,7 @@ async function boot(){
 }
 async function start(){
   try { S = await api("GET", "/api/setup"); }
-  catch(e) { $("stage").innerHTML = `<h1 class="q">We couldn’t load setup.</h1><p class="lede">${esc(e.message)}</p>`; footer({back: false, next: false}); return; }
+  catch(e) { $("stage").innerHTML = `<h1 class="q">Setup couldn’t load.</h1><p class="lede">${esc(e.message)}</p>`; footer({back: false, next: false}); return; }
   if (!MOCK) applyTheme(S.theme);
   const resume = S.step !== "welcome" && S.step !== "board";
   go(S.done && S.step !== "board" ? "welcome" : S.step);

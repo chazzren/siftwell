@@ -15,9 +15,10 @@ import json, os, re, statistics
 import catalog
 import people
 
-STEPS = ["welcome", "resume", "highlights", "where", "pay", "level", "direction", "dealbreakers", "companies",
-         "questions", "board"]
-OPTIONAL = {"questions"}           # page shows Skip; resume can also be skipped but later steps get thinner
+# ("companies", a screen with nothing to answer, is gone: the last screen says where employers come from in one line.
+# A profile that stopped on it carries on at the step after Dealbreakers; see get_state.)
+STEPS = ["welcome", "resume", "highlights", "where", "pay", "level", "direction", "dealbreakers", "questions", "board"]
+OPTIONAL = {"questions", "direction"}   # page shows Skip; resume and where can also be skipped but later steps get thinner
 NEEDS_CLAUDE = {"questions"}       # left out altogether while Claude isn't connected (the screen could only say so)
 
 RADII = [10, 25, 35, 50, 75]
@@ -41,8 +42,14 @@ SETUP_DEFAULTS = {
     "search_started": "",   # when Start my job search first ran for this profile (first_search.py); empty = never
 }
 
-INDUSTRY_IDEAS = ["Defense & weapons", "Government contracting", "Gambling", "Tobacco & vaping", "Crypto",
-                  "Staffing agencies", "Oil & gas", "Payday lending", "Adtech"]
+# A few broad, common ones as one-tap ideas (anyone can type their own); nothing that assumes a line of work.
+INDUSTRY_IDEAS = ["Staffing agencies", "Commission-only sales", "Call centers", "Gambling", "Tobacco & vaping"]
+
+# What people read for the stored levels 1-7 (the same values the board and ratings use, so nothing re-rates). Six are
+# offered; 5 ("Senior manager") is shown only to a profile that already has it, and is covered by the band around
+# Supervisor / Manager and Director anyway. jobtext.LEVEL_NAMES (job cards) is left as it is.
+LEVEL_LABELS = {1: "Entry", 2: "Experienced", 3: "Senior", 4: "Supervisor / Manager", 5: "Senior manager", 6: "Director", 7: "Executive"}
+LEVEL_CHOICES = [1, 2, 3, 4, 6, 7]
 
 
 class SetupError(ValueError):
@@ -95,11 +102,11 @@ def _profiles(pid):
 
 # ------------------------------------------------------------------ derived bits
 def _levels():
-    try:
-        import jobfinder
-        return jobfinder.LEVEL_NAMES
-    except Exception:
-        return {1: "Entry level", 2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"}
+    return dict(LEVEL_LABELS)
+
+def level_choices(mine=None):
+    """The levels offered on Level screens: the six neutral ones, plus a stored 5 so a saved choice still shows."""
+    return sorted(set(LEVEL_CHOICES) | ({int(mine)} if mine else set()))
 
 def infer_level(prof):
     """The level (1-7) the person's own job title states, for the hint on the Level screen: "Senior Accountant",
@@ -198,6 +205,21 @@ def recent_title(pid):
         return ""
 
 
+def clearance_relevant(pid, prof=None):
+    """True when security clearances matter to this person: their profile names one, or their board has jobs that ask
+    for one. Only then do setup and My profile ask about clearance jobs (most people never need to think about it)."""
+    if prof is None:
+        active, draft = _profiles(pid)
+        prof = draft or active
+    if [x for x in ((prof or {}).get("clearances") or []) if str(x).strip()]:
+        return True
+    try:
+        d = json.load(open(people.pdir("jobs.json", pid=pid)))
+        return any(j.get("clearance") for j in (d.get("jobs") or []))
+    except Exception:
+        return False
+
+
 # ------------------------------------------------------------------ state
 def _band_offsets(mine, band):
     lo, hi = (band or [mine - 1, mine + 1])[:2]
@@ -229,7 +251,10 @@ def get_state(pid, ingest=None):
         rstatus = "none"
     guess = infer_level(prof)
     mine = int(s["seniority_mine"]) if s.get("seniority_mine") else None   # None: not chosen (every level shows)
-    step = s.get("setup_step") if s.get("setup_step") in STEPS else "welcome"
+    step = s.get("setup_step")
+    if step == "companies":            # (that screen is gone: carry on after Dealbreakers)
+        step = "questions"
+    step = step if step in STEPS else "welcome"
     ready = _claude_ready()
     if step not in steps_for(ready):       # stopped on a step that is left out now: carry on at the one after it
         step = next_step(step, ready)
@@ -251,6 +276,8 @@ def get_state(pid, ingest=None):
         "inferred": {"level": guess, "current_employer": emp},
         "market": market_hint(prof, mine or (guess or {}).get("level")),
         "levels": {str(k): v for k, v in _levels().items()},
+        "level_choices": level_choices(mine),
+        "clearance_relevant": clearance_relevant(pid, prof),
         "industry_ideas": INDUSTRY_IDEAS,
         "values": {
             "name": people.name(pid),
@@ -266,7 +293,7 @@ def get_state(pid, ingest=None):
             "direction": direction,
             "target_text": s.get("target_text") or "",
             "target_scope": s.get("target_scope") or "all",
-            "clearance": pr.get("display.clearance", "secret"),
+            "clearance": pr.get("display.clearance", "all"),
             "travel_max": s.get("travel_max") or "any",
             "skip_employers": raw["skip_employers"] if "skip_employers" in raw else ([emp] if emp else []),
             "skip_industries": s.get("skip_industries") or [],
@@ -299,7 +326,7 @@ def _money(v, field, label, optional=False):
                 v = f * 1000
         except ValueError:
             pass
-    return _int(v, field, 20000, 2_000_000, label, optional)
+    return _int(v, field, 15000, 2_000_000, label, optional)   # (an hourly answer arrives already worked out per year)
 
 def _strlist(v, field, max_items=30, max_len=80):
     if isinstance(v, str):
@@ -357,7 +384,7 @@ def validate(step, data):
     elif step == "pay":
         cur = _money(d.get("current_base"), "current_base", "your current base", optional=True)
         floor = _money(d.get("salary_floor"), "salary_floor", "the lowest base you'd take", optional=True)
-        floor = max(30000, min(1_000_000, floor)) if floor else 0   # blank: no floor, every job shows
+        floor = max(15000, min(1_000_000, floor)) if floor else 0   # blank: no floor, every job shows
         tgt = _money(d.get("salary_target"), "salary_target", "your target", optional=True)
         if tgt is not None and tgt < floor:
             raise SetupError("Your target should be at or above your floor.", "salary_target")
@@ -379,6 +406,8 @@ def validate(step, data):
             lo = hi = m
         up = {"seniority_mine": m, "seniority_band": [lo, hi]}
     elif step == "direction":
+        if d.get("skipped"):
+            return {}, extra   # Skip: nothing is saved (a direction can be added later on My profile > Target)
         dr = d.get("direction")
         if dr not in DIRECTIONS:
             raise SetupError("Choose one of the options.", "direction")
@@ -390,17 +419,16 @@ def validate(step, data):
             raise SetupError("Describe what you're aiming for." if dr == "specific" else "Pick one of the suggestions, or describe your own.", "target_text")
         up = {"direction": dr, "target_text": text, "target_scope": scope}
     elif step == "dealbreakers":
-        clr = d.get("clearance", "secret")
-        if clr not in CLEARANCE:
+        clr = d.get("clearance")          # asked only when it matters (clearance_relevant); otherwise left as it is
+        if clr is not None and clr not in CLEARANCE:
             raise SetupError("Pick a clearance option.", "clearance")
         tr = d.get("travel_max", "any")
         if tr not in TRAVEL:
             raise SetupError("Pick how much travel is OK.", "travel_max")
         up = {"travel_max": tr, "skip_employers": _strlist(d.get("skip_employers") or [], "skip_employers"),
               "skip_industries": _strlist(d.get("skip_industries") or [], "skip_industries")}
-        extra["prefs"] = {"display.clearance": clr}
-    elif step == "companies":
-        pass  # nothing to choose: employers come from the directory near the person, their own additions and Claude
+        if clr is not None:
+            extra["prefs"] = {"display.clearance": clr}
     elif step in ("questions", "board"):
         pass  # answers go through /api/answers
     return up, extra
@@ -465,6 +493,22 @@ def goals_text(s):
         bits.append("Not interested in: " + ", ".join(s["skip_industries"]) + ".")
     return " ".join(bits)
 
+# Settings that reach Claude only through the "Setup answers" line of the goals: when My profile > Job search changes
+# one of them, the server writes that line again (goals_with_answers), as the end of setup does.
+GOALS_KEYS = ("salary_target", "skip_employers", "skip_industries")
+
+
+def goals_with_answers(s):
+    """The goals text with its "Setup answers: ..." line (goals_text) brought up to date; the person's own words kept."""
+    summary = goals_text(s)
+    goals = s.get("goals") or ""
+    marker = "Setup answers: "
+    goals = re.sub(re.escape(marker) + r".*$", "", goals, flags=re.S).rstrip()
+    if summary:
+        goals = (goals + "\n\n" if goals else "") + marker + summary
+    return goals
+
+
 def finish(pid):
     """Mark setup done and tell the server what to start. Returns
     {"ok", "kick": {"interpret_target": bool, "update": bool}, "settings": {...}}."""
@@ -475,12 +519,7 @@ def finish(pid):
         import resume
         resume.approve({})
     active, _ = _profiles(pid)
-    summary = goals_text(s)
-    goals = s.get("goals") or ""
-    marker = "Setup answers: "
-    goals = re.sub(re.escape(marker) + r".*$", "", goals, flags=re.S).rstrip()
-    if summary:
-        goals = (goals + "\n\n" if goals else "") + marker + summary
+    goals = goals_with_answers(s)
     raw = _write(pid, {"setup_done": True, "setup_step": "board", "goals": goals,
                        "pivot_ai": bool((s.get("target_text") or "").strip())})
     return {"ok": True, "has_profile": bool(active),

@@ -1,16 +1,23 @@
-"""The Employers page (GET /catalog; called "Employers" everywhere people see it): the household's shared catalog of
-companies and listings.
+"""The Employers page (GET /catalog; called "Employers" everywhere people see it): the home for employers, for the whole
+household.
 
 Same two-pane layout as /settings (settings_page.CSS): a list of sections on the left, the selected one on the
-right, chosen by the URL hash (/catalog#listings); at phone width a drill-down with a "‹ Catalog" back control.
-Sections: Companies (add by careers link, pause, remove, fetch now), Listings (server-side pages), Runs & updates
-(history, the automatic-update control (autoupdate.py), Fetch everything now), Rating (per person; opens the board's Re-rate
-panel), Find employers near me (employer_finder.py) and Share (catalog_share.py). Data comes from /api/catalog/*
-(catalog_api.py); each section loads when first shown."""
+right, chosen by the URL hash (/catalog#listings); at phone width a drill-down with a "‹ Employers" back control.
+Sections:
+  Your employers (#companies)  the list; each row has one visible action (Check now) and a "⋯" menu (Stop watching /
+                               Watch, Pause / Resume, Look up facts, Remove)
+  Add employers (#add)         three ways: paste a careers link (company_add.py), from the directory near you
+                               (directory.ADD_HTML / ADD_SCRIPT: directory.preview count chooser + undo), find with Claude
+                               (employer_finder.py; #find opens this section at that part)
+  Job listings (#listings)     server-side pages
+  Activity (#runs)             Find new jobs now, each person's ratings (opens the board's Re-rate panel; #rating lands
+                               here) and the history. The daily schedule is set only in Settings > Finding new jobs.
+  Share (#share)               catalog_share.py
+Data comes from /api/catalog/* (catalog_api.py) and /api/directory*; each section loads when first shown."""
 import html
 import json
 
-import autoupdate
+import directory
 import getting_started
 import people
 import report
@@ -18,37 +25,30 @@ import settings_page
 
 _SVG = settings_page._SVG
 PANES = [
-    ("companies", "Employers", '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/>'),
+    ("companies", "Your employers", '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/>'),
+    ("add", "Add employers", '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'),
     ("listings", "Job listings", '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>'),
-    ("runs", "Finding new jobs", '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/><path d="M12 7v5l3 2"/>'),
-    ("rating", "Ratings", '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>'),
-    ("find", "Find employers near me", '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/>'),
+    ("runs", "Activity", '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/><path d="M12 7v5l3 2"/>'),
     ("share", "Share", '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>'),
 ]
 e = html.escape
 
 
 def _head(cid, name):
-    return (f'<div class="sphead"><a class="sback" href="/catalog" data-back>‹ Employers</a>'
+    return (f'<div class="sphead"><a class="sback" href="/catalog" data-back>‹ All sections</a>'
             f'<div class="sprow"><h2 id="h-{cid}">{e(name)}</h2><span class="ssave" role="status" aria-live="polite"></span></div></div>')
 
 
 BODIES = {
     "companies": """
-<section class="sgsec"><h3 class="sgtitle">Add an employer</h3><div class="sgroup">
-  <form class="srow stack" id="addForm">
-    <input type="text" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" id="addUrl" placeholder="Paste the employer’s careers page link, e.g. careers.example.com" aria-label="Careers page link" required>
-    <div class="cline"><input type="text" id="addName" placeholder="Name (optional)" aria-label="Company name (optional)" maxlength="60">
-    <select id="addList" aria-label="Who it is for"></select><button class="btn primary" type="submit" id="addBtn">Add</button></div>
-  </form></div>
-  <p class="sfoot" id="addMsg" role="status" aria-live="polite">Siftwell works out how the employer lists its jobs, checks it can read them, adds it, then gets its jobs.</p></section>
 <div class="livebar" id="fetchBar" role="status" aria-live="polite" hidden><div class="lbtop"><b id="fetchTitle">Working…</b></div><div class="pbar"><i id="fetchFill"></i></div></div>
+<p class="sfoot cintro">The employers whose job pages Siftwell checks. Want more? <a href="#add" data-go="add">Add employers</a>.</p>
 <div class="ctools">
-  <input type="search" id="coQ" placeholder="Search companies" aria-label="Search companies">
+  <input type="search" id="coQ" placeholder="Search employers" aria-label="Search employers">
+  <select id="coListF" aria-label="Whose employers"><option value="mine">Your employers</option><option value="">Everyone’s employers</option><option value="other">Only other people’s</option></select>
   <select id="coStatus" aria-label="Status"><option value="">Any status</option><option value="ok">OK</option><option value="suspect">Looks incomplete</option><option value="capped">Too many to read all</option><option value="error">Couldn’t be read</option><option value="paused">Paused</option><option value="new">Not checked yet</option></select>
-  <select id="coListF" aria-label="Whose employers"><option value="">Every employer</option><option value="mine">Your employers</option><option value="other">Not yours</option></select>
-  <select id="coAts" aria-label="Careers site type"><option value="">Any careers site type</option></select>
 </div>
+<details class="advf"><summary>Advanced filters</summary><div class="ctools"><select id="coAts" aria-label="How the employer lists its jobs"><option value="">Any way of listing jobs</option></select></div></details>
 <p class="count" id="coCount">Loading…</p>
 <p class="notice" id="factsNote" hidden></p>
 <div class="clist" id="coRows"></div>
@@ -65,18 +65,33 @@ BODIES = {
 <div class="clist" id="lsRows"></div>
 <div class="pager"><button class="btn sm" type="button" id="lsPrev">‹ Previous</button><span class="note" id="lsPage"></span><button class="btn sm" type="button" id="lsNext">Next ›</button></div>
 <p class="sfoot">Under each listing: who it currently passes the filters for, and Claude's rating for them.</p>""",
+    "add": """
+<p class="sfoot cintro">Three ways to add employers. Each one becomes one of your employers, and Siftwell checks its job page for openings.</p>
+<h3 class="ssec">1. Paste a careers link</h3>
+<section class="sgsec" style="margin-top:8px"><div class="sgroup">
+  <form class="srow stack" id="addForm">
+    <input type="text" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" id="addUrl" placeholder="Paste the employer’s careers page link, e.g. careers.example.com" aria-label="Careers page link" required>
+    <div class="cline"><input type="text" id="addName" placeholder="Name (optional)" aria-label="Employer name (optional)" maxlength="60">
+    <select id="addList" aria-label="Who it is for"></select><button class="btn primary" type="submit" id="addBtn">Add</button></div>
+  </form></div>
+  <p class="sfoot" id="addMsg" role="status" aria-live="polite">Siftwell works out how the employer lists its jobs, checks it can read them, adds it, then gets its jobs.</p></section>
+<h3 class="ssec">2. From the directory near you</h3>
+<section class="sgsec" style="margin-top:8px"><div class="sgroup">__DIRECTORY__</div>__DIRFOOT__</section>
+<h3 class="ssec" id="fdSec">3. Find with Claude</h3>
+__FIND__""",
     "runs": """
-__AUTOUPDATE__
 <section class="sgsec"><h3 class="sgtitle">Find new jobs now</h3><div class="sgroup">
   <div class="srow"><div class="slab"><span>Check every employer for new and removed jobs</span><small id="allEst">For everyone in the household. Claude then rates the new listings for each person (uses your Claude plan).</small></div><div class="sctl"><button class="btn primary sm" type="button" id="fetchAll">Find new jobs now</button></div></div>
   <div class="srow stack" id="allBar" role="status" aria-live="polite" hidden><div class="lbtop"><b id="allTitle"></b><button class="btn sm" type="button" id="allStop" hidden title="Stop finding new jobs now. Everything found so far is kept and the boards are rebuilt with it; the employers not reached are checked next time.">Stop</button></div><div class="pbar"><i id="allFill"></i></div>
     <details class="rundet" id="allDet"><summary>Details</summary><div class="note mono" id="allLine"></div></details></div>
+  <div class="srow"><div class="slab"><span>Find new jobs automatically</span><small id="auLine">Checking…</small></div><div class="sctl"><a class="btn sm" href="/settings#updates">Change in Settings</a></div></div>
 </div></section>
+<section class="sgsec"><h3 class="sgtitle">Ratings</h3>
+<p class="sfoot" style="margin:0 14px 8px">For each person: how many job listings pass their search, and how many Claude has rated. Rating happens on the board's Re-rate panel.</p>
+<div id="rateCards"><p class="note">Loading…</p></div></section>
 <section class="sgsec"><h3 class="sgtitle">History</h3><div class="clist" id="runRows"><p class="note">Loading…</p></div></section>""",
-    "rating": """
-<p class="note">For each person: how many catalog listings pass their filters, and how many Claude has rated. Rating happens on the board's Re-rate panel.</p>
-<div id="rateCards"><p class="note">Loading…</p></div>""",
-    "find": """
+}
+FIND_HTML = """
 <div class="notice" id="fdClaude" hidden></div>
 <form id="fdForm" class="sgsec">
   <h3 class="sgtitle">Where and what</h3>
@@ -118,19 +133,24 @@ __AUTOUPDATE__
   </div>
   <details class="fdet" id="fdBadWrap"><summary id="fdBadSum"></summary><p class="note" id="fdSysNote"></p><div id="fdBad"></div></details>
   <details class="fdet" id="fdKnownWrap"><summary id="fdKnownSum"></summary><div class="sgroup" id="fdKnown"></div></details>
-</section>""",
+</section>"""
+BODIES.update({
     "share": """
 <section class="sgsec"><h3 class="sgtitle">Export</h3><div class="sgroup">
   <div class="srow stack"><span>Which employers</span><div class="cats" id="exLists"></div></div>
-  <div class="srow stack"><span>Or pick companies</span><input type="search" id="exQ" placeholder="Filter companies" aria-label="Filter companies"><div class="pick" id="exCos"></div></div>
+  <div class="srow stack"><span>Or pick employers</span><input type="search" id="exQ" placeholder="Filter employers" aria-label="Filter employers"><div class="pick" id="exCos"></div></div>
   <div class="srow"><div class="slab"><label for="exListings">Include current listings</label><small>The open job posts and their text, so the other household sees them before their first update.</small></div><div class="sctl"><input type="checkbox" role="switch" class="sw" id="exListings" checked></div></div>
   <div class="srow stack"><div class="sbtns"><button class="btn primary" type="button" id="exBtn">Download .siftwell file</button></div><p class="note" id="exMsg" role="status" aria-live="polite"></p></div>
-</div><p class="sfoot">Only public information goes in the file: company names, their job systems and (if ticked) their open listings. Never profiles, resumes, saved or applied marks, tailored resumes, settings, your access key, Claude's ratings or company research.</p></section>
+</div><p class="sfoot">Only public information goes in the file: employer names, where their job pages are and (if ticked) their open listings. Never profiles, resumes, saved or applied marks, tailored resumes, settings, your access key, Claude's ratings or company research.</p></section>
 <section class="sgsec"><h3 class="sgtitle">Import</h3><div class="sgroup">
   <div class="srow stack"><input type="file" id="imFile" accept=".siftwell" aria-label="Choose a .siftwell file"><p class="note" id="imMsg" role="status" aria-live="polite">Choose a .siftwell file someone shared with you.</p></div>
   <div class="srow stack" id="imGo" hidden><div class="cline"><label for="imList" class="note">Add them for</label><select id="imList"></select><button class="btn primary sm" type="button" id="imBtn">Add</button></div></div>
-</div><p class="sfoot">Companies already in your catalog are matched by their job board and listings by their id. Nothing you have is removed or closed; dates keep the earliest first seen and latest last seen.</p></section>""",
-}
+</div><p class="sfoot">Employers Siftwell already has are matched by their job page and listings by their id. Nothing you have is removed or closed; dates keep the earliest first seen and latest last seen.</p></section>""",
+})
+BODIES["add"] = (BODIES["add"].replace("__DIRECTORY__", directory.ADD_HTML).replace("__DIRFOOT__", directory.ADD_FOOT)
+                 .replace("__FIND__", FIND_HTML))
+# Old addresses still land in the right place: #find is part of Add employers, #rating part of Activity.
+ALIASES = {"find": "add", "rating": "runs"}
 
 
 def render(pid=None) -> str:
@@ -140,11 +160,11 @@ def render(pid=None) -> str:
     for cid, label, icon in PANES:
         nav.append(f'<a class="scat" href="#{cid}" data-cat="{cid}"><span class="sico">{_SVG.format(icon)}</span>'
                    f'<span class="sname">{e(label)}</span><span class="schev" aria-hidden="true">›</span></a>')
-        panes.append(f'<section class="spane" data-cat="{cid}" aria-labelledby="h-{cid}" hidden>{_head(cid, label)}{BODIES[cid].replace('__AUTOUPDATE__', autoupdate.PANE_HTML)}</section>')
+        panes.append(f'<section class="spane" data-cat="{cid}" aria-labelledby="h-{cid}" hidden>{_head(cid, label)}{BODIES[cid]}</section>')
     tools = report.TOOLS.replace('id="catalogBtn" href="/catalog"', 'id="catalogBtn" href="/catalog" aria-current="page"')
     head = report.HEAD.replace("<title>Siftwell</title>", "<title>Employers · Siftwell</title>")
-    body = (settings_page.BODY.replace("<h1>Settings · __NAME__</h1>", "<h1>Employers</h1>").replace("__TOOLS__", tools)
-            .replace(settings_page.SUBTITLE, "Every employer and job listing Siftwell checks, for everyone in this household")
+    body = (settings_page.BODY.replace("__TITLE__", "Employers").replace("__TOOLS__", tools)
+            .replace("__SUBTITLE__", "The employers Siftwell checks for jobs: yours, adding more, and what has run. For everyone in this household")
             .replace('aria-label="Settings categories"', 'aria-label="Employers page sections"').replace("__NAV__", "".join(nav))
             .replace("__PANES__", "".join(panes)).replace("__VERSION__", e(getting_started.VERSION)))
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
@@ -153,7 +173,8 @@ def render(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + settings_page.CSS + CSS + "</head><body>" + body +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") + ";window.__ME__=" + json.dumps({"id": pid, "name": people.name(pid)}).replace("</", "<\\/") +
-            ";</script>\n" + SCRIPT.replace("/*__THEME__*/", report.THEME_JS) + autoupdate.SCRIPT + report.DOWN_SCRIPT + "</body></html>")
+            ";</script>\n" + report.CONFIRM_SCRIPT + settings_page.ASK_SCRIPT + SCRIPT.replace("/*__THEME__*/", report.THEME_JS)
+            .replace("/*__ALIASES__*/{}", json.dumps(ALIASES)) + directory.ADD_SCRIPT + report.DOWN_SCRIPT + "</body></html>")
 
 
 CSS = """<style>
@@ -176,6 +197,19 @@ CSS = """<style>
 .crow a{color:var(--accent);text-decoration:none}
 .cact{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .cact .btn[data-armed="1"]{color:var(--bad);border-color:var(--bad)}
+.cact{position:relative}
+#coRows{overflow:visible}
+.mbtn{min-width:var(--h-sm,32px);font-size:16px;line-height:1;letter-spacing:.05em}
+.cmenu{position:absolute;right:0;top:calc(100% + 4px);z-index:20;min-width:200px;display:flex;flex-direction:column;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.14)}
+.cmenu[hidden]{display:none}
+.cmenu button{all:unset;box-sizing:border-box;display:block;width:100%;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:14px;color:var(--ink);min-height:36px}
+.cmenu button:hover,.cmenu button:focus-visible{background:var(--accent-soft)}
+.cmenu button.danger{color:var(--bad)}
+.cmenu button:disabled{opacity:.5;cursor:default}
+.cintro{margin:14px 14px 0}
+.advf{margin-top:8px}.advf summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+.bk-btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+#dirBox .slab small{white-space:normal}
 .pill{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
 .pill.ok{background:var(--good-soft);color:var(--good);border-color:transparent}
 .pill.suspect,.pill.capped,.pill.stopped,.pill.partial,.pill.running{background:var(--warn-soft);color:var(--warn);border-color:transparent}
@@ -229,6 +263,7 @@ CSS = """<style>
   .frow{grid-template-columns:auto minmax(0,1fr)}
   .frow > :nth-child(n+3){grid-column:2}
   .cact{justify-content:flex-start}
+  .cmenu{left:0;right:auto}
   .ctools select{flex:1 1 140px}
   .sctl.cline{max-width:62%}
   .seg{display:flex}.seg button{flex:1;padding:6px 4px;font-size:12.5px;white-space:nowrap}
@@ -247,6 +282,9 @@ const phone = () => matchMedia("(max-width:720px)").matches;
 const n = x => (x || 0).toLocaleString();
 const pl = (k, one, many) => `${n(k)} ${k === 1 ? one : many}`;
 const ME = window.__ME__ || {};
+const ask = o => window.siftAsk(o);   // {title, text, ok, danger} -> Promise<bool> (settings_page.ASK_SCRIPT)
+let NAMES = {};                       // profile id -> name, for what people read (history, ratings)
+const who = id => NAMES[id] || id;
 let PREFS = window.__PREFS__ || {};
 function applyTheme(){
   const t = PREFS["display.theme"];
@@ -287,18 +325,31 @@ function fillListSelect(sel, def){
 
 // ---- sections: the URL hash picks one (/catalog#listings); at phone width no hash means "show the list"
 const CATS = [...document.querySelectorAll(".spane")].map(p => p.dataset.cat);
+const ALIAS = /*__ALIASES__*/{};   // older addresses: #find is in Add employers, #rating in Activity
 const loaded = {};
 function route(){
-  const h = location.hash.slice(1), sel = CATS.includes(h) ? h : "", shown = sel || "companies";
+  let h = location.hash.slice(1), part = "";
+  if (ALIAS[h]) { part = h; h = ALIAS[h]; history.replaceState(history.state, "", "#" + h); }
+  const sel = CATS.includes(h) ? h : "", shown = sel || "companies";
   $("slayout").classList.toggle("atList", !sel);
   document.querySelectorAll(".scat").forEach(a => a.setAttribute("aria-current", a.dataset.cat === shown ? "page" : "false"));
   document.querySelectorAll(".spane").forEach(p => p.hidden = p.dataset.cat !== shown);
   if (!phone() || sel) show(shown);
+  if (part === "find" && $("fdSec")) setTimeout(() => $("fdSec").scrollIntoView({block: "start"}), 50);
 }
 function show(cat){
-  const f = {companies: loadCompanies, listings: loadListings, runs: loadRuns, rating: loadRating, find: loadFind, share: loadShare}[cat];
-  if (f && (!loaded[cat] || cat === "rating" || cat === "runs" || cat === "find")) { loaded[cat] = true; f(); }
+  const f = {companies: loadCompanies, add: loadAdd, listings: loadListings, runs: () => { loadRuns(); loadRating(); loadSchedule(); }, share: loadShare}[cat];
+  if (f && (!loaded[cat] || cat === "runs" || cat === "add")) { loaded[cat] = true; f(); }
 }
+function loadAdd(){
+  if (!$("addList").options.length) (LISTS.length ? Promise.resolve() : get("/api/catalog/companies").then(d => { LISTS = d.lists; })).then(() => fillListSelect($("addList"), "own-" + ME.id)).catch(() => {});
+  loadFind();
+  if (window.dirReload) window.dirReload();   // (directory.ADD_SCRIPT: loads when this section is shown)
+}
+document.querySelector(".spanes").addEventListener("click", ev => {
+  const a = ev.target.closest("[data-go]"); if (!a) return;
+  ev.preventDefault(); history.pushState({fromList: false}, "", "#" + a.dataset.go); route(); scrollTo(0, 0);
+});
 window.addEventListener("hashchange", route);
 document.querySelector(".snav").addEventListener("click", ev => {
   const a = ev.target.closest(".scat"); if (!a) return;
@@ -351,18 +402,17 @@ function loadCompanies(){
     COS = d.companies; LISTS = d.lists; FJ = d.facts_job || FJ;
     factsNote(); if (FJ.running) pollFacts();
     if (!$("addList").options.length) fillListSelect($("addList"), "own-" + ME.id);
-    const lf = $("coListF"), cur = lf.value;
-    lf.value = cur;
+    if (!loaded.coDefault) { loaded.coDefault = true; if (!COS.some(c => c.mine)) $("coListF").value = ""; }   // (nothing of their own yet: show everyone's)
     const af = $("coAts"), ca = af.value, atsList = [...new Set(COS.map(c => c.ats))].sort((a, b) => atsName(a).localeCompare(atsName(b)));
-    af.innerHTML = `<option value="">Any job system</option>` + atsList.map(a => `<option value="${esc(a)}">${esc(atsName(a))}</option>`).join("");
+    af.innerHTML = `<option value="">Any way of listing jobs</option>` + atsList.map(a => `<option value="${esc(a)}">${esc(atsName(a))}</option>`).join("");
     af.value = ca;
-    const lc = $("lsCo"); if (lc.options.length <= 1) lc.innerHTML = `<option value="">All companies</option>` + COS.map(c => `<option>${esc(c.name)}</option>`).join("");
+    const lc = $("lsCo"); if (lc.options.length <= 1) lc.innerHTML = `<option value="">All employers</option>` + COS.map(c => `<option>${esc(c.name)}</option>`).join("");
     renderCompanies();
   }).catch(err => { $("coCount").textContent = errText(err); });
 }
 function coFiltered(){
   const q = $("coQ").value.trim().toLowerCase(), st = $("coStatus").value, li = $("coListF").value, at = $("coAts").value;
-  return COS.filter(c => (!q || c.name.toLowerCase().includes(q) || atsName(c.ats).toLowerCase().includes(q)) && (!st || c.status === st)
+  return COS.filter(c => (!q || c.name.toLowerCase().includes(q)) && (!st || c.status === st)
     && (!li || (li === "mine") === !!c.mine) && (!at || c.ats === at));
 }
 // ---- company facts (looked up by Claude; the button looks one company up now)
@@ -376,10 +426,10 @@ function factsText(c){
   if (f.failed) return `Facts: none found ${day(f.failed)}` + (f.at ? ` (last found ${day(f.at)})` : "");
   return `Facts looked up ${day(f.at)}`;
 }
-function factsBtn(c){
+function factsItem(c){
   const f = c.facts || {};
   if (!FJ.claude || f.at === "hand") return "";
-  return `<button class="btn sm" type="button" data-act="facts"${FJ.running ? " disabled" : ""}>${f.at ? "Refresh facts" : "Look up facts"}</button>`;
+  return `<button type="button" role="menuitem" data-act="facts"${FJ.running ? " disabled" : ""}>${f.at ? "Refresh company facts" : "Look up company facts"}</button>`;
 }
 function factsNote(){
   const el = $("factsNote"), L = FJ.last;
@@ -397,14 +447,18 @@ function pollFacts(){
     else factsNote();
   }).catch(() => { factsTimer = setTimeout(pollFacts, 8000); });
 }
+function rowMain(c, lists, reason){
+  return `<div><b>${esc(c.name)}</b><small>${esc(lists)}</small><small>${esc(factsText(c))}</small></div>
+  <div><span class="pill ${esc(c.status)}">${esc(STATUS[c.status] || c.status)}</span>${c.paused && c.fetch_status && c.fetch_status !== "ok" ? ` <span class="pill ${esc(c.fetch_status)}">${esc(STATUS[c.fetch_status] || c.fetch_status)}</span>` : ""}${reason}</div>
+  <div><span>${n(c.open)} open</span><small>${c.last ? "Checked " + esc(when(c.last)) : "Not checked yet"}</small></div>`;
+}
 function coRow(c){
-  const lists = c.mine ? "one of your employers" : (c.watchers || []).length ? "watched by " + c.watchers.join(", ") : "watched by nobody";
+  const lists = c.mine ? "One of your employers" : (c.watchers || []).length ? "Watched by " + c.watchers.join(", ") : "Watched by nobody";
   const abroad = c.abroad ? `<small>Hires mostly outside the US (${n(c.foreign)} of its postings are abroad). Only its jobs that name a US place go on a board; its plain “Remote” jobs are not counted as US remote.</small>` : "";
   const reason = (c.reason ? `<small>${esc(c.reason)}</small>` : "") + abroad;
-  return `<div class="crow" data-name="${esc(c.name)}"><div><b>${esc(c.name)}</b><small>${esc(atsName(c.ats))}${lists ? " · " + esc(lists) : ""}</small><small>${esc(factsText(c))}</small></div>
-  <div><span class="pill ${esc(c.status)}">${esc(STATUS[c.status] || c.status)}</span>${c.paused && c.fetch_status && c.fetch_status !== "ok" ? ` <span class="pill ${esc(c.fetch_status)}">${esc(STATUS[c.fetch_status] || c.fetch_status)}</span>` : ""}${reason}</div>
-  <div><span>${n(c.open)} open</span><small>${c.last ? "Checked " + esc(when(c.last)) : "Not checked yet"}</small></div>
-  <div class="cact"><button class="btn sm" type="button" data-act="fetch"${c.paused ? " disabled" : ""}>Check now</button>${factsBtn(c)}<button class="btn sm" type="button" data-act="watch" title="${c.mine ? "Take it off your employers (it stays on this page for the rest of the household)" : "Add it to your employers, so its jobs can reach your board"}">${c.mine ? "Stop watching" : "Watch"}</button><button class="btn sm" type="button" data-act="pause">${c.paused ? "Resume" : "Pause"}</button><button class="btn sm" type="button" data-act="remove">Remove</button></div></div>`;
+  return `<div class="crow" data-name="${esc(c.name)}">` + rowMain(c, lists, reason) + `
+  <div class="cact"><button class="btn sm" type="button" data-act="fetch"${c.paused ? " disabled" : ""}>Check now</button><button class="btn sm mbtn" type="button" data-menu aria-haspopup="menu" aria-expanded="false" aria-label="More for ${esc(c.name)}" title="More">⋯</button>
+    <div class="cmenu" role="menu" aria-label="More for ${esc(c.name)}" hidden><button type="button" role="menuitem" data-act="watch">${c.mine ? "Stop watching (take it off your employers)" : "Watch (add it to your employers)"}</button><button type="button" role="menuitem" data-act="pause">${c.paused ? "Resume checking it" : "Pause checking it"}</button>${factsItem(c)}<button type="button" role="menuitem" class="danger" data-act="remove">Remove for everyone…</button></div></div></div>`;
 }
 function renderCompanies(){
   const list = coFiltered();
@@ -415,16 +469,29 @@ function renderCompanies(){
 }
 ["coQ", "coStatus", "coListF", "coAts"].forEach(id => $(id).addEventListener(id === "coQ" ? "input" : "change", () => { coShown = 100; renderCompanies(); }));
 $("coMore").addEventListener("click", () => { coShown += 200; renderCompanies(); });
-let rmTimer = null;
-$("coRows").addEventListener("click", ev => {
+// the "⋯" menu of a row: opens below its button, closes on a choice, Escape or a click elsewhere; arrow keys move
+function closeMenus(except){ document.querySelectorAll(".cmenu:not([hidden])").forEach(m => { if (m !== except) { m.hidden = true; const b = m.parentElement.querySelector("[data-menu]"); if (b) b.setAttribute("aria-expanded", "false"); } }); }
+document.addEventListener("click", ev => { if (!ev.target.closest(".cact")) closeMenus(); });
+$("coRows").addEventListener("keydown", ev => {
+  const m = ev.target.closest(".cmenu"); if (!m) return;
+  const items = [...m.querySelectorAll("button:not(:disabled)")], i = items.indexOf(document.activeElement);
+  if (ev.key === "Escape") { ev.preventDefault(); closeMenus(); m.parentElement.querySelector("[data-menu]").focus(); }
+  else if (ev.key === "ArrowDown") { ev.preventDefault(); items[(i + 1) % items.length].focus(); }
+  else if (ev.key === "ArrowUp") { ev.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+});
+$("coRows").addEventListener("click", async ev => {
+  const mb = ev.target.closest("[data-menu]");
+  if (mb) {
+    const m = mb.parentElement.querySelector(".cmenu"), open = m.hidden;
+    closeMenus(m); m.hidden = !open; mb.setAttribute("aria-expanded", String(open));
+    if (open) { const f = m.querySelector("button:not(:disabled)"); if (f) f.focus(); }
+    return;
+  }
   const b = ev.target.closest("button[data-act]"); if (!b) return;
   const row = b.closest(".crow"), name = row.dataset.name, c = COS.find(x => x.name === name) || {}, act = b.dataset.act;
   const say = (t, bad) => { let m = row.querySelector(".rowmsg"); if (!m) { m = document.createElement("small"); m.className = "rowmsg"; row.firstElementChild.appendChild(m); } m.textContent = t; m.style.color = bad ? "var(--bad)" : ""; };
-  if (act === "remove" && b.dataset.armed !== "1") {
-    b.dataset.armed = "1"; b.textContent = (window.matchMedia && matchMedia("(pointer: coarse)").matches ? "Tap" : "Click") + " again to remove";
-    say("Removes it from everyone's boards. Its listings are kept as closed, so adding it back later keeps their history.");
-    clearTimeout(rmTimer); rmTimer = setTimeout(() => { b.dataset.armed = ""; b.textContent = "Remove"; say(""); }, 6000); return;
-  }
+  closeMenus();
+  if (act === "remove" && !await ask({title: `Remove ${name}?`, text: "It comes off everyone's employers and boards in this household. Its listings are kept as closed, so adding it back later keeps their history. (To take it off only your own list, choose Stop watching instead.)", ok: "Remove", danger: true})) return;
   b.disabled = true;
   if (act === "facts") {
     post("/api/catalog/facts", {name}).then(() => { FJ.running = name; FJ.last = null; factsNote(); renderCompanies(); pollFacts(); })
@@ -437,6 +504,7 @@ $("coRows").addEventListener("click", ev => {
     if (act === "fetch") { say("Checking it now. Its new jobs reach the boards when it finishes."); wasRunning = true; pollStatus(); b.disabled = false; return; }
     if (act === "remove") { COS = COS.filter(x => x.name !== name); renderCompanies(); return; }
     c.paused = !c.paused; c.status = c.paused ? "paused" : (c.fetch_status || "new"); row.outerHTML = coRow(c);
+    const nr = [...$("coRows").children].find(r => r.dataset.name === name); if (nr) nr.querySelector("[data-menu]").focus();
   }).catch(err => { b.disabled = false; say(errText(err), true); });
 });
 $("addForm").addEventListener("submit", ev => {
@@ -449,7 +517,9 @@ $("addForm").addEventListener("submit", ev => {
     b.disabled = false; $("addUrl").value = ""; $("addName").value = "";
     m.textContent = `${d.existing ? "Siftwell already had it: now one of your employers" : "Added"} ${d.name} (${n(d.open_jobs)} open jobs). ` +
       (d.fetching ? "Getting its jobs now." : "Its jobs come with the next Find new jobs.");
-    loadCompanies(); if (d.fetching) { wasRunning = true; pollStatus(); }
+    loaded.companies = false; if ($("slayout").querySelector('.spane[data-cat="companies"]:not([hidden])')) loadCompanies();
+    if (window.dirReload) window.dirReload();
+    if (d.fetching) { wasRunning = true; pollStatus(); }
   }).catch(err => { b.disabled = false; m.style.color = "var(--bad)"; m.textContent = errText(err); });
 });
 
@@ -489,30 +559,32 @@ $("lsPrev").addEventListener("click", () => { lsPage--; loadListings().then(() =
 $("lsNext").addEventListener("click", () => { lsPage++; loadListings().then(() => $("lsCount").scrollIntoView({block: "nearest"})); });
 
 // ---- Runs & updates
-const KIND = {fetch: "Find new jobs", recompute: "Board rebuild", rerate: "Re-rate", rescore: "Re-read listings", migrate: "Catalog set up", find: "Find employers near me"};
+const KIND = {fetch: "Find new jobs", recompute: "Boards brought up to date", rerate: "Re-rate", rescore: "Listings read again", migrate: "Employers list set up", find: "Find employers with Claude"};
+const RUNST = {ok: "Done", running: "Running", stopped: "Stopped", partial: "Partly done", error: "Problem", budget: "Stopped at the budget"};
 function runRow(r){
   const d = r.details || {};
   let what = KIND[r.kind] || r.kind;
   if (r.kind === "fetch" && d.only) { const k = String(d.only).split(",").length; what = k > 3 ? `Checked ${n(k)} employers` : "Checked: " + d.only; }
-  if (r.kind === "rerate" && d.person) what += " · " + d.person + (d.tiers ? " (" + d.tiers.join(", ") + ")" : "");
+  if (r.kind === "rerate" && d.person) what += " · " + who(d.person) + (d.tiers ? " (" + d.tiers.map(x => TIER[x] || x).join(", ") + ")" : "");
   if (r.kind === "find") what += " · " + [d.label || d.location, d.size === "exhaustive" ? `exhaustive (${n(d.passes)} of up to ${n(d.budget)} passes)` : d.size].filter(Boolean).join(", ");
   const c = [];
   if (r.kind === "find") { if (r.companies != null) c.push(`${pl(r.companies, "employer", "employers")} found`); if (r.fetched != null) c.push(`${n(r.fetched)} readable`); }
   else {
-    if (r.companies != null) c.push(pl(r.companies, "company", "companies"));
-    if (r.fetched != null) c.push(`${n(r.fetched)} ${r.kind === "migrate" ? "listings" : "fetched"}`);
+    if (r.kind === "migrate") { if (r.companies != null) c.push(pl(r.companies, "employer", "employers")); if (r.fetched != null) c.push(pl(r.fetched, "listing", "listings")); }
+    else if (r.fetched != null && r.companies != null && r.fetched !== r.companies) c.push(`${n(r.fetched)} of ${pl(r.companies, "employer", "employers")} checked`);
+    else if (r.companies != null) c.push(`${pl(r.companies, "employer", "employers")} checked`);
     if (r.new) c.push(`${n(r.new)} new`); if (r.closed) c.push(`${n(r.closed)} closed`); if (r.changed) c.push(`${n(r.changed)} changed`); if (r.reopened) c.push(`${n(r.reopened)} back`);
   }
   const boards = d.boards || {};
-  const bl = Object.entries(boards).map(([p, v]) => v && v.error ? `${p}: failed` : v ? `${p}: ${n(v.jobs)} jobs` : "").filter(Boolean);
+  const bl = Object.entries(boards).map(([p, v]) => v && v.error ? `${who(p)}: board not updated` : v ? `${who(p)}: ${n(v.jobs)} jobs` : "").filter(Boolean);
   if (bl.length) c.push(bl.join(", "));
-  const tim = Object.entries(boards).flatMap(([p, v]) => (v && v.timings || []).map(t => `${p} · ${t.tier}: ${n(t.jobs)} jobs in ${t.secs}s` + (t.failed ? `, ${t.failed} batches failed` : "") + (t.stopped ? ` (${t.stopped})` : "")));
-  const errs = (r.errors || []).map(x => `${x.company || x.person || x.category || ""}: ${x.error || x.status || ""}`);
+  const tim = Object.entries(boards).flatMap(([p, v]) => (v && v.timings || []).map(t => `${who(p)} · ${TIER[t.tier] || t.tier}: ${n(t.jobs)} jobs in ${t.secs}s` + (t.failed ? `, ${t.failed} batches got no answer` : "") + (t.stopped ? ` (${t.stopped})` : "")));
+  const errs = (r.errors || []).map(x => `${x.company || (x.person ? who(x.person) : "") || x.category || ""}: ${x.error || x.status || ""}`);
   const more = (errs.length ? `<details><summary>${n(errs.length)} problem${errs.length === 1 ? "" : "s"}</summary><div>${errs.map(esc).join("<br>")}</div></details>` : "") +
-    (tim.length ? `<details><summary>Timing by model</summary><div>${tim.map(esc).join("<br>")}</div></details>` : "");
+    (tim.length ? `<details><summary>How long rating took</summary><div>${tim.map(esc).join("<br>")}</div></details>` : "");
   const st = r.status === "running" && r.finished ? "stopped" : r.status;
   return `<div class="crow rrow"><div><b>${esc(what)}</b><small>${esc(when(r.started))}${r.finished ? " · " + esc(dur(r.started, r.finished)) : ""}</small></div>
-    <div><span class="pill ${esc(st)}">${esc(st)}</span></div><div><small>${esc(c.join(" · ")) || "&nbsp;"}</small>${more}</div></div>`;
+    <div><span class="pill ${esc(st)}">${esc(RUNST[st] || st)}</span></div><div><small>${esc(c.join(" · ")) || "&nbsp;"}</small>${more}</div></div>`;
 }
 function loadRuns(){
   return get("/api/catalog/runs").then(d => {
@@ -524,19 +596,26 @@ $("allStop").addEventListener("click", () => {
   $("allStop").disabled = true;
   fetch("/api/update/stop", {method: "POST", headers: H, body: "{}"}).then(() => { $("allStop").disabled = false; pollStatus(); }).catch(() => { $("allStop").disabled = false; });
 });
-$("fetchAll").addEventListener("click", () => {
+$("fetchAll").addEventListener("click", async () => {
   const e = window.__EST;
-  if (!confirm("Find new jobs now?\n\n" + (e ? `Checks all ${n(e.companies)} employers for new and removed jobs, for everyone in the household. That takes ${e.text}.` : "Checks every employer for new and removed jobs, for everyone in the household.") + " Claude then rates the new listings for each person, which uses your Claude plan.")) return;
+  if (!await ask({title: "Find new jobs now?", ok: "Find new jobs", text: (e ? `Checks all ${n(e.companies)} employers for new and removed jobs, for everyone in the household. That takes ${e.text}.` : "Checks every employer for new and removed jobs, for everyone in the household.") + " Claude then rates the new listings for each person, which uses your Claude plan."})) return;
   fetch("/api/update", {method: "POST", headers: H, body: "{}"}).then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error === "already running" ? "Siftwell is already finding new jobs." : d.error); }))
     .then(() => { wasRunning = true; pollStatus(); }).catch(err => { $("allBar").hidden = false; $("allTitle").textContent = errText(err); });
 });
 
-// ---- Rating
+// The daily schedule is set in Settings > Finding new jobs; Activity only says what it is
+function loadSchedule(){
+  const tm = s => { const [h, m] = String(s || "").split(":").map(Number); const d = new Date(); d.setHours(h || 0, m || 0, 0, 0); return d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); };
+  get("/api/schedule").then(s => {
+    $("auLine").textContent = s.mode === "off" ? "Off: Siftwell looks only when someone presses Find new jobs." : s.mode === "closed" ? `Every day at ${tm(s.time)}, even when Siftwell is closed.` : `Every day at ${tm(s.time)}, while Siftwell is running.`;
+  }).catch(() => { $("auLine").textContent = "Set in Settings, under Finding new jobs."; });
+}
+// ---- Ratings (per person)
 function loadRating(){
   return get("/api/catalog/rating").then(d => {
     $("rateCards").innerHTML = d.people.map(p => {
       const s = p.summary, r = p.rerate || {};
-      const stats = s ? [["Pass their filters", s.passing], ["Rated by Claude", s.rated], ["Got a careful look or best judgment", s.deep], ["Waiting for a rating", s.unrated], ["Need a fresh rating", s.stale]]
+      const stats = s ? [["Pass their search", s.passing], ["Rated by Claude", s.rated], ["Got a careful look or best judgment", s.deep], ["Waiting for a rating", s.unrated], ["Need a fresh rating", s.stale]]
         .map(([l, v]) => `<div><b>${n(v)}</b><span>${esc(l)}</span></div>`).join("") : "";
       const tiers = s ? `Quick ${n(s.haiku)} · careful ${n(s.sonnet)} · best ${n(s.opus)}` + (s.unmet ? ` · ${n(s.unmet)} skipped (requirements not met)` : "") : "";
       const live = r.running ? `<div class="srow"><span class="note">${esc(r.label || "Re-rating")}${r.total ? ` · ${n(r.done)} of ${n(r.total)}${r.tier ? " (" + esc(r.tier) + ")" : ""}` : ""}…</span></div>` : "";
@@ -556,7 +635,7 @@ $("rateCards").addEventListener("click", ev => {
   fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: b.dataset.rr})}).then(go).catch(() => { b.disabled = false; });
 });
 
-// ---- Find employers near me
+// ---- Find employers with Claude
 let FD = null, fdTimer = null, fdSize = "medium";
 const CSTATE = {pending: "Waiting", researching: "Claude is researching…", checking: "Checking careers pages…", done: "Done", error: "Problem"};
 let fdEstTimer = null, fdEstSeq = 0;
@@ -593,7 +672,7 @@ function fdClaudeNotice(c){
   if (c.installed && c.signed_in) { el.hidden = true; return true; }
   el.hidden = false;
   el.innerHTML = (c.installed ? "Claude Code is installed but signed out." : "Claude Code isn't installed on this computer.") +
-    " Find employers near me uses Claude Code (your Claude plan) to search the web. <a href=\"/settings#get-started\">Open Settings → Get started</a> to set it up, then come back.";
+    " Finding employers with Claude uses Claude Code (your Claude plan) to search the web. <a href=\"/settings#get-started\">Open Settings → Get started</a> to set it up, then come back.";
   return false;
 }
 let FDC = {key: "", list: []};   // the candidate list the page has (the server leaves it out of a poll when unchanged)
@@ -648,7 +727,7 @@ function renderFind(){
     if (st.state === "checking" && all) s = `Checking careers pages: ${checked} of ${all}`;
     if (st.state === "done") s = exh ? `Done after ${n(st.passes)} pass${st.passes === 1 ? "" : "es"}: ${st.stop || ""}` : `${n((c.readable || 0) + (c.added || 0))} readable of ${n(all)} found`;
     if (st.state === "error") s = "Problem: " + (st.error || "") + " (Resume tries again)";
-    const cnt = all ? `<div class="fcn"><span><b>${n(all)}</b> found</span><span><b>${n((c.readable || 0) + (c.added || 0))}</b> readable</span><span><b>${n(c.unreadable)}</b> can't read</span><span><b>${n((c.known || 0) + (c.duplicate || 0))}</b> already in catalog</span>${c.pending ? `<span><b>${n(c.pending)}</b> to check</span>` : ""}</div>` : "";
+    const cnt = all ? `<div class="fcn"><span><b>${n(all)}</b> found</span><span><b>${n((c.readable || 0) + (c.added || 0))}</b> readable</span><span><b>${n(c.unreadable)}</b> can't read</span><span><b>${n((c.known || 0) + (c.duplicate || 0))}</b> already here</span>${c.pending ? `<span><b>${n(c.pending)}</b> to check</span>` : ""}</div>` : "";
     return `<div class="fcat"><div class="fcl"><span>${esc(lab)}</span><span class="note">${esc(s)}</span></div>${cnt}</div>`;
   }).join("");
   $("fdLines").textContent = d.live ? (d.lines || []).join("\n") : "";
@@ -659,9 +738,9 @@ function renderFind(){
   const prevTicked = new Set([...document.querySelectorAll("#fdOk input:checked")].map(x => x.value));
   $("fdOk").innerHTML = ok.length ? ok.map(c => `<div class="crow frow">${c.status === "added" ? `<span class="pill ok">Added</span>` : `<input type="checkbox" value="${c.id}" aria-label="Add ${esc(c.name)}"${prevTicked.has(String(c.id)) ? " checked" : ""}>`}
       <div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}${c.location_note ? " · " + esc(c.location_note) : ""}</small>${c.why ? `<small>${esc(c.why)}</small>` : ""}</div>
-      <div><span>${esc(atsName(c.ats))}</span><small>${n(c.open_jobs)} open job${c.open_jobs === 1 ? "" : "s"}${c.added_as && c.added_as !== c.name ? " · added as " + esc(c.added_as) : ""}</small></div>
+      <div><span>${n(c.open_jobs)} open job${c.open_jobs === 1 ? "" : "s"}</span><small>${c.added_as && c.added_as !== c.name ? "Added as " + esc(c.added_as) : ""}</small></div>
       <div>${safeUrl(c.url) ? `<a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener" class="note">Careers page</a>` : ""}</div></div>`).join("")
-    : `<div class="srow"><span class="note">${d.live ? "Readable employers show up here as they're checked." : !bad.length && known.length ? "Every employer found is already in your catalog." : "None of the new employers found could be read by Siftwell."}</span></div>`;
+    : `<div class="srow"><span class="note">${d.live ? "Readable employers show up here as they're checked." : !bad.length && known.length ? "Every employer found is already on the Employers page." : "None of the new employers found could be read by Siftwell."}</span></div>`;
   $("fdAdd").disabled = $("fdAddAll").disabled = !ok.some(c => c.status === "readable");
   $("fdBadWrap").hidden = !bad.length; $("fdBadSum").textContent = `${n(bad.length)} employer${bad.length === 1 ? "" : "s"} Siftwell can't read`;
   const groups = {}; bad.forEach(c => (groups[c.system || "Not identified"] = groups[c.system || "Not identified"] || []).push(c));
@@ -674,7 +753,7 @@ function renderFind(){
     (order.length > 4 ? `, and ${n(order.length - 4)} more group${order.length - 4 === 1 ? "" : "s"}` : "") + ". Support for the biggest job system would unlock the most employers." : "";
   $("fdBad").innerHTML = order.map(k => `<details class="fsys" data-sys="${esc(k)}"${openSys.has(k) ? " open" : ""}><summary><b>${n(groups[k].length)}</b> · ${esc(k)}</summary><div class="sgroup">` +
     groups[k].map(c => `<div class="crow"><div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}${c.location_note ? " · " + esc(c.location_note) : ""}</small></div><div><small>${esc(c.reason || "")}</small>${safeUrl(c.url) ? `<a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener" class="sm">${esc(c.url)}</a>` : `<span class="sm">${esc(c.url)}</span>`}</div></div>`).join("") + `</div></details>`).join("");
-  $("fdKnownWrap").hidden = !known.length; $("fdKnownSum").textContent = `${n(known.length)} already in your catalog`;
+  $("fdKnownWrap").hidden = !known.length; $("fdKnownSum").textContent = `${n(known.length)} already on the Employers page`;
   $("fdKnown").innerHTML = known.map(c => `<div class="crow"><div><b>${esc(c.name)}</b><small>${esc(catLab(c.category))}</small></div><div><small>${esc(c.reason || "")}</small></div></div>`).join("");
 }
 $("fdForm").addEventListener("submit", ev => {
@@ -695,8 +774,8 @@ $("fdResume").addEventListener("click", () => {
 function fdAdd(body){
   const m = $("fdAddMsg"); m.style.color = ""; m.textContent = "Adding…";
   post("/api/catalog/find/add", {...body, list: $("fdList").value}).then(d => {
-    m.textContent = `Added ${n(d.added.length)} employer${d.added.length === 1 ? "" : "s"}${$("fdList").value === "all" ? " for everyone" : " to your employers"}. ` + (d.fetching ? "Fetching their jobs now." : "Their jobs come with the next update.");
-    loaded.companies = false; loadFind();
+    m.textContent = `Added ${n(d.added.length)} employer${d.added.length === 1 ? "" : "s"}${$("fdList").value === "all" ? " for everyone" : " to your employers"}. ` + (d.fetching ? "Getting their jobs now." : "Their jobs come with the next Find new jobs.");
+    loaded.companies = false; loadFind(); if (window.dirReload) window.dirReload();
   }).catch(err => { m.style.color = "var(--bad)"; m.textContent = errText(err); });
 }
 $("fdAdd").addEventListener("click", () => fdAdd({ids: [...document.querySelectorAll("#fdOk input:checked")].map(x => +x.value)}));
@@ -716,13 +795,13 @@ const picked = new Set();
 function drawPick(){
   const q = $("exQ").value.trim().toLowerCase();
   const list = COS.filter(c => !q || c.name.toLowerCase().includes(q)).slice(0, 300);
-  $("exCos").innerHTML = list.map(c => `<label><input type="checkbox" value="${esc(c.name)}"${picked.has(c.name) ? " checked" : ""}> ${esc(c.name)} <span class="note">${esc(atsName(c.ats))}</span></label>`).join("") || `<span class="note">No companies match.</span>`;
+  $("exCos").innerHTML = list.map(c => `<label><input type="checkbox" value="${esc(c.name)}"${picked.has(c.name) ? " checked" : ""}> ${esc(c.name)}</label>`).join("") || `<span class="note">No employers match.</span>`;
 }
 $("exQ").addEventListener("input", drawPick);
 $("exCos").addEventListener("change", ev => { const x = ev.target; if (x.checked) picked.add(x.value); else picked.delete(x.value); });
 $("exBtn").addEventListener("click", () => {
   const lists = [...$("exLists").querySelectorAll("input:checked")].map(x => x.value), m = $("exMsg");
-  if (!lists.length && !picked.size) { m.textContent = "Tick your employers, or at least one company."; return; }
+  if (!lists.length && !picked.size) { m.textContent = "Tick your employers, or at least one employer."; return; }
   m.textContent = "Preparing the file…"; $("exBtn").disabled = true;
   fetch("/api/catalog/export", {method: "POST", headers: H, body: JSON.stringify({lists, names: [...picked], listings: $("exListings").checked})}).then(r => {
     if (!r.ok) return r.json().then(d => { throw new Error(d.error || "Couldn't export."); });
@@ -730,7 +809,7 @@ $("exBtn").addEventListener("click", () => {
     return r.blob().then(b => {
       const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = fn; document.body.appendChild(a); a.click();
       setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
-      m.textContent = `Saved ${fn}: ${pl(+cn[0], "company", "companies")}, ${pl(+cn[1], "listing", "listings")}.`;
+      m.textContent = `Saved ${fn}: ${pl(+cn[0], "employer", "employers")}, ${pl(+cn[1], "listing", "listings")}.`;
     });
   }).catch(err => { m.textContent = errText(err); }).then(() => { $("exBtn").disabled = false; });
 });
@@ -742,7 +821,7 @@ $("imFile").addEventListener("change", () => {
   fetch("/api/catalog/import/preview", {method: "POST", headers: {"X-Jobboard": "1", "Content-Type": "application/octet-stream"}, body: f})
     .then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error || "Couldn't read that file."); return d; })).then(d => {
       imToken = d.token;
-      m.textContent = `${n(d.new_companies)} new compan${d.new_companies === 1 ? "y" : "ies"}, ${n(d.new_listings)} new listing${d.new_listings === 1 ? "" : "s"}, ${n(d.known_companies)} already in your catalog` +
+      m.textContent = `${pl(d.new_companies, "new employer", "new employers")}, ${n(d.new_listings)} new listing${d.new_listings === 1 ? "" : "s"}, ${n(d.known_companies)} already here` +
         (d.known_listings ? ` (${n(d.known_listings)} listings you already have get their dates merged)` : "") + ".";
       $("imGo").hidden = false;
     }).catch(err => { m.style.color = "var(--bad)"; m.textContent = errText(err); });
@@ -750,7 +829,7 @@ $("imFile").addEventListener("change", () => {
 $("imBtn").addEventListener("click", () => {
   const m = $("imMsg"); $("imBtn").disabled = true; m.style.color = ""; m.textContent = "Adding…";
   post("/api/catalog/import", {token: imToken, list: $("imList").value}).then(d => {
-    m.textContent = `Added ${pl(d.new_companies, "company", "companies")} and ${pl(d.new_listings, "listing", "listings")}` + (d.known_companies ? `; ${pl(d.known_companies, "company", "companies")} you already had ${d.known_companies === 1 ? "is" : "are"} now among ${$("imList").value === "all" ? "everyone’s" : "yours"} too` : "") + ". Everyone's boards are being rebuilt.";
+    m.textContent = `Added ${pl(d.new_companies, "employer", "employers")} and ${pl(d.new_listings, "listing", "listings")}` + (d.known_companies ? `; ${pl(d.known_companies, "employer", "employers")} you already had ${d.known_companies === 1 ? "is" : "are"} now among ${$("imList").value === "all" ? "everyone’s" : "yours"} too` : "") + ". Everyone's boards are being rebuilt.";
     $("imGo").hidden = true; $("imFile").value = ""; imToken = ""; loaded.companies = false; COS = [];
   }).catch(err => { m.style.color = "var(--bad)"; m.textContent = errText(err); }).then(() => { $("imBtn").disabled = false; });
 });
@@ -774,6 +853,7 @@ fetch("/api/people").then(r => r.json()).then(d => {
   const me = d.people.find(p => p.id === d.current) || {};
   $("avName").textContent = me.name || "Profile"; $("avInit").textContent = (me.name || "?").trim()[0].toUpperCase();
   $("lsWho").insertAdjacentHTML("beforeend", d.people.map(p => `<option value="${esc(p.id)}">On ${esc(p.name)}'s board</option>`).join(""));
+  NAMES = Object.fromEntries(d.people.map(p => [p.id, p.name])); if (loaded.runs) loadRuns();
   $("amPeople").innerHTML = `<div class="who">Profiles</div>` + d.people.map(p => `<button role="menuitem" data-person="${esc(p.id)}" aria-current="${p.id === d.current}">${esc(p.name)}</button>`).join("") + `<button role="menuitem" data-person="__add">Add a person</button><button role="menuitem" data-person="__manage">Manage profiles</button>`;
 }).catch(() => {});
 $("avatarBtn").addEventListener("click", ev => { ev.stopPropagation(); const h = $("amenu").hidden; $("amenu").hidden = !h; $("avatarBtn").setAttribute("aria-expanded", h); });
@@ -782,7 +862,7 @@ $("amenu").addEventListener("click", ev => {
   const b = ev.target.closest("button"); if (!b) return;
   $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false");
   const v = b.dataset.person; if (!v) return;
-  if (v === "__add") return toBoard(["jb.run", "addPerson"]);
+  if (v === "__add") { location.href = "/people/new"; return; }   // the same form as the welcome page
   if (v === "__manage") { location.href = "/settings#profiles"; return; }
   if (v === ME.id) return;
   fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => location.reload());

@@ -106,7 +106,7 @@ def board_counts(pid):
     d = read_json(fp, {}) or {}
     js = d.get("jobs") or []
     out = {"jobs": len(js), "rated": sum(1 for j in js if j.get("ai_fit") is not None), "generated": d.get("generated"),
-           "counted": "rate_batch" in d}
+           "counted": "rate_batch" in d, "clearance": sum(1 for j in js if j.get("clearance"))}
     _BOARD_COUNTS[pid] = (st.st_mtime_ns, st.st_size, out)
     return out
 
@@ -1159,13 +1159,16 @@ class H(BaseHTTPRequestHandler):
         if path in getting_started.GET_PATHS and getting_started.handle_get(self, path, pid, self.path.partition("?")[2]):
             return
         if pid is None:  # fresh install: nothing exists until the first person is added
-            if path in ("/", "/index.html", "/setup", "/settings", "/profile"):
+            if path in ("/", "/index.html", "/setup", "/settings", "/profile", "/people/new"):
                 import welcome_page
                 return self._send(200, welcome_page.render_welcome_html(), "text/html")
             if path == "/api/people":
                 return self._send(200, {"people": [], "current": None, "settings": dict(people.DEFAULT_SETTINGS), "prefs": people.prefs()})
             if path != "/api/status":
                 return self._send(409, {"error": "Add a person first."})
+        if path == "/people/new":  # Add a person: the welcome page's form (Settings > Profiles, the profile menu)
+            import welcome_page
+            return self._send(200, welcome_page.render_add_person_html(), "text/html")
         if path == "/setup":
             import setup_page
             return self._send(200, setup_page.render_setup_html(), "text/html")
@@ -1630,8 +1633,13 @@ class H(BaseHTTPRequestHandler):
             try:
                 if "salary_floor" in st:  # blank or 0 = no floor
                     fl = int(st["salary_floor"] or 0)
-                    clean["salary_floor"] = max(30000, min(1_000_000, fl)) if fl > 0 else 0
+                    clean["salary_floor"] = max(15000, min(1_000_000, fl)) if fl > 0 else 0   # (15,000: full-time at the US minimum wage)
                 if "current_base" in st: clean["current_base"] = int(st["current_base"]) if st["current_base"] not in (None, "") else None
+                if "salary_target" in st:  # My profile > Job search > Pay (setup asks for it too); blank = none
+                    tg = int(st["salary_target"]) if st["salary_target"] not in (None, "", 0, "0") else None
+                    if tg is not None and not 15000 <= tg <= 2_000_000:
+                        return self._send(400, {"error": "Target pay should be between $15,000 and $2,000,000 a year."})
+                    clean["salary_target"] = tg
                 if "seniority_mine" in st:
                     if st["seniority_mine"] in (None, "", 0, "0"):  # "Any level"
                         clean["seniority_mine"], clean["seniority_band"] = None, [1, 7]
@@ -1667,9 +1675,22 @@ class H(BaseHTTPRequestHandler):
                 if st["travel_max"] not in ("none", "light", "moderate", "any"):
                     return self._send(400, {"error": "Pick how much travel is OK."})
                 clean["travel_max"] = st["travel_max"]
+            import setup_flow
+            for k in ("skip_employers", "skip_industries"):  # My profile > Job search > Dealbreakers (the same keys setup writes)
+                if k in st:
+                    try:
+                        clean[k] = setup_flow._strlist(st[k] or [], k)
+                    except setup_flow.SetupError as e:
+                        return self._send(400, {"error": str(e)})
             if body.get("name"): people.rename(pid, str(body["name"]))
             before = people.settings()
             saved = people.save_settings(clean)
+            # Claude learns about target pay and the dealbreakers only from the "Setup answers" line of the goals (as at
+            # the end of setup): when one of them changes here, that line is written again so the change takes effect.
+            if any(k in clean and before.get(k) != saved.get(k) for k in setup_flow.GOALS_KEYS):
+                g = setup_flow.goals_with_answers(saved)
+                if g != (saved.get("goals") or ""):
+                    saved = people.save_settings({"goals": g})
             # a new search area (home, radius, ways of working): the page offers the directory's employers for it
             area = lambda s: (str(s.get("home_zip") or "").strip().lower(), int(s.get("radius_miles") or 35), tuple(s.get("workplaces") or ()), bool(s.get("remote_us", True)))
             area_changed = area(before) != area(saved)

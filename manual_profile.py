@@ -25,18 +25,24 @@ CSS = """
 .mp button.mp-b{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}
 .mp button.mp-b.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
 .mp button.mp-b.link{border:0;background:none;color:var(--accent);padding:0;font-weight:600}
+.mp .mp-clr{display:flex;flex-direction:column;gap:6px;min-width:0}
+.mp .mp-q{font-size:13px;font-weight:600}
+.mp .mp-yn{display:flex;gap:16px}
+.mp .mp-yn label{display:inline-flex;align-items:center;gap:6px;font-size:14px;min-height:32px;cursor:pointer}
+.mp .mp-yn input{width:18px;height:18px;margin:0}
 @media (max-width:560px){.mp .mp-grid,.mp .mp-row3{grid-template-columns:minmax(0,1fr)}}
 """
 
 JS = r"""
 window.ManualProfile = (function(){
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  const CLR = [["", "None"], ["Public Trust", "Public Trust"], ["Secret", "Secret"], ["Top Secret", "Top Secret"], ["TS/SCI", "TS/SCI"], ["TS/SCI + poly", "TS/SCI + polygraph"]];
+  // Clearance levels, asked only after "Do you hold a security clearance?" is answered Yes (most people never need it).
+  const CLR = [["Public Trust", "Public Trust"], ["Secret", "Secret"], ["Top Secret", "Top Secret"], ["TS/SCI", "TS/SCI"], ["TS/SCI + poly", "TS/SCI + polygraph"]];
   const blankRole = () => ({title: "", employer: "", dates: "", highlights: ""});
   const blank = () => ({name: "", location: "", current_title: "", years_experience: "", summary: "", experience: [blankRole()],
                         skills: "", education: "", certifications: "", clearance: ""});
   const lines = v => Array.isArray(v) ? v.join("\n") : (v || "");
-  let D = blank(), root = null, opts = {}, msg = {t: "", cls: ""};
+  let D = blank(), root = null, opts = {}, msg = {t: "", cls: ""}, hasClr = null;   // hasClr: null until answered
 
   function fill(src, only){
     if (!src) return;
@@ -48,7 +54,7 @@ window.ManualProfile = (function(){
     if ((src.experience || []).length) D.experience = src.experience.map(e => ({title: e.title || "", employer: e.employer || "", dates: e.dates || "", highlights: lines(e.highlights)}));
     if (!D.experience.length) D.experience = [blankRole()];
   }
-  function load(p){ D = blank(); fill(p && Object.assign({}, p, {current_title: ((p.target_roles || [])[0]) || ""}), false); if (root) draw(); }
+  function load(p){ D = blank(); hasClr = null; fill(p && Object.assign({}, p, {current_title: ((p.target_roles || [])[0]) || ""}), false); if (root) draw(); }
 
   const f = (k, label, ctl, help) => `<label class="f">${esc(label)}${help ? `<small>${esc(help)}</small>` : ""}${ctl}</label>`;
   const inp = (k, ph, type) => `<input type="${type || "text"}" data-mp="${k}" value="${esc(D[k])}"${ph ? ` placeholder="${esc(ph)}"` : ""}${type === "number" ? ' min="0" max="70"' : ""} autocomplete="off">`;
@@ -60,6 +66,7 @@ window.ManualProfile = (function(){
     <label class="f">What you did <small>One accomplishment per line.</small><textarea data-r="highlights" rows="4">${esc(r.highlights)}</textarea></label>
     ${D.experience.length > 1 ? `<div><button type="button" class="mp-b link" data-act="rmrole" data-i="${i}">Remove this role</button></div>` : ""}</div>`;
 
+  const clrOn = () => hasClr !== null ? hasClr : (D.clearance ? true : null);
   function draw(){
     root.innerHTML = `<div class="mp">
       <div class="mp-pre"><b>Start from a resume file <span class="mp-note">(optional)</span></b>
@@ -69,15 +76,17 @@ window.ManualProfile = (function(){
           <div class="mp-btns" style="margin-top:6px"><button type="button" class="mp-b" data-act="usepaste">Fill the form from this text</button></div></details>
         <span class="mp-msg" data-pre role="status"></span></div>
       <div class="mp-grid">${f("name", "Full name", inp("name"), "As it should appear on your resume.")}${f("location", "Location", inp("location", "City, ST"))}
-        ${f("current_title", "Current job title", inp("current_title", "e.g. Office Manager"), "This is what Siftwell searches for first.")}
+        ${f("current_title", "Current job title", inp("current_title", "Your job title"), "This is what Siftwell searches for first.")}
         ${f("years_experience", "Years of experience", inp("years_experience", "", "number"), "Optional. Worked out from your roles if blank.")}</div>
       ${f("summary", "Summary", ta("summary", 4, "Two or three sentences about what you do best."))}
       <h3>Experience</h3><div id="mpRoles">${D.experience.map(role).join("")}</div>
       <div><button type="button" class="mp-b" data-act="addrole">+ Add a role</button></div>
       <div class="mp-grid">${f("skills", "Skills", ta("skills", 4), "One per line, or separated by commas.")}
-        ${f("education", "Education", ta("education", 4, "e.g. Associate degree in Business, Lakeside Community College"), "One per line.")}</div>
-      <div class="mp-grid">${f("certifications", "Certifications and licenses", ta("certifications", 3, "e.g. PMP; RN license"), "One per line, or separated by semicolons.")}
-        ${f("clearance", "Security clearance", `<select data-mp="clearance">${CLR.map(([v, t]) => `<option value="${esc(v)}"${D.clearance === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>`, "Only what you hold today.")}</div>
+        ${f("education", "Education", ta("education", 4, "e.g. a diploma, degree or training program, and where"), "One per line.")}</div>
+      <div class="mp-grid">${f("certifications", "Certifications and licenses", ta("certifications", 3, "e.g. a license; a certificate"), "One per line, or separated by semicolons.")}
+        <div class="f mp-clr" role="group" aria-labelledby="mpClrQ"><span class="mp-q" id="mpClrQ">Do you hold a security clearance?</span>
+          <span class="mp-yn"><label><input type="radio" name="mpclr" value="no"${clrOn() === false ? " checked" : ""}> No</label><label><input type="radio" name="mpclr" value="yes"${clrOn() ? " checked" : ""}> Yes</label></span>
+          ${clrOn() ? f("clearance", "Which one?", `<select data-mp="clearance">${(!D.clearance || CLR.some(c => c[0] === D.clearance) ? CLR : [[D.clearance, D.clearance]].concat(CLR)).map(([v, t]) => `<option value="${esc(v)}"${D.clearance === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>`, "Only what you hold today.") : ""}</div></div>
       ${opts.button ? `<div class="mp-btns"><button type="button" class="mp-b primary" data-act="save">Save my profile</button></div>` : ""}
       <div class="mp-msg ${msg.cls}" data-msg role="status">${esc(msg.t)}</div></div>`;
   }
@@ -107,6 +116,7 @@ window.ManualProfile = (function(){
   }
   function onChange(e){
     const el = e.target;
+    if (el.name === "mpclr") { hasClr = el.value === "yes"; D.clearance = hasClr ? (D.clearance || CLR[0][0]) : ""; draw(); const r = root.querySelector('input[name="mpclr"]:checked'); if (r) r.focus(); return; }
     if (el.dataset.act === "file" && el.files[0]) {
       const file = el.files[0];
       if (file.size > 15 * 1024 * 1024) { pre("That file is over 15 MB.", "err"); return; }

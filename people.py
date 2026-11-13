@@ -93,10 +93,12 @@ PREF_SCHEMA = {
     "claude.auto_rerate": (True, [True, False]),
     "claude.auto_rate": (True, [True, False]),
     "claude.facts_per_update": (10, (0, 200)),   # shared facts: an update uses the highest value any profile sets
-    "display.start_tab": ("jobs", ["jobs", "pivot", "tailored", "companies"]),
+    "display.start_tab": ("jobs", ["jobs", "saved", "applied", "pivot", "tailored", "companies"]),   # saved / applied: the Jobs tab showing those
     "display.sort": ("score", ["score", "relevant", "appeal", "odds", "odds_later", "pay", "gd", "new"]),
     # (display.level, the board's old Seniority filter default, is gone: "Your level" in the board's My search decides it.)
-    "display.clearance": ("secret", ["all", "none", "nopoly", "secret"]),
+    # Default board filter for jobs that ask for a security clearance. "all" (show them) unless the person chooses; asked only
+    # when clearances matter to them (setup_flow.clearance_relevant). Profiles that saved a choice keep it.
+    "display.clearance": ("all", ["all", "none", "nopoly", "secret"]),
     "display.theme": ("system", ["system", "light", "dark"]),
 }
 

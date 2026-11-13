@@ -1,12 +1,15 @@
 """The Settings page (GET /settings): per-profile preferences in a two-pane, iOS/macOS-Settings-style layout.
 
-Left: a category list (one per PREF_SCHEMA prefix, plus the API key). Right: the selected category's controls in
-rounded grouped sections. The selection lives in the URL hash (/settings#display). At phone width it becomes a
+Left: a category list in three groups: "This profile" (Resume PDF, Tailoring, Resume review, Ratings & Claude, Display:
+the PREF_SCHEMA prefixes, saved per profile), "This household" (Get started, Profiles, Finding new jobs, About & updates,
+Backup & move) and "Advanced" (Employer directory source and Build my own directory, API key). Right: the selected
+category's controls in rounded grouped sections. It opens on Get started. The selection lives in the URL hash (/settings#display). At phone width it becomes a
 drill-down: the list alone, then one category with a "‹ Settings" back control.
 
 Every control auto-saves on change through POST /api/prefs (people.save_prefs merges partial updates).
-It reuses the board's styles (report.HEAD) and header icon row (report.TOOLS). Update / Re-rate / Add a person
-hand off to the board: they set sessionStorage "jb.run" and go to /#jobs, where report.py's script picks the request up
+Saved search settings (where, pay, level, dealbreakers) are not here: they live on My profile > Job search.
+It reuses the board's styles (report.HEAD) and header icon row (report.TOOLS). Add a person opens /people/new (the
+same form as the welcome page, welcome_page.py). Update / Re-rate hand off to the board: they set sessionStorage "jb.run" and go to /#jobs, where report.py's script picks the request up
 and runs it with its usual confirm and progress UI. My profile is its own page (profile_page.py), which shares this
 page's layout CSS, pane helpers and script pieces (fill_script)."""
 import html
@@ -57,23 +60,23 @@ CATEGORIES = [
             ("number", "tailor.bullets_older", "Older roles", "1 to 6 bullets."),
         ]),
     ]),
-    ("review", "Astra review", '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>', [
+    ("review", "Resume review (Astra)", '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>', [
         ("Astra (ChatGPT)", "Astra grades each tailored resume and sends it back for rework until it passes. It runs through the "
          "Codex app (a ChatGPT sign-in): without Codex on this computer a tailored resume is marked Not reviewed, and Siftwell's own "
          "free checks (page count, pronouns, date formats, posting keywords) still run.", [
             ("toggle", "review.enabled", "Grade every tailored resume", ""),
-            ("toggle", "review.ask_facts", "Let Astra ask me for facts", ""),
+            ("toggle", "review.ask_facts", "Let Astra ask you for facts", ""),
             ("number", "review.threshold", "Pass score", "60 to 95."),
             ("number", "review.max_rounds", "Max rework rounds", "1 to 4."),
         ]),
     ]),
-    ("claude", "Claude usage", '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', [
+    ("claude", "Ratings & Claude", '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', [
         ("How much Claude rates in one run", "A run is one automatic rating after Find new jobs, one scheduled night (its Find new jobs and "
          "the re-rate after it count as one run together), or one press of Rate more or Re-rate. The limits are per run and the same "
          "for all of them; they don't grow with the number of jobs in your area. Jobs over a limit keep a — for Match until the next run. The three kinds of rating have the same names everywhere in Siftwell, each with the Claude model it uses: Quick check (Haiku), "
          "Careful look (Sonnet) and Best judgment (Opus). Applies from the next run.", [
             ("number", "claude.haiku_per_night", "Quick checks per run", "New jobs that get a quick check (Haiku), the ones most relevant to your work first. 0 to 500."),
-            ("number", "claude.sonnet_pct", "Careful look: best % of rated jobs", "The best-scoring share of your rated jobs get a careful look (Sonnet), at most 100 per run. 0 to 50."),
+            ("number", "claude.sonnet_pct", "Careful look: best % of rated jobs", "The best-rated share of your rated jobs get a careful look (Sonnet), at most 100 per run. 0 to 50."),
             ("number", "claude.opus_top", "Best judgment: your top jobs", "How many of your best jobs get Claude's best judgment (Opus), at most 50 new per run, plus up to 25 jobs you saved (the latest first). 0 to 1,000."),
             ("number", "claude.per_update", "Target-tab ratings per run", "Jobs rated for your Target tab in one run. 0 to 50."),
         ]),
@@ -90,9 +93,10 @@ CATEGORIES = [
     ]),
     ("display", "Display", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>', [
         ("Board", "", [
-            ("select", "display.start_tab", "Start on", [("jobs", "Jobs"), ("pivot", "Target tab"), ("tailored", "Resumes"), ("companies", "Companies")], ""),
+            ("select", "display.start_tab", "Start on", [("jobs", "Jobs"), ("pivot", "Target"), ("saved", "Saved"), ("applied", "Applied"), ("tailored", "Resumes"), ("companies", "Employers")], "The tab your board opens on."),
             ("select", "display.sort", "Default sort", [("score", "Best bets (good job and good fit)"), ("relevant", "Most relevant to my work"), ("appeal", "Most appealing (pay, place, level)"), ("odds", "Best fit (Claude’s Match)"), ("odds_later", "Best fit with my resume as it is"), ("pay", "Highest pay"), ("gd", "Best employee reviews"), ("new", "Newest")], ""),
-            ("select", "display.clearance", "Default clearance", [("secret", "Secret or less"), ("nopoly", "No TS/SCI + poly"), ("none", "No clearance mentioned"), ("all", "Any clearance")], ""),
+            # (shown only when clearances matter to this profile: setup_flow.clearance_relevant; the same setting is under My profile > Job search > Dealbreakers)
+            ("select", "display.clearance", "Jobs that need a security clearance", [("all", "Show them all"), ("none", "Hide every one"), ("secret", "Up to Secret"), ("nopoly", "Anything but a polygraph")], "Shown because your profile or your board has clearance jobs."),
         ]),
         ("Appearance", "", [
             ("select", "display.theme", "Theme", [("system", "Match device"), ("light", "Light"), ("dark", "Dark")], ""),
@@ -132,68 +136,95 @@ def _group(title, foot, rows):
     return f'<section class="sgsec">{t}<div class="sgroup">{"".join(rows)}</div>{f}</section>'
 
 
-def _pane_head(cid, name, back_href="/settings", back_label="Settings"):
+def _pane_head(cid, name, back_href="/settings", back_label="Settings", scope=""):
+    sc = f'<small class="sscope">{e(scope)}</small>' if scope else ""
     return (f'<div class="sphead"><a class="sback" href="{back_href}" data-back>‹ {e(back_label)}</a>'
-            f'<div class="sprow"><h2 id="h-{cid}">{e(name)}</h2><span class="ssave" role="status" aria-live="polite"></span></div></div>')
+            f'<div class="sprow"><h2 id="h-{cid}">{e(name)}</h2><span class="ssave" role="status" aria-live="polite"></span></div>{sc}</div>')
 
 
-def _render_parts():
+# The left-hand list, in three groups. Each pane says whose setting it is under its title.
+NAV_GROUPS = [
+    ("This profile", [c[0] for c in CATEGORIES]),
+    ("This household", ["get-started", "profiles", "updates", "about", "backup"]),
+    ("Advanced", ["directory", "apikey"]),
+]
+DEFAULT_CAT = "get-started"   # what Settings opens on (at desktop width, with no #section in the address)
+
+
+def _render_parts(name="", clearance=True):
     nav, panes = [], []
-    for cid, name, icon, groups in [GS_CAT + ("checklist",), PROF_CAT + ("profiles",)] + CATEGORIES + [UPDATES_CAT + ("updates",), directory.CAT + ("directory",), ABOUT_CAT + ("about",), BACKUP_CAT + ("backup",), KEY_CAT + (None,)]:
+    every = {c[0]: c for c in [GS_CAT + ("checklist",), PROF_CAT + ("profiles",)] + CATEGORIES +
+             [UPDATES_CAT + ("updates",), directory.CAT + ("directory",), ABOUT_CAT + ("about",), BACKUP_CAT + ("backup",), KEY_CAT + (None,)]}
+    order = [(g, every[cid]) for g, ids in NAV_GROUPS for cid in ids]
+    last_group = None
+    for group, (cid, name_, icon, groups) in order:
+        if group != last_group:
+            nav.append(f'<div class="sgrp" role="presentation">{e(group)}</div>')
+            last_group = group
+        scope = (f"Only for {name}" if name else "Only for this profile") if group == "This profile" else \
+            "For everyone in this household" if group == "This household" else "For everyone in this household · Advanced"
         count = '<span class="scount" id="gsCount" hidden></span>' if cid == "get-started" else ""
-        nav.append(f'<a class="scat" href="#{cid}" data-cat="{cid}"><span class="sico">{_SVG.format(icon)}</span>'
-                   f'<span class="sname">{e(name)}</span>{count}<span class="schev" aria-hidden="true">›</span></a>')
+        dflt = " data-default" if cid == DEFAULT_CAT else ""
+        nav.append(f'<a class="scat" href="#{cid}" data-cat="{cid}"{dflt}><span class="sico">{_SVG.format(icon)}</span>'
+                   f'<span class="sname">{e(name_)}</span>{count}<span class="schev" aria-hidden="true">›</span></a>')
         if groups == "checklist":
             body = getting_started.PANE_HTML
         elif groups == "profiles":
             body = (_group("Everyone in this household", "Removing a profile takes it off the board. Its folder is kept in the people_removed "
                            "folder inside your Siftwell data folder, not deleted.", ['<div id="profList"></div>']) +
-                    '<div class="sbtns" style="margin-top:14px"><button class="btn primary" type="button" id="profAdd">Add a person</button></div>'
+                    '<div class="sbtns" style="margin-top:14px"><a class="btn primary" href="/people/new" id="profAdd">Add a person</a></div>'
                     '<p class="note" id="profMsg" role="status" aria-live="polite" style="margin:8px 14px 0"></p>'
-                    '<p class="note" style="margin:8px 14px 0">Resume, search settings, target and companies for the person you are viewing are on <a href="/profile">My profile</a>.</p>')
+                    '<p class="note" style="margin:8px 14px 0">Resume, search settings and target for the person you are viewing are on <a href="/profile">My profile</a>; '
+                    'employers are on the <a href="/catalog">Employers</a> page.</p>')
         elif groups == "updates":
             body = autoupdate.PANE_HTML
         elif groups == "directory":
-            body = directory.PANE_HTML
+            body = directory.SOURCE_HTML
         elif groups == "about":
             body = appupdate.PANE_HTML
         elif groups == "backup":
             body = backup.PANE_HTML
         elif groups is None:
             body = (_group("Status", "", [_row("<span>Anthropic API key</span>", "", '<span class="note" id="keyState">Checking…</span>')]) +
-                    _group("Change key", "Scoring runs through your Claude subscription using the Claude Code app on this computer, so a key is "
-                           "optional: only if you would rather bill scoring separately. A saved key stays on this computer "
+                    _group("Change key", "Rating runs through your Claude subscription using the Claude Code app on this computer, so a key is "
+                           "optional: only if you would rather bill rating separately. A saved key stays on this computer "
                            "(secrets.json in your Siftwell data folder) and is sent only to Anthropic. Ratings are cached, so later updates only rate what's new.",
                            ['<form class="srow stack" id="keyForm"><input type="password" id="keyInput" placeholder="Paste an Anthropic API key (sk-ant-…)" '
                             'autocomplete="off" aria-label="Anthropic API key"><div class="sbtns"><button class="btn primary" type="submit">Save key</button>'
-                            '<button class="btn" type="button" id="keyClear">Remove key</button></div></form>']))
+                            '<button class="btn danger" type="button" id="keyClear">Remove key</button></div></form>']))
         else:
+            if not clearance:
+                groups = [(t, f, [r for r in rows if r[1] != "display.clearance"]) for t, f, rows in groups]
             body = "".join(_group(t, f, [_row(f'<label for="{c_id}">{e(lbl)}</label>', hlp, ctl) for c_id, lbl, hlp, ctl in map(_control, rows)])
                            for t, f, rows in groups)
             if cid == "claude":
-                body = _group("What Siftwell has used", "Counted from Claude's own report after each request Siftwell makes on this "
-                              "computer (all profiles). A token is roughly three quarters of a word. Other things you do with Claude "
-                              "aren't included, and looking at this page never uses Claude.",
-                              ['<div class="srow stack" id="usageBox"><span class="note">Loading…</span></div>']) + body
+                # two parts: how much Claude rates (the settings), then what it has used (read-only)
+                body = '<h3 class="ssec">How much Claude rates</h3>' + body
                 body += _group("Ratings from older versions", "", [
                     _row("<span>Keep my current ratings</span>",
                          "Marks ratings made by older versions of Siftwell as up to date, so they aren't re-rated. "
                          "Use this if you haven't changed your resume or answers since.",
                          '<button class="btn sm" type="button" id="keepBtn">Keep my current ratings</button>'),
                     '<div class="srow"><span class="note" id="keepMsg" role="status" aria-live="polite"></span></div>'])
-            body += ('<div class="sreset"><button class="btn ghost sm" type="button" data-reset>Restore all defaults</button>'
+                body += '<h3 class="ssec">Usage</h3>' + _group("What Siftwell has used", "Counted from Claude's own report after each request Siftwell makes on this "
+                              "computer (all profiles). A token is roughly three quarters of a word. Other things you do with Claude "
+                              "aren't included, and looking at this page never uses Claude.",
+                              ['<div class="srow stack" id="usageBox"><span class="note">Loading…</span></div>'])
+            body += ('<div class="sreset"><button class="btn ghost sm danger" type="button" data-reset>Restore all defaults</button>'
                      '<span class="note" data-resetmsg></span></div>')
-        panes.append(f'<section class="spane" data-cat="{cid}" aria-labelledby="h-{cid}" hidden>{_pane_head(cid, name)}{body}</section>')
+        panes.append(f'<section class="spane" data-cat="{cid}" aria-labelledby="h-{cid}" hidden>{_pane_head(cid, name_, scope=scope)}{body}</section>')
     return "".join(nav), "".join(panes)
 
 
 def render_settings_html(pid=None) -> str:
+    import setup_flow
     name = e(people.name(pid))
     p = people.prefs(pid)
-    nav, panes = _render_parts()
+    nav, panes = _render_parts(people.name(pid), clearance=setup_flow.clearance_relevant(pid))
     tools = report.TOOLS.replace('id="prefsBtn" href="/settings"', 'id="prefsBtn" href="/settings" aria-current="page"')
-    head = report.HEAD.replace("<title>Siftwell</title>", "<title>Settings · " + name + "</title>")
-    body = BODY.replace("__TOOLS__", tools).replace("__NAV__", nav).replace("__PANES__", panes).replace("__NAME__", name).replace("__VERSION__", e(getting_started.VERSION))
+    head = report.HEAD.replace("<title>Siftwell</title>", "<title>Settings · Siftwell</title>")
+    body = (BODY.replace("__TITLE__", "Settings").replace("__SUBTITLE__", f"{name}’s settings, and the ones for everyone in this household")
+            .replace("__TOOLS__", tools).replace("__NAV__", nav).replace("__PANES__", panes).replace("__VERSION__", e(getting_started.VERSION)))
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             # Apply the saved theme before first paint so the page doesn't flash the wrong colours.
@@ -201,7 +232,7 @@ def render_settings_html(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + CSS + getting_started.CSS + backup.CSS + appupdate.CSS + "</head><body>" + body + '<script src="/assets/vendor/qrcode.js"></script>\n' +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") +
-            ";</script>\n" + report.CONFIRM_SCRIPT + report.DOWN_SCRIPT + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + autoupdate.SCRIPT + appupdate.BANNER_SCRIPT + appupdate.PANE_SCRIPT + directory.PANE_SCRIPT + "</body></html>")
+            ";</script>\n" + report.CONFIRM_SCRIPT + ASK_SCRIPT + report.DOWN_SCRIPT + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + autoupdate.SCRIPT + appupdate.BANNER_SCRIPT + appupdate.PANE_SCRIPT + directory.SOURCE_SCRIPT + "</body></html>")
 
 
 CSS = """<style>
@@ -245,6 +276,11 @@ CSS = """<style>
 .sw:checked{background:var(--accent)}
 .sw:checked::after{transform:translateX(18px)}
 .sver{margin:10px 12px 0;color:var(--muted);font-size:11.5px}
+.sgrp{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:14px 10px 4px}
+.sgrp:first-child{padding-top:2px}
+.sscope{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.ssec{font-size:15px;font-weight:650;margin:26px 0 0}
+.ssec:first-of-type{margin-top:14px}
 .utab{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13.5px}
 .utab th,.utab td{padding:5px 0;text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:normal;overflow-wrap:anywhere;text-transform:none;letter-spacing:0;vertical-align:top}
 .utab th:first-child,.utab td:first-child{text-align:left;padding-right:8px;width:36%}
@@ -254,12 +290,17 @@ CSS = """<style>
 .sreset{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
 .sreset .note{color:var(--muted);font-size:12.5px}
 .sreset [data-reset][data-armed="1"]{color:var(--bad)}
+/* fallback until report.HEAD has the shared danger button; :where() keeps it weaker than that one */
+:where(.btn.danger){color:var(--bad);border-color:var(--bad)}
+:where(.btn.danger:hover){background:var(--bad-soft)}
 @media (max-width:720px){
   .slayout{display:block}
   .slayout.atList .spanes,.slayout:not(.atList) .snav{display:none}
   .snav{position:static;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
   .scat{border-radius:0;padding:10px 14px;min-height:48px}
   .scat+.scat{border-top:1px solid var(--line)}
+  .sgrp{padding:14px 14px 6px;background:var(--bg);border-top:1px solid var(--line)}
+  .sgrp:first-child{border-top:0;padding-top:10px}
   .scat[aria-current="page"]{background:none;color:var(--ink);font-weight:500}
   .scat[aria-current="page"] .sico{background:var(--accent-soft)}
   .schev{display:block;color:var(--muted);font-size:20px;line-height:1}
@@ -270,12 +311,12 @@ CSS = """<style>
 </style>
 """
 
-SUBTITLE = "App-wide: setup, resume PDFs, tailoring, Claude usage and display"
+# __TITLE__ / __SUBTITLE__ are filled by each page that uses this layout (Settings, Employers).
 BODY = """<div class="wrap">
 <header class="top">
   <div class="brandline">
-    """ + report.MARK + """<h1>Settings · __NAME__</h1>
-    <span class="fresh">App-wide: setup, resume PDFs, tailoring, Claude usage and display</span>
+    """ + report.MARK + """<h1>__TITLE__</h1>
+    <span class="fresh">__SUBTITLE__</span>
   </div>
   <div class="tools" id="tools">
 __TOOLS__  </div>
@@ -288,12 +329,26 @@ __TOOLS__  </div>
 </div>
 """
 
+# ---- ASK_SCRIPT: window.siftAsk({title, text, ok, danger}) -> Promise<bool>, the yes/no question every destructive action on
+# Settings, My profile, Employers and setup asks, in the app's own dialog (report.CONFIRM_SCRIPT's appConfirm, which must
+# be on the page first). danger: the yes button is drawn in the danger style (.btn.danger). This is the one place that
+# knows how appConfirm is called.
+ASK_SCRIPT = """<script>window.siftAsk = function(o){
+  var msg = o.title + (o.text ? "\\n\\n" + o.text : "");
+  if (!window.appConfirm) return Promise.resolve(window.confirm(msg));
+  var p = window.appConfirm(msg, o.ok);
+  if (o.danger) { var ds = document.querySelectorAll("dialog"), d = ds[ds.length - 1], y = d && d.querySelector(".btn.primary"); if (y) { y.classList.remove("primary"); y.classList.add("danger"); } }
+  return p;
+};</script>
+"""
+
 # ---- Script pieces shared by /settings and /profile (profile_page.py): both are two-pane pages under the same header.
 # Each is spliced into the page script at its /*__NAME__*/ marker by fill_script().
 PRELUDE_JS = r"""const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 const phone = () => matchMedia("(max-width:720px)").matches;
+const ask = o => window.siftAsk(o);   // {title, text, ok, danger} -> Promise<bool> (ASK_SCRIPT)
 let PREFS = window.__PREFS__ || {};
 function applyTheme(){
   const t = PREFS["display.theme"];
@@ -313,8 +368,8 @@ function saveState(el, text, bad){
 ROUTER_JS = r"""// ---- categories: the URL hash picks one (/settings#display, /profile#search); at phone width no hash means "show the list"
 const CATS = [...document.querySelectorAll(".spane")].map(p => p.dataset.cat);
 function route(){
-  const firstCat = (document.querySelector(".scat") || {dataset: {}}).dataset.cat || CATS[0];
-  const h = location.hash.slice(1), sel = CATS.includes(h) ? h : "", shown = sel || firstCat;  // the desktop default is the first item in the list
+  const firstCat = (document.querySelector(".scat[data-default]") || document.querySelector(".scat") || {dataset: {}}).dataset.cat || CATS[0];
+  const h = location.hash.slice(1), sel = CATS.includes(h) ? h : "", shown = sel || firstCat;  // the desktop default: the item marked data-default, else the first
   $("slayout").classList.toggle("atList", !sel);
   document.querySelectorAll(".scat").forEach(a => a.setAttribute("aria-current", a.dataset.cat === shown ? "page" : "false"));
   document.querySelectorAll(".spane").forEach(p => p.hidden = p.dataset.cat !== shown);
@@ -379,7 +434,7 @@ $("amenu").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   $("amenu").hidden = true; $("avatarBtn").setAttribute("aria-expanded", "false");
   const v = b.dataset.person; if (!v) return;
-  if (v === "__add") return toBoard(["jb.run", "addPerson"]);
+  if (v === "__add") { location.href = "/people/new"; return; }   // the same form as the welcome page
   if (v === "__manage") { location.href = "/settings#profiles"; return; }
   if (v === curPerson) return;
   fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => location.reload());
@@ -415,23 +470,15 @@ document.querySelector(".spanes").addEventListener("change", e => {
   }
   post({prefs: {[el.dataset.pref]: valueOf(el)}}, el);
 });
-// Restore all defaults: the first tap arms the button, a second tap within 5 s resets every setting.
+// Restore all defaults: asks first, then resets every setting of this profile on this page.
 document.querySelectorAll("[data-reset]").forEach(b => {
-  let t = null;
-  const msg = b.parentElement.querySelector("[data-resetmsg]");
-  const disarm = () => { b.dataset.armed = ""; b.textContent = "Restore all defaults"; msg.textContent = ""; };
-  b.addEventListener("click", () => {
-    if (b.dataset.armed !== "1") {
-      b.dataset.armed = "1"; b.textContent = "Tap again to restore defaults";
-      msg.textContent = "Resets every setting on this page (all categories) for this profile.";
-      clearTimeout(t); t = setTimeout(disarm, 5000); return;
-    }
-    clearTimeout(t); disarm();
+  b.addEventListener("click", async () => {
+    if (!await ask({title: "Restore all defaults?", text: "Resets every setting under This profile (Resume PDF, Tailoring, Resume review, Ratings & Claude and Display) for this profile.", ok: "Restore defaults", danger: true})) return;
     post({reset: true}, b).then(() => { if (!b.closest(".spane").querySelector(".ssave.err")) saveState(b, "Defaults restored"); });
   });
 });
 
-// ---- Claude usage: what Siftwell's own requests used today and over the last 7 days (read from a local log, no Claude call)
+// ---- Ratings & Claude > Usage: what Siftwell's own requests used today and over the last 7 days (read from a local log, no Claude call)
 (() => {
   const box = $("usageBox"); if (!box) return;
   const n = x => (x || 0).toLocaleString();
@@ -487,14 +534,17 @@ document.querySelectorAll("[data-reset]").forEach(b => {
 
 // ---- optional Anthropic API key
 const keyState = () => fetch("/api/settings").then(r => r.json()).then(s => {
-  $("keyState").textContent = s.has_key ? "Saved. Scoring is billed to this key instead of your subscription." : "None saved (not needed).";
+  $("keyState").textContent = s.has_key ? "Saved. Rating is billed to this key instead of your subscription." : "None saved (not needed).";
 }).catch(() => { $("keyState").textContent = "Couldn't check. Check the connection."; });
 keyState();
 $("keyForm").addEventListener("submit", e => {
   e.preventDefault(); const k = $("keyInput").value.trim(); if (!k) return;
   fetch("/api/settings", {method: "POST", headers: H, body: JSON.stringify({anthropic_api_key: k})}).then(() => { $("keyInput").value = ""; keyState(); });
 });
-$("keyClear").addEventListener("click", () => fetch("/api/settings", {method: "POST", headers: H, body: JSON.stringify({clear: true})}).then(keyState));
+$("keyClear").addEventListener("click", async () => {
+  if (!await ask({title: "Remove the saved API key?", text: "Rating then goes through your Claude subscription again.", ok: "Remove key", danger: true})) return;
+  fetch("/api/settings", {method: "POST", headers: H, body: JSON.stringify({clear: true})}).then(keyState);
+});
 
 /*__THEME__*/
 /*__HEADER__*/
@@ -507,15 +557,14 @@ function setGsBadge(s){
 const onStatus = setGsBadge;
 /*__CHECKLIST__*/
 load(false);
-// ---- Profiles pane: rename inline, remove with a two-tap confirm (the server keeps the folder in people_removed)
+// ---- Profiles pane: rename inline, remove after a yes in the app's dialog (the server keeps the folder in people_removed)
 const profMsg = (t, bad) => { const m = $("profMsg"); m.textContent = t || ""; m.style.color = bad ? "var(--bad)" : ""; };
 function renderProfiles(){
-  $("profList").innerHTML = PEOPLE.map(p => `<div class="srow" data-id="${esc(p.id)}"><div class="slab"><span>${esc(p.name)}${p.id === curPerson ? " (viewing now)" : ""}</span><small>${p.profile ? "Resume and profile set up" : "No resume yet"}</small></div><div class="sctl pbtns"><button class="btn sm" type="button" data-rn>Rename</button><button class="btn sm rmbtn" type="button" data-rm>Remove</button></div></div>`).join("");
+  $("profList").innerHTML = PEOPLE.map(p => `<div class="srow" data-id="${esc(p.id)}"><div class="slab"><span>${esc(p.name)}${p.id === curPerson ? " (viewing now)" : ""}</span><small>${p.profile ? "Resume and profile set up" : "No resume yet"}</small></div><div class="sctl pbtns"><button class="btn sm" type="button" data-rn>Rename</button><button class="btn sm danger rmbtn" type="button" data-rm>Remove</button></div></div>`).join("");
 }
 function profPost(url, body){
   return fetch(url, {method: "POST", headers: H, body: JSON.stringify(body)}).then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error || "Something went wrong."); return d; }));
 }
-let rmTimer = null;
 $("profList").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   const row = b.closest(".srow"), id = row.dataset.id, p = PEOPLE.find(x => x.id === id) || {};
@@ -531,16 +580,14 @@ $("profList").addEventListener("click", e => {
       .then(() => { profMsg("Saved."); return loadPeople(); })
       .catch(err => { b.disabled = false; profMsg(err instanceof TypeError ? "Couldn't save. Check the connection." : err.message, true); });
   } else if (b.hasAttribute("data-rm")) {
-    if (b.dataset.armed !== "1") {
-      renderProfiles(); const nb = $("profList").querySelector(`[data-id="${id}"] [data-rm]`);
-      nb.dataset.armed = "1"; nb.textContent = "Tap again to remove";
-      profMsg(`Removing ${p.name} takes their resume, saved jobs, tailored resumes and settings off the board. The folder is kept in people_removed in your data folder.`);
-      clearTimeout(rmTimer); rmTimer = setTimeout(() => { renderProfiles(); profMsg(""); }, 6000); return;
-    }
-    clearTimeout(rmTimer); b.disabled = true; b.textContent = "Removing…";
-    profPost("/api/people/remove", {id})
-      .then(() => { if (id === curPerson) { location.reload(); return; } profMsg(`${p.name} was removed.`); return loadPeople(); })
-      .catch(err => { renderProfiles(); profMsg(err instanceof TypeError ? "Couldn't remove it. Check the connection." : err.message, true); });
+    profMsg("");
+    ask({title: `Remove ${p.name}?`, text: `This takes ${p.name}'s resume, saved jobs, tailored resumes and settings off the board. The folder is kept in people_removed in your Siftwell data folder, not deleted.`, ok: "Remove", danger: true}).then(yes => {
+      if (!yes) return;
+      b.disabled = true; b.textContent = "Removing…";
+      profPost("/api/people/remove", {id})
+        .then(() => { if (id === curPerson) { location.reload(); return; } profMsg(`${p.name} was removed.`); return loadPeople(); })
+        .catch(err => { renderProfiles(); profMsg(err instanceof TypeError ? "Couldn't remove it. Check the connection." : err.message, true); });
+    });
   }
 });
 $("profList").addEventListener("keydown", e => {
@@ -548,7 +595,6 @@ $("profList").addEventListener("keydown", e => {
   if (e.key === "Enter") { e.preventDefault(); inp.closest(".srow").querySelector("[data-rnsave]").click(); }
   else if (e.key === "Escape") renderProfiles();
 });
-$("profAdd").addEventListener("click", () => toBoard(["jb.run", "addPerson"]));
 function onPeople(){ renderProfiles(); }
 loadPeople();
 })();
