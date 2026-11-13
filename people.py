@@ -93,16 +93,34 @@ PREF_SCHEMA = {
     "claude.auto_rerate": (True, [True, False]),
     "claude.auto_rate": (True, [True, False]),
     "claude.facts_per_update": (10, (0, 200)),   # shared facts: an update uses the highest value any profile sets
-    "display.start_tab": ("jobs", ["jobs", "pivot", "tailored", "companies"]),
+    "display.start_tab": ("jobs", ["jobs", "saved", "applied", "pivot", "tailored", "companies"]),   # (an old "companies" opens Jobs)
     "display.sort": ("score", ["score", "relevant", "appeal", "odds", "odds_later", "pay", "gd", "new"]),
     # (display.level, the board's old Seniority filter default, is gone: "Your level" in the board's My search decides it.)
-    "display.clearance": ("secret", ["all", "none", "nopoly", "secret"]),
+    "display.clearance": ("all", ["all", "none", "nopoly", "secret"]),   # "Any" for everyone (see _clearance_any)
     "display.theme": ("system", ["system", "light", "dark"]),
 }
 
+CLEARANCE_ANY = "prefs_clearance_any"   # settings.json marker: the clearance filter's old default was set back to Any once
+
+def _clearance_any(s, pid):
+    """v0.5: the board's clearance filter starts at "Any clearance" for everyone. Up to v0.4 its default was "Secret or
+    less", and every save of any preference stored that default too, so a stored "secret" can't be told from a choice:
+    it is set back to "all" once. A choice made after that (Settings, Display) is kept: save_prefs sets the marker."""
+    if s.get(CLEARANCE_ANY) or not os.path.exists(pdir("settings.json", pid=pid)):
+        return s
+    p = s.get("prefs")
+    if isinstance(p, dict) and p.get("display.clearance") == "secret":
+        p["display.clearance"] = "all"
+    s[CLEARANCE_ANY] = True
+    try:
+        _write_settings(s, pid)
+    except Exception:
+        pass
+    return s
+
 def prefs(pid=None):
     """Current preferences, defaults filled in."""
-    saved = settings(pid).get("prefs") or {}
+    saved = _clearance_any(settings(pid), pid).get("prefs") or {}
     out = {}
     for k, (d, allowed) in PREF_SCHEMA.items():
         v = saved.get(k, d)
@@ -134,6 +152,7 @@ def save_prefs(new, pid=None):
     merged = {**prefs(pid), **clean_prefs(new)}
     s = settings(pid)
     s["prefs"] = merged
+    s[CLEARANCE_ANY] = True
     _write_settings(s, pid)
     return merged
 
@@ -232,8 +251,7 @@ def add(name):
             _write_settings(json.loads(json.dumps(DEFAULT_SETTINGS)), pid)
     except Exception:
         pass
-    # New profiles start with no clearance filter (the "secret" default in PREF_SCHEMA is kept only so existing
-    # profiles that never saved this preference don't change behaviour). The same goes for questions before tailoring:
+    # New profiles start with no clearance filter ("all", now the default for everyone too). Questions before tailoring:
     # a new profile is asked only when the posting has real gaps ("gaps"); existing profiles keep what they had.
     try:
         save_prefs({"display.clearance": "all", "tailor.questions": "gaps"}, pid=pid)

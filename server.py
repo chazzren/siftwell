@@ -728,7 +728,7 @@ def _stop_file(pid):
 
 def rate_label(o):
     if not o:
-        return "Full re-rate"
+        return "Rating the jobs that need it"
     if o.get("more"):
         return "Rating the next batch"
     if o.get("ids") is not None:
@@ -742,7 +742,7 @@ def rate_label(o):
         return f"Quick check of {n} new job{'s' if n != 1 else ''}"
     t = o.get("tiers") or []
     if len(t) == 3:
-        return "Full re-rate"
+        return "Rating the jobs that need it"
     name = {"haiku": "Quick check", "sonnet": f"Careful look · best {o.get('sonnet_pct')}%",
             "opus": f"Best judgment · top {o.get('opus_top')}"}[t[0]]
     return name + ("" if o.get("only_needed", True) else " (fresh look at all)")

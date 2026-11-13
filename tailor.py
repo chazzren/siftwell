@@ -506,17 +506,23 @@ def render_html(s):
     j = t["job"]
     import netsafe
     link = netsafe.clean_link(j.get("url"))  # (http/https only)
-    posting = f'<a href="{e(link)}" target="_blank" rel="noopener">Open posting</a>' if link else ""
+    posting = f'<a href="{e(link)}" target="_blank" rel="noopener">View posting ↗</a>' if link else ""
+    import report        # the app's own dialog (appConfirm), the same one every page uses
+    boot = json.dumps({"person": people.current() or "", "id": j.get("id") or "", "title": j.get("title") or ""}).replace("</", "<\\/")
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tailored: {e(j['title'])}</title>
+<script>try{{var t=localStorage.getItem("jb.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}}catch(e){{}}</script>
 <style>
-:root{{--bg:#f5f6f8;--paper:#fff;--ink:#152033;--muted:#5b6678;--line:#dde1e8;--accent:#23468f;--warn:#9a5b00;--warn-soft:#fbf0dc}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#0f141c;--paper:#171e29;--ink:#e4e9f1;--muted:#97a2b4;--line:#2a3342;--accent:#8fb0f0;--warn:#f0b25e;--warn-soft:#3a2b14;color-scheme:dark}}}}
+:root{{--bg:#f5f6f8;--paper:#fff;--surface:#fff;--ink:#152033;--muted:#5b6678;--line:#dde1e8;--accent:#23468f;--accent-soft:#e6ecf8;--warn:#9a5b00;--warn-soft:#fbf0dc;--bad:#a63232;--bad-soft:#f8e4e4}}
+@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{--bg:#0f141c;--paper:#171e29;--surface:#171e29;--ink:#e4e9f1;--muted:#97a2b4;--line:#2a3342;--accent:#8fb0f0;--accent-soft:#1f2c45;--warn:#f0b25e;--warn-soft:#3a2b14;--bad:#ef8b8b;--bad-soft:#3d1c1c;color-scheme:dark}}}}
+:root[data-theme="dark"]{{--bg:#0f141c;--paper:#171e29;--surface:#171e29;--ink:#e4e9f1;--muted:#97a2b4;--line:#2a3342;--accent:#8fb0f0;--accent-soft:#1f2c45;--warn:#f0b25e;--warn-soft:#3a2b14;--bad:#ef8b8b;--bad-soft:#3d1c1c;color-scheme:dark}}
 *{{box-sizing:border-box}} body{{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Public Sans",system-ui,sans-serif}}
 .wrap{{max-width:1180px;margin:0 auto;padding:20px 16px 48px;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px}}
 .bar{{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}}
-.bar h1{{font-size:18px;margin:0}} .bar a,.bar button{{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:6px;padding:7px 12px;text-decoration:none;cursor:pointer}}
-.bar .primary{{background:var(--accent);border-color:var(--accent);color:var(--paper)}}
+.bar h1{{font-size:20px;margin:2px 0 0}} .bar .acts a,.bar .acts button,.btn{{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:8px;padding:0 12px;min-height:36px;display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}}
+.bar .primary,.btn.primary{{background:var(--accent);border-color:var(--accent);color:var(--paper)}} .btn.danger{{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}}
+.bar .acts{{display:flex;gap:8px;flex-wrap:wrap}} .bar .acts button[aria-pressed="true"]{{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}} .bar .acts button:disabled{{opacity:.6;cursor:default}}
+.back{{color:var(--accent);font-weight:600;text-decoration:none}} .back:hover{{text-decoration:underline}} .tmsg{{flex-basis:100%;margin:0;color:var(--muted);font-size:13px}} .tmsg:empty{{display:none}}
 .paper{{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:28px 32px;min-width:0}}
 .name{{font-size:22px;font-weight:700;text-align:center}} .ct{{text-align:center;color:var(--muted);font-size:12.5px}}
 .headline{{text-align:center;font-weight:600;margin:6px 0 4px}}
@@ -530,13 +536,15 @@ aside h3{{margin:0 0 6px;font-size:13px}} aside ul{{font-size:13px}} .gaps{{back
 @media print{{body{{background:#fff;color:#000}} .bar,aside{{display:none}} .wrap{{display:block;padding:0}} .paper{{border:0;padding:0}} .src{{display:none}}}}
 </style></head><body>
 <div class="wrap">
- <div class="bar"><h1>{e(j['title'])} · {e(j['company'])}</h1>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-   <button id="toggle" type="button">Hide sources</button>
+ <div class="bar"><div><a class="back" href="/#tailored">‹ Resumes</a><h1>{e(j['title'])} · {e(j['company'])}</h1></div>
+  <div class="acts">
    <a class="primary" href="/tailored/{s}.pdf">Download PDF</a>
    <a href="/tailored/{s}.docx">Download Word</a>
    {posting}
-  </div></div>
+   <button id="applied" type="button" aria-pressed="false" hidden>Mark applied</button>
+   <button id="again" type="button">Tailor again</button>
+   <button id="toggle" type="button">Hide sources</button>
+  </div><p class="tmsg" id="tmsg" role="status"></p></div>
  <div class="paper">
   {contact}
   <div class="headline">{e(t.get('headline',''))}</div>
@@ -557,7 +565,33 @@ aside h3{{margin:0 0 6px;font-size:13px}} aside ul{{font-size:13px}} .gaps{{back
   <section><h3>How to use this</h3><ul><li>Every bullet shows the resume line it came from. Check each one before you send.</li><li>Download PDF gives the finished, formatted resume (sources hidden). Use Word if you want to edit it first.</li><li>For a Google Doc, upload the Word file to Google Drive and open it with Google Docs.</li></ul></section>
  </aside>
 </div>
-<script>document.getElementById("toggle").onclick=function(){{var c=document.body.classList.toggle("clean");this.textContent=c?"Show sources":"Hide sources";}};</script>
+{report.CONFIRM_SCRIPT}<script>(function(){{
+var B = {boot}, $ = function(i){{ return document.getElementById(i); }}, H = {{"Content-Type": "application/json", "X-Jobboard": "1"}};
+$("toggle").onclick = function(){{ var c = document.body.classList.toggle("clean"); this.textContent = c ? "Show sources" : "Hide sources"; }};
+var say = function(t){{ $("tmsg").textContent = t; }};
+// Mark applied: the same mark as on the board (Save / Applied / Not for me are kept per profile)
+var q = B.person ? "?person=" + encodeURIComponent(B.person) : "", applied = false;
+function show(){{ var b = $("applied"); b.hidden = false; b.setAttribute("aria-pressed", String(applied)); b.textContent = applied ? "\u2713 Applied" : "Mark applied"; }}
+if (B.id) fetch("/api/marks" + q).then(function(r){{ return r.json(); }}).then(function(m){{ applied = (m || {{}})[B.id] === "applied"; show(); }}).catch(function(){{}});
+$("applied").onclick = function(){{
+  var next = !applied, b = this; b.disabled = true;
+  fetch("/api/marks", {{method: "POST", headers: H, body: JSON.stringify({{person: B.person, id: B.id, status: next ? "applied" : ""}})}})
+    .then(function(r){{ if (!r.ok) throw 0; applied = next; show(); say(next ? "Marked as applied. It is on your Applied tab." : ""); }})
+    .catch(function(){{ say("Couldn\u2019t reach Siftwell, so that wasn\u2019t saved."); }}).then(function(){{ b.disabled = false; }});
+}};
+// Tailor again: Claude writes a new version for this job; the Resumes tab shows it working
+$("again").onclick = function(){{
+  var b = this;
+  appConfirm({{title: "Tailor this resume again?", ok: "Tailor again", text: "Claude writes a new version for this job (about a minute; it uses your Claude plan). It replaces this one when it is done."}}).then(function(yes){{
+    if (!yes) return;
+    b.disabled = true; say("Starting\u2026");
+    fetch("/api/tailor", {{method: "POST", headers: H, body: JSON.stringify({{person: B.person, id: B.id}})}})
+      .then(function(r){{ return r.json().then(function(d){{ return {{ok: r.ok, d: d}}; }}); }})
+      .then(function(x){{ if (!x.ok) {{ b.disabled = false; say(x.d.error || "Tailoring couldn\u2019t start."); return; }} location.href = "/#tailored"; }})
+      .catch(function(){{ b.disabled = false; say("Couldn\u2019t reach Siftwell. Try again."); }});
+  }});
+}};
+}})();</script>
 </body></html>"""
 
 # ------------------------------------------------------------------ PDF (print layout rendered by headless Chrome)
