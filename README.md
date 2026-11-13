@@ -30,7 +30,7 @@ The first time, Windows may say **"Windows protected your PC"**: click **More in
 2. **Set up your profile**: upload a resume (or fill in a short form), your home ZIP and radius, and the pay you're after.
 3. **Click Start my job search** at the end of setup. Siftwell shows how many employers its free employer directory has near you (no Claude needed) and how long checking them takes, adds the ones you choose, then checks their career pages. Your board fills in with the openings that fit you.
 
-Later, **Find new jobs** (the circular-arrow icon) checks your employers again, and you can add any employer by its careers-page link on the **Employers** page.
+Later, **Find new jobs** (the blue button at the top) checks your employers again, and you can add any employer by its careers-page link on the **Employers** page.
 
 ## What it does
 

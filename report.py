@@ -23,6 +23,9 @@ HEAD = """<title>Siftwell</title>
   --bar:#cfd6e2; --bar-fill:#23468f;
   --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  /* type and radius scale: every size on these pages is one of these */
+  --fs-xs:11px; --fs-sm:12.5px; --fs-md:14px; --fs-lg:16px; --fs-xl:20px; --fs-2xl:28px;
+  --r:8px; --r-lg:12px; --r-pill:999px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0f141c; --surface:#171e29; --ink:#e4e9f1; --muted:#97a2b4; --line:#2a3342;
@@ -36,46 +39,46 @@ HEAD = """<title>Siftwell</title>
   --bar:#2f3a4c; --bar-fill:#8fb0f0; color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:var(--fs-md);line-height:1.45;margin:0}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
 header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:14px;border-bottom:1px solid var(--line)}
-h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balance}
-.sub{color:var(--muted);font-size:13px;margin-top:2px}
+h1{font-size:var(--fs-xl);font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:var(--fs-sm);margin-top:2px}
 .stats{display:flex;gap:20px;flex-wrap:wrap}
-.stat b{display:block;font-family:var(--mono);font-size:18px;font-weight:500;font-variant-numeric:tabular-nums}
-.stat span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.stat b{display:block;font-family:var(--mono);font-size:var(--fs-xl);font-weight:500;font-variant-numeric:tabular-nums}
+.stat span{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 nav.tabs{display:flex;gap:4px;margin:14px 0 0}
-nav.tabs a{padding:7px 12px;border-radius:6px;color:var(--muted);text-decoration:none;font-weight:600}
+nav.tabs a{padding:7px 12px;border-radius:var(--r);color:var(--muted);text-decoration:none;font-weight:600}
 nav.tabs a[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
 .filters{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
 .filters input[type=search]{flex:1 1 220px;min-width:0}
 input,select,button{font:inherit;color:var(--ink)}
-input[type=search],select{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+input[type=search],select{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:6px 9px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
 .seg button{border:0;background:transparent;padding:6px 10px;cursor:pointer;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
-label.chk{display:inline-flex;gap:6px;align-items:center;color:var(--muted);font-size:13px}
+label.chk{display:inline-flex;gap:6px;align-items:center;color:var(--muted);font-size:var(--fs-sm)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.count{color:var(--muted);font-size:13px;margin:10px 0}
+.count{color:var(--muted);font-size:var(--fs-sm);margin:10px 0}
 ol.jobs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.job{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;grid-template-columns:58px minmax(0,1fr) 230px;gap:4px 16px;align-items:start}
+.job{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;grid-template-columns:58px minmax(0,1fr) 230px;gap:4px 16px;align-items:start}
 .job.hidden-by-user{opacity:.45}
 .scores{grid-row:span 2;display:flex;flex-direction:column;gap:6px}
 .score.match{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
 .score.match.hi{background:var(--good-soft);color:var(--good);border-color:transparent}
 .score.match.mid{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .score.match.lo{background:var(--bad-soft);color:var(--bad);border-color:transparent}
-.nocl{color:var(--muted);font-size:12.5px}.nocl a,.acts .nocl a{color:var(--accent);font-weight:600;border:0!important;background:none!important;padding:0!important;min-height:0!important;display:inline!important}
+.nocl{color:var(--muted);font-size:var(--fs-sm)}.nocl a,.acts .nocl a{color:var(--accent);font-weight:600;border:0!important;background:none!important;padding:0!important;min-height:0!important;display:inline!important}
 .rsc .m.na{color:var(--muted);font-weight:400}
-.rrno{font-size:13.5px}.rrno p{margin:0 0 8px}
-.score{font-family:var(--mono);font-size:20px;font-weight:500;text-align:center;border-radius:6px;padding:6px 0;background:var(--accent-soft);color:var(--accent);font-variant-numeric:tabular-nums;cursor:help}
-.score small{display:block;font-size:10px;letter-spacing:.05em;color:var(--muted)}
-.title{font-weight:600;font-size:15px;color:var(--ink);text-decoration:none}
+.rrno{font-size:var(--fs-md)}.rrno p{margin:0 0 8px}
+.score{font-family:var(--mono);font-size:var(--fs-xl);font-weight:500;text-align:center;border-radius:var(--r);padding:6px 0;background:var(--accent-soft);color:var(--accent);font-variant-numeric:tabular-nums;cursor:help}
+.score small{display:block;font-size:var(--fs-xs);letter-spacing:.05em;color:var(--muted)}
+.title{font-weight:600;font-size:var(--fs-lg);color:var(--ink);text-decoration:none}
 .title:hover{text-decoration:underline}
-.meta{color:var(--muted);font-size:13px;display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:2px}
+.meta{color:var(--muted);font-size:var(--fs-sm);display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:2px}
 .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
-.chip{font-size:11.5px;padding:2px 7px;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip{font-size:var(--fs-xs);padding:2px 7px;border-radius:var(--r-pill);background:var(--bg);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .chip.remote{background:var(--good-soft);color:var(--good);border-color:transparent}
 .chip.hybrid{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 .chip.onsite{background:var(--warn-soft);color:var(--warn);border-color:transparent}
@@ -83,68 +86,68 @@ ol.jobs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .chip.trv-heavy{background:var(--bad-soft);color:var(--bad);border-color:transparent}
 .chip.trv-moderate,.chip.trv-some{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .chip.new{background:var(--new-soft);color:var(--new);border-color:transparent;font-weight:600}
-.pay{grid-row:span 2;font-size:12px;color:var(--muted)}
-.pay .amt{font-family:var(--mono);font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
-.bar{position:relative;height:8px;background:var(--bar);border-radius:4px;margin:6px 0 3px}
-.bar i{position:absolute;top:0;bottom:0;background:var(--bar-fill);border-radius:4px}
+.pay{grid-row:span 2;font-size:var(--fs-sm);color:var(--muted)}
+.pay .amt{font-family:var(--mono);font-size:var(--fs-md);color:var(--ink);font-variant-numeric:tabular-nums}
+.bar{position:relative;height:8px;background:var(--bar);border-radius:var(--r);margin:6px 0 3px}
+.bar i{position:absolute;top:0;bottom:0;background:var(--bar-fill);border-radius:var(--r)}
 .bar .mk{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
 .bar .mk.cur{background:var(--muted)}
 .bar .mid{position:absolute;top:1px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--bg);border:1.5px solid var(--ink)}
 .bar.wide i{background:repeating-linear-gradient(135deg,var(--bar-fill) 0 4px,transparent 4px 7px)}
 .pay .note{color:var(--warn)}
-.axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:var(--fs-xs);color:var(--muted)}
 .acts{display:flex;gap:6px;margin-top:8px}
-.acts button{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--muted)}
+.acts button{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:3px 8px;font-size:var(--fs-sm);cursor:pointer;color:var(--muted)}
 .acts button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .more2{grid-column:2 / 3;display:flex;flex-direction:column;gap:4px;min-width:0}
-details.snip{font-size:12.5px;color:var(--muted)}
+details.snip{font-size:var(--fs-sm);color:var(--muted)}
 .coname{color:var(--ink);font-weight:600}
 .meta .gd{font-weight:600;color:var(--ink)}
 .meta .gd.hi{color:var(--good)}
 .meta .gd.lo{color:var(--warn)}
-details.copanel{font-size:12.5px;color:var(--muted)}
+details.copanel{font-size:var(--fs-sm);color:var(--muted)}
 details.copanel summary{cursor:pointer;width:max-content}
-details.copanel[open]{background:var(--bg);border:1px solid var(--line);border-radius:var(--r,8px);padding:8px 10px}
+details.copanel[open]{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
 details.copanel p{margin:6px 0;color:var(--ink);max-width:70ch}
 details.copanel dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:3px 12px;margin:6px 0}
 details.copanel dt{color:var(--muted)}
 details.copanel dd{margin:0;color:var(--ink);min-width:0;overflow-wrap:anywhere}
 details.copanel a{color:var(--accent)}
-.asof{color:var(--muted);font-size:11.5px}
+.asof{color:var(--muted);font-size:var(--fs-xs)}
 .colinks{display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
 details.snip summary{cursor:pointer;width:max-content}
 details.snip p{margin:6px 0 0;max-width:70ch;white-space:pre-line}
-.more{display:block;margin:14px auto;padding:8px 16px;border:1px solid var(--line);background:var(--surface);border-radius:6px;cursor:pointer}
-.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-top:14px}
-table{border-collapse:collapse;width:100%;font-size:13px}
+.more{display:block;margin:14px auto;padding:8px 16px;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);cursor:pointer}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);margin-top:14px}
+table{border-collapse:collapse;width:100%;font-size:var(--fs-sm)}
 th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
-th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+th{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
 td.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
 td.err{color:var(--bad);white-space:normal;min-width:200px}
 .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:600;color:var(--ink)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:7px 12px;cursor:pointer;font-weight:600;color:var(--ink)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
 .btn:disabled{opacity:.6;cursor:default}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-top:12px;display:flex;flex-direction:column;gap:8px}
 .panel .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.panel input[type=password]{flex:1 1 260px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
-.panel small,.panel .note{color:var(--muted);font-size:12.5px}
-.prog{height:6px;background:var(--bar);border-radius:3px;overflow:hidden}
+.panel input[type=password]{flex:1 1 260px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px}
+.panel small,.panel .note{color:var(--muted);font-size:var(--fs-sm)}
+.prog{height:6px;background:var(--bar);border-radius:var(--r);overflow:hidden}
 .prog i{display:block;height:100%;background:var(--bar-fill);width:0;transition:width .4s}
-.loglines{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:pre-wrap;max-height:9em;overflow:auto}
-.why{font-size:13px;color:var(--ink);margin-top:6px;max-width:75ch}
+.loglines{font-family:var(--mono);font-size:var(--fs-xs);color:var(--muted);white-space:pre-wrap;max-height:9em;overflow:auto}
+.why{font-size:var(--fs-sm);color:var(--ink);margin-top:6px;max-width:75ch}
 .why b{font-weight:600;color:var(--accent)}
-.banner{background:var(--warn-soft);color:var(--warn);border-radius:6px;padding:8px 12px;font-size:13px;margin-top:12px}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:var(--r);padding:8px 12px;font-size:var(--fs-sm);margin-top:12px}
 .clsteps{margin:8px 0 2px 20px;padding:0;color:var(--ink)}
 .clsteps li{margin:6px 0}
 .clrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
 .clrow input{flex:1 1 220px;min-width:0;height:var(--h);border:1px solid var(--line);border-radius:var(--r);padding:0 10px;background:var(--surface);color:var(--ink);font:inherit}
 .clmsg{display:block;margin-top:4px;color:var(--bad)}
 .clok{color:var(--good)}
-.drop{border:1.5px dashed var(--line);border-radius:8px;padding:16px;text-align:center;color:var(--muted);cursor:pointer}
+.drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:16px;text-align:center;color:var(--muted);cursor:pointer}
 .drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
-.panel textarea{width:100%;min-height:5.5em;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;resize:vertical}
-.panel .help{font-size:12.5px;color:var(--muted);margin:0 0 4px}
+.panel textarea{width:100%;min-height:5.5em;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px;font:inherit;resize:vertical}
+.panel .help{font-size:var(--fs-sm);color:var(--muted);margin:0 0 4px}
 .chip.lbl-apply_now{background:var(--good-soft);color:var(--good);border-color:transparent;font-weight:600}
 .chip.lbl-tailor{background:var(--accent-soft);color:var(--accent);border-color:transparent;font-weight:600}
 .chip.lbl-stretch{background:var(--warn-soft);color:var(--warn);border-color:transparent}
@@ -155,20 +158,20 @@ td.err{color:var(--bad);white-space:normal;min-width:200px}
 .chip.lbl-long_shot{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .chip.gap{border-style:dashed}
 .pv{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px;margin-top:12px}
-.pv .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
-.pv h3{margin:0 0 4px;font-size:14px}
-.pv .help{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+.pv .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;min-width:0}
+.pv h3{margin:0 0 4px;font-size:var(--fs-md)}
+.pv .help{font-size:var(--fs-sm);color:var(--muted);margin:0 0 8px}
 .pvcounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.pvcounts button{text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:8px 10px;cursor:pointer;color:var(--ink)}
-.pvcounts b{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums}
-.pvcounts span{font-size:12px;color:var(--muted)}
-.gaprow{display:grid;grid-template-columns:minmax(0,11rem) minmax(0,1fr) 2.5rem;gap:8px;align-items:center;font-size:12.5px;padding:3px 0;border:0;background:none;width:100%;text-align:left;cursor:pointer;color:var(--ink)}
+.pvcounts button{text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:var(--r);padding:8px 10px;cursor:pointer;color:var(--ink)}
+.pvcounts b{display:block;font-family:var(--mono);font-size:var(--fs-xl);font-variant-numeric:tabular-nums}
+.pvcounts span{font-size:var(--fs-sm);color:var(--muted)}
+.gaprow{display:grid;grid-template-columns:minmax(0,11rem) minmax(0,1fr) 2.5rem;gap:8px;align-items:center;font-size:var(--fs-sm);padding:3px 0;border:0;background:none;width:100%;text-align:left;cursor:pointer;color:var(--ink)}
 .gaprow[aria-pressed="true"]{font-weight:700}
-.gaprow i{display:block;height:8px;border-radius:4px;background:var(--bar-fill)}
+.gaprow i{display:block;height:8px;border-radius:var(--r);background:var(--bar-fill)}
 .gaprow em{font-style:normal;font-family:var(--mono);color:var(--muted);text-align:right}
-.tl{font-size:12.5px;color:var(--muted);margin-top:3px;max-width:75ch}
-.legend{color:var(--muted);font-size:12.5px;max-width:75ch;margin:14px 0 0}
-dialog.sheet{border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);padding:0;width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 24px)}
+.tl{font-size:var(--fs-sm);color:var(--muted);margin-top:3px;max-width:75ch}
+.legend{color:var(--muted);font-size:var(--fs-sm);max-width:75ch;margin:14px 0 0}
+dialog.sheet{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);color:var(--ink);padding:0;width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 24px)}
 dialog.sheet::backdrop{background:rgba(0,0,0,.45)}
 .sheet form{display:flex;flex-direction:column;max-height:calc(100dvh - 26px)}
 .sheet .qhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
@@ -176,26 +179,26 @@ dialog.sheet::backdrop{background:rgba(0,0,0,.45)}
 .sheet .qfoot{display:flex;gap:8px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line)}
 .q{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-bottom:1px solid var(--line)}
 .q:last-child{border-bottom:0}
-.q .qreq{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);font-weight:600}
-.q .qtext{font-weight:600;font-size:14px}
-.q .qwhy{font-size:12.5px;color:var(--muted)}
-.q textarea{width:100%;min-height:4.2em;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;color:var(--ink);resize:vertical}
+.q .qreq{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--accent);font-weight:600}
+.q .qtext{font-weight:600;font-size:var(--fs-md)}
+.q .qwhy{font-size:var(--fs-sm);color:var(--muted)}
+.q textarea{width:100%;min-height:4.2em;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px;font:inherit;color:var(--ink);resize:vertical}
 .ans{display:flex;gap:6px}
-.ans button{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer}
+.ans button{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:var(--r-pill);padding:4px 12px;font-size:var(--fs-sm);cursor:pointer}
 .ans button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
 .qwait{padding:24px 0;color:var(--muted)}
 .psgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px 12px;margin:8px 0}
-.psgrid label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
+.psgrid label{display:flex;flex-direction:column;gap:3px;font-size:var(--fs-sm);color:var(--muted)}
 .psgrid label.chk{flex-direction:row;align-items:center}
-.psgrid input[type=text],.psgrid input[type=number],.psgrid select,.psgrid textarea,#newPersonName{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;color:var(--ink);min-width:0}
+.psgrid input[type=text],.psgrid input[type=number],.psgrid select,.psgrid textarea,#newPersonName{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px;font:inherit;color:var(--ink);min-width:0}
 #newPersonName{flex:1 1 200px}
 .countrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.factlist{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.factlist{display:flex;flex-direction:column;gap:6px;font-size:var(--fs-sm)}
 .fact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;padding:6px 0;border-top:1px solid var(--line)}
-.linkbtn{border:0;background:none;color:var(--accent);font:inherit;font-size:12px;cursor:pointer;padding:0 2px}
-.fact .pol{color:var(--ink);font-size:12.5px;margin-top:2px;padding-left:8px;border-left:2px solid var(--accent-soft)}
-.fact .fl{color:var(--muted);font-size:12px}
-.fact button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:5px;padding:2px 8px;font-size:12px;cursor:pointer}
+.linkbtn{border:0;background:none;color:var(--accent);font:inherit;font-size:var(--fs-sm);cursor:pointer;padding:0 2px}
+.fact .pol{color:var(--ink);font-size:var(--fs-sm);margin-top:2px;padding-left:8px;border-left:2px solid var(--accent-soft)}
+.fact .fl{color:var(--muted);font-size:var(--fs-sm)}
+.fact button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:var(--r);padding:2px 8px;font-size:var(--fs-sm);cursor:pointer}
 @media (max-width:760px){
   .job{grid-template-columns:52px minmax(0,1fr)}
   .scores{grid-row:auto}
@@ -204,24 +207,24 @@ dialog.sheet::backdrop{background:rgba(0,0,0,.45)}
 }
 
 /* ---- v2: one control system. Every control is --h tall, --r rounded; spacing on a 4/8/12/16 scale. */
-:root{--h:36px;--h-sm:28px;--r:8px}
+:root{--h:36px;--h-sm:28px}
 header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 16px;padding-bottom:12px;border-bottom:0}
 .brand{min-width:0}
-h1{font-size:20px}
-.sub{font-size:12.5px}
+h1{font-size:var(--fs-xl)}
+.sub{font-size:var(--fs-sm)}
 .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.btn,input[type=search],select,.seg,#personSel{height:var(--h);border-radius:var(--r);font-size:14px}
+.btn,input[type=search],select,.seg,#personSel{height:var(--h);border-radius:var(--r);font-size:var(--fs-md)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600;cursor:pointer;white-space:nowrap}
 .btn:hover{border-color:var(--muted)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
 .btn.ghost{background:transparent;border-color:transparent;color:var(--accent)}
 .btn.ghost:hover{background:var(--accent-soft)}
-.btn.sm{height:var(--h-sm);padding:0 10px;font-size:13px}
+.btn.sm{height:var(--h-sm);padding:0 10px;font-size:var(--fs-sm)}
 input[type=search],select,#personSel{background:var(--surface);border:1px solid var(--line);padding:0 10px;color:var(--ink)}
 select{padding-right:28px}
 #personSel{font-weight:600;max-width:12rem}
 .seg{display:inline-flex;align-items:stretch;padding:2px;gap:2px;border:1px solid var(--line);background:var(--surface)}
-.seg button{border:0;border-radius:6px;padding:0 10px;background:transparent;color:var(--muted);font-weight:500}
+.seg button{border:0;border-radius:var(--r);padding:0 10px;background:transparent;color:var(--muted);font-weight:500}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
 nav.tabs{gap:20px;margin:4px 0 0;border-bottom:1px solid var(--line)}
 nav.tabs a{padding:10px 0;border-radius:0;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;flex:0 0 auto}
@@ -232,66 +235,65 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
 .frow select{flex:0 0 auto}
 .rmbtn{color:var(--bad);background:transparent;border:1px solid var(--line)}
 .rmbtn[data-armed="1"]{background:var(--bad-soft);border-color:var(--bad)}
-.nlbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:7px 10px;border-radius:var(--r);background:var(--accent-soft);color:var(--ink);font-size:13px}
+.nlbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:7px 10px;border-radius:var(--r);background:var(--accent-soft);color:var(--ink);font-size:var(--fs-sm)}
 .nlbar b{color:var(--accent);font-weight:600}
-.nlbar .nlterms{color:var(--muted);font-size:12px;flex-basis:100%}
+.nlbar .nlterms{color:var(--muted);font-size:var(--fs-sm);flex-basis:100%}
 .nlbar.err{background:var(--bad-soft);color:var(--bad)}
 .nlbar .spin{width:12px;height:12px;border:2px solid var(--accent);border-right-color:transparent;border-radius:50%;animation:nlspin .8s linear infinite}
 @keyframes nlspin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.nlbar .spin{animation:none}}
-.badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--surface);font-size:11px;font-weight:700}
+.badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);background:var(--accent);color:var(--surface);font-size:var(--fs-xs);font-weight:700}
 .fpanel{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);display:flex;flex-direction:column;gap:12px}
 .btn.icon{width:var(--h);padding:0}
 .field input[type=number]{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;width:100%}
-.fgroup{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);border-top:1px solid var(--line);padding-top:10px}
+.fgroup{font-size:var(--fs-sm);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);border-top:1px solid var(--line);padding-top:10px}
 .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:12px}
 .fgroup.first{border-top:0;padding-top:0}
-.fhint{margin:-6px 0 0;font-size:13px;color:var(--muted)}
+.fhint{margin:-6px 0 0;font-size:var(--fs-sm);color:var(--muted)}
 .fhint:empty{display:none}
 .fhint.err{color:var(--bad)}
 .field input[type=text]{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;width:100%;min-width:0}
 .filters:has(.fpanel:not([hidden])){position:static}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .field select{width:100%}
-.flabel{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.flabel{font-size:var(--fs-xs);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .checks{display:flex;flex-wrap:wrap;gap:4px 12px;min-height:var(--h);align-items:center}
 .fchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .fchips:empty{display:none}
-.fchip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 6px 0 10px;border-radius:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:12.5px;cursor:pointer}
-.fchip span{color:var(--muted);font-size:15px;line-height:1}
+.fchip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 6px 0 10px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:var(--fs-sm);cursor:pointer}
+.fchip span{color:var(--muted);font-size:var(--fs-lg);line-height:1}
 .fchip:hover{border-color:var(--muted)}
 .countrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:8px 0}
 .count{margin:0}
 .pvbar{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .pvbar .pvcounts{display:flex;flex-wrap:wrap;gap:6px}
-.pvbar .pvcounts button{height:var(--h-sm);display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:13px;cursor:pointer;text-align:left}
-.pvbar .pvcounts button b{font-family:var(--mono);font-size:13px;display:inline}
+.pvbar .pvcounts button{height:var(--h-sm);display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:var(--fs-sm);cursor:pointer;text-align:left}
+.pvbar .pvcounts button b{font-family:var(--mono);font-size:var(--fs-sm);display:inline}
 .pvbar .pvcounts button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
-.pvgaps summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:13px;width:max-content}
+.pvgaps summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:var(--fs-sm);width:max-content}
 .pvgaps[open]{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
 .panel{border-radius:var(--r);gap:10px}
-.panel h2.sec{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:6px 0 0}
+.panel h2.sec{font-size:var(--fs-sm);font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:6px 0 0}
 .acts{flex-wrap:wrap}
-.acts a{display:inline-flex;align-items:center;height:var(--h-sm);padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--muted);font-size:12px;text-decoration:none;white-space:nowrap}
-.acts button.danger{margin-left:auto;color:var(--bad);border-color:transparent;background:transparent}
+.acts a{display:inline-flex;align-items:center;height:var(--h-sm);padding:0 8px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--muted);font-size:var(--fs-sm);text-decoration:none;white-space:nowrap}
+.acts button.danger{margin-left:auto;color:var(--bad);border-color:var(--bad);background:var(--bad-soft)}
 .acts button.danger[data-armed="1"]{background:var(--bad-soft);border-color:var(--bad)}
 .acts a.pri,.acts button.pri{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
-.tl2{font-size:12.5px;color:var(--muted);margin-top:4px;max-width:75ch}
+.tl2{font-size:var(--fs-sm);color:var(--muted);margin-top:4px;max-width:75ch}
 .job.tlcard{grid-template-columns:58px minmax(0,1fr)}
 .tlwork{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--accent)}
 .tlwork .spin{width:11px;height:11px;border:2px solid var(--accent);border-right-color:transparent;border-radius:50%;animation:nlspin .8s linear infinite}
-.tlfail{color:var(--bad);font-size:12.5px;margin-top:4px;max-width:75ch;overflow-wrap:anywhere}
-.tlwarn{font-size:12.5px;margin-top:6px;max-width:75ch;overflow-wrap:anywhere;border-left:3px solid var(--warn);padding:2px 0 2px 10px}
+.tlfail{color:var(--bad);font-size:var(--fs-sm);margin-top:4px;max-width:75ch;overflow-wrap:anywhere}
+.tlwarn{font-size:var(--fs-sm);margin-top:6px;max-width:75ch;overflow-wrap:anywhere;border-left:3px solid var(--warn);padding:2px 0 2px 10px}
 .tlwarn ul{margin:3px 0 0;padding-left:16px}.tlwarn li{margin:1px 0}.tlwarn span{color:var(--muted)}
 .tlcard.working .scores,.tlcard.failed .scores{display:grid;place-items:center}
 .tlcard .tlicon{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-weight:700}
 .tlcard.failed .tlicon{background:var(--bad-soft);color:var(--bad)}
 @media (prefers-reduced-motion:reduce){.tlwork .spin{animation:none}}
-.acts button{height:var(--h-sm);border-radius:6px;white-space:nowrap}
+.acts button{height:var(--h-sm);border-radius:var(--r);white-space:nowrap}
 @media (max-width:640px){
   .wrap{padding-block:12px 40px}
   header.top{gap:8px}
-  .tools{width:100%}
   #personSel{flex:1 1 auto;max-width:none}
   .frow{flex-wrap:wrap}
   .frow input[type=search]{flex:1 1 100%}
@@ -309,9 +311,9 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
 header.top{align-items:center}
 .brandline{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .brandline .mk{width:24px;height:24px;flex:none;align-self:center;color:var(--ink);margin-right:-4px}
-.fresh{color:var(--muted);font-size:12.5px}
-.avatarBtn{display:inline-flex;align-items:center;gap:8px;height:var(--h);border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 12px 0 4px;font-weight:600;cursor:pointer;color:var(--ink)}
-.avatarBtn .av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:13px}
+.fresh{color:var(--muted);font-size:var(--fs-sm)}
+.avatarBtn{display:inline-flex;align-items:center;gap:8px;height:var(--h);border:1px solid var(--line);background:var(--surface);border-radius:var(--r-pill);padding:0 12px 0 4px;font-weight:600;cursor:pointer;color:var(--ink)}
+.avatarBtn .av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:var(--fs-sm)}
 .menuWrap{position:relative}
 .iconBtn{position:relative;width:var(--h);height:var(--h);display:inline-grid;place-items:center;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--ink);cursor:pointer;padding:0}
 .iconBtn:hover{background:var(--bg)}
@@ -319,45 +321,42 @@ header.top{align-items:center}
 a.iconBtn{text-decoration:none}
 .iconBtn:disabled{opacity:.55;cursor:default}
 .iconBtn svg{width:18px;height:18px}
-#themeBtn .ti{display:none}
-#themeBtn:not([data-mode]) .ti-system,#themeBtn[data-mode="system"] .ti-system,#themeBtn[data-mode="light"] .ti-light,#themeBtn[data-mode="dark"] .ti-dark{display:block}
 .iconBtn.busy svg{animation:nlspin 1.4s linear infinite}
 @media (prefers-reduced-motion:reduce){.iconBtn.busy svg{animation:none}}
-.rrbadge{position:absolute;top:-4px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--surface);font-size:10.5px;font-weight:700;display:grid;place-items:center}
+.rrbadge{position:absolute;top:-4px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);background:var(--accent);color:var(--surface);font-size:var(--fs-xs);font-weight:700;display:grid;place-items:center}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-@media (max-width:640px){.tools .menuWrap{margin-left:auto}}
-.amenu{position:absolute;right:0;top:calc(var(--h) + 6px);width:270px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;z-index:40}
-.amenu .who{padding:8px 10px;color:var(--muted);font-size:12px}
-.amenu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;border:0;background:none;padding:9px 10px;border-radius:8px;text-align:left;cursor:pointer;color:var(--ink);font-size:14px;height:auto;font-weight:500}
+.amenu{position:absolute;right:0;top:calc(var(--h) + 6px);width:270px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;z-index:40}
+.amenu .who{padding:8px 10px;color:var(--muted);font-size:var(--fs-sm)}
+.amenu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;border:0;background:none;padding:9px 10px;border-radius:var(--r);text-align:left;cursor:pointer;color:var(--ink);font-size:var(--fs-md);height:auto;font-weight:500}
 .amenu button:hover{background:var(--bg)}
 .amenu button[aria-current="true"]{font-weight:700}
 .amenu button[aria-current="true"]::after{content:"✓";color:var(--accent)}
 .amenu small{color:var(--muted);font-weight:400}
-/* Re-rate panel: a popover under the ✨ icon; a bottom sheet on phones */
-.rrpop{position:fixed;z-index:45;width:min(440px,calc(100vw - 16px));max-height:calc(100vh - 80px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+/* Rate jobs panel: a popover under the Rate jobs button that opened it; a bottom sheet on phones */
+.rrpop{position:fixed;z-index:45;width:min(440px,calc(100vw - 16px));max-height:calc(100vh - 80px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:0 10px 30px rgba(0,0,0,.18);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .rrpop .rrhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.rrpop .rrhead strong{font-size:15px}
+.rrpop .rrhead strong{font-size:var(--fs-lg)}
 .rrrow{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px}
 .rrrow.rec{border:1px solid var(--accent);background:var(--accent-soft);border-radius:var(--r);padding:10px}
-.rrtxt{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:13px}
-.rrtxt small,.rrfoot small{color:var(--muted);font-size:12.5px}
-.rrtag{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
-.rrtxt input[type=number]{width:72px;height:var(--h-sm);border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:0 6px;font:inherit}
+.rrtxt{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:var(--fs-sm)}
+.rrtxt small,.rrfoot small{color:var(--muted);font-size:var(--fs-sm)}
+.rrtag{display:inline-block;margin-left:6px;font-size:var(--fs-xs);font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+.rrtxt input[type=number]{width:72px;height:var(--h-sm);border:1px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink);padding:0 6px;font:inherit}
 .rrtxt input[type=number][aria-invalid="true"]{border-color:var(--bad)}
 .rrhint{color:var(--warn)!important}
 .rrfoot{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:10px}
 .rrmsg{color:var(--accent)!important;font-weight:600}
 .rrmsg.bad{color:var(--bad)!important}
-@media (max-width:640px){.rrpop{left:0!important;right:0!important;top:auto!important;bottom:0;width:auto;max-height:85vh;border-radius:16px 16px 0 0;padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}}
+@media (max-width:640px){.rrpop{left:0!important;right:0!important;top:auto!important;bottom:0;width:auto;max-height:85vh;border-radius:var(--r-lg) var(--r-lg) 0 0;padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}}
 .banner.gsbn{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);color:var(--ink)}
 .banner.gsbn span{flex:1 1 220px}
-.updbn .updnotes{flex:1 1 100%;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;margin:4px 0 0;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);font-size:12.5px;line-height:1.45}
-.updbn .updsteps,.updbn .updmsg{flex:1 1 100%;font-size:13px}
+.updbn .updnotes{flex:1 1 100%;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;margin:4px 0 0;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);font-size:var(--fs-sm);line-height:1.45}
+.updbn .updsteps,.updbn .updmsg{flex:1 1 100%;font-size:var(--fs-sm)}
 .updbn .updsteps ol{margin:4px 0 0 18px;padding:0}
 .updbn .updmsg:empty{display:none}
-nav.tabs a .n{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:4px;font-weight:500}
+nav.tabs a .n{font-family:var(--mono);font-size:var(--fs-xs);color:var(--muted);margin-left:4px;font-weight:500}
 .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.qc{height:30px;border:1px solid var(--line);background:var(--surface);border-radius:15px;padding:0 12px;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.qc{height:30px;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-pill);padding:0 12px;font-size:var(--fs-sm);color:var(--muted);cursor:pointer;white-space:nowrap}
 .qc[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
 .split{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:16px;align-items:start}
 .listcol{min-width:0}
@@ -369,18 +368,18 @@ ol.rows{gap:0;background:var(--surface);border:1px solid var(--line);border-radi
 .jrow[aria-selected="true"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
 .jrow.hidden-by-user{opacity:.5}
 .rtitle{font-weight:600;line-height:1.3;min-width:0}
-.rco{color:var(--muted);font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rmeta{grid-column:1/-1;display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--muted);margin-top:3px}
-.rmeta .amt{font-family:var(--mono);color:var(--ink);font-size:12.5px}
+.rco{color:var(--muted);font-size:var(--fs-sm);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmeta{grid-column:1/-1;display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:var(--fs-sm);color:var(--muted);margin-top:3px}
+.rmeta .amt{font-family:var(--mono);color:var(--ink);font-size:var(--fs-sm)}
 .rsc{grid-row:1/3;grid-column:2;display:flex;gap:4px}
 .rsc div{text-align:center;min-width:40px}
-.rsc b{display:block;font:500 17px/1.15 var(--mono)}
-.rsc b.m{color:var(--muted);font-size:15px}
+.rsc b{display:block;font:500 var(--fs-lg)/1.15 var(--mono)}
+.rsc b.m{color:var(--muted);font-size:var(--fs-lg)}
 .rsc b.m.hi{color:var(--good)}
-.rsc b.rv{color:var(--muted);font-size:15px}
+.rsc b.rv{color:var(--muted);font-size:var(--fs-lg)}
 .rsc b.rv.hi{color:var(--ink)}
-.rsc small{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.vpill{font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:999px;white-space:nowrap;background:var(--bg);color:var(--muted)}
+.rsc small{font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.vpill{font-size:var(--fs-xs);font-weight:600;padding:1px 8px;border-radius:var(--r-pill);white-space:nowrap;background:var(--bg);color:var(--muted)}
 .vpill.v-apply_now,.vpill.v-after_prep{background:var(--good-soft);color:var(--good)}
 .vpill.v-tailor{background:var(--accent-soft);color:var(--accent)}
 .vpill.v-stretch,.vpill.v-long_shot{background:var(--warn-soft);color:var(--warn)}
@@ -388,75 +387,75 @@ ol.rows{gap:0;background:var(--surface);border:1px solid var(--line);border-radi
 .ndot{width:7px;height:7px;border-radius:50%;background:var(--new);display:inline-block;margin-right:6px;vertical-align:1px}
 .racts{position:absolute;right:10px;bottom:8px;display:none;gap:4px}
 .jrow:hover .racts{display:flex}
-.racts button{width:30px;height:26px;border:1px solid var(--line);background:var(--surface);border-radius:6px;cursor:pointer;color:var(--muted);font-size:13px;padding:0}
+.racts button{width:30px;height:26px;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);cursor:pointer;color:var(--muted);font-size:var(--fs-sm);padding:0}
 .racts button[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
-.detail{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--fbar,0px) + 12px);max-height:calc(100dvh - env(safe-area-inset-top,0px) - var(--fbar,0px) - 24px);overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-radius:12px;min-width:0}
+.detail{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--fbar,0px) + 12px);max-height:calc(100dvh - env(safe-area-inset-top,0px) - var(--fbar,0px) - 24px);overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);min-width:0}
 .dpane{padding:20px 22px 28px;display:flex;flex-direction:column;gap:18px}
-.dback{display:none;align-self:flex-start;border:0;background:none;color:var(--accent);font-weight:600;padding:0;cursor:pointer;font-size:15px}
-.dtitle{font-size:22px;font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
-.dco{display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--muted);font-size:13.5px;margin-top:6px;align-items:center}
+.dback{display:none;align-self:flex-start;border:0;background:none;color:var(--accent);font-weight:600;padding:0;cursor:pointer;font-size:var(--fs-lg)}
+.dtitle{font-size:var(--fs-xl);font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
+.dco{display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--muted);font-size:var(--fs-md);margin-top:6px;align-items:center}
 .dco .coname{color:var(--ink)}
 .dacts{display:flex;gap:8px;flex-wrap:wrap}
 .dacts .btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
 .dsec{border-top:1px solid var(--line);padding-top:14px}
-.dsec>h3{margin:0 0 10px;font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.dsec>h3{margin:0 0 10px;font-size:var(--fs-xs);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .dscores{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .dsc{display:flex;gap:12px;align-items:center}
 .ring{--p:0;width:54px;height:54px;border-radius:50%;flex:none;display:grid;place-items:center;background:conic-gradient(var(--accent) calc(var(--p)*1%),var(--bar) 0)}
-.ring b{width:42px;height:42px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font:500 16px var(--mono)}
-.dsc p{margin:0;font-size:12.5px;color:var(--muted)}
-.dsc strong{display:block;color:var(--ink);font-size:14px}
+.ring b{width:42px;height:42px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font:500 var(--fs-lg) var(--mono)}
+.dsc p{margin:0;font-size:var(--fs-sm);color:var(--muted)}
+.dsc strong{display:block;color:var(--ink);font-size:var(--fs-md)}
 .dread p{margin:0 0 10px;max-width:70ch}
 .dread .lab{display:block;font-weight:600;color:var(--ink);margin-bottom:1px}
-.dsec .pay{grid-row:auto;font-size:13px}
+.dsec .pay{grid-row:auto;font-size:var(--fs-sm)}
 .dsec details.copanel summary{display:none}
 .dsec details.copanel{background:none;border:0;padding:0}
-.dsec .snipp{white-space:pre-line;color:var(--muted);font-size:13.5px;max-width:75ch;margin:0}
+.dsec .snipp{white-space:pre-line;color:var(--muted);font-size:var(--fs-md);max-width:75ch;margin:0}
 .dempty{padding:48px 24px;text-align:center;color:var(--muted)}
-.dempty b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
+.dempty b{display:block;color:var(--ink);font-size:var(--fs-lg);margin-bottom:4px}
 /* Empty Jobs tab: Start your job search / running / nothing passed your filters (first_search.py via /api/search) */
 .startcard{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--r);padding:18px 20px;margin:12px 0;display:flex;flex-direction:column;gap:10px}
-.startcard h2{margin:0;font-size:19px;letter-spacing:-.01em;color:var(--ink)}
-.startcard p{margin:0;color:var(--muted);max-width:70ch;font-size:14px}
+.startcard h2{margin:0;font-size:var(--fs-xl);letter-spacing:-.01em;color:var(--ink)}
+.startcard p{margin:0;color:var(--muted);max-width:70ch;font-size:var(--fs-md)}
 .startcard .sacts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .startcard .sacts .btn{text-decoration:none}
-.startcard ul{margin:0;padding-left:18px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:4px}
-.startcard .chk{font-size:14px;color:var(--ink)}
-.startcard .smsg{font-size:13px;color:var(--bad)}
+.startcard ul{margin:0;padding-left:18px;color:var(--muted);font-size:var(--fs-md);display:flex;flex-direction:column;gap:4px}
+.startcard .chk{font-size:var(--fs-md);color:var(--ink)}
+.startcard .smsg{font-size:var(--fs-sm);color:var(--bad)}
 .startcard .smsg:empty{display:none}
 .startcard .dmsg{color:var(--ink)}
 .startcard ul .linkbtn{font-size:inherit;padding:0;text-align:left}
 .startcard .linkbtn{font-size:inherit}
 .dchoose{display:inline-flex;flex-wrap:wrap;gap:6px 10px;align-items:center;max-width:100%}
-.dchoose select{max-width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit;font-size:13px}
-.dchoose .dest{font-size:12.5px;color:var(--muted)}
+.dchoose select{max-width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);padding:5px 8px;font:inherit;font-size:var(--fs-sm)}
+.dchoose .dest{font-size:var(--fs-sm);color:var(--muted)}
 .field #coFind{margin-bottom:4px}
 #view-jobs.nojobs #list .dempty,#view-jobs.nojobs .countrow,#view-jobs.nojobs .split .detail{display:none}
 .reqbox{display:flex;flex-direction:column;gap:8px}
 .reqbox .chip{white-space:normal}
 .chip.req-unmet{background:var(--bad-soft);color:var(--bad);border-color:transparent}
 .chip.req-flag{background:var(--warn-soft);color:var(--warn);border-color:transparent}
-.reqwhy{font-size:12.5px;color:var(--muted);max-width:75ch}
+.reqwhy{font-size:var(--fs-sm);color:var(--muted);max-width:75ch}
 .rmeta .rq{color:var(--warn);font-weight:600}
-.rmeta .old,.dco .old{color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:0 7px;font-size:11.5px}
+.rmeta .old,.dco .old{color:var(--muted);border:1px dashed var(--line);border-radius:var(--r-pill);padding:0 7px;font-size:var(--fs-xs)}
 .tierdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:3px;vertical-align:1px;background:var(--muted)}
 .tierdot.t-haiku{background:transparent;border:1px solid var(--muted)}
-.tiertag{font-size:11.5px;color:var(--muted)}
-.ratefresh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.tiertag{font-size:var(--fs-xs);color:var(--muted)}
+.ratefresh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:var(--fs-sm);color:var(--muted)}
 .rmeta .rq.un{color:var(--bad)}
 .hlcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:10px}
 .hlcard{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--bg);min-width:0}
-.hlcard .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;justify-content:space-between;gap:6px}
+.hlcard .k{font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;justify-content:space-between;gap:6px}
 .hlcard .k em{font-style:normal;color:var(--accent);text-transform:none;letter-spacing:0;font-weight:600}
-.hlcard .v{margin-top:4px;font-size:13.5px}
+.hlcard .v{margin-top:4px;font-size:var(--fs-md)}
 .hlcard .v div+div{margin-top:3px}
-.hlbanner{background:var(--accent-soft);color:var(--ink);border-radius:var(--r);padding:10px 12px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.hlbanner{background:var(--accent-soft);color:var(--ink);border-radius:var(--r);padding:10px 12px;font-size:var(--fs-sm);display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
 .hledit{display:flex;flex-direction:column;gap:8px}
 .hlrow{display:grid;grid-template-columns:130px minmax(0,1fr) minmax(0,1fr) auto;gap:6px;align-items:center}
 .hlrow.lic{grid-template-columns:minmax(0,1fr) 130px auto}
 .hledit input,.hledit select{height:var(--h);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 8px;font:inherit;min-width:0}
 @media (max-width:640px){.hlrow,.hlrow.lic{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
-details.howto{margin-top:16px;color:var(--muted);font-size:12.5px}
+details.howto{margin-top:16px;color:var(--muted);font-size:var(--fs-sm)}
 details.howto summary{cursor:pointer;color:var(--accent);font-weight:600;width:max-content}
 details.howto .legend{margin-top:8px}
 @media (max-width:900px){
@@ -467,6 +466,132 @@ details.howto .legend{margin-top:8px}
   .racts{display:none!important}
   .dscores{grid-template-columns:minmax(0,1fr)}
   .fresh{display:none}
+}
+/* ---- v4: one header for every page (text navigation, Find new jobs, the person menu; a bottom tab bar on phones),
+   one dialog, one danger style, one way to show a score, and touch-sized controls on touch screens. */
+header.top{flex-wrap:wrap;align-items:center;gap:10px 12px}
+header.top .tools{display:contents}
+header.top .brandline{order:1;flex:1 1 auto;min-width:0;flex-wrap:nowrap}
+header.top .brandline h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+header.top .brandline .fresh{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.countrow{justify-content:flex-start;gap:8px 14px}
+.mainnav{order:2;display:flex;gap:2px;align-items:center}
+.mainnav a{position:relative;display:inline-flex;align-items:center;height:var(--h);padding:0 10px;border-radius:var(--r);color:var(--muted);font-weight:600;text-decoration:none;white-space:nowrap}
+.mainnav a:hover{color:var(--ink);background:var(--surface)}
+.mainnav a[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
+.mainnav .rrbadge{position:static;margin-left:6px}
+header.top #rerateBtn{order:3}
+header.top .findBtn{order:4}
+header.top .menuWrap{order:5}
+.findBtn svg{width:16px;height:16px;flex:none}
+.findBtn.busy svg{animation:nlspin 1.4s linear infinite}
+.findBtn:disabled{opacity:.75}
+@media (prefers-reduced-motion:reduce){.findBtn.busy svg{animation:none}}
+.amenu .amsep{height:1px;background:var(--line);margin:6px 4px}
+.amenu a{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:var(--r);color:var(--ink);text-decoration:none;font-size:var(--fs-md);font-weight:500}
+.amenu a:hover{background:var(--bg)}
+.amenu #themeBtn small,.moresheet small{color:var(--muted);font-weight:400}
+.tabbar,.moresheet{display:none}
+nav.tabs .tabext{margin-left:auto;color:var(--accent);font-weight:600}
+@media (max-width:899px){
+  .mainnav{order:10;flex:1 1 100%;overflow-x:auto;scrollbar-width:none;margin:-4px 0 0 -10px}
+  .mainnav::-webkit-scrollbar{display:none}
+}
+@media (max-width:720px){
+  header.top{gap:8px;padding-bottom:8px}
+  .mainnav,header.top #rerateBtn{display:none}
+  #avName{display:none}
+  .avatarBtn{padding:0 4px}
+  .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);padding:0 env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+  .tabbar a,.tabbar button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:56px;border:0;background:none;padding:0;color:var(--muted);font:inherit;font-size:var(--fs-xs);font-weight:600;text-decoration:none;cursor:pointer}
+  .tabbar svg{width:22px;height:22px}
+  .tabbar [aria-current="page"],.tabbar [aria-expanded="true"]{color:var(--accent)}
+  body{padding-bottom:calc(56px + env(safe-area-inset-bottom,0px))}
+  .moresheet:not([hidden]){display:flex;flex-direction:column;gap:2px;position:fixed;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom,0px));z-index:26;background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:var(--r-lg) var(--r-lg) 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.16);padding:8px}
+  .moresheet a,.moresheet button{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;width:100%;padding:0 12px;border:0;background:none;border-radius:var(--r);color:var(--ink);font:inherit;font-size:var(--fs-md);font-weight:500;text-decoration:none;text-align:left;cursor:pointer}
+  .moresheet [aria-current="page"]{color:var(--accent);font-weight:700}
+  nav.tabs{display:none}
+}
+@media (max-width:480px){.fl-new{display:none}header.top .findBtn{padding:0 12px}}
+/* the app's own dialog (appConfirm) and the destructive / strong button styles every page uses */
+dialog.appdlg{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);color:var(--ink);padding:20px;width:min(440px,calc(100vw - 32px))}
+dialog.appdlg::backdrop{background:rgba(0,0,0,.45)}
+.btn.danger{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.btn.danger:hover{border-color:var(--bad)}
+.btn.strong{border-color:var(--accent);color:var(--accent)}
+.btn.quiet{background:transparent;border-color:transparent;color:var(--muted);font-weight:500}
+.btn.quiet:hover{background:var(--bg);border-color:var(--line);color:var(--ink)}
+.btn.quiet[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft);border-color:transparent}
+.acts a.danger,.acts button.danger{color:var(--bad)}
+/* notices: one at a time; the rest behind "N more notices" (stackBanners) */
+.banner.stk{display:none}
+.bnmore{margin-top:6px;font-size:var(--fs-sm)}
+.bnmore .linkbtn{font-size:var(--fs-sm);font-weight:600}
+/* Filters: the saved search is its own tinted card; "Narrow the list" is the plain part below it */
+.mscard{background:var(--accent-soft);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.mshead{display:flex;gap:8px 12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.mshead h3{margin:0;font-size:var(--fs-md);font-weight:700;color:var(--ink)}
+.mssub{margin:2px 0 0;color:var(--muted);font-size:var(--fs-sm)}
+.mssum{margin:0;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.msedit summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:var(--fs-sm);width:max-content}
+.msedit[open] .msgrid{margin-top:10px}
+.mscard .field input,.mscard .field select{background:var(--surface)}
+.mscard .fhint{margin:0}
+.fgsub{text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted)}
+/* the count line: "186 jobs · 5 hidden" with the reasons behind it, and Rate jobs */
+.count .hidn{display:inline-block;vertical-align:top}
+.count .hidn summary{cursor:pointer;color:var(--accent);font-weight:600;list-style:none;display:inline-flex;align-items:center;gap:4px}
+.count .hidn summary::-webkit-details-marker{display:none}
+.count .hidn summary::after{content:"▾";font-size:var(--fs-xs)}
+.count .hidn[open] summary::after{content:"▴"}
+.count .hidn ul{margin:6px 0 2px;padding:8px 12px;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;gap:4px;color:var(--ink);max-width:min(560px,calc(100vw - 32px))}
+.count .hidn li{display:flex;gap:8px;align-items:baseline;justify-content:space-between;flex-wrap:wrap}
+.countrow .note{font-size:var(--fs-sm)}
+#rateMore .n{font-family:var(--mono);font-weight:500;color:var(--accent)}
+/* scores: the same number-over-label treatment in the list, the details pane and the Resumes tab */
+.rsc.big{gap:14px}
+.rsc.big div{min-width:56px}
+.rsc.big b{font-size:var(--fs-xl)}
+.dscores{display:flex;flex-direction:column;gap:10px}
+.dsc{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px;align-items:start}
+.dsc .sv{text-align:center}
+.dsc .sv b{display:block;font:500 var(--fs-xl)/1.1 var(--mono);color:var(--ink)}
+.dsc .sv b.m.hi{color:var(--good)}
+.dsc .sv b.na{color:var(--muted)}
+.dsc .sv small{font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.dsc details.subw summary{cursor:pointer;color:var(--accent);font-weight:600;width:max-content}
+.dsc details.subw div{margin-top:4px;color:var(--ink)}
+.job.tlcard .scores.rsc{grid-row:1 / span 2;grid-column:1;flex-direction:column;gap:8px}
+/* details pane actions: one primary, View posting as the strong second, Save / Applied / Not for me lighter */
+.dacts{align-items:center}
+.dmarks{display:flex;gap:4px;flex-wrap:wrap;margin-top:-8px}
+.nocl.once{display:block;margin-top:6px}
+.rrmain{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.rrmain .rrsum{margin:0;font-size:var(--fs-md)}
+.rrmain small{color:var(--muted);font-size:var(--fs-sm)}
+.rrmore summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:var(--fs-sm);width:max-content}
+.rrmore[open]{display:flex;flex-direction:column;gap:10px}
+.rrlim{color:var(--muted);font-size:var(--fs-sm)}
+#view-jobs.nojobs .filters,#view-jobs.nojobs .howto,#view-jobs.nojobs .pvbar{display:none}
+@media (max-width:640px){
+  .frow{flex-wrap:nowrap}
+  .frow input[type=search]{flex:1 1 auto}
+  .frow select{flex:0 1 auto;max-width:38%;min-width:0;text-overflow:ellipsis}
+  #filtersBtn .fbl{display:none}
+  #filtersBtn{flex:none;padding:0 10px}
+  .quick,.fchips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-16px;margin-right:-16px;padding:0 16px}
+  .quick::-webkit-scrollbar,.fchips::-webkit-scrollbar{display:none}
+  .qc,.fchip{flex:none}
+  .countrow{flex-wrap:nowrap;align-items:flex-start}
+  .countrow #rateMore{flex:none}
+}
+#filtersBtn svg{width:16px;height:16px}
+/* touch screens: controls at least 32px tall, action buttons 36px */
+@media (pointer:coarse){
+  :root{--h-sm:32px}
+  .qc,.fchip{height:32px}
+  .acts a,.acts button,.dacts .btn,.dmarks .btn{min-height:36px;height:auto}
+  .count .linkbtn,.bnmore .linkbtn,.hidn summary{min-height:32px;display:inline-flex;align-items:center}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -494,33 +619,43 @@ DOWN_SCRIPT = """<script>(function(){
   if (location.protocol.indexOf("http") === 0) setTimeout(tick, 15000);
 })();</script>
 """
-# CONFIRM_SCRIPT: window.appConfirm(message, okLabel) -> Promise<bool>: a yes/no question in the app's own dialog
-# (the sheet style when the page has it), instead of the browser's confirm box.
-CONFIRM_SCRIPT = """<script>window.appConfirm = function(msg, okLabel){
+# CONFIRM_JS / CONFIRM_SCRIPT: the ONE confirmation pattern. window.appConfirm({title, text, ok, danger}) -> Promise<bool>
+# asks a yes/no question in the app's own dialog, never the browser's confirm box. text may hold paragraphs split by
+# "\n\n"; ok is the confirm button's words ("Remove them"); danger: true draws it as a destructive action (.btn.danger)
+# and puts the focus on Cancel. The older call appConfirm("Title\n\nText", "OK words") still works. Every page with the
+# shared header (TOOLS) has it; a page without the header includes CONFIRM_SCRIPT.
+CONFIRM_JS = r"""window.appConfirm = function(o, okLabel){
+  if (!o || typeof o !== "object") { var parts = String(o == null ? "" : o).split("\n\n"); o = {title: parts[0], text: parts.slice(1).join("\n\n"), ok: okLabel}; }
   return new Promise(function(resolve){
-    var d = document.createElement("dialog"); d.className = "sheet"; d.setAttribute("aria-label", "Please confirm");
-    d.style.cssText = "max-width:min(440px,calc(100vw - 32px));border:1px solid var(--line,#d9d9d9);border-radius:14px;padding:20px;background:var(--panel,var(--bg,#fff));color:var(--text,#1b1b1b)";
-    var parts = String(msg).split("\\n\\n"), h = document.createElement("p"); h.style.cssText = "margin:0 0 8px;font-weight:650;font-size:16px"; h.textContent = parts[0]; d.appendChild(h);
-    parts.slice(1).forEach(function(t){ var p = document.createElement("p"); p.style.cssText = "margin:0 0 8px;color:var(--muted,#555)"; p.textContent = t; d.appendChild(p); });
-    var row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px";
-    var no = document.createElement("button"); no.type = "button"; no.className = "btn ghost"; no.textContent = "Cancel";
-    var yes = document.createElement("button"); yes.type = "button"; yes.className = "btn primary"; yes.textContent = okLabel || "OK";
+    var d = document.createElement("dialog"); d.className = "appdlg"; d.setAttribute("aria-labelledby", "appDlgT");
+    d.style.cssText = "border:1px solid var(--line,#d9d9d9);border-radius:12px;padding:20px;background:var(--surface,#fff);color:var(--ink,#1b1b1b);width:min(440px,calc(100vw - 32px))";
+    var h = document.createElement("h2"); h.id = "appDlgT"; h.style.cssText = "margin:0 0 8px;font-size:16px;font-weight:700"; h.textContent = o.title || "Are you sure?"; d.appendChild(h);
+    String(o.text || "").split("\n\n").filter(Boolean).forEach(function(t){ var p = document.createElement("p"); p.style.cssText = "margin:0 0 8px;color:var(--muted,#555)"; p.textContent = t; d.appendChild(p); });
+    var row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px";
+    var no = document.createElement("button"); no.type = "button"; no.className = "btn"; no.textContent = o.cancel || "Cancel";
+    var yes = document.createElement("button"); yes.type = "button"; yes.className = "btn " + (o.danger ? "danger" : "primary"); yes.textContent = o.ok || "OK";
     row.appendChild(no); row.appendChild(yes); d.appendChild(row); document.body.appendChild(d);
-    var done = function(v){ try { d.close(); } catch(e) {} d.remove(); resolve(v); };
+    var back = document.activeElement;
+    var done = function(v){ try { d.close(); } catch(e) {} d.remove(); try { if (back && back.focus) back.focus(); } catch(e) {} resolve(v); };
     no.addEventListener("click", function(){ done(false); }); yes.addEventListener("click", function(){ done(true); });
     d.addEventListener("cancel", function(e){ e.preventDefault(); done(false); });
-    if (d.showModal) d.showModal(); else resolve(confirm(msg));
+    d.addEventListener("click", function(e){ if (e.target === d) { var r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) done(false); } });
+    if (!d.showModal) { d.remove(); resolve(false); return; }
+    d.showModal(); (o.danger ? no : yes).focus();
   });
-};</script>
+};
 """
+CONFIRM_SCRIPT = "<script>" + CONFIRM_JS + "</script>\n"
 
-THEME_JS = r"""// ---- theme button: Auto -> Light -> Dark -> Auto; saves display.theme and applies it at once. Needs $, H, PREFS, applyTheme().
+THEME_JS = r"""// ---- theme (person menu, and More on phones): Match device -> Light -> Dark; saves display.theme and applies it at once.
+// Needs $, H, PREFS, applyTheme(). Settings, Display has the same choice.
 function themeMode(){ const t = PREFS["display.theme"]; return t === "light" || t === "dark" ? t : "system"; }
 function themeSync(){
+  const m = themeMode(), name = {system: "Match device", light: "Light", dark: "Dark"}, nxt = {system: "light", light: "dark", dark: "system"}[m];
+  document.querySelectorAll("[data-theme-lbl]").forEach(e => { e.textContent = name[m]; });
   const b = $("themeBtn"); if (!b) return;
-  const m = themeMode(), name = {system: "Auto (follows your device)", light: "Light", dark: "Dark"}, nxt = {system: "light", light: "dark", dark: "system"}[m];
   b.dataset.mode = m;
-  b.title = "Theme: " + name[m] + ". Click for " + name[nxt].split(" ")[0]; b.setAttribute("aria-label", b.title);
+  b.title = "Theme: " + name[m] + ". Click for " + name[nxt]; b.setAttribute("aria-label", b.title);
 }
 $("themeBtn").addEventListener("click", () => {
   const nxt = {system: "light", light: "dark", dark: "system"}[themeMode()];
@@ -530,22 +665,84 @@ $("themeBtn").addEventListener("click", () => {
 });
 """
 
-# Header icon row (Home, Find new jobs (#updateBtn), Re-rate, Employers (/catalog), My profile, Theme, Settings, profile menu): shared by the board and settings_page.py.
-TOOLS = """    <a class="iconBtn" id="homeBtn" href="/#jobs" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></a>
-    <button class="iconBtn" type="button" id="updateBtn" title="Find new jobs: check your employers for new openings" aria-label="Find new jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span class="vh" id="updSmall">check your employers for new openings</span></button>
-    <button class="iconBtn" type="button" id="rerateBtn" title="Re-rate: choose how Claude re-rates your jobs, no new listings" aria-label="Re-rate jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="rrbadge" id="rrBadge" hidden></span><span class="vh" id="rrSmall">Claude only, no new listings</span></button>
-    <a class="iconBtn" id="catalogBtn" href="/catalog" title="Employers: every employer and job listing Siftwell checks, the history of its checks, and ways to add more" aria-label="Employers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg></a>
-    <a class="iconBtn" id="resumeBtn" href="/profile" title="My profile: resume, about you, job search, target, companies" aria-label="My profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.5 17c.6-1.9 2-3 3.5-3s2.9 1.1 3.5 3"/><path d="M15 9.5h3.5M15 13h3.5"/></svg></a>
-    <button class="iconBtn" type="button" id="themeBtn" title="Theme: Auto (follows your device). Click for Light" aria-label="Theme: Auto (follows your device). Click for Light"><svg class="ti ti-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg><svg class="ti ti-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="ti ti-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
-    <a class="iconBtn" id="prefsBtn" href="/settings" title="Settings: setup checklist, resume PDFs, review, Claude usage, display" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="rrbadge" id="gsBadge" hidden></span></a>
-    <div class="menuWrap">
-      <button class="avatarBtn" id="avatarBtn" aria-haspopup="menu" aria-expanded="false"><span class="av" id="avInit">·</span><span id="avName">Profile</span></button>
-      <div class="amenu" id="amenu" role="menu" hidden>
-        <div id="amPeople"></div>
-      </div>
-    </div>
+_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+_SPARK = '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>'
+_FIND = '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>'
+
+# HEADER_JS: what the shared header does by itself on every page: the current page in the navigation, the phone tab bar
+# and its More sheet. (Each page still wires Find new jobs, Rate jobs and the person menu's profiles itself.) The board
+# tells it whether this profile has a Target tab: window.siftTarget(name or "").
+HEADER_JS = r"""(function(){
+  var $ = function(id){ return document.getElementById(id); }, P = location.pathname;
+  var page = /^\/catalog/.test(P) ? "catalog" : /^\/profile/.test(P) ? "profile" : /^\/settings/.test(P) ? "settings" : "jobs";
+  var nav = $({jobs: "homeBtn", catalog: "catalogBtn", profile: "resumeBtn", settings: "prefsBtn"}[page]);
+  if (nav) nav.setAttribute("aria-current", "page");
+  var more = $("moreSheet"), moreBtn = $("tbMore");
+  function tab(){
+    var h = location.hash, cur = page === "catalog" ? "employers" : page !== "jobs" ? "more"
+      : h === "#saved" ? "saved" : h === "#tailored" ? "resumes" : h === "#applied" || h === "#pivot" ? "more" : "jobs";
+    document.querySelectorAll("#tabbar [data-tb]").forEach(function(a){ if (a.dataset.tb === cur) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    document.querySelectorAll("#moreSheet [data-mv]").forEach(function(a){ var on = (page === a.dataset.mv) || (page === "jobs" && h === "#" + a.dataset.mv); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  }
+  function target(name){
+    var a = $("mvTarget"); if (!a) return;
+    a.hidden = !name; if (name) a.querySelector("span").textContent = name;
+  }
+  window.siftTarget = function(name){ try { localStorage.setItem("jb.target", JSON.stringify(name || "")); } catch(e) {} target(name); };
+  try { target(JSON.parse(localStorage.getItem("jb.target") || '""')); } catch(e) {}
+  function close(){ if (!more || more.hidden) return; more.hidden = true; moreBtn.setAttribute("aria-expanded", "false"); }
+  if (moreBtn) moreBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    var open = more.hidden; more.hidden = !open; moreBtn.setAttribute("aria-expanded", String(open));
+    if (open) { var f = more.querySelector("a:not([hidden]),button"); if (f) f.focus(); }
+  });
+  if (more) more.addEventListener("click", function(e){
+    if (e.target.closest("#mvTheme")) { var t = $("themeBtn"); if (t) t.click(); return; }
+    if (e.target.closest("a")) close();
+  });
+  document.addEventListener("click", function(e){ if (more && !more.hidden && !e.target.closest("#moreSheet,#tbMore,#themeBtn")) close(); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && more && !more.hidden) { close(); moreBtn.focus(); } });
+  window.addEventListener("hashchange", function(){ close(); tab(); });
+  tab();
+})();
 """
 
+# The shared header: text navigation (Jobs · Employers · Profile · Settings), Rate jobs, Find new jobs and the person menu
+# (profiles, My profile, Settings, theme); below 900px a compact bar, and at 720px and less a bottom tab bar (Jobs ·
+# Saved · Resumes · Employers · More). Used by the board, Settings, Employers and My profile; the ids (homeBtn,
+# catalogBtn, resumeBtn, prefsBtn, updateBtn, rerateBtn, themeBtn, avatarBtn, amenu, amPeople, gsBadge) are what
+# those pages' scripts use. It carries its own script (the dialog and the navigation state).
+TOOLS = """    <nav class="mainnav" aria-label="Siftwell">
+      <a id="homeBtn" href="/#jobs">Jobs</a><a id="catalogBtn" href="/catalog" title="Every employer Siftwell checks, and ways to add more">Employers</a><a id="resumeBtn" href="/profile" title="Your resume, what you look for, your search and target">Profile</a><a id="prefsBtn" href="/settings" title="Setup checklist, resume PDFs, Claude usage, display">Settings<span class="rrbadge" id="gsBadge" hidden></span></a>
+    </nav>
+    <button class="iconBtn" type="button" id="rerateBtn" title="Rate jobs: choose how Claude rates your jobs (no new listings)" aria-label="Rate jobs">""" + _IC + _SPARK + """</svg><span class="rrbadge" id="rrBadge" hidden></span><span class="vh" id="rrSmall">Claude only, no new listings</span></button>
+    <button class="btn primary findBtn" type="button" id="updateBtn" title="Find new jobs: check your employers for new openings">""" + _IC + _FIND + """</svg><span class="flbl" aria-hidden="true">Find<span class="fl-new"> new</span> jobs</span><span class="vh">Find new jobs: </span><span class="vh" id="updSmall">check your employers for new openings</span></button>
+    <div class="menuWrap">
+      <button class="avatarBtn" id="avatarBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Profiles and settings"><span class="av" id="avInit">·</span><span id="avName">Profile</span></button>
+      <div class="amenu" id="amenu" role="menu" hidden>
+        <div id="amPeople"></div>
+        <div class="amsep" role="separator"></div>
+        <a role="menuitem" href="/profile">My profile</a>
+        <a role="menuitem" href="/settings">Settings</a>
+        <button role="menuitem" type="button" id="themeBtn">Theme <small data-theme-lbl>Match device</small></button>
+      </div>
+    </div>
+    <nav class="tabbar" id="tabbar" aria-label="Siftwell">
+      <a href="/#jobs" data-tb="jobs">""" + _IC + """<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Jobs</span></a>
+      <a href="/#saved" data-tb="saved">""" + _IC + """<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><span>Saved</span></a>
+      <a href="/#tailored" data-tb="resumes">""" + _IC + """<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg><span>Resumes</span></a>
+      <a href="/catalog" data-tb="employers">""" + _IC + """<path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg><span>Employers</span></a>
+      <button type="button" id="tbMore" data-tb="more" aria-haspopup="menu" aria-expanded="false" aria-controls="moreSheet">""" + _IC + """<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span>More</span></button>
+    </nav>
+    <div class="moresheet" id="moreSheet" role="menu" aria-label="More" hidden>
+      <a role="menuitem" href="/profile" data-mv="profile">My profile</a>
+      <a role="menuitem" href="/settings" data-mv="settings">Settings</a>
+      <a role="menuitem" href="/#applied" data-mv="applied">Applied</a>
+      <a role="menuitem" href="/#pivot" data-mv="pivot" id="mvTarget" hidden><span>Target</span></a>
+      <button role="menuitem" type="button" id="mvTheme">Theme <small data-theme-lbl>Match device</small></button>
+    </div>
+    <script>""" + CONFIRM_JS + HEADER_JS + """</script>
+"""
 BODY = """<div class="wrap">
 <header class="top">
   <div class="brandline">
@@ -562,6 +759,7 @@ BODY = """<div class="wrap">
 <div class="banner gsbn" id="chkBanner" role="status" aria-live="polite" hidden></div>
 <div class="banner gsbn" id="dirBanner" role="status" aria-live="polite" hidden></div>
 <div class="banner gsbn" id="ttlBanner" hidden></div>
+<div class="bnmore" id="bnMore" hidden><button type="button" class="linkbtn" id="bnMoreBtn" aria-expanded="false"></button></div>
 <div class="panel" id="progress" hidden>
   <div class="row"><strong id="progTitle">Updating…</strong><span class="note" id="progNote"></span><button class="btn sm" type="button" id="progStop" hidden title="Stop rating: batches already sent finish and their ratings are kept. Queued runs are cancelled.">Stop</button><button class="btn sm" type="button" id="updStop" hidden title="Stop finding new jobs now. Everything found so far is kept and your board is rebuilt with it; the employers not reached are checked next time.">Stop</button><button class="btn sm primary" type="button" id="progReload" hidden>Show new ratings</button></div>
   <div class="prog"><i id="progBar"></i></div>
@@ -569,44 +767,42 @@ BODY = """<div class="wrap">
   <div class="loglines" id="progLog"></div>
 </div>
 <div class="rrpop" id="rrPanel" role="dialog" aria-labelledby="rrTitle" hidden>
-  <div class="rrhead"><strong id="rrTitle">Re-rate jobs</strong><button class="btn ghost sm" type="button" id="rrClose">Close</button></div>
-  <div class="rrno" id="rrNo" hidden><p><b>Re-rating needs Claude.</b> Claude reads each posting against your resume to give the Match rating. Without it, Siftwell still finds, filters and ranks jobs by Appeal.</p><a class="btn primary sm" href="/settings#get-started">Settings, then Get started</a></div>
-  <div class="rrrow rec">
-    <div class="rrtxt"><span><b>Full re-rate</b><span class="rrtag">recommended</span></span>
-      <small>A quick check (Haiku) of jobs that need it, then a careful look (Sonnet) at the best <span class="rrPctTxt"></span>% of your rated jobs, then best judgment (Opus) on your top <span class="rrTopTxt"></span>. Only missing ratings and ones made with older info are done.</small>
-      <small id="rrEstFull"></small>
-      <label class="chk rrTgt"><input type="checkbox" id="rrTgtFull" checked><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs)</small></span></label></div>
-    <button class="btn primary sm" type="button" data-rr="full">Run</button>
+  <div class="rrhead"><strong id="rrTitle">Rate jobs</strong><button class="btn ghost sm" type="button" id="rrClose">Close</button></div>
+  <div class="rrno" id="rrNo" hidden><p><b>Rating jobs needs Claude.</b> Claude reads each posting against your resume to give the Match rating. Without it, Siftwell still finds, filters and ranks jobs by how relevant they are and by Appeal.</p><a class="btn primary sm" href="/settings#get-started">Settings, then Get started</a></div>
+  <div class="rrmain">
+    <p class="rrsum" id="rrSum"></p>
+    <button class="btn primary" type="button" data-rr="full" id="rrGo">Rate the jobs that need it</button>
+    <small id="rrEstFull"></small>
+    <label class="chk rrTgt"><input type="checkbox" id="rrTgt" checked><span>Also rate for my <span class="rrTgtName">Target</span> tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs)</small></span></label>
   </div>
+  <details class="rrmore" id="rrMore"><summary>More options</summary>
   <div class="rrrow">
-    <div class="rrtxt"><b>Quick check · Haiku</b>
+    <div class="rrtxt"><b>Quick check only</b>
       <small id="rrHAll"></small>
-      <label class="chk"><input type="checkbox" id="rrHNeed" checked><span>Only jobs that need it (<span id="rrHN">0</span>)</span></label>
-      <label class="chk rrTgt"><input type="checkbox" id="rrTgtHaiku"><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs; off unless you tick it)</small></span></label></div>
+      <label class="chk"><input type="checkbox" id="rrHNeed" checked><span>Only jobs that need it (<span id="rrHN">0</span>)</span></label></div>
     <button class="btn sm" type="button" data-rr="haiku">Run</button>
   </div>
   <div class="rrrow">
-    <div class="rrtxt"><b>Careful look · Sonnet</b>
+    <div class="rrtxt"><b>Careful look only</b>
       <span>Top <input type="number" id="rrPct" min="1" max="100" step="1" aria-label="Percent of rated jobs for a careful look"> % of rated jobs <span class="note" id="rrSN"></span></span>
       <label class="chk"><input type="checkbox" id="rrSNeed" checked><span>Only ones that need it (<span id="rrSNn">0</span>)</span></label>
-      <label class="chk rrTgt"><input type="checkbox" id="rrTgtSonnet"><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs; off unless you tick it)</small></span></label>
       <small class="rrhint" hidden>Run the quick check first for better picks.</small></div>
     <button class="btn sm" type="button" data-rr="sonnet">Run</button>
   </div>
   <div class="rrrow">
-    <div class="rrtxt"><b>Best judgment · Opus</b>
+    <div class="rrtxt"><b>Best judgment only</b>
       <span>Top <input type="number" id="rrTop" min="1" max="2000" step="1" aria-label="Number of top rated jobs for best judgment"> rated jobs <span class="note" id="rrON"></span></span>
       <label class="chk"><input type="checkbox" id="rrONeed" checked><span>Only ones that need it (<span id="rrONn">0</span>)</span></label>
-      <label class="chk rrTgt"><input type="checkbox" id="rrTgtOpus"><span>Also rate for my Target tab <small>(extra Claude requests: up to <span class="rrTgtN"></span> more jobs; off unless you tick it)</small></span></label>
       <small class="rrhint" hidden>Run the quick check first for better picks.</small></div>
     <button class="btn sm" type="button" data-rr="opus">Run</button>
   </div>
   <div class="rrfoot">
     <small id="rrEst"></small>
-    <small id="rrLim"></small>
-    <small>"Top" follows your Best bets order among jobs that already have a rating. These numbers apply to this run only; your defaults stay in Settings. Target-tab ratings are a separate cost: the Full re-rate includes them, single-model runs only if you tick the box.</small>
-    <small class="rrmsg" id="rrMsg" role="status"></small>
+    <small>"Top" follows your Best bets order among jobs that already have a rating. The numbers here apply to this run only; your defaults stay in Settings.</small>
   </div>
+  </details>
+  <small id="rrLim" class="rrlim"></small>
+  <small class="rrmsg" id="rrMsg" role="status"></small>
 </div>
 <dialog class="sheet" id="qSheet" aria-labelledby="qTitle">
   <form method="dialog" id="qForm">
@@ -625,7 +821,7 @@ BODY = """<div class="wrap">
   <div class="note" id="addPersonMsg"></div>
 </div>
 
-<nav class="tabs"><a href="#jobs" id="tab-jobs">Jobs</a><a href="#pivot" id="tab-pivot">Target</a><a href="#saved" id="tab-saved">Saved</a><a href="#applied" id="tab-applied">Applied</a><a href="#tailored" id="tab-tailored">Resumes</a><a href="#companies" id="tab-companies">Companies</a></nav>
+<nav class="tabs" aria-label="Your jobs"><a href="#jobs" id="tab-jobs">Jobs</a><a href="#saved" id="tab-saved">Saved</a><a href="#applied" id="tab-applied">Applied</a><a href="#tailored" id="tab-tailored">Resumes</a><a href="#pivot" id="tab-pivot" hidden>Target</a><a class="tabext" id="tab-employers" href="/catalog?mine=1#companies">Your employers →</a></nav>
 
 <section id="view-jobs">
   <div class="startcard" id="startCard" role="region" aria-labelledby="scTitle" aria-live="polite" hidden></div>
@@ -633,17 +829,18 @@ BODY = """<div class="wrap">
     <div class="frow">
       <input type="search" id="q" enterkeyhint="search" placeholder="Describe a job, industry, company or role, then press Enter" aria-label="Describe what you're looking for">
       <select id="sort" aria-label="Sort">
-        <option value="rel" id="sortRel" hidden>Closest to my search</option><option value="score">Best bets (good job and good fit)</option><option value="relevant" id="sortRelevant">Most relevant to my work</option><option value="appeal">Most appealing (pay, place, level)</option><option value="odds" id="sortOdds">Best fit (Claude’s Match)</option><option value="odds_later" id="sortLater">Best fit with my resume as it is</option><option value="pay">Highest pay</option><option value="gd">Best employee reviews</option><option value="new">Newest</option>
+        <option value="rel" id="sortRel" hidden>Closest to my search</option><option value="score" id="sortScore">Best bets (Appeal and Match together)</option><option value="relevant" id="sortRelevant">Most relevant to my work</option><option value="appeal">Most appealing (pay, place, level)</option><option value="odds" id="sortOdds">Best Match (Claude’s rating)</option><option value="odds_later" id="sortLater">Best Match with my resume as it is</option><option value="pay">Highest pay</option><option value="gd">Best employee reviews</option><option value="new">Newest</option>
       </select>
-      <button class="btn" type="button" id="filtersBtn" aria-expanded="false" aria-controls="fPanel">Filters<span class="badge" id="fCount" hidden></span></button>
+      <button class="btn" type="button" id="filtersBtn" aria-expanded="false" aria-controls="fPanel" aria-label="Filters"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg><span class="fbl">Filters</span><span class="badge" id="fCount" hidden></span></button>
     </div>
     <div class="nlbar" id="nlBar" role="status" aria-live="polite" hidden></div>
     <div class="quick" id="quick"></div>
     <div class="fpanel" id="fPanel" hidden>
-      <div id="msWrap" hidden>
-      <div class="fgroup first">My search</div>
-      <p class="fhint">These decide which jobs reach your board. They are saved with your profile.</p>
-      <div class="fgrid msgrid" id="msGrid">
+      <section class="mscard" id="msWrap" aria-labelledby="msTitle" hidden>
+        <div class="mshead"><div><h3 id="msTitle">Your search</h3><p class="mssub">Saved to your profile · changes what reaches your board</p></div><a class="btn sm" id="msEditLink" href="/profile#search">Edit search settings</a></div>
+        <p class="mssum" id="msSum"></p>
+        <details class="msedit" id="msEdit"><summary>Edit here</summary>
+        <div class="fgrid msgrid" id="msGrid">
         <label class="field"><span class="flabel">Home ZIP or City, ST</span><input type="text" id="msZip" data-ms="home_zip" placeholder="ZIP code or City, ST" autocomplete="postal-code"></label>
         <label class="field"><span class="flabel">Search radius</span><select id="msRadius" data-ms="radius_miles">
           <option value="10">10 miles</option><option value="25">25 miles</option><option value="35">35 miles</option><option value="50">50 miles</option><option value="75">75 miles</option></select></label>
@@ -658,21 +855,22 @@ BODY = """<div class="wrap">
         <label class="field"><span class="flabel">Lowest base ($)</span><input type="number" inputmode="numeric" step="5000" min="0" id="msFloor" data-ms="salary_floor" placeholder="No floor"></label>
         <label class="field wide"><span class="flabel">Your level</span><select id="msLevel" data-ms="seniority_mine">
           <option value="">Any level</option><option value="1">Entry level</option><option value="2">Mid-level</option><option value="3">Senior</option><option value="4">Lead / Manager</option><option value="5">Principal / Sr. Manager</option><option value="6">Director</option><option value="7">VP / Executive</option></select></label>
-      </div>
-      <p class="fhint" id="msState" role="status" aria-live="polite"></p>
-      <div class="fgroup">Narrow the list</div>
-      </div>
+        </div>
+        </details>
+        <p class="fhint" id="msState" role="status" aria-live="polite"></p>
+      </section>
+      <div class="fgroup first">Narrow the list <span class="fgsub">· only this view, nothing is saved</span></div>
       <div class="fgrid fview">
         <label class="field"><span class="flabel">Fit</span><select id="lbl"></select></label>
         <label class="field"><span class="flabel">Company</span><input type="search" id="coFind" placeholder="Type to find a company" aria-label="Type to find a company in the list below" autocomplete="off" hidden><select id="co"><option value="all">All companies</option></select></label>
         <label class="field"><span class="flabel">Show</span><select id="st">
-          <option value="active">Not hidden</option><option value="saved">Saved</option><option value="applied">Applied</option><option value="hidden">Hidden</option><option value="all">Everything</option></select></label>
+          <option value="active">Not hidden</option><option value="hidden">Hidden (Not for me)</option><option value="all">Everything</option></select></label>
         <label class="field" id="clrField" hidden><span class="flabel">Security clearance</span><select id="clr">
-          <option value="all">Any clearance</option><option value="none">No clearance mentioned</option>
-          <option value="nopoly">No TS/SCI + poly</option><option value="secret" selected>Secret or less</option></select></label>
+          <option value="all" selected>Any clearance</option><option value="none">No clearance mentioned</option>
+          <option value="nopoly">No TS/SCI + poly</option><option value="secret">Secret or less</option></select></label>
         <div class="field"><span class="flabel">Only</span>
-          <div class="checks"><label class="chk"><input type="checkbox" id="paidonly"> Salary listed</label>
-          <label class="chk"><input type="checkbox" id="nowide"> No wide bands</label>
+          <div class="checks"><label class="chk"><input type="checkbox" id="paidonly"> Pay listed</label>
+          <label class="chk"><input type="checkbox" id="nowide"> No wide pay bands</label>
           <label class="chk"><input type="checkbox" id="newonly"> New</label>
           <label class="chk"><input type="checkbox" id="reqall"> Jobs I don't meet requirements for</label></div></div>
       </div>
@@ -698,7 +896,7 @@ BODY = """<div class="wrap">
         <label class="field"><span class="flabel">Stock for employees</span><select id="cEq">
           <option value="all">Any</option><option value="liquid">Public stock (can be sold)</option><option value="private">Private shares / options</option></select></label>
       </div>
-      <div class="row"><button class="btn ghost sm" type="button" id="fReset">Reset to defaults</button><button class="btn sm" type="button" id="fDone">Done</button></div>
+      <div class="row"><button class="btn ghost sm" type="button" id="fReset" title="Clears the filters above. Your saved search stays as it is.">Clear filters</button><button class="btn sm" type="button" id="fDone">Done</button></div>
     </div>
     <div class="fchips" id="fChips"></div>
   </div>
@@ -707,30 +905,23 @@ BODY = """<div class="wrap">
     <div class="pvcounts" id="pvCounts"></div>
     <details class="pvgaps"><summary>What to work on</summary><p class="help" id="pvHelp"></p><div id="pvGaps"></div></details>
   </div>
-  <div class="countrow"><div class="count" id="count"></div><button class="btn ghost sm" type="button" id="rateMore" hidden></button><span class="note" id="rateMsg"></span></div>
+  <div class="countrow"><div class="count" id="count"></div><button class="btn sm" type="button" id="rateMore" hidden aria-haspopup="dialog">Rate jobs</button><span class="note" id="rateMsg"></span></div>
   <div class="split">
     <div class="listcol"><ol class="jobs rows" id="list" role="listbox" aria-label="Jobs"></ol>
     <button class="more" id="more" hidden>Show 100 more</button></div>
     <aside class="detail" id="detail" aria-label="Job details"></aside>
   </div>
   <details class="howto"><summary>How the scores work</summary>
-  <p class="legend" id="pvLegend" hidden>This tab shows jobs that fit your target, which you set under Resume, then Search settings. Claude rates each as a step toward it. "Now" is your shot today with an honest tailored resume. "After prep" assumes the preparation you described. Apply now = 65+ today; After prep = 65+ once prepared; Long shot = 40 to 64 even after prep. Pitch ideas only claim what's true today. Score = 50% odds (60% now, 40% after prep) + 30% pay + 20% quality of life.</p>
-  <p class="legend" id="legend2"><b>Overall</b> = how worth pursuing a job is: 50% match + 30% pay + 20% quality of life. <b>Match</b> = how well your resume, honestly tailored, meets the job's requirements (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability).</p>
-  <p class="legend" id="legend">Verdicts come from Claude comparing each job with your resume: Strong match (strong as written), Worth tailoring (strong after honest tailoring), Stretch, Not a fit. On the pay bar, the dark tick is your <span class="floorTxt"></span> floor, the grey tick is your current base, and the ring is the midpoint. Ranges whose top is 1.6× the bottom or more are flagged as wide bands. Save, Applied and Hide are kept per profile.</p>
+  <p class="legend" id="pvLegend" hidden>This tab shows jobs that fit your target, which you set on My profile, under Target. Claude rates each as a step toward it. "Now" is your shot today with an honest tailored resume. "After prep" assumes the preparation you described. Apply now = 65+ today; After prep = 65+ once prepared; Long shot = 40 to 64 even after prep. Pitch ideas only claim what's true today. Overall = 50% odds (60% now, 40% after prep) + 30% pay + 20% quality of life.</p>
+  <p class="legend" id="legend2"></p>
+  <p class="legend" id="legend">Verdicts come from Claude comparing each job with your resume: Strong match (strong as written), Worth tailoring (strong after honest tailoring), Stretch, Not a fit. On the pay bar, the dark tick is your <span class="floorTxt"></span> floor, the grey tick is your current base, and the ring is the midpoint. Ranges whose top is 1.6× the bottom or more are flagged as wide pay bands. Save, Applied and Not for me are kept per profile.</p>
   </details>
 </section>
 
 <section id="view-tailored" hidden>
   <div class="countrow"><div class="count" id="tlCount">Loading…</div></div>
   <ol class="jobs" id="tlList"></ol>
-  <p class="legend">Every tailored resume you've made for this profile, newest first. Download PDF gives the finished resume; Review shows each bullet's source and the gaps Claude flagged.</p>
-</section>
-<section id="view-companies" hidden>
-  <div class="tablewrap"><table>
-    <thead><tr><th>Employer</th><th>Industry</th><th>Job listings</th><th>Matches</th><th>Last check</th></tr></thead>
-    <tbody id="cos"></tbody>
-  </table></div>
-  <p class="legend">Job listings = every open job the employer lists. Matches = the ones that fit your search: location (near you, or US remote), job title and <span class="floorTxt"></span> pay.</p>
+  <p class="legend">Every tailored resume you've made for this profile, newest first. Download PDF gives the finished resume, Download Word one you can edit; Review shows each bullet's source and the gaps Claude flagged.</p>
 </section>
 </div>
 """
@@ -780,8 +971,14 @@ const nNew = jobs.filter(j => j.new).length;
 const updatedAt = (() => { try { return new Date(D.generated).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"}); } catch(e) { return D.generated.replace("T", " "); } })();
 $("sub").textContent = "Updated " + updatedAt;
 document.querySelectorAll(".floorTxt").forEach(e => e.textContent = D.salary_floor ? fmt(D.salary_floor) : "");  // (no floor set: "your floor", "salary filters")
+// The Target tab is there only when this profile has a target (set on My profile, under Target), named after it.
 $("tab-pivot").textContent = D.target_name || "Target";
-if (!D.pivot_enabled) { $("tab-pivot").hidden = true; if (location.hash === "#pivot") location.hash = "#jobs"; }
+$("tab-pivot").hidden = !D.pivot_enabled;
+if (!D.pivot_enabled && location.hash === "#pivot") location.hash = "#jobs";
+if (window.siftTarget && SERVED) siftTarget(D.pivot_enabled ? (D.target_name || "Target") : "");   // (the phone's More menu)
+document.querySelectorAll(".rrTgtName").forEach(e => e.textContent = D.target_name || "Target");
+// The board's employers live on the Employers page (open counts, last check, add / remove): one link, with how many.
+$("tab-employers").textContent = `Your employers (${(D.companies || []).length.toLocaleString()}) →`;
 $("stats").innerHTML = [
   [jobs.length, "matches"], [jobs.filter(j=>j.workplace==="remote").length, "remote"],
   [jobs.filter(j=>j.salary_min!=null && j.salary_min>=D.salary_floor).length, D.salary_floor ? "min ≥ " + fmt(D.salary_floor) : "pay listed"],
@@ -830,7 +1027,7 @@ function drawPivotPanel(){
   const counts = [["apply_now", n(j => pvLab(j)==="apply_now"), "Apply now", "a genuine shot today"],
     ["after_prep", n(j => pvLab(j)==="after_prep"), "After prep", "once you've done the prep"],
     ["long_shot", n(j => pvLab(j)==="long_shot"), "Long shots", "possible, but a reach"],
-    ["all", pj.length - scored.length, "Not yet rated", "use Get Claude's take"]];
+    ["all", pj.length - scored.length, "Not yet rated", "use Rate this job, or Rate jobs"]];
   $("pvCounts").innerHTML = counts.map(([v,c,l,sub]) => `<button type="button" data-lbl="${v}" title="${esc(sub)}" aria-pressed="${$("lbl").value === v}"><b>${c}</b> ${l}</button>`).join("");
   const tally = {}, label = {};
   scored.filter(j => ["apply_now","after_prep"].includes(pvLab(j))).forEach(j => (j.pv_gaps||[]).forEach(g => { const k = g.toLowerCase(); if (k.includes("ts/sci") || k.includes("scif")) return; tally[k] = (tally[k]||0) + 1; label[k] = label[k] || g; }));
@@ -842,11 +1039,16 @@ $("pvCounts").addEventListener("click", e => { const b = e.target.closest("butto
 $("pvGaps").addEventListener("click", e => { const b = e.target.closest("button[data-gap]"); if (!b) return; gapSel = gapSel === b.dataset.gap ? "" : b.dataset.gap; if (gapSel) $("lbl").value = "noskip"; shown = 100; drawPivotPanel(); render(); });
 ["q","clr","co","st","sort","paidonly","newonly","reqall","lbl","nowide","cType","cSize","cVal","cAge","cGd","cLay","cEq"].forEach(id => $(id).addEventListener("input", () => { shown = 100; render(); }));
 $("more").addEventListener("click", () => { shown += 100; render(); });
+// "N hidden ▾" in the count line: each reason with its own Show (for this visit; nothing saved changes).
+let lvlShown = false;
 $("count").addEventListener("click", e => {
-  if (e.target.id === "reqShow") { $("reqall").checked = true; shown = 100; render(); }
-  if (e.target.id === "offShow") { offShown = true; OFF.forEach(j => { j.off_list = true; jobs.push(j); }); OFF.length = 0; shown = 100; render(); }
+  const id = e.target.id;
+  if (id === "reqShow") { $("reqall").checked = true; shown = 100; render(); }
+  if (id === "offShow") { offShown = true; OFF.forEach(j => { j.off_list = true; jobs.push(j); }); OFF.length = 0; shown = 100; render(); }
+  if (id === "lvlShow") { lvlShown = true; shown = 100; render(); }
+  if (id === "hidShow") { $("st").value = "hidden"; shown = 100; render(); }
 });
-// ---- My search (top of the Filters panel): this profile's saved search settings, the same ones /setup asks for.
+// ---- Your search (the card at the top of the Filters panel): this profile's saved search settings, the same ones /setup asks for.
 // They decide which jobs reach the board: home ZIP / radius / ways of working / remote anywhere / pay floor are applied
 // when the board is built (jobfinder.select_for_person); level and travel limit are applied here (mySearchOk).
 // Each change saves through POST /api/person/settings, like My profile used to: the server re-checks this board (and
@@ -873,9 +1075,20 @@ function msFill(){
   document.querySelectorAll("[data-mswp]").forEach(el => el.checked = (MYS.workplaces || []).includes(el.dataset.mswp));
 }
 function msSay(t, err){ $("msState").textContent = t; $("msState").classList.toggle("err", !!err); }
+// The card's one-line summary: "43215 · 35 mi · on-site, hybrid · remote anywhere in the US · $60k+ · any level"
+function msSummary(){
+  if (!MYS) return;
+  const s = MYS, wpN = {onsite: "on-site", hybrid: "hybrid", remote: "remote"}, wps = (s.workplaces || []).map(w => wpN[w] || w);
+  const remoteOnly = wps.length === 1 && wps[0] === "remote", home = String(s.home_zip || "").trim();
+  const trv = {none: "no travel", light: "light travel", moderate: "some travel"}[s.travel_max];
+  const parts = [remoteOnly ? "" : home ? `${home} · ${s.radius_miles || 35} mi` : "No home ZIP yet", wps.join(", "),
+    s.remote_us && !remoteOnly ? "remote anywhere in the US" : "", s.salary_floor ? fmt(s.salary_floor) + "+" : "any pay",
+    s.seniority_mine ? LVN[s.seniority_mine] || "" : "any level", trv || ""];
+  $("msSum").textContent = parts.filter(Boolean).join(" · ");
+}
 function msLoaded(st){
   if (!SERVED || !st) return;
-  MYS = st; $("msWrap").hidden = false; msFill();
+  MYS = st; $("msWrap").hidden = false; msFill(); msSummary();
 }
 const msBoard = () => fetch("/api/profile/board" + pq()).then(r => r.json());
 if (SERVED) msBoard().then(b => { if (msBase === undefined) msBase = b.board_at || null; }).catch(() => {});
@@ -885,7 +1098,7 @@ function msAwaitBoard(){
   const tick = () => msBoard().then(b => {
     if (b.board_at && b.board_at !== msBase && !b.rebuilding) { saveFilters(); location.reload(); return; }
     if (++tries < 90) msTimer = setTimeout(tick, 2000);
-    else msSay("Saved. Your board re-checks as soon as the current update or re-rate finishes.");
+    else msSay("Saved. Your board re-checks as soon as the current Find new jobs or rating finishes.");
   }).catch(() => { msTimer = setTimeout(tick, 4000); });
   msTimer = setTimeout(tick, 1500);
 }
@@ -895,14 +1108,14 @@ function msSave(settings){
     .then(r => r.json().then(d => ({ok: r.ok, d})))
     .then(({ok, d}) => {
       if (!ok) { msFill(); msSay(d.error || "Couldn't save that.", true); return; }
-      MYS = Object.assign({}, MYS, d.settings); msFill();
+      MYS = Object.assign({}, MYS, d.settings); msFill(); msSummary();
       if (d.area_changed) { try { sessionStorage.setItem("jb.area", "1"); } catch(e) {} if (typeof areaOffer === "function") areaOffer(); }
       D.salary_floor = MYS.salary_floor || 0;
       shown = 100; render();
       msSay("Saved. Re-checking your board…"); msAwaitBoard();
     }).catch(() => { msFill(); msSay("Couldn't reach Siftwell, so that wasn't saved.", true); });
 }
-$("msGrid").addEventListener("change", e => {
+$("msGrid").addEventListener("change", async e => {
   const el = e.target;
   if (el.dataset.mswp) {
     const wps = [...document.querySelectorAll("[data-mswp]")].filter(x => x.checked).map(x => x.dataset.mswp);
@@ -911,7 +1124,7 @@ $("msGrid").addEventListener("change", e => {
   }
   // The older built-in area (no home ZIP yet): a ZIP changes which jobs count as near you, so say so before saving.
   if (el.dataset.ms === "home_zip" && el.value.trim() && MYS && !String(MYS.home_zip || "").trim() && !((MYS.workplaces || []).length === 1 && MYS.workplaces[0] === "remote") && jobs.length
-      && !confirm("Set your home ZIP?\n\nThis changes which jobs count as near you. Until now Siftwell has used its built-in Washington, DC area list for this profile; with a ZIP it keeps jobs within your search radius of that place instead, so some jobs will be added to your board and some removed.\n\n(If you only want more employers near you, Settings, then Employer directory lets you pick an area for that without changing your job filter.)")) { msFill(); el.value = ""; return; }
+      && !await appConfirm({title: "Set your home ZIP?", ok: "Set my home ZIP", text: "This changes which jobs count as near you. Until now Siftwell has used its built-in Washington, DC area list for this profile; with a ZIP it keeps jobs within your search radius of that place instead, so some jobs will be added to your board and some removed.\n\n(If you only want more employers near you, Settings, then Employer directory lets you pick an area for that without changing your job filter.)"})) { msFill(); el.value = ""; return; }
   if (el.dataset.ms) msSave({[el.dataset.ms]: el.type === "checkbox" ? el.checked : el.value});
 });
 
@@ -976,7 +1189,7 @@ function travelChip(j){
 }
 
 // ---- preferences (from the server; defaults until loaded)
-let PREFS = {"display.clearance": "secret", "display.sort": "score", "display.theme": "system", "tailor.questions": "always"};
+let PREFS = {"display.clearance": "all", "display.sort": "score", "display.theme": "system", "tailor.questions": "always"};
 let RESTORED = false;  // true when filters came back from a page refresh, so defaults don't override them
 function applyTheme(){
   const t = PREFS["display.theme"];
@@ -991,7 +1204,10 @@ function applyDisplayDefaults(){
     $("clr").value = PREFS["display.clearance"]; $("sort").value = PREFS["display.sort"];
     if (!jobs.some(j => j.ai_fit != null) && ["score", "odds", "odds_later"].includes($("sort").value)) $("sort").value = NOMATCH_SORT();  // nothing to rank by Match yet
     if (!OPENED) SEL = null;   // (the order may just have changed: the detail pane shows the new first row)
-    if (!location.hash && PREFS["display.start_tab"] && PREFS["display.start_tab"] !== "jobs") { location.hash = "#" + PREFS["display.start_tab"]; return; }
+    // Settings, Display, "Start on": Jobs, Saved, Applied, Resumes or the Target tab (an older "Companies" choice stays on Jobs:
+    // employers are on the Employers page now)
+    const st0 = PREFS["display.start_tab"];
+    if (!location.hash && st0 && st0 !== "jobs" && st0 !== "companies" && (st0 !== "pivot" || D.pivot_enabled)) { location.hash = "#" + st0; return; }
   }
   render();
 }
@@ -1057,7 +1273,7 @@ function drawTailored(){
     const j = byId[x.job.id], when = x.created ? new Date(x.created).toLocaleDateString([], {month: "short", day: "numeric", year: "numeric"}) : "";
     const m = j ? (j.ai_fit ?? j.pv_now) : null, w = x.work || {};
     const title = safeUrl(x.job.url) ? `<a class="title" href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">${esc(x.job.title || "Job")}</a>` : `<span class="title">${esc(x.job.title || "Job")}</span>`;
-    const posting = safeUrl(x.job.url) ? `<a href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">Posting</a>` : "";
+    const posting = safeUrl(x.job.url) ? `<a href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">View posting ↗</a>` : "";
     if (x.state === "running" || x.state === "failed") {  // not a finished resume yet
       const run = x.state === "running";
       return `<li class="job tlcard ${run ? "working" : "failed"}" data-slug="${esc(x.slug)}">
@@ -1069,7 +1285,7 @@ function drawTailored(){
       </div></li>`;
     }
     return `<li class="job tlcard">
-      <div class="scores">${j ? `<div class="score" title="Overall">${j.score}<small>OVERALL</small></div>` : ""}${m != null ? `<div class="score match ${m >= 70 ? "hi" : m >= 45 ? "mid" : "lo"}">${m}<small>MATCH</small></div>` : ""}</div>
+      <div class="scores rsc">${j ? scoreTrio(j, false) : m != null ? `<div><b class="m ${m >= 70 ? "hi" : ""}">${m}</b><small>Match</small></div>` : ""}</div>
       <div style="min-width:0">
         ${safeUrl(x.job.url) ? `<a class="title" href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">${esc(x.job.title || "")}</a>` : `<span class="title">${esc(x.job.title || "")}</span>`}
         <div class="meta"><span class="coname">${esc(x.job.company || "")}</span><span>Tailored ${esc(when)}</span><span>${j ? "Still open" : "No longer on your board"}</span>${x.gaps ? `<span>${x.gaps} gap${x.gaps === 1 ? "" : "s"} flagged</span>` : ""}${w.running ? `<span class="tlwork" role="status"><span class="spin"></span>Re-tailoring: ${esc(TL_STEP[w.step] || "working…")}</span>` : reviewBadge(x.review)}</div>
@@ -1077,7 +1293,7 @@ function drawTailored(){
         ${w.running ? "" : factNotes(x.facts)}
         ${w.running ? "" : reviewNotes(x.review)}
         ${w.error && !w.running ? `<div class="tlfail">Re-tailoring failed: ${esc(w.error)} <button class="btn ghost sm" type="button" data-dismiss="${esc(x.slug)}">Dismiss</button></div>` : ""}
-        <div class="acts">${x.review && x.review.status === "interrupted" ? `<button class="pri" data-resume="${esc(x.job.id)}" data-slug="${x.slug}">Resume review</button>` : ""}${x.review && x.review.status === "needs_answers" ? `<button class="pri" data-astra="${esc(x.job.id)}" data-slug="${x.slug}">Answer Astra's questions</button>` : ""}<a class="pri" href="/tailored/${x.slug}.pdf">Download PDF</a><a href="/tailored/${x.slug}" target="_blank" rel="noopener">Review</a><a href="/tailored/${x.slug}.docx">Word</a>${safeUrl(x.job.url) ? `<a href="${esc(safeUrl(x.job.url))}" target="_blank" rel="noopener">Posting</a>` : ""}<button class="danger" data-del="${x.slug}">Remove</button></div>
+        <div class="acts">${x.review && x.review.status === "interrupted" ? `<button class="pri" data-resume="${esc(x.job.id)}" data-slug="${x.slug}">Resume review</button>` : ""}${x.review && x.review.status === "needs_answers" ? `<button class="pri" data-astra="${esc(x.job.id)}" data-slug="${x.slug}">Answer Astra's questions</button>` : ""}<a class="pri" href="/tailored/${x.slug}.pdf">Download PDF</a><a href="/tailored/${x.slug}.docx">Download Word</a><a href="/tailored/${x.slug}" target="_blank" rel="noopener">Review</a>${posting}<button class="danger" data-del="${x.slug}" data-title="${esc(x.job.title || "this job")}">Remove</button></div>
       </div></li>`;
   }).join("");
 }
@@ -1135,19 +1351,26 @@ function coPanel(j){
 const ago = d => { if (!d) return ""; const t = Date.parse(d); if (!t) return ""; const n = Math.round((Date.now() - t) / 864e5); return n <= 0 ? "today" : n === 1 ? "yesterday" : n < 7 ? n + "d ago" : n < 45 ? Math.round(n / 7) + "w ago" : Math.round(n / 30) + "mo ago"; };
 const whereTxt = j => j.workplace === "remote" ? (j.remote_in ? `Remote (${j.remote_in})` : "Remote") : (j.where || (j.dmv_locations.length ? j.dmv_locations : j.locations)[0] || "").replace(/,?\s*(United States( of America)?|USA)$/i, "").slice(0, 40) + (j.workplace === "hybrid" ? " · Hybrid" : "");
 const payTxt = j => j.salary_min == null ? (j.lazy ? "Pay: open to check" : "Pay not listed") : (payOwn(j) || (j.salary_max && j.salary_max !== j.salary_min ? `${fmt(j.salary_min)}–${fmt(j.salary_max)}` : fmt(j.salary_min)));
-const TIERN = {haiku: "Quick check (Haiku)", sonnet: "Careful look (Sonnet)", opus: "Best judgment (Opus)"};   // the same three names everywhere
+const TIERN = {haiku: "Quick check", sonnet: "Careful look", opus: "Best judgment"};   // the same three names everywhere (no model names)
 const tierName = j => j.ai_tier ? TIERN[j.ai_tier] + (j.ai_at ? " · " + j.ai_at : "") + (j.ai_stale ? " · made with older info" : "") : "Not rated yet";
 const verdict = j => mode === "pivot" ? (j.pv_label ? [pvLab(j), PVL[j.pv_label]] : null) : (j.ai_label ? [j.ai_label, LBL[j.ai_label]] : null);
 let SEL = null, OPENED = false;
+// The scores, one name and one order everywhere (list rows, details, Resumes, Target): Relevant · Appeal · Match. On the
+// Target tab, Overall (that tab's Best bets number) stands where Appeal does.
+function scoreTrio(j, pvm){
+  const m = pvm ? j.pv_now : j.ai_fit;
+  return (!pvm && HASREL ? `<div title="${esc(j.rel_why || "How close this job is to the work you do")}"><b class="rv${j.rel >= 70 ? " hi" : ""}">${j.rel ?? "–"}</b><small>Relevant</small></div>` : "") +
+    `<div><b>${pvm ? (j.pv_score ?? j.score) : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div>` +
+    `<div><b class="m ${m >= 70 ? "hi" : ""}${m == null && NOAI ? " na" : ""}" title="${m == null ? (NOAI ? "Match ratings need Claude" : "Not rated yet") : pvm ? "" : tierName(j)}">${m ?? "—"}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div>`;
+}
 function card(j){
-  const s = status[j.id] || "", pvm = mode === "pivot";
-  const sc = pvm ? (j.pv_score ?? j.score) : j.score, m = pvm ? j.pv_now : j.ai_fit, v = verdict(j);
+  const s = status[j.id] || "", pvm = mode === "pivot", v = verdict(j);
   return `<li class="jrow ${s==="hidden"?"hidden-by-user":""}" role="option" tabindex="0" data-id="${esc(j.id)}" aria-selected="${SEL === j.id}">
     <div class="rtitle">${j.new ? '<span class="ndot" title="New this week"></span>' : ""}${esc(j.title)}</div>
-    <div class="rsc">${!pvm && HASREL ? `<div title="${esc(j.rel_why || "How close this job is to the work you do")}"><b class="rv${j.rel >= 70 ? " hi" : ""}">${j.rel ?? "–"}</b><small>Relevant</small></div>` : ""}<div><b>${pvm ? sc : (j.appeal ?? "–")}</b><small>${pvm ? "Overall" : "Appeal"}</small></div><div><b class="m ${m >= 70 ? "hi" : ""}${m == null && NOAI ? " na" : ""}" title="${m == null ? (NOAI ? "Match ratings need Claude" : "Not rated yet") : pvm ? "" : tierName(j)}">${m ?? "—"}</b><small>Match${!pvm && j.ai_tier && j.ai_tier !== "opus" ? `<span class="tierdot t-${j.ai_tier}"></span>` : ""}</small></div></div>
+    <div class="rsc">${scoreTrio(j, pvm)}</div>
     <div class="rco">${esc(coOf(j))} · ${esc(whereTxt(j))}</div>
     <div class="rmeta">${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : NOAI ? "" : `<span class="vpill">Not rated yet</span>`}<span class="amt">${payTxt(j)}</span>${j.posted ? `<span>${ago(j.posted)}</span>` : ""}${(pvm ? j.pv_stale : j.ai_stale) ? '<span class="old" title="Rated before your latest info">Older info</span>' : ""}${j.req_status === "unmet" ? '<span class="rq un">Requirement not met</span>' : j.req_status === "flag" ? '<span class="rq">Check requirements</span>' : ""}${TAILORED[j.id] ? "<span>Resume ready</span>" : WORK[j.id] && WORK[j.id].state === "running" ? "<span>Tailoring…</span>" : ""}${s === "applied" ? "<span>Applied</span>" : s === "saved" ? "<span>★ Saved</span>" : ""}</div>
-    <div class="racts"><button type="button" data-k="saved" aria-pressed="${s==="saved"}" title="Save" aria-label="Save">★</button><button type="button" data-k="hidden" aria-pressed="${s==="hidden"}" title="Not for me" aria-label="Hide">✕</button></div>
+    <div class="racts"><button type="button" data-k="saved" aria-pressed="${s==="saved"}" title="Save" aria-label="Save">★</button><button type="button" data-k="hidden" aria-pressed="${s==="hidden"}" title="Not for me" aria-label="Not for me">✕</button></div>
   </li>`;
 }
 function detail(j){
@@ -1162,28 +1385,36 @@ function detail(j){
   const wpChip = j.workplace ? `<span class="chip ${j.workplace}"${j.remote_in ? ` title="Remote for people who live in ${esc(j.remote_in)}"` : ""}>${j.workplace === "onsite" ? "On-site" : j.workplace === "remote" && j.remote_in ? `Remote (${esc(j.remote_in)})` : j.workplace[0].toUpperCase()+j.workplace.slice(1)}</span>` : `<span class="chip">Workplace not stated</span>`;
   const locs = (j.dmv_locations.length ? j.dmv_locations : j.locations).slice(0,4).map(l => `<span class="chip">${esc(l)}</span>`).join("");
   const clr = j.clearance ? `<span class="chip ${j.clearance.includes("poly")?"poly":""}">${esc(j.clearance)}</span>` : "";
-  const tl = TAILORED[j.id], wk = WORK[j.id];
-  const tailorBtns = !SERVED ? "" : wk && tlBusy(wk) ? `<button class="btn primary" type="button" disabled>${esc(TL_STEP[(wk.work || {}).step] || "Tailoring…")}</button><a class="btn" href="#tailored">See it in Resumes</a>`
+  const tl = TAILORED[j.id], wk = WORK[j.id], url = safeUrl(j.url);
+  // One primary action (Tailor my resume, or Download PDF once it is tailored), View posting as the strong second one,
+  // and Save / Applied / Not for me as lighter actions below. Without Claude there is no Tailor button: View posting
+  // is the primary action, and Claude's read says once what Claude would add.
+  const noTailor = !SERVED || (NOAI && !tl && !(wk && (tlBusy(wk) || wk.state === "failed")));
+  const tailorBtns = noTailor ? "" : wk && tlBusy(wk) ? `<button class="btn primary" type="button" disabled>${esc(TL_STEP[(wk.work || {}).step] || "Tailoring…")}</button><a class="btn" href="#tailored">See it in Resumes</a>`
     : wk && wk.state === "failed" ? `<button class="btn primary" type="button" data-tailor="1"${NOAI ? ' disabled title="Needs Claude"' : ""}>Tailoring failed · Try again</button>`
-    : tl ? `<a class="btn primary" href="/tailored/${tl}.pdf">Download resume PDF</a><a class="btn" href="/tailored/${tl}" target="_blank" rel="noopener">Review resume</a><button class="btn" type="button" data-tailor="1" data-again="1"${NOAI ? ' disabled title="Needs Claude"' : ""}>Re-tailor</button>`
-    : NOAI ? `<button class="btn primary" type="button" disabled title="Needs Claude">Tailor my resume</button>${noClaude("Tailoring")}` : `<button class="btn primary" type="button" data-tailor="1">Tailor my resume</button>`;
+    : tl ? `<a class="btn primary" href="/tailored/${tl}.pdf">Download PDF</a><a class="btn" href="/tailored/${tl}.docx">Download Word</a><a class="btn" href="/tailored/${tl}" target="_blank" rel="noopener">Review</a>`
+    : `<button class="btn primary" type="button" data-tailor="1">Tailor my resume</button>`;
+  const viewBtn = url ? `<a class="btn ${noTailor ? "primary" : "strong"}" href="${esc(url)}" target="_blank" rel="noopener">View posting ↗</a>` : "";
+  const again = tl && SERVED && !(wk && tlBusy(wk)) ? `<button class="btn quiet" type="button" data-tailor="1" data-again="1"${NOAI ? ' disabled title="Needs Claude"' : ""}>Tailor again</button>` : "";
+  const sv = (val, lab, cls) => `<div class="sv"><b class="${cls || ""}">${val ?? "–"}</b><small>${lab}</small></div>`;
+  const ap = j.appeal_parts;
   return `<div class="dpane" data-id="${esc(j.id)}">
     <button class="dback" type="button" id="dBack">‹ All jobs</button>
     <div><h2 class="dtitle">${esc(j.title)}</h2>
       <div class="dco"><span class="coname">${esc(coOf(j))}</span><span>${esc(whereTxt(j))}</span>${j.posted ? `<span>Posted ${ago(j.posted)}</span>` : ""}${v ? `<span class="vpill v-${v[0]}">${v[1]}</span>` : ""}${j.new ? '<span class="chip new">New</span>' : ""}</div></div>
-    <div class="dacts acts">${tailorBtns}
-      <button class="btn" type="button" data-k="saved" aria-pressed="${s==="saved"}">${s==="saved" ? "★ Saved" : "☆ Save"}</button>
-      <button class="btn" type="button" data-k="applied" aria-pressed="${s==="applied"}">${s==="applied" ? "✓ Applied" : "Mark applied"}</button>
-      ${safeUrl(j.url) ? `<a class="btn" href="${esc(safeUrl(j.url))}" target="_blank" rel="noopener">View posting ↗</a>` : ""}
-      <button class="btn ghost" type="button" data-k="hidden" aria-pressed="${s==="hidden"}">${s==="hidden" ? "Unhide" : "Not for me"}</button></div>
+    <div class="dacts acts">${tailorBtns}${viewBtn}</div>
+    <div class="dmarks">
+      <button class="btn quiet" type="button" data-k="saved" aria-pressed="${s==="saved"}">${s==="saved" ? "★ Saved" : "☆ Save"}</button>
+      <button class="btn quiet" type="button" data-k="applied" aria-pressed="${s==="applied"}">${s==="applied" ? "✓ Applied" : "Mark applied"}</button>
+      <button class="btn quiet" type="button" data-k="hidden" aria-pressed="${s==="hidden"}">${s==="hidden" ? "Unhide" : "Not for me"}</button>${again}</div>
     ${wk && !tlBusy(wk) && (wk.state === "failed" || (wk.work || {}).error) ? `<div class="tlfail" role="alert">Tailoring failed: ${esc((wk.work || {}).error || "Something went wrong.")}</div>` : ""}
     <section class="dsec"><h3>How you stack up</h3><div class="dscores">
-      ${pvm ? `<div class="dsc"><div class="ring" style="--p:${sc}"><b>${sc}</b></div><p><strong>Overall</strong>Odds, pay and quality of life combined.</p></div>`
-        : `<div class="dsc"><div class="ring" style="--p:${j.appeal ?? 0}"><b>${j.appeal ?? "–"}</b></div><p><strong>Appeal</strong>How well this job gives you what you want.${j.appeal_parts ? `<br>Pay ${j.appeal_parts.pay} · Place ${j.appeal_parts.place} · Level ${j.appeal_parts.level} · Company ${j.appeal_parts.company} · Travel ${j.appeal_parts.burden}` : ""}</p></div>`}
-      ${!pvm && HASREL ? `<div class="dsc"><div class="ring" style="--p:${j.rel ?? 0}"><b>${j.rel ?? "–"}</b></div><p><strong>Relevance</strong>How close this job is to the work you do. ${esc(j.rel_why || "")}${j.rel_why ? "." : ""}<br><a href="/profile#search">Change what Siftwell looks for</a></p></div>` : ""}
-      <div class="dsc"><div class="ring" style="--p:${m ?? 0}"><b>${m ?? "–"}</b></div><p><strong>Match</strong>${m == null ? (NOAI ? "Needs Claude." : "Not rated yet.") : pvm ? `Your shot today with an honest tailored resume (after prep: ${j.pv_later}).` : `How well your resume matches what they want${asis != null && asis !== m ? ` (${asis} as written today)` : ""}.<br><span class="tiertag t-${j.ai_tier}">${esc(tierName(j))}</span>`}</p></div>
+      ${!pvm && HASREL ? `<div class="dsc">${sv(j.rel, "Relevant")}<p><strong>Relevant</strong>How close this job is to the work you do. ${esc(j.rel_why || "")}${j.rel_why ? "." : ""}<br><a href="/profile#search">Change what Siftwell looks for</a></p></div>` : ""}
+      ${pvm ? `<div class="dsc">${sv(sc, "Overall")}<p><strong>Overall</strong>Odds, pay and quality of life combined.</p></div>`
+        : `<div class="dsc">${sv(j.appeal, "Appeal")}<div><p><strong>Appeal</strong>How well this job gives you what you want: pay, place, level, company and travel.</p>${ap ? `<details class="subw"><summary>Why</summary><div>Pay ${ap.pay} · Place ${ap.place} · Level ${ap.level} · Company ${ap.company} · Travel ${ap.burden}</div></details>` : ""}</div></div>`}
+      <div class="dsc">${sv(m ?? "—", "Match", "m" + (m >= 70 ? " hi" : "") + (m == null ? " na" : ""))}<p><strong>Match</strong>${m == null ? (NOAI ? "Not rated: Match ratings come from Claude (see below)." : "Not rated yet.") : pvm ? `Your shot today with an honest tailored resume (after prep: ${j.pv_later}).` : `How well your resume matches what they want${asis != null && asis !== m ? ` (${asis} as written today)` : ""}.<br><span class="tiertag t-${j.ai_tier}">${esc(tierName(j))}</span>`}</p></div>
     </div></section>
-    <section class="dsec dread"><h3>Claude's read</h3>${!unrated && (pvm ? j.pv_stale : j.ai_stale) && SERVED ? `<div class="ratefresh"><span class="old">Rated before your latest info</span><button class="btn sm" type="button" data-rate="1">Re-rate this job</button></div>` : ""}${unrated && NOAI ? `<p>${noClaude("Claude's read")}</p>` : unrated ? `<p>Claude hasn't read this one yet.</p>${SERVED && D.profile ? `<button class="btn" type="button" data-rate="1">Get Claude's take (about 30 seconds)</button>` : ""}` : read}</section>
+    <section class="dsec dread"><h3>Claude's read</h3>${!unrated && (pvm ? j.pv_stale : j.ai_stale) && SERVED && !NOAI ? `<div class="ratefresh"><span class="old">Rated before your latest info</span><button class="btn sm" type="button" data-rate="1">Rate this job again</button></div>` : ""}${unrated && NOAI ? `<p class="nocl once">Claude's read, the Match rating and a tailored resume need Claude. ${NOAI_LINK}</p>` : unrated ? `<p>Claude hasn't read this one yet.</p>${SERVED && D.profile ? `<button class="btn" type="button" data-rate="1">Rate this job (about 30 seconds)</button>` : ""}` : read + (NOAI && !tl ? `<p class="nocl once">A tailored resume needs Claude. ${NOAI_LINK}</p>` : "")}</section>
     ${reqSection(j)}
     <section class="dsec"><h3>Pay</h3>${payBar(j)}</section>
     <section class="dsec"><h3>Details</h3><div class="chips">${levelChip(j)}${wpChip}${locs}${clr}${j.scif ? `<span class="chip onsite">SCIF</span>` : ""}${travelChip(j)}</div></section>
@@ -1269,7 +1500,7 @@ $("list").addEventListener("keydown", e => { const r = e.target.closest(".jrow")
 document.addEventListener("keydown", e => {
   if (e.target.matches("input, select, textarea") || $("qSheet").open) return;
   if (e.key === "Escape") { closeDetail(); $("amenu").hidden = true; return; }
-  if (!["ArrowDown","ArrowUp","j","k"].includes(e.key) || !$("view-companies").hidden || !$("view-tailored").hidden) return;
+  if (!["ArrowDown","ArrowUp","j","k"].includes(e.key) || !$("view-tailored").hidden || e.target.closest("dialog, .rrpop, .amenu, .moresheet")) return;
   const ids = window.__shownIds || []; if (!ids.length) return;
   e.preventDefault();
   let i = ids.indexOf(SEL); i = (e.key === "ArrowDown" || e.key === "j") ? Math.min(ids.length - 1, i + 1) : Math.max(0, i - 1);
@@ -1278,11 +1509,13 @@ document.addEventListener("keydown", e => {
 });
 function render(){
   const q = $("q").value.trim().toLowerCase(), clr = $("clr").value, co = $("co").value, st = $("st").value;
-  window.__reqHidden = 0; window.__lvlHidden = 0; window.__offHidden = 0;
+  window.__reqHidden = 0; window.__lvlHidden = 0; window.__offHidden = 0; let hidN = 0;
   const lvlBand = msNow().seniority_band || [1, 7];
   let r = jobs.filter(j => {
     if (wp === "remote" && j.workplace !== "remote") return false;
-    if (!mySearchOk(j)) { if (j.level != null && (j.level < lvlBand[0] || j.level > lvlBand[1])) window.__lvlHidden++; return false; }
+    const offLvl = j.level != null && (j.level < lvlBand[0] || j.level > lvlBand[1]);
+    if (!(lvlShown && offLvl) && !mySearchOk(j)) { if (offLvl) window.__lvlHidden++; return false; }
+    if (lvlShown && offLvl && !mySearchOk(Object.assign({}, j, {level: null}))) return false;   // (still within your travel limit)
     if (co !== "all" && coOf(j) !== co) return false;
     if (j.off_list && !offShown && mode !== "pivot") { window.__offHidden++; return false; }
     const lb = $("lbl").value;
@@ -1308,8 +1541,8 @@ function render(){
     if (clr === "secret" && ["TS/SCI + poly","TS/SCI","Top Secret"].includes(j.clearance)) return false;
     const s = status[j.id] || "";
     if (PIN) { if (s !== PIN) return false; }
-    else if (st === "active" && s === "hidden") return false;
-    else if (["saved","applied","hidden"].includes(st) && s !== st) return false;
+    else if (st === "active" && s === "hidden") { hidN++; return false; }
+    else if (st === "hidden" && s !== st) return false;
     if (nlOn()) { if (!NL.rank.has(j.id)) return false; }
     else if (q && !(j.title+" "+j.company+" "+j.locations.join(" ")+" "+j.sector).toLowerCase().includes(q)) return false;
     return true;
@@ -1327,21 +1560,29 @@ function render(){
   const notRated = !D.profile ? 0 : mode === "pivot" ? pvJobs().filter(j => j.pv_label == null && j.req_status !== "unmet").length : jobs.filter(j => j.ai_rs && j.ai_fit == null).length;
   // ratings made with older info, for the tab being shown (the Target tab has its own ratings, so its own count)
   const staleN = mode === "pivot" ? pvJobs().filter(j => j.pv_label != null && j.pv_stale).length : (D.ratings && D.ratings.stale_all) || 0;
-  $("count").innerHTML = `${r.length.toLocaleString()} of ${base.toLocaleString()} jobs` + (r.length > shown ? ` · showing ${shown}` : "") +
-    (notRated ? ` · <span title="Claude rates a limited number of jobs in one go, the ones most relevant to your work first. The rest show a dash for Match until they are rated.">${notRated.toLocaleString()} job${notRated === 1 ? "" : "s"} not rated yet</span>` : "") +
-    (!NOAI && staleN ? ` · <span title="Rated before your latest resume, answers or goals. Rate more (or the Re-rate icon at the top) brings them up to date.">${staleN.toLocaleString()} rated with older info</span>` : "") +
-    (window.__lvlHidden ? ` · <span title="These jobs state a level outside the levels you chose (Filters, then My search). Jobs that state no level are always shown.">${window.__lvlHidden.toLocaleString()} hidden by your level</span>` : "") +
-    (window.__reqHidden ? ` · <button type="button" class="linkbtn" id="reqShow">${window.__reqHidden.toLocaleString()} hidden: requirements you don't meet</button>` : "") +
-    (offN ? ` · <span title="Your board shows jobs whose titles match your list (Profile, then What Siftwell looks for). These don't match anything on it, and Claude doesn't rate them.">${offN.toLocaleString()} hidden because their titles aren’t on your list</span> · <button type="button" class="linkbtn" id="offShow">Show</button>` : "");
+  // The count line: "186 jobs · 5 hidden ▾", the reasons (each with its Show) behind the disclosure; Rate jobs beside it.
+  const n = x => x.toLocaleString(), hidOpen = !!document.querySelector("#count .hidn[open]");
+  const why = [];
+  if (window.__reqHidden) why.push([window.__reqHidden, "need something you don't meet (a degree, license or similar)", "reqShow"]);
+  if (offN) why.push([offN, "have titles that aren’t on your list (My profile, What Siftwell looks for); Claude doesn’t rate them", "offShow"]);
+  if (window.__lvlHidden) why.push([window.__lvlHidden, "are at a level outside the one you chose in your search", "lvlShow"]);
+  if (hidN) why.push([hidN, "you marked Not for me", "hidShow"]);
+  const hidT = why.reduce((a, w) => a + w[0], 0);
+  const pvEmpty = mode === "pivot" && !base;
+  $("count").innerHTML = (pvEmpty ? "No jobs for your target yet" : `${n(r.length)} job${r.length === 1 ? "" : "s"}`) + (r.length > shown ? ` · showing ${n(shown)}` : "") +
+    (hidT ? ` · <details class="hidn"${hidOpen ? " open" : ""}><summary>${n(hidT)} hidden</summary><ul>${why.map(([c, t, id]) => `<li><span>${n(c)} ${t}</span><button type="button" class="linkbtn" id="${id}">Show</button></li>`).join("")}</ul></details>` : "");
   drawChips();
-  const moreN = notRated + (NOAI ? 0 : staleN);
-  $("rateMore").hidden = !SERVED || !D.profile || !moreN;
-  if (!$("rateMore").disabled) $("rateMore").textContent = "Rate more" + (NOAI ? " (needs Claude)" : "");
-  $("rateMore").title = "Claude rates the next batch: up to " + RLIM.haiku + " jobs get a quick check (the ones most relevant to your work first), then a closer look at the best of them. Uses your Claude plan.";
+  // Rate jobs: opens the rating panel; the number is how many jobs are waiting for a rating (none rated yet, or older info)
+  const moreN = mode === "pivot" ? notRated + (NOAI ? 0 : staleN) : jobs.filter(j => j.ai_rs && (j.ai_fit == null || j.ai_stale)).length;
+  $("rateMore").hidden = !SERVED || !D.profile || (!moreN && !NOAI) || pvEmpty;
+  $("rateMore").innerHTML = NOAI ? "Rate jobs" : `Rate jobs${moreN ? ` · <span class="n">${n(moreN)}</span> waiting` : ""}`;
+  $("rateMore").title = NOAI ? "Rating jobs needs Claude" : [notRated ? `${n(notRated)} not rated yet` : "", staleN ? `${n(staleN)} rated with older info` : ""].filter(Boolean).join(", ") + ". Claude rates a limited number in one go, the ones most relevant to your work first.";
   const page = r.slice(0, shown);
   window.__shownIds = page.map(j => j.id);
   if (!page.some(j => j.id === SEL)) { SEL = !window.matchMedia("(max-width:900px)").matches && page[0] ? page[0].id : null; if (!SEL) OPENED = false; }
-  $("list").innerHTML = page.length ? page.map(card).join("") : `<li class="dempty"><b>${PIN === "saved" ? "Nothing saved yet" : PIN === "applied" ? "No applications yet" : "No jobs match"}</b>${PIN === "saved" ? "Tap Save on any job to keep it here." : PIN === "applied" ? "Mark a job as applied and it moves here, so you can keep track." : (!nlOn() && SERVED && q.split(/\s+/).length > 1 ? "Press Enter to have Claude search for that description." : "Try removing a filter.")}</li>`;
+  $("list").innerHTML = page.length ? page.map(card).join("") : pvEmpty
+    ? `<li class="dempty"><b>No jobs fit your target yet</b>This tab collects jobs that are a step toward ${esc(D.target_name || "your target")}. They show up after the next Find new jobs. To change the target, go to <a href="/profile#target">My profile, Target</a>.</li>`
+    : `<li class="dempty"><b>${PIN === "saved" ? "Nothing saved yet" : PIN === "applied" ? "No applications yet" : "No jobs match"}</b>${PIN === "saved" ? "Tap Save on any job to keep it here." : PIN === "applied" ? "Mark a job as applied and it moves here, so you can keep track." : (!nlOn() && SERVED && q.split(/\s+/).length > 1 ? "Press Enter to have Claude search for that description." : "Try removing a filter.")}</li>`;
   $("more").hidden = r.length <= shown;
   drawDetail(); drawQuick(); drawTabCounts(); nlDraw(r.length);
 }
@@ -1436,7 +1677,7 @@ document.addEventListener("click", e => {
       if (!ok) throw Object.assign(new Error(d.error || "Sign-in didn't go through."), {expired: !!d.expired});
       const inSearch = box.id === "nlBar";
       box.className = box.className.replace(" err", "");
-      box.innerHTML = `<span class="clok">Signed in to Claude.</span> <span>${inSearch ? "Running your search now." : "Ratings pick up again the next time you find new jobs (the circular-arrow icon at the top)."}</span>`;
+      box.innerHTML = `<span class="clok">Signed in to Claude.</span> <span>${inSearch ? "Running your search now." : "Ratings pick up again the next time you find new jobs (Find new jobs, at the top)."}</span>`;
       if (inSearch) { nlSeq++; runNL(); }
       else document.querySelectorAll(".nlbar.err").forEach(x => x.hidden = true);
     }).catch(err => {
@@ -1451,8 +1692,8 @@ if (SERVED) clPost({action: "status"}).then(({d}) => {
   const ready = !!d.logged_in && d.installed !== false;
   if (!ready && !NOAI) { NOAI = true; applyNoAI(!!d.installed); }  // Claude went away since this board was built
   else if (!ready && d.installed && NOAI) noClaudeBanner(true);  // installed but signed out: offer the sign-in button
-  else if (ready && NOAI) { NOAI = false; applyNoAI(false); $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude is connected. Use Find new jobs (the circular-arrow icon at the top) or the Re-rate sparkle icon to get Match ratings."; }
-  if (d.logged_in && (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out")) $("aiBanner").textContent = "Claude Code is signed in. Ratings pick up again the next time you find new jobs (the circular-arrow icon at the top).";
+  else if (ready && NOAI) { NOAI = false; applyNoAI(false); $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude is connected. Use Find new jobs (at the top) or Rate jobs to get Match ratings."; }
+  if (d.logged_in && (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out")) $("aiBanner").textContent = "Claude Code is signed in. Ratings pick up again the next time you find new jobs (Find new jobs, at the top).";
 }).catch(() => {});
 // Settings gear badge: number of missing required Get started items (hidden when none); settings_page.py has the same logic.
 function setGsBadge(s){
@@ -1501,10 +1742,7 @@ function drawTabCounts(){
   $("tab-applied").innerHTML = `Applied<span class="n">${n("applied")}</span>`;
 }
 
-$("cos").innerHTML = D.companies.slice().sort((a,b)=>b.matched-a.matched || a.company.localeCompare(b.company)).map(c => `<tr>
-  <td>${esc(c.company)}</td><td>${esc(c.sector === "Siftwell directory" ? "" : c.sector)}</td>
-  <td class="n">${c.raw_jobs.toLocaleString()}</td><td class="n">${c.matched}</td>
-  <td class="${c.status==="ok"?"":"err"}"${c.status==="ok"?"":` title="${esc(c.status)}"`}>${c.status==="ok"?"OK":"Couldn’t be read last time"}</td></tr>`).join("");
+// (The board's employer table moved to the Employers page: "Your employers (n) →" in the tab row.)
 
 // ---- The employer directory on the board: one chooser used wherever employers can be added (the Start card, after a
 // change of search area, "Try the directory again"). It never adds blindly: it says how many employers, about how
@@ -1545,7 +1783,7 @@ const buildOffer = (bd, pre) => bd && bd.offer ? `<span class="dbuild">${esc(bd.
 function buildStart(btn, msg, then){
   btn.disabled = true; if (msg) msg.textContent = " Starting…";
   fetch("/api/localdir/start", {method: "POST", headers: H, body: JSON.stringify({add: "all", metered_ok: !!btn.dataset.meteredOk})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
-    if (!ok && d.metered && !btn.dataset.meteredOk) { btn.disabled = false; if (msg) msg.textContent = ""; if (confirm(d.error + "\n\nBuild anyway?")) { btn.dataset.meteredOk = "1"; buildStart(btn, msg, then); } return; }
+    if (!ok && d.metered && !btn.dataset.meteredOk) { btn.disabled = false; if (msg) msg.textContent = ""; appConfirm({title: "Build anyway?", text: d.error, ok: "Build anyway"}).then(yes => { if (yes) { btn.dataset.meteredOk = "1"; buildStart(btn, msg, then); } }); return; }
     if (!ok) { btn.disabled = false; if (msg) msg.textContent = " " + (d.error || "That didn’t work."); return; }
     if (msg) msg.textContent = " Started. Employers near you are added to your list as Siftwell finds them.";
     if (then) then(d);
@@ -1622,7 +1860,7 @@ if (SERVED && !jobs.length) (function(){
         <p>Siftwell hasn’t looked for jobs for you yet. When you start, it will ${what}. Jobs start to show up within a few minutes; you can leave this page while it runs.</p>
         ${dirLine}
         ${f.possible ? `<label class="chk"><input type="checkbox" id="scFind"${f.default ? " checked" : ""}><span>Also find more ${f.remote_only ? "remote-friendly employers in your field" : "employers near " + esc(f.label)} with Claude (optional): Claude searches the web, using your Claude plan; ${esc(f.estimate)}</span></label>` : ""}
-        ${f.reason === "no_place" ? `<p>Add your home ZIP (Filters, then My search) so Siftwell can add employers near you.</p>` : ""}
+        ${f.reason === "no_place" ? `<p>Add your home ZIP (<a href="/profile#search">My profile, Job search</a>) so Siftwell can add employers near you.</p>` : ""}
         ${nothing ? `<p><b>There are no employers to check yet.</b> Add your home ZIP, or add an employer by its careers link.</p>` : ""}
         ${titleTip(p)}
         <div class="sacts"><button class="btn primary" type="button" id="scGo"${nothing ? " disabled" : ""}>Start my job search</button>${nothing ? `<a class="btn" href="/catalog#companies">Add an employer by link</a>` : ""}</div>
@@ -1690,7 +1928,7 @@ if (SERVED && !jobs.length) (function(){
     else if (pvOk && pvNew) fixes.push(`<b>${n(pvNew)} more employers</b> ${d.remote_only ? "that hire remotely" : `within ${d.radius} miles of ${esc(d.label)}`} are in Siftwell’s free employer directory. ${dirChooser(PV, "sc")} <button type="button" class="btn sm primary" id="scDir">Add them</button><span class="dmsg" id="scDirMsg" role="status"></span>`);
     if (p.titles === false) fixes.push(`<a href="/profile#search">Tell Siftwell what work you do</a>: with your job title it can pick out the jobs that are relevant to you.`);
     else fixes.push(`<a href="/profile#search">Add more job titles</a> (My profile, then Job search): only jobs with a title like yours are kept.`);
-    fixes.push(`<a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (Filters, then My search). Siftwell then offers the employers in the wider area.`);
+    fixes.push(`<a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (Filters, then Your search). Siftwell then offers the employers in the wider area.`);
     fixes.push(`<a href="/catalog#find">Find more employers with Claude</a>: Claude looks up employers in your area${p.claude ? "" : " (needs Claude)"}, and you add the ones Siftwell can read.`);
     fixes.push(`<a href="/catalog#companies">Add an employer by its careers link</a>.`);
     show(`<h2 id="scTitle">${p.companies ? "No jobs matched your search" : "There are no employers to check yet"}</h2>
@@ -1705,27 +1943,30 @@ if (SERVED && !jobs.length) (function(){
 
 let PIN = "";
 function route(){
-  if (location.hash === "#filters") {  // My profile links here: the Jobs tab with the Filters panel (and its My search group) open
+  if (location.hash === "#filters") {  // links from My profile and the Start card: the Jobs tab with the Filters panel (and its Your search card) open
     history.replaceState(null, "", location.pathname + location.search + "#jobs");
     $("fPanel").hidden = false; $("filtersBtn").setAttribute("aria-expanded", "true"); syncFbar();
   }
-  const v = {"#companies": "companies", "#pivot": "pivot", "#tailored": "tailored", "#saved": "saved", "#applied": "applied"}[location.hash] || "jobs";
+  if (location.hash === "#companies") { location.replace("/catalog?mine=1#companies"); return; }   // (the old Companies tab: the Employers page now)
+  if (location.hash === "#pivot" && !D.pivot_enabled) { history.replaceState(null, "", location.pathname + location.search + "#jobs"); }
+  const v = {"#pivot": "pivot", "#tailored": "tailored", "#saved": "saved", "#applied": "applied"}[location.hash] || "jobs";
   PIN = v === "saved" || v === "applied" ? v : "";
   closeDetail(true);
-  $("view-jobs").hidden = v === "companies" || v === "tailored"; $("view-companies").hidden = v !== "companies"; $("view-tailored").hidden = v !== "tailored";
-  ["jobs","pivot","saved","applied","tailored","companies"].forEach(t => $("tab-" + t).setAttribute("aria-current", v===t ? "page" : "false"));
+  $("view-jobs").hidden = v === "tailored"; $("view-tailored").hidden = v !== "tailored";
+  ["jobs","pivot","saved","applied","tailored"].forEach(t => $("tab-" + t).setAttribute("aria-current", v===t ? "page" : "false"));
   if (v === "tailored") drawTailored();
   const m = v === "pivot" ? "pivot" : "current";
   if (m !== mode || !$("lbl").options.length) { mode = m; gapSel = ""; setLabelOptions(); shown = 100; }
   $("pvPanel").hidden = mode !== "pivot";
-  $("sortLater").textContent = mode === "pivot" ? "Best fit after I prepare" : "Best fit with my resume as it is";
-  $("sortOdds").textContent = mode === "pivot" ? "Best fit today" : "Best fit (Claude’s Match)";
+  $("sortScore").textContent = mode === "pivot" ? "Best bets (Overall)" : "Best bets (Appeal and Match together)";
+  $("sortLater").textContent = mode === "pivot" ? "Best Match after I prepare" : "Best Match with my resume as it is";
+  $("sortOdds").textContent = mode === "pivot" ? "Best Match today" : "Best Match (Claude’s rating)";
   $("sortRelevant").hidden = $("sortRelevant").disabled = mode === "pivot" || !HASREL;
   if ($("sortRelevant").disabled && $("sort").value === "relevant") $("sort").value = "score";
   $("legend").hidden = mode === "pivot"; $("pvLegend").hidden = mode !== "pivot";
   $("legend2").innerHTML = mode === "pivot"
-    ? "<b>Overall</b> = how worth pursuing a job is: 50% odds (60% today, 40% after prep) + 30% pay + 20% quality of life. <b>Match</b> = your shot today with an honest tailored resume (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability). Hover it for the after-prep number."
-    : (HASREL ? "<b>Relevant</b> = how close a job is to the work you do: its title against your job titles, other names for them, one step up and related roles, plus your skills found in the posting. Worked out by Siftwell itself for every job (no Claude); see and change the list under My profile, Job search. " : "") + "<b>Appeal</b> = how well a job gives you what you want, worked out from the posting and company facts: 40% pay (against your floor, or against the other jobs on your board when you have no floor), 20% workplace and distance, 15% level, 15% company (employee reviews, layoffs), 10% travel and clearance burden. <b>Match</b> = how well your resume, honestly tailored, meets what they ask for (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability). Claude rates a limited number of jobs each run, the most relevant first: a quick Haiku rating, then a Sonnet rating for the best of those, then a careful Opus rating for the top ones; a hollow dot means quick, a filled dot Sonnet, no dot Opus. <b>Best bets</b> (the default order) ranks jobs high on both Appeal and Match; a job Claude hasn't rated yet is placed by its Relevance instead.";
+    ? "<b>Overall</b> = how worth pursuing a job is: 50% odds (60% today, 40% after prep) + 30% pay + 20% quality of life; <b>Best bets</b> on this tab orders by it. <b>Match</b> = your shot today with an honest tailored resume (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability). Hover it for the after-prep number."
+    : (HASREL ? "<b>Relevant</b> = how close a job is to the work you do: its title against your job titles, other names for them, one step up and related roles, plus your skills found in the posting. Worked out by Siftwell itself for every job (no Claude); see and change the list under My profile, Job search. " : "") + "<b>Appeal</b> = how well a job gives you what you want, worked out from the posting and company facts: 40% pay (against your floor, or against the other jobs on your board when you have no floor), 20% workplace and distance, 15% level, 15% company (employee reviews, layoffs), 10% travel and clearance burden (the job's details show each part under Why). <b>Match</b> = how well your resume, honestly tailored, meets what they ask for (Claude's 0 to 100 rating; 70+ is a genuine shot; it's a rating, not a probability). Claude rates a limited number of jobs each run, the most relevant first: a quick check, then a careful look at the best of those, then its best judgment on the top ones; a hollow dot means a quick check, a filled dot a careful look, no dot best judgment. <b>Best bets</b> (the default order) ranks jobs high on both Appeal and Match; a job Claude hasn't rated yet is placed by its Relevance instead.";
   if (mode === "pivot") drawPivotPanel();
   render();
 }
@@ -1796,7 +2037,8 @@ function companyOk(j){
 }
 
 // ---- filters panel and active-filter chips
-const FDEF = () => ({clr: PREFS["display.clearance"] || "secret", st: "active", co: "all", lbl: mode === "pivot" ? "noskip" : "all"});
+// Clear filters: back to these. It never touches the saved search (the Your search card).
+const FDEF = () => ({clr: PREFS["display.clearance"] || "all", st: "active", co: "all", lbl: mode === "pivot" ? "noskip" : "all"});
 const optText = id => { const o = $(id).selectedOptions[0]; return o ? o.textContent : ""; };
 function activeFilters(){
   const out = [];
@@ -1804,7 +2046,7 @@ function activeFilters(){
   for (const id of ["lbl", "clr", "co"]) if ($(id).value !== "all") out.push([id, optText(id)]);
   for (const id of CF_IDS) if ($(id).value !== "all") out.push([id, CF_LABEL[id] + optText(id)]);
   if ($("st").value !== "active") out.push(["st", "Show: " + optText("st")]);
-  for (const [id, t] of [["paidonly", "Salary listed"], ["nowide", "No wide bands"], ["newonly", "New"], ["reqall", "Including requirements I don't meet"]]) if ($(id).checked) out.push([id, t]);
+  for (const [id, t] of [["paidonly", "Pay listed"], ["nowide", "No wide pay bands"], ["newonly", "New"], ["reqall", "Including requirements I don't meet"]]) if ($(id).checked) out.push([id, t]);
   if (gapSel) out.push(["gap", "Gap: " + gapSel]);
   return out;
 }
@@ -1828,7 +2070,7 @@ $("fReset").addEventListener("click", () => {
   const d = FDEF(); Object.entries(d).forEach(([k, v]) => $(k).value = v);
   ["paidonly", "nowide", "newonly", "reqall"].forEach(id => $(id).checked = false);
   CF_IDS.forEach(id => $(id).value = "all");
-  wp = "all"; gapSel = "";
+  wp = "all"; gapSel = ""; lvlShown = false;
   shown = 100; if (mode === "pivot") drawPivotPanel(); render();
 });
 
@@ -1853,6 +2095,8 @@ try {
   if (sv) {
     sessionStorage.removeItem("jb.filters"); RESTORED = true;
     FILTER_IDS.forEach(id => { if (id in sv.f) { if ($(id).type === "checkbox") $(id).checked = sv.f[id]; else $(id).value = sv.f[id]; } });
+    if (!$("st").value) $("st").value = "active";   // (Show: Saved / Applied are the Saved and Applied tabs now)
+    if (!$("clr").value) $("clr").value = "all";
     if (sv.nl && $("q").value.trim() === sv.nl.q) nlSet(sv.nl);
     if (!(NL ? ["rel"] : []).concat(["score","relevant","appeal","odds","odds_later","pay","gd","new"]).includes($("sort").value) || [...$("sort").options].some(o => o.value === $("sort").value && o.disabled)) $("sort").value = "score";
     $("lbl").value = sv.lbl; wp = sv.wp === "remote" ? "remote" : "all";  // an older "Near me" (dmv) value is ignored
@@ -1885,8 +2129,26 @@ function applyNoAI(signIn){
 if (NOAI) applyNoAI(false);
 else if (D.ai_status === "cli_logged_out" || D.pivot_status === "cli_logged_out") { $("aiBanner").hidden = false; if (SERVED) signInOffer($("aiBanner"), "Claude fit scoring is paused because Claude Code is signed out."); else $("aiBanner").textContent = "Claude fit scoring is paused because Claude Code is signed out. Open the board from the server to sign in."; }
 else if (D.ai_status === "no_claude") { NOAI = true; applyNoAI(false); }
-else if (D.ai_status === "no_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude fit scoring is off. Add an Anthropic API key in Settings, then use Find new jobs (the circular-arrow icon at the top)."; }
-else if (D.ai_status === "bad_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "The saved Anthropic API key was rejected. Replace it in Settings, then use Find new jobs (the circular-arrow icon at the top)."; }
+else if (D.ai_status === "no_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "Claude fit scoring is off. Add an Anthropic API key in Settings, then use Find new jobs (at the top)."; }
+else if (D.ai_status === "bad_key") { $("aiBanner").hidden = false; $("aiBanner").textContent = "The saved Anthropic API key was rejected. Replace it in Settings, then use Find new jobs (at the top)."; }
+
+// ---- Notices: at most one at a time, the most useful first; the others wait behind "N more notices". (The progress
+// line, #progress and #chkBanner, is never folded away.)
+(function(){
+  const ORDER = ["dirBanner", "aiBanner", "ttlBanner", "updBanner", "gsBanner"].map($).filter(Boolean);
+  let open = false;
+  const sync = () => {
+    const vis = ORDER.filter(b => !b.hidden), more = vis.length - 1;
+    vis.forEach((b, i) => b.classList.toggle("stk", !open && i > 0));
+    ORDER.filter(b => b.hidden).forEach(b => b.classList.remove("stk"));
+    $("bnMore").hidden = more < 1;
+    $("bnMoreBtn").textContent = open ? "Show fewer notices" : `${more} more notice${more === 1 ? "" : "s"}`;
+    $("bnMoreBtn").setAttribute("aria-expanded", String(open));
+  };
+  $("bnMoreBtn").addEventListener("click", () => { open = !open; sync(); });
+  if (window.MutationObserver) { const mo = new MutationObserver(sync); ORDER.forEach(b => mo.observe(b, {attributes: true, attributeFilter: ["hidden"]})); }
+  sync();
+})();
 
 if (SERVED) {
   $("tools").hidden = false;
@@ -1922,18 +2184,7 @@ if (SERVED) {
       check();
     });
   }
-  // "Rate more": the next batch of unrated jobs, with the same per-run limits as the automatic rating
-  $("rateMore").addEventListener("click", () => {
-    if (NOAI) { $("rateMsg").innerHTML = `Match ratings need Claude. ${NOAI_LINK}`; return; }
-    const b = $("rateMore");
-    b.disabled = true; $("rateMsg").textContent = "";
-    fetch("/api/rerate", {method: "POST", headers: H, body: JSON.stringify({more: true})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
-      b.disabled = false;
-      if (!ok) { $("rateMsg").textContent = d.error || "Couldn't start"; return; }
-      if (d.queued) { $("rateMsg").textContent = "Queued behind the rating that is running."; pollRerate(); return; }
-      pollRerate.mine = true; scrollTo(0, 0); pollRerate();
-    }).catch(() => { b.disabled = false; $("rateMsg").textContent = "Couldn't reach Siftwell."; });
-  });
+  // "Rate jobs" in the count line opens the same panel as the header's Rate jobs button (rrOpen, below).
 
   // ---- profiles
   let curPerson = D.person ? D.person.id : "";
@@ -2091,17 +2342,15 @@ if (SERVED) {
     }
     const del = e.target.closest("button[data-del]");
     if (del) {
-      if (del.dataset.armed !== "1") {  // two taps: the first arms the button for a few seconds
-        del.dataset.armed = "1"; del.textContent = "Tap again to remove";
-        setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "Remove"; } }, 4000);
-        return;
-      }
+      appConfirm({title: "Remove this tailored resume?", text: `The resume for ${del.dataset.title || "this job"} is deleted from this computer (its PDF and Word files too). This can't be undone; you can tailor a new one later.`, ok: "Remove it", danger: true}).then(yes => {
+      if (!yes) return;
       del.disabled = true; del.textContent = "Removing…";
       fetch("/api/tailored/delete", {method: "POST", headers: H, body: JSON.stringify({person: PID, slug: del.dataset.del})})
         .then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
           if (!ok) { del.disabled = false; del.textContent = d.error || "Couldn't remove"; return; }
           loadTailored().then(() => { drawTailored(); render(); });
         });
+      });
       return;
     }
     const rs = e.target.closest("button[data-resume]");
@@ -2254,7 +2503,7 @@ if (SERVED) {
       + (k ? `<button class="btn sm ghost" type="button" id="dirUndoBtn">Remove the employers this added</button>` : "") + `<button class="btn sm ghost" type="button" id="dirClose">OK</button>`;
     $("dirClose").addEventListener("click", () => { dirB.hidden = true; dropNote(); });
     if ($("dirUndoBtn")) $("dirUndoBtn").addEventListener("click", async () => {
-      if (!await appConfirm(`Remove the ${k.toLocaleString()} employers this added?\n\nThey leave your list (their jobs leave your board). You can add them again later.`, "Remove them")) return;
+      if (!await appConfirm({title: `Remove the ${k.toLocaleString()} employers this added?`, text: "They leave your list (their jobs leave your board). You can add them again later.", ok: "Remove them", danger: true})) return;
       $("dirUndoBtn").disabled = true; dropNote();
       const undo = () => dirUndo().then(({ok, d}) => {
         dirB.innerHTML = `<span>${ok ? `Removed ${(d.removed || 0).toLocaleString()} employers. Your board is being re-checked.` : esc(d.error || "That didn’t work.")}</span><button class="btn sm ghost" type="button" id="dirClose">OK</button>`;
@@ -2295,8 +2544,8 @@ if (SERVED) {
     fetch("/api/localdir").then(r => r.json()).then(ld => {
       const b = $("dirBuild"); if (!b || !ld.possible || ld.running || !ld.offer) return;
       b.hidden = false; b.title = ld.offer;
-      b.addEventListener("click", () => {
-        if (!confirm("Build my own directory?\n\n" + ld.offer)) return;
+      b.addEventListener("click", async () => {
+        if (!await appConfirm({title: "Build my own directory?", text: ld.offer, ok: "Build it"})) return;
         buildStart(b, $("dirMsg"), () => { $("dirRetry").hidden = true; chkSig = ""; poll(); });
       });
     }).catch(() => {});
@@ -2326,9 +2575,10 @@ if (SERVED) {
   const RR = D.ratings || {};
   const need = NOAI ? 0 : (RR.stale || 0) + (RR.unrated || 0);
   $("rrSmall").textContent = NOAI ? "needs Claude" : need ? `${need} of your top ${RR.top} not rated or out of date` : "all top jobs current";
-  $("rerateBtn").title = "Re-rate: choose how Claude re-rates your jobs, no new listings" + (need ? ` (${need} of your top ${RR.top} not rated or out of date)` : " (all top jobs current)");
+  $("rerateBtn").title = "Rate jobs: choose how Claude rates your jobs (no new listings)" + (need ? ` (${need} of your top ${RR.top} not rated or out of date)` : " (all top jobs current)");
   if (need) { $("rrBadge").hidden = false; $("rrBadge").textContent = need > 99 ? "99+" : need; }
-  // ---- Re-rate panel. Counts come from the board: ai_rs (per tier: "-" none, "s" older info, "f" current) and ai_bb
+  // ---- Rate jobs panel. One main action (rate the jobs that need it, within the per-run limits) and the single steps
+  // under More options. Counts come from the board: ai_rs (per step: "-" none, "s" older info, "f" current) and ai_bb
   // (Best bets with the best available Match) on every job Claude would rate. The server picks again when it runs.
   const RB = D.rate_batch || {haiku: 25, sonnet: 15, opus: 15};
   // A board rendered from an older jobs.json has no per-job rating freshness (ai_rs) or batch sizes (rate_batch): the server
@@ -2343,7 +2593,7 @@ if (SERVED) {
       }).catch(() => { if (++tries < 60) setTimeout(wait, 5000); });
     })();
   }
-  const TNAME = {haiku: "Quick check (Haiku)", sonnet: "Careful look (Sonnet)", opus: "Best judgment (Opus)"};
+  const TNAME = TIERN;
   const ratePool = jobs.filter(j => j.ai_rs);
   const byBB = ratePool.slice().sort((a, b) => (b.ai_bb || 0) - (a.ai_bb || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));  // same order the server picks in
   const nf = n => n.toLocaleString();
@@ -2354,12 +2604,12 @@ if (SERVED) {
     const pct = intIn("rrPct", 1, 100), top = intIn("rrTop", 1, 2000);
     const tgtN = Math.min(RLIM.target, +(PREFS["claude.per_update"] || RLIM.target));
     document.querySelectorAll(".rrTgtN").forEach(e => e.textContent = nf(tgtN));
-    $("rrLim").textContent = `One run rates at most ${nf(RLIM.haiku)} jobs with a quick check, ${nf(RLIM.sonnet)} with a careful look and ${nf(RLIM.opus)} new ones with best judgment (plus up to ${nf(RLIM.saved)} jobs you saved). Run it again, or press Rate more on the board, for the next batch.`;
+    $("rrLim").textContent = `One run rates at most ${nf(RLIM.haiku)} jobs with a quick check, ${nf(RLIM.sonnet)} with a careful look and ${nf(RLIM.opus)} new ones with best judgment (plus up to ${nf(RLIM.saved)} jobs you saved). Run it again for the next batch. Uses your Claude plan.`;
     if (COUNTING) {
       ["rrHN", "rrSNn", "rrONn"].forEach(id => $(id).textContent = "Counting…");
-      $("rrHAll").textContent = "Counting… your board is being refreshed for this panel (a minute or so). This page reloads when it's done.";
+      $("rrHAll").textContent = $("rrSum").textContent = "Counting… your board is being refreshed for this panel (a minute or so). This page reloads when it's done.";
       $("rrSN").textContent = $("rrON").textContent = "";
-      $("rrEstFull").textContent = $("rrEst").textContent = "Counting…";
+      $("rrEstFull").textContent = $("rrEst").textContent = "";
       document.querySelectorAll("#rrPanel [data-rr]").forEach(b => b.disabled = true);
       document.querySelectorAll(".rrhint").forEach(e => e.hidden = true);
       return {pct, top, n: {haiku: 0, sonnet: 0, opus: 0}, all: 0};
@@ -2375,57 +2625,63 @@ if (SERVED) {
     const oPick = oTop.concat(oSaved);
     const sNeed = sTop.filter(j => stale(j, 1)).length, oNeed = oPick.filter(j => stale(j, 2)).length;
     const oRun = need => Math.min(RLIM.opus, oTop.filter(j => !need || stale(j, 2)).length) + Math.min(RLIM.saved, oSaved.filter(j => !need || stale(j, 2)).length);
+    const unr = ratePool.filter(j => j.ai_fit == null).length, old = ratePool.filter(j => j.ai_fit != null && j.ai_stale).length;
+    $("rrSum").textContent = !ratePool.length ? "There are no jobs on your board for Claude to rate yet." : unr || old
+      ? `${[unr ? `${plural(unr, "job")} not rated yet` : "", old ? `${plural(old, "job")} rated with older info` : ""].filter(Boolean).join(", ")}.`
+      : `All ${plural(ratePool.length, "job")} Claude would rate have a current rating.`;
     $("rrHAll").textContent = `${plural(ratePool.length, "job")} on your board that Claude would rate. One run checks up to ${nf(RLIM.haiku)}, the ones most relevant to your work first.`;
     $("rrHN").textContent = nf(hNeed);
     $("rrSN").textContent = pct ? `= ${plural(sTop.length, "job")}` : "(1 to 100)";
     $("rrSNn").textContent = nf(sNeed);
     $("rrON").textContent = top ? `${oSaved.length ? `+ ${nf(oSaved.length)} saved ` : ""}= ${plural(oPick.length, "job")}` : "(1 to 2,000)";
     $("rrONn").textContent = nf(oNeed);
-    document.querySelectorAll(".rrPctTxt").forEach(e => e.textContent = pct || "?");
-    document.querySelectorAll(".rrTopTxt").forEach(e => e.textContent = top ? nf(top) : "?");
     document.querySelectorAll(".rrhint").forEach(e => e.hidden = !(hNeed >= Math.max(10, ratePool.length * 0.2)));
-    // what one run would really do: never more than the per-run limits
+    // what one run would really do: never more than the per-run limits (ai_score.RUN_LIMITS)
     const h = Math.min(RLIM.haiku, $("rrHNeed").checked ? hNeed : ratePool.length), s = Math.min(RLIM.sonnet, $("rrSNeed").checked ? sNeed : sTop.length), o = oRun($("rrONeed").checked);
     const hb = Math.min(hNeed, RLIM.haiku, +(PREFS["claude.haiku_per_night"] || RLIM.haiku));
     const full = reqs(hb, "haiku") + reqs(Math.min(sNeed, RLIM.sonnet), "sonnet") + reqs(oRun(true), "opus");
-    $("rrEstFull").textContent = full ? `About ${plural(full, "Claude request")} (fewer if the quick check finds little has changed).` : "Everything is current: nothing to do.";
-    $("rrEst").textContent = `Claude requests: Quick check ${nf(reqs(h, "haiku"))} · Careful look ${pct ? nf(reqs(s, "sonnet")) : "?"} · Best judgment ${top ? nf(reqs(o, "opus")) : "?"} (${RB.haiku} Haiku or ${RB.sonnet} Sonnet/Opus jobs per request). Uses your Claude plan.`;
+    $("rrGo").textContent = full ? `Rate the jobs that need it · about ${plural(full, "request")}` : "Everything is rated";
+    $("rrEstFull").textContent = full ? `A quick check of up to ${nf(Math.min(hb, RLIM.haiku))} jobs (the most relevant first), then a careful look at your best ${pct || "?"}% of rated jobs and best judgment on your top ${top ? nf(top) : "?"}. Only missing ratings and ones made with older info are done; fewer requests if little has changed.` : "Nothing to do right now.";
+    $("rrEst").textContent = `Claude requests for these: Quick check ${nf(reqs(h, "haiku"))} · Careful look ${pct ? nf(reqs(s, "sonnet")) : "?"} · Best judgment ${top ? nf(reqs(o, "opus")) : "?"} (a request rates ${RB.haiku} jobs in a quick check, ${RB.sonnet} in a careful look or best judgment). Uses your Claude plan.`;
     // without Claude nothing here can run: the buttons are off and the panel says how to connect it
-    document.querySelectorAll("#rrPanel [data-rr]").forEach(b => { b.disabled = NOAI || (b.dataset.rr !== "haiku" && !(pct && top)); b.title = NOAI ? "Needs Claude" : ""; });
+    document.querySelectorAll("#rrPanel [data-rr]").forEach(b => { b.disabled = NOAI || (b.dataset.rr === "full" ? !full : b.dataset.rr !== "haiku" && !(pct && top)); b.title = NOAI ? "Needs Claude" : ""; });
     return {pct, top, n: {haiku: h, sonnet: s, opus: o}, all: ratePool.length};
   }
+  let rrFrom = null;   // the button that opened the panel (the header's Rate jobs, or the one in the count line)
   function rrPlace(){
-    const p = $("rrPanel"), r = $("rerateBtn").getBoundingClientRect();
+    const p = $("rrPanel"), r = (rrFrom && rrFrom.offsetParent ? rrFrom : $("rerateBtn")).getBoundingClientRect();
     p.style.top = Math.round(r.bottom + 8) + "px";
     p.style.right = Math.max(8, Math.round(innerWidth - r.right - 8)) + "px"; p.style.left = "auto";
   }
-  function rrOpen(){
+  function rrOpen(e){
     if (!$("rrPanel").hidden) return rrClose();
-    $("rrTitle").textContent = `Re-rate ${D.person && D.person.name ? D.person.name + "'s" : "your"} jobs`;
+    rrFrom = e && e.currentTarget || $("rerateBtn");
+    $("rrTitle").textContent = `Rate ${D.person && D.person.name ? D.person.name + "'s" : "your"} jobs`;
     if ($("rrPct").value === "") $("rrPct").value = PREFS["claude.sonnet_pct"] || 15;
     if ($("rrTop").value === "") $("rrTop").value = PREFS["claude.opus_top"] || 50;
     document.querySelectorAll(".rrTgt").forEach(e => e.hidden = !D.pivot_enabled);
     $("rrMsg").textContent = ""; $("rrMsg").classList.remove("bad");
-    rrCalc(); rrPlace(); $("rrPanel").hidden = false; $("rerateBtn").setAttribute("aria-expanded", "true");
-    (NOAI ? $("rrClose") : $("rrPanel").querySelector("[data-rr=full]")).focus();   // (without Claude the panel explains itself: #rrNo)
+    rrCalc(); rrPlace(); $("rrPanel").hidden = false; rrFrom.setAttribute("aria-expanded", "true");
+    (NOAI || $("rrGo").disabled ? $("rrClose") : $("rrGo")).focus();   // (without Claude the panel explains itself: #rrNo)
   }
-  function rrClose(){ $("rrPanel").hidden = true; $("rerateBtn").setAttribute("aria-expanded", "false"); }
+  function rrClose(){ $("rrPanel").hidden = true; ["rerateBtn", "rateMore"].forEach(id => $(id).setAttribute("aria-expanded", "false")); }
   ["rrPct", "rrTop", "rrHNeed", "rrSNeed", "rrONeed"].forEach(id => $(id).addEventListener("input", rrCalc));
   $("rrClose").addEventListener("click", rrClose);
   addEventListener("resize", () => { if (!$("rrPanel").hidden) rrPlace(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("rrPanel").hidden) { rrClose(); $("rerateBtn").focus(); } });
-  document.addEventListener("click", e => { if (!$("rrPanel").hidden && !e.target.closest("#rrPanel,#rerateBtn")) rrClose(); });
-  $("rrPanel").addEventListener("click", e => {
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("rrPanel").hidden && !document.querySelector("dialog[open]")) { rrClose(); (rrFrom || $("rerateBtn")).focus(); } });
+  document.addEventListener("click", e => { if (!$("rrPanel").hidden && !e.target.closest("#rrPanel,#rerateBtn,#rateMore,dialog")) rrClose(); });
+  $("rrPanel").addEventListener("click", async e => {
     const b = e.target.closest("button[data-rr]"); if (!b) return;
     const kind = b.dataset.rr, c = rrCalc();
     if (kind === "haiku") { c.pct = c.pct || +(PREFS["claude.sonnet_pct"] || 15); c.top = c.top || +(PREFS["claude.opus_top"] || 50); }  // not used by the quick check
     if (!(c.pct && c.top)) { $("rrMsg").textContent = "A careful look takes 1 to 100% of your rated jobs; best judgment 1 to 2,000 jobs."; $("rrMsg").classList.add("bad"); return; }
     const only = kind === "full" ? true : $({haiku: "rrHNeed", sonnet: "rrSNeed", opus: "rrONeed"}[kind]).checked;
-    const tgt = !!D.pivot_enabled && $({full: "rrTgtFull", haiku: "rrTgtHaiku", sonnet: "rrTgtSonnet", opus: "rrTgtOpus"}[kind]).checked;
+    const tgt = !!D.pivot_enabled && $("rrTgt").checked;   // (one Target tick for whichever run starts here)
     if (kind !== "full" && !only) {  // a forced run re-rates jobs whose ratings are current: say how many first
       const n = c.n[kind], name = {haiku: "quick check", sonnet: "careful look", opus: "best-judgment look"}[kind];
-      if (!confirm(`Give ${plural(n, "job")} a fresh ${name}?\n\nThis also re-rates jobs whose ratings are current: about ${plural(reqs(n, kind), "Claude request")} on your Claude plan.` +
-                   (tgt ? `\n\nIt also rates up to ${plural(Math.min(RLIM.target, +(PREFS["claude.per_update"] || RLIM.target)), "job")} for your Target tab.` : ""))) return;
+      if (!await appConfirm({title: `Give ${plural(n, "job")} a fresh ${name}?`, ok: "Rate them",
+          text: `This also re-rates jobs whose ratings are current: about ${plural(reqs(n, kind), "Claude request")} on your Claude plan.` +
+                (tgt ? `\n\nIt also rates up to ${plural(Math.min(RLIM.target, +(PREFS["claude.per_update"] || RLIM.target)), "job")} for your ${D.target_name || "Target"} tab.` : "")})) return;
     }
     const body = {tiers: kind === "full" ? ["haiku", "sonnet", "opus"] : [kind], only_needed: only, sonnet_pct: c.pct, opus_top: c.top, target: tgt};
     b.disabled = true;
@@ -2444,7 +2700,7 @@ if (SERVED) {
       if (s.running) {
         pollRerate.auto = !!s.auto && !(s.queue || []).length;  // the automatic quick check of new jobs
         $("progress").hidden = false; $("progReload").hidden = true;
-        $("progTitle").textContent = (s.label || "Re-rating") + (s.stopping ? ": stopping…" : "…");
+        $("progTitle").textContent = (s.label || "Rating jobs") + (s.stopping ? ": stopping…" : "…");
         $("progNote").textContent = s.total ? `${TNAME[s.tier] || "Claude"} · batch ${s.done} of ${s.total}` : "starting";
         $("progBar").style.width = s.total ? (100 * s.done / s.total) + "%" : "4%";
         $("progStop").hidden = false; $("progStop").disabled = !!s.stopping;
@@ -2455,9 +2711,9 @@ if (SERVED) {
       } else {
         if (pollRerate.was) {
           pollRerate.was = false; $("progStop").hidden = true; $("progQueue").hidden = true;
-          if (s.error) { $("progTitle").textContent = "Re-rating stopped"; $("progNote").textContent = s.error; }
+          if (s.error) { $("progTitle").textContent = "Rating stopped"; $("progNote").textContent = s.error; }
           else if (pollRerate.auto && !pollRerate.mine) {  // nobody pressed Run here: don't reload under their hands, offer it
-            $("progTitle").textContent = (s.label || "Re-rating") + (s.stopped ? " stopped" : " done"); $("progNote").textContent = "";
+            $("progTitle").textContent = (s.label || "Rating jobs") + (s.stopped ? " stopped" : " done"); $("progNote").textContent = "";
             $("progBar").style.width = "100%"; $("progReload").hidden = false;
           } else { saveFilters(); location.reload(); return; }
           pollRerate.auto = pollRerate.mine = false;
@@ -2471,17 +2727,16 @@ if (SERVED) {
     fetch("/api/rerate/stop", {method: "POST", headers: H, body: "{}"}).then(() => pollRerate()).catch(() => { $("progStop").disabled = false; });
   });
   $("progReload").addEventListener("click", () => { saveFilters(); location.reload(); });
-  $("rerateBtn").setAttribute("aria-haspopup", "dialog"); $("rerateBtn").setAttribute("aria-expanded", "false");
-  $("rerateBtn").addEventListener("click", rrOpen);
+  ["rerateBtn", "rateMore"].forEach(id => { $(id).setAttribute("aria-haspopup", "dialog"); $(id).setAttribute("aria-expanded", "false"); $(id).addEventListener("click", rrOpen); });
   pollRerate();
-  $("updateBtn").addEventListener("click", () => {
+  $("updateBtn").addEventListener("click", async () => {
     const mine = estMine(), e = EST ? (mine ? EST.mine : EST.all) : null;
     const what = e ? `Siftwell checks ${mine ? "your" : "all"} ${e.companies.toLocaleString()} employer${e.companies === 1 ? "" : "s"} for new and removed openings. That takes ${e.text}.` : "Siftwell checks your employers for new and removed openings.";
-    if (!confirm("Find new jobs now?\n\n" + what + (NOAI ? "" : " Claude then rates the new ones (this uses your Claude plan).") + (mine ? "\n\nThe other profiles’ employers are checked when they press Find new jobs, or by the automatic daily one." : ""))) return;
+    if (!await appConfirm({title: "Find new jobs now?", ok: "Find new jobs", text: what + (NOAI ? "" : " Claude then rates the new ones (this uses your Claude plan).") + (mine ? "\n\nThe other profiles’ employers are checked when they press Find new jobs, or by the automatic daily one." : "")})) return;
     fetch("/api/update", {method: "POST", headers: H, body: JSON.stringify({scope: "mine"})}).then(() => { wasRunning = true; scrollTo(0, 0); poll(); });
   });
   poll();
-  // The settings page hands its Find new jobs / Re-rate / Add a person clicks to the board (sessionStorage "jb.run").
+  // The settings page hands its Find new jobs / Rate jobs / Add a person clicks to the board (sessionStorage "jb.run").
   try {
     const r = sessionStorage.getItem("jb.run"); sessionStorage.removeItem("jb.run");
     if (r === "update" || r === "rerate") setTimeout(() => $(r + "Btn").click(), 300);
@@ -2498,10 +2753,10 @@ def build(payload, path, fragment=False):
     data = "<script>window.__DATA__=" + json.dumps(payload, separators=(",", ":")).replace("</", "<\\/") + \
            ";window.__CURRENT__=" + json.dumps(cur) + ";</script>\n"
     import appupdate
-    body = HEAD + BODY + data + CONFIRM_SCRIPT + SCRIPT + appupdate.BANNER_SCRIPT
+    body = HEAD + BODY + data + SCRIPT + appupdate.BANNER_SCRIPT   # (appConfirm comes with the header, TOOLS)
     if not fragment:
         body = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
-                HEAD + "</head><body>" + BODY + data + CONFIRM_SCRIPT + SCRIPT + appupdate.BANNER_SCRIPT + "</body></html>")
+                HEAD + "</head><body>" + BODY + data + SCRIPT + appupdate.BANNER_SCRIPT + "</body></html>")
     import paths
     paths.write_atomic(path, body)  # temp file + replace: the server never serves a half-written board
