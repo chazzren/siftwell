@@ -106,16 +106,8 @@ def _clearance_any(s, pid):
     """v0.5: the board's clearance filter starts at "Any clearance" for everyone. Up to v0.4 its default was "Secret or
     less", and every save of any preference stored that default too, so a stored "secret" can't be told from a choice:
     it is set back to "all" once. A choice made after that (Settings, Display) is kept: save_prefs sets the marker."""
-    if s.get(CLEARANCE_ANY) or not os.path.exists(pdir("settings.json", pid=pid)):
-        return s
-    p = s.get("prefs")
-    if isinstance(p, dict) and p.get("display.clearance") == "secret":
-        p["display.clearance"] = "all"
-    s[CLEARANCE_ANY] = True
-    try:
-        _write_settings(s, pid)
-    except Exception:
-        pass
+    # PM decision: an existing profile's stored clearance choice is never changed behind its back (the household that
+    # uses it relies on "Secret or less"); only new profiles start at "Any". Kept as a no-op so callers stay unchanged.
     return s
 
 def prefs(pid=None):
