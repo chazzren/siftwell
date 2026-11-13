@@ -94,7 +94,7 @@ CATEGORIES = [
     ("display", "Display", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>', [
         ("Board", "", [
             ("select", "display.start_tab", "Start on", [("jobs", "Jobs"), ("saved", "Saved"), ("applied", "Applied"), ("tailored", "Resumes"), ("pivot", "Target")], "The tab your board opens on (Target only when you have one)."),
-            ("select", "display.sort", "Default sort", [("score", "Best bets (good job and good fit)"), ("relevant", "Most relevant to my work"), ("appeal", "Most appealing (pay, place, level)"), ("odds", "Best fit (Claude’s Match)"), ("odds_later", "Best fit with my resume as it is"), ("pay", "Highest pay"), ("gd", "Best employee reviews"), ("new", "Newest")], ""),
+            ("select", "display.sort", "Default sort", [("score", "Best bets (Appeal and Match together)"), ("relevant", "Most relevant to my work"), ("appeal", "Most appealing (pay, place, level)"), ("odds", "Best Match (Claude’s rating)"), ("odds_later", "Best Match with my resume as it is"), ("pay", "Highest pay"), ("gd", "Best employee reviews"), ("new", "Newest")], ""),
             # (shown only when clearances matter to this profile: setup_flow.clearance_relevant; the same setting is under My profile > Job search > Dealbreakers)
             ("select", "display.clearance", "Jobs that need a security clearance", [("all", "Show them all"), ("none", "Hide every one"), ("secret", "Up to Secret"), ("nopoly", "Anything but a polygraph")], "Shown because your profile or your board has clearance jobs."),
         ]),

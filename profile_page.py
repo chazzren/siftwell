@@ -622,6 +622,17 @@ function drawLF(){
   const sec = (title, help, chips, add) => `<div class="lfsec"><h4>${title}</h4><p class="note">${help}</p>${chips ? `<div class="lfchips">${chips}</div>` : ""}${add || ""}</div>`;
   const occNote = "A whole occupation from the O*NET list: every name employers use for it counts.";
   const lr = LF.learned || {up: [], down: []};
+  // Learned from Claude's ratings (lookfor.learn_from_claude: read from ratings Claude already made, no extra requests);
+  // each title or word can be taken off; hidden while there is nothing learned
+  const fc = LF.from_claude || {}, fcUp = fc.up || [], fcDown = fc.down || [], wUp = fc.words_up || [], wDown = fc.words_down || [];
+  const fcChip = (t, tip) => `<span class="lfchip" title="${esc(tip)}"><span>${esc(t)}</span><button type="button" data-lfrm="learned" data-v="${esc(t)}" aria-label="Remove ${esc(t)}">×</button></span>`;
+  const fcHtml = !fc.rated || !(fcUp.length || fcDown.length || wUp.length || wDown.length) ? "" :
+    `<div class="lfsec" id="lfClaude"><h4>Learned from Claude's ratings</h4><p class="note">From ${nf(fc.rated)} rated jobs. Siftwell reads the ratings Claude already made (no extra requests) and moves similar jobs up or down a little. Take off anything that's wrong.</p>` +
+    (fcUp.length ? `<p class="note"><b>Titles moved up</b></p><div class="lfchips">${fcUp.map(x => fcChip(x.t, `rated 70+ on ${x.hi} of ${x.n} jobs`)).join("")}</div>` : "") +
+    (fcDown.length ? `<p class="note"><b>Titles moved down</b></p><div class="lfchips">${fcDown.map(x => fcChip(x.t, `rated low on ${x.n} jobs, avg ${x.avg}`)).join("")}</div>` : "") +
+    (wUp.length ? `<p class="note"><b>Words in jobs Claude rated higher</b></p><div class="lfchips">${wUp.map(w => fcChip(w, "found more often in jobs Claude rated higher")).join("")}</div>` : "") +
+    (wDown.length ? `<p class="note"><b>Words in jobs Claude rated lower</b></p><div class="lfchips">${wDown.map(w => fcChip(w, "found more often in jobs Claude rated lower")).join("")}</div>` : "") +
+    `<div class="row"><button class="linkbtn" type="button" data-lfreset="claude">Forget what Claude's ratings taught Siftwell</button></div></div>`;
   r.innerHTML =
     `<div class="lfsec"><h4><label for="lfRecent">Your most recent job title</label></h4><p class="note">This one counts most. ${LF.recent ? "" : "<b>Add it</b> so Siftwell can tell which jobs are close to your work."}</p>
       <form class="lfadd" id="lfRecentForm"><input type="text" id="lfRecent" maxlength="80" value="${esc(LF.recent)}" placeholder="e.g. Registered Nurse, Electrician, Office Manager" enterkeyhint="done"></form></div>` +
@@ -634,7 +645,7 @@ function drawLF(){
     sec("Skills and tools", "Found in a posting’s text, each one adds a little.", LF.skills.map(x => lfChip("skill", x)).join(""), lfAdd("skill", "Add a skill or tool", "Add a skill or tool")) +
     (LF.past.length ? sec("Jobs you held before", "From your profile. They count a little.", LF.past.map(x => lfChip("title", x)).join("")) : "") +
     `<div class="lfsec"><h4><label for="lfField">Your field</label></h4><form class="lfadd" id="lfFieldForm"><input type="text" id="lfField" maxlength="60" value="${esc(LF.field)}" placeholder="e.g. Healthcare, Construction, Education" enterkeyhint="done"></form><p class="note">Saves by itself when you leave the box.</p></div>` +
-    `<div class="lfsec"><h4>Learned from what you save and hide</h4><p class="note">${lr.n_up || lr.n_down
+    fcHtml + `<div class="lfsec"><h4>Learned from what you save and hide</h4><p class="note">${lr.n_up || lr.n_down
         ? `Jobs with titles like the ${nf(lr.n_up)} you saved or applied to move up a little${lr.up.length ? ` (${esc(lr.up.slice(-4).join(", "))})` : ""}; titles like the ${nf(lr.n_down)} you hid move down a little${lr.down.length ? ` (${esc(lr.down.slice(-4).join(", "))})` : ""}. Never more than a few points.`
         : "Nothing yet. Saving a job nudges similar titles up a little; hiding one nudges similar titles down. Never more than a few points."}</p>
       <div class="row">${lr.n_up || lr.n_down ? `<button class="btn ghost sm" type="button" data-lfreset="learning">Forget what was learned</button>` : ""}
@@ -675,6 +686,11 @@ $("lfRoot").addEventListener("click", e => {
   if (rm) { lfOp(rm.dataset.lfrm === "occ" ? {remove: "occ", code: rm.dataset.v} : {remove: rm.dataset.lfrm, text: rm.dataset.v}); return; }
   const rs = e.target.closest("[data-lfreset]");
   if (rs) {
+    if (rs.dataset.lfreset === "claude") {
+      ask({title: "Forget what Claude's ratings taught Siftwell?", text: "The titles and words learned from Claude's ratings are cleared, and the ones you took off can come back. Siftwell learns again from the ratings the next time your board is rebuilt. No ratings are changed.", ok: "Forget it"})
+        .then(yes => { if (yes) lfOp({reset: "claude"}); });
+      return;
+    }
     if (rs.dataset.lfreset !== "sheet") { lfOp({reset: rs.dataset.lfreset}); return; }
     ask({title: "Start the list over from your profile?", text: "The titles and skills you added or removed here are forgotten.", ok: "Start over", danger: true})
       .then(yes => { if (yes) lfOp({reset: "sheet"}); });

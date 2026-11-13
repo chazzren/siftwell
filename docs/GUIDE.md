@@ -223,6 +223,8 @@ Every entry is a chip: press **×** to remove it (a removed title or occupation 
 - a job title Claude rated low on three or more jobs, never highly, moves down a few points ("Claude rated similar jobs low");
 - the wording of a posting counts a little too: words that keep turning up in the postings Claude rated higher than usual move similar postings up, words from the ones it rated lower move them down, at most 15 points either way ("worded like jobs Claude rated highly" or "... low"). This needs at least 100 rated jobs.
 
+You can see what it learned on **My profile → Job search**, under **What Siftwell looks for → Learned from Claude's ratings** (titles moved up or down and the words it noticed, with how many rated jobs it came from); tap **×** to take one off, or **Forget what Claude's ratings taught Siftwell** to start over.
+
 Everything it learns, from you and from Claude's ratings together, moves a job by at most about 20 points. It is worked out again each time your board is rebuilt, so it follows Claude's newest ratings, and none of it ever changes or resets a rating.
 
 **Pay in the Appeal score.** If you set a lowest base, pay is scored against it (a point for every $2,000 above it), as before. With no lowest base, pay is scored against the other jobs on your own board: the middle of your board is 50 and the best-paid jobs you see are near 100, whether your field pays by the hour or six figures.

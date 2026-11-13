@@ -810,7 +810,6 @@ BODY = """<div class="wrap">
     <div class="qfoot" id="qFoot"><button class="btn primary" type="button" id="qGo">Save answers and tailor</button><button class="btn" type="button" id="qSkip">Skip, tailor now</button></div>
   </form>
 </dialog>
-</div>
 
 <nav class="tabs" aria-label="Your jobs"><a href="#jobs" id="tab-jobs">Jobs</a><a href="#saved" id="tab-saved">Saved</a><a href="#applied" id="tab-applied">Applied</a><a href="#tailored" id="tab-tailored">Resumes</a><a href="#pivot" id="tab-pivot" hidden>Target</a><a class="tabext" id="tab-employers" href="/catalog?mine=1#companies">Your employers →</a></nav>
 
