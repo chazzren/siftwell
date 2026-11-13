@@ -62,7 +62,7 @@ _columns_ok = set()
 
 # Board fields that depend on the person looking (never stored on a listing).
 PERSON_KEYS = {"score", "appeal", "appeal_parts", "fit_score", "comp_score", "qol_score", "req_status", "req_chips",
-               "req_soft", "req_reasons", "dmv_locations", "tracks", "new", "desc", "rel", "rel_why"}
+               "req_soft", "req_reasons", "dmv_locations", "tracks", "new", "desc", "rel", "rel_why", "rel_x"}
 COLUMNS = ("company", "title", "url", "workplace", "salary_min", "salary_max", "salary_mid", "dept", "posted")
 
 

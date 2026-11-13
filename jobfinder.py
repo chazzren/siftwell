@@ -1601,7 +1601,8 @@ def score_person(jobs, prof, new_claude=True, refresh=False, opts=None):
             if new_claude and "budgets" in opts:
                 budgets = opts["budgets"]
             ai_status = ai_score.run_funnel(jobs, budgets, refresh=refresh, saved=saved_ids(), eligible=eligible_for_claude,
-                                            log=lambda m: print(m, flush=True), prepare=ensure_text, **extra)
+                                            log=lambda m: print(m, flush=True), prepare=ensure_text,
+                                            explore=ai_score.EXPLORE_SHARE if automatic else 0.0, **extra)
         else:
             ai_status = "no_profile"
         for j in jobs:
@@ -1677,7 +1678,7 @@ def ratings_summary(jobs):
             "stale": sum(1 for j in top if j.get("ai_stale")), "unrated": sum(1 for j in top if j.get("ai_fit") is None),
             "stale_all": sum(1 for j in jobs if j.get("ai_stale"))}
 
-BOARD_HIDDEN = ("desc", "base_wp", "remote_strict", "remote_bare", "local_unnamed", "last_seen")
+BOARD_HIDDEN = ("desc", "base_wp", "remote_strict", "remote_bare", "local_unnamed", "last_seen", "rel_x")
 
 def _claude_ready():
     try:
@@ -1838,6 +1839,16 @@ def recompute(pids=None, rate=False, refresh=False, pool=None, opts=None):
             if rate:
                 print(f"--- {people.name(pid)}: {len(jobs)} listings pass their filters", flush=True)
             ai_status, pv_status = score_person(jobs, prof, new_claude=rate, refresh=refresh, opts=opts)
+            # Relevance learns from the Match ratings now on the board (no Claude call; never part of a rating key):
+            # when what it learned changed, every job is scored again and Best bets re-placed
+            try:
+                if lookfor.learn_from_claude(pid, jobs):
+                    relevance = lookfor.scorer(pid, prof).fit(jobs)
+                    for j in jobs:
+                        relevance.score(j)
+                        combine(j)
+            except Exception as e:
+                print(f"(Relevance did not learn from the ratings: {type(e).__name__}: {e})", flush=True)
             if rate:
                 catalog.set_meta(f"board_status:{pid}", [ai_status, pv_status])
             else:
@@ -1867,7 +1878,7 @@ def mark_off_list(jobs, relevance, st):
     n = 0
     for j in jobs:
         ts = relevance.title_score(j.get("title") or "")
-        if ts[0] and ts[1] not in ("", "shared"):
+        if ts[0] and ts[6]:             # (an entry learned from Claude's ratings only re-orders: it is not the person's list)
             continue
         if "ai" in (j.get("tracks") or []):
             j["tracks"] = ["ai"]        # (stays for the Target tab; the page keeps it off the main list)
