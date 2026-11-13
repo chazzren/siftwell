@@ -113,7 +113,7 @@ def _check_imports():
 
 DIRECTORY_BUILDER = ("index_build", "index_build.build", "index_build.local", "index_build.seed", "index_build.net",
                      "index_build.readers", "index_build.systems", "index_build.cc", "index_build.ct", "index_build.gov",
-                     "index_build.postings", "localdir")
+                     "index_build.postings", "index_build.resolve", "localdir")
 
 
 def directory_builder_problems():

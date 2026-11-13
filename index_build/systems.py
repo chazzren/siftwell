@@ -52,14 +52,22 @@ BAD = {"www", "app", "api", "apply", "assets", "static", "cdn", "help", "support
        "j", "boards", "job-boards", "v1", "embed", "search", "login", "admin", "mail", "status", "blog", "docs"}
 
 
-def parse(url):
-    """A company config for a job-board URL, or None."""
+def parse(url, strict=True):
+    """A company config for a job-board URL, or None. strict (a URL a crawler saw: Common Crawl, a posting): a
+    Workday "site" that is a generic word ("Jobs", "Search", two letters) is taken for crawler noise. strict=False (a
+    link on the employer's own careers page, a pack): such a site is the employer's real one (Trinity Health's is
+    "Jobs"); only what can never be a site ("robots.txt", "en-US", "wday") is refused."""
     if not url:
         return None
     u = url if re.match(r"https?://", url) else "https://" + url
+    c = None
+    if not strict:
+        m = WD_LINK.search(u)
+        if m and not bad_workday_site(m.group(3), strict=False):
+            c = {"ats": "workday", "tenant": m.group(1), "wd": m.group(2), "site": m.group(3)}
     try:
         import company_add
-        c = company_add._match(u)
+        c = c or company_add._match(u)
     except Exception:
         c = None
     if not c:
@@ -76,7 +84,7 @@ def parse(url):
         return None
     if c.get("ats") == "greenhouse":
         c["token"] = c["token"].lower()
-    if c.get("ats") == "workday" and bad_workday_site(c.get("site", "")):
+    if c.get("ats") == "workday" and bad_workday_site(c.get("site", ""), strict):
         return None
     try:
         import netsafe
@@ -86,10 +94,33 @@ def parse(url):
     return c
 
 
-def bad_workday_site(site):
-    """"robots", "en-US", "es", "wday" ...: what a crawler saw after the host, not a career site."""
+WD_LINK = re.compile(r"([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?([A-Za-z0-9_-]+)")
+# never a career site, whoever names it: robots.txt, a site map, a bare language ("en-US"), Workday's own paths
+WD_NEVER_A_SITE = re.compile(r"(?i:robots(?:\.txt)?|sitemap\w*|favicon\w*|assets|login|wday|cxs)|[a-z]{2}[-_][A-Z]{2}|[a-z]{2}-[a-z]{2}")
+
+
+def bad_workday_site(site, strict=True):
+    """"robots", "en-US", "es", "wday" ...: what a crawler saw after the host, not a career site. strict (Common Crawl
+    and other crawled links): also generic words ("Jobs", "Search", "job", two letters), which are crawler noise far
+    more often than a site. strict=False (a tenant's own robots.txt, a starter pack, the employer's own careers page,
+    a name resolved to its board): those are real sites (Trinity Health's is "Jobs", 3M's "Search")."""
+    if not site:
+        return True
+    if not strict:
+        return bool(WD_NEVER_A_SITE.fullmatch(site))
     import company_add
-    return not site or site.lower() in ("wday", "cxs") or bool(company_add.WD_NOT_A_SITE.fullmatch(site))
+    return site.lower() in ("wday", "cxs") or bool(company_add.WD_NOT_A_SITE.fullmatch(site))
+
+
+# Where a board was found. Common Crawl ("cc"), certificate names ("ct") and links in postings ("hn") are crawled
+# guesses; everything else names the board on purpose (a starter pack, a tenant's robots.txt, the employer's own careers
+# page: "wdc", "res" = a public list's employer resolved to its careers site, "seed" = the shared directory's seed).
+CRAWLED = {"cc", "ct", "hn"}
+
+
+def trusted(src):
+    """Was a board named on purpose by at least one of its sources (see CRAWLED)?"""
+    return any(s not in CRAWLED for s in src or ())
 
 
 WD_HOST = re.compile(r"(?:^|[/@.\s\"'=])([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com", re.I)

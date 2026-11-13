@@ -115,32 +115,15 @@ def wdc(min_postings=3, max_postings=20000, log=print):
 
 def resolve_domain(dom, log=print):
     """A job-board config for an employer's web domain: a known job system linked from its careers page, or its own
-    JobPosting pages. None when neither is found."""
-    from .systems import parse
-    import jsonld_fetcher
+    JobPosting pages (resolve.detect_page: the same detection the public-list resolver uses). None when neither is
+    found."""
+    from .resolve import detect_page
     for url in (f"https://{dom}/careers", f"https://careers.{dom}/", f"https://jobs.{dom}/", f"https://www.{dom}/careers"):
         try:
             page = net.get_text(url, timeout=15, tries=1, cap=3_000_000)
         except Exception:
             continue
-        for m in re.finditer(r"https?://[^\s\"'<>]+", page):
-            c = parse(m.group(0))
-            if c:
-                return c
-        cfg = None
-        for probe in (lambda: __import__("ats_sap_taleo").detect_page(url, page),   # (the same chain company_add.detect uses)
-                      lambda: __import__("ats_more").detect(url, page),
-                      lambda: __import__("ats_public").detect(url, page),
-                      lambda: jsonld_fetcher.detect_config(url, page)):
-            try:
-                cfg = probe()
-            except Exception:
-                cfg = None
-            if cfg:
-                break
+        cfg = detect_page(url, page)
         if cfg:
-            import netsafe
-            cfg, _ = netsafe.clean_config(cfg)
-            if cfg:
-                return cfg
+            return cfg
     return None

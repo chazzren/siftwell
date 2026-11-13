@@ -202,10 +202,12 @@ def workday_sites(tenant, wd):
 
 
 def parse_workday_robots(txt, host):
+    """The career sites a tenant's robots.txt lists. Its own list is authoritative: a site named "Jobs" or "Search" is a
+    real one here (only what can never be a site is skipped: systems.bad_workday_site, not strict)."""
     from .systems import bad_workday_site
     out = []
     for m in re.finditer(r"(?im)^\s*Sitemap:\s*https?://([^/\s]+)/([A-Za-z0-9_-]+)/siteMap\.xml", txt or ""):
-        if m.group(1).lower() == host.lower() and not bad_workday_site(m.group(2)) and m.group(2) not in out:
+        if m.group(1).lower() == host.lower() and not bad_workday_site(m.group(2), strict=False) and m.group(2) not in out:
             out.append(m.group(2))
     return out
 

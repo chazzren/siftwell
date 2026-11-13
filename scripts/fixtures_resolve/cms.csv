@@ -1,0 +1,6 @@
+"Facility ID","Facility Name","Address","City/Town","State","ZIP Code","County/Parish","Telephone Number","Hospital Type","Hospital Ownership","Emergency Services"
+"360001","MOUNT CARMEL EAST & WEST","6001 E BROAD ST","COLUMBUS","OH","43213","FRANKLIN","(614) 000-0000","Acute Care Hospitals","Voluntary non-profit - Church","Yes"
+"360002","RIVERSIDE METHODIST HOSPITAL","3535 OLENTANGY RIVER RD","COLUMBUS","OH","43214","FRANKLIN","(614) 000-0000","Acute Care Hospitals","Voluntary non-profit - Private","Yes"
+"360003","GRANT MEDICAL CENTER","111 S GRANT AVE","COLUMBUS","OH","43215","FRANKLIN","(614) 000-0000","Acute Care Hospitals","Voluntary non-profit - Private","Yes"
+"360004","CHALMERS P WYLIE VA","420 N JAMES RD","COLUMBUS","OH","43219","FRANKLIN","(614) 000-0000","Acute Care Hospitals","Veterans Health Administration","No"
+"060001","DENVER HEALTH MEDICAL CENTER","777 BANNOCK ST","DENVER","CO","80204","DENVER","(303) 000-0000","Acute Care Hospitals","Government - Local","Yes"

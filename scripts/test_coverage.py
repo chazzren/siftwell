@@ -306,9 +306,10 @@ live = {
 sfx = build.distinct_boards(live)
 check("every distinct career site is kept (Workday site, UKG board, Taleo section)", set(sfx) == {"a", "b", "d", "e", "f", "g", "h"})
 check("an exact mirror is merged", "c" not in sfx)
-check("extra sites carry the site's name", sfx["a"] == "" and sfx["b"] == "OSUEventJobs" and sfx["f"] == "board 2" and sfx["h"] == "nursing")
+check("extra sites carry the site's plain name, else the place they hire most", sfx["a"] == "" and sfx["b"] == "board 2" and sfx["f"] == "board 2"
+      and sfx["h"] == "Nursing")
 e = build.entry(live["b"], "OH", sfx["b"])
-check("entry: name with the site, states list", e["n"] == "The Ohio State University (OSUEventJobs)" and e["ps"] == ["OH"] and "mb" not in e)
+check("entry: a site code that says nothing gives the place, states list", e["n"] == "The Ohio State University (Columbus OH #2)" and e["ps"] == ["OH"] and "mb" not in e)
 big = ten({"ats": "icims", "base": "https://careers-big.icims.com"}, 5000, [[39.9 + i / 1000, -83.0, 1, f"Place {i}, OH", "OH"] for i in range(200)], sample=True)
 e = build.entry(big, "OH")
 check("entry: 150 places a state, cut flag, sampled boards are maybe-near", len(e["p"]) == 150 and e["pt"] == 1 and e["mb"] == 1 and e["x"] == 1)
@@ -328,6 +329,107 @@ pl = build.board_places({"Green": 4, "Austin, TX": 2})
 check("... and is dropped otherwise", "Green, OH" not in {p[3] for p in pl} and "Austin, TX" in {p[3] for p in pl})
 check("... and always for a staffing board", "Green, OH" not in {p[3] for p in build.board_places({"Green": 4, "Akron, OH": 2}, staffing=True)})
 check("a bare big city still counts", "Chicago, IL" in {p[3] for p in build.board_places({"Chicago": 4})})
+
+# ---------------------------------------------------------------- generic Workday site names: crawled vs named on purpose
+check("a crawled link to a generic-looking Workday site is noise", systems.parse("https://trinityhealth.wd1.myworkdayjobs.com/Jobs") is None
+      and systems.parse("https://mmm.wd1.myworkdayjobs.com/Search") is None)
+check("... the employer's own page naming it is not", systems.parse("https://trinityhealth.wd1.myworkdayjobs.com/Jobs", strict=False) ==
+      {"ats": "workday", "tenant": "trinityhealth", "wd": "wd1", "site": "Jobs"}
+      and systems.parse("https://ohiohealth.wd5.myworkdayjobs.com/en-US/OhioHealthJobs/login", strict=False)["site"] == "OhioHealthJobs")
+check("... and never a robots.txt, a language or Workday's own paths", all(systems.parse(f"https://x.wd1.myworkdayjobs.com/{s}", strict=False) is None
+                                                                       for s in ("robots.txt", "en-US", "fr-ca", "wday", "sitemap")))
+check("a tenant's robots.txt keeps its sites named Jobs / Search", readers.parse_workday_robots(
+    "Sitemap: https://trinityhealth.wd1.myworkdayjobs.com/Jobs/siteMap.xml\nSitemap: https://trinityhealth.wd1.myworkdayjobs.com/en-US/siteMap.xml\n",
+    "trinityhealth.wd1.myworkdayjobs.com") == ["Jobs"])
+T2 = build.Tenants(os.path.join(TMP, "tenants2.json.gz"))
+for c, src in (({"ats": "workday", "tenant": "mmm", "wd": "wd1", "site": "Search"}, ["pack"]), ({"ats": "workday", "tenant": "junk", "wd": "wd1", "site": "jobs"}, ["cc"]),
+               ({"ats": "workday", "tenant": "trinityhealth", "wd": "wd1", "site": "jobs"}, ["res"])):
+    T2.d[systems.key(c)] = {"c": c, "src": src, "lnames": {"Mount Carmel Health System": ["OH"]} if src == ["res"] else {}}
+readers.workday_sites = lambda t, w: {"trinityhealth.wd1": ["Jobs", "Nursing_Jobs"]}.get(f"{t}.{w}", [])
+st2 = {"wd_sites": {"trinityhealth.wd1": ["2026-11-01", ["Nursing_Jobs"]]}}
+build.workday_sites_pass(T2, st2, {("bare", "wd5")}, 100)
+got = {(t["c"]["tenant"], t["c"]["site"]): t for t in T2.d.values()}
+check("generic-looking sites from a pack are kept, crawled ones dropped", ("mmm", "Search") in got and ("junk", "jobs") not in got)
+check("a list read by an older builder is read again (sites named Jobs were left out)", st2["wd_sites"]["trinityhealth.wd1"][1] == ["Jobs", "Nursing_Jobs"])
+check("a resolved board spelled differently moves its name onto the tenant's own spelling",
+      ("trinityhealth", "jobs") not in got and got[("trinityhealth", "Jobs")].get("lnames") == {"Mount Carmel Health System": ["OH"]})
+check("hosts known without a site are remembered for the next build", "bare.wd5" in st2.get("wd_hosts", {}) and "junk.wd1" in st2["wd_hosts"])
+
+# ---------------------------------------------------------------- public lists -> careers sites (resolve.py, recorded pages)
+import zipfile
+from index_build import resolve
+PAGES = json.load(open(os.path.join(HERE, "fixtures_resolve", "pages.json"), encoding="utf-8"))
+FIX = os.path.join(HERE, "fixtures_resolve")
+LISTS = os.path.join(TMP, "lists")
+os.makedirs(LISTS)
+for f in ("cms.csv", "ahrq_systems.csv", "ahrq_linkage.csv", "dotgov.csv"):
+    open(os.path.join(LISTS, f), "wb").write(open(os.path.join(FIX, f), "rb").read())
+for f in ("ipeds", "nces"):
+    with zipfile.ZipFile(os.path.join(LISTS, f + ".zip"), "w") as z:
+        z.writestr(f.upper() + "2023.csv", open(os.path.join(FIX, f + ".csv"), encoding="utf-8").read())
+os.environ["SIFTWELL_LISTS_DIR"] = LISTS
+resolve._resolves = lambda host: any("//" + host + "/" in u + "/" or "//" + host + "/" in u for u in PAGES)    # (DNS: the recorded sites exist)
+resolve._AHRQ_CACHE.clear()
+asked_pages = []
+def fake_fetch(url, timeout=20):
+    asked_pages.append(url)
+    v = PAGES.get(url)
+    if not v:
+        raise OSError("no such page")
+    return v[1], v[0]
+resolve.fetch = fake_fetch
+resolve.DETECTORS = (lambda u, p: __import__("ats_public").detect(u, p),)   # (the others ask the network)
+resolve.log = lambda *a: None
+ents = {e["id"]: e for e in resolve.entities(["OH"], log=lambda *a: None)}
+check("lists: hospitals of a local health system are looked up through the system, a multi-state system's keep their own entry",
+      "cms:360001" in ents and "cms:360002" not in ents and "ahrq:HSI1" in ents and ents["ahrq:HSI2"]["states"] == ["OH"])
+check("lists: federal hospitals are left out (their jobs are on USAJOBS)", "cms:360004" not in ents)
+check("lists: colleges of 1,000+ students, open districts with 2+ schools", "ipeds:204796" in ents and "ipeds:204797" not in ents and "ipeds:204798" not in ents
+      and "nces:3904702" in ents and "nces:3999999" not in ents and "nces:3900001" not in ents)
+check("lists: one entry per city / county / state government, never its departments", {e["name"] for e in ents.values() if e["src"] == "dotgov"} ==
+      {"City of Columbus", "Franklin County", "State of Ohio"} and ents["gov:columbus.gov"]["web"] == "https://columbus.gov/")
+check("lists: only the asked states", all(e["state"] == "OH" or "OH" in (e.get("states") or []) for e in ents.values()))
+r = resolve.resolve(ents["cms:360001"])
+check("Mount Carmel: guessed home page (not the namesake church), Careers link, Trinity Health's Workday site named Jobs",
+      r["s"] == "hit" and r["c"] == {"ats": "workday", "tenant": "trinityhealth", "wd": "wd1", "site": "Jobs"} and r["how"] == "guess"
+      and r["n"] == "Mount Carmel Health System" and "https://mountcarmel.org/" not in [x for x in asked_pages if PAGES.get(x) and r["h"] == x])
+r = resolve.resolve(ents["ahrq:HSI1"])
+check("OhioHealth: found from the system's name, its site name without '.com'", r["s"] == "hit" and r["c"]["site"] == "OhioHealthJobs" and r["n"] == "OhioHealth")
+r = resolve.resolve(ents["ahrq:HSI3"])
+check("Kettering Health: the Kettering Foundation's site is not taken for it", r["s"] == "hit" and r["c"] == {"ats": "icims", "base": "https://careers-ketteringhealth.icims.com"}
+      and r["h"] == "https://ketteringhealth.org/")
+r = resolve.resolve(dict(ents["ahrq:HSI2"], states=["OH", "MI", "PA"]))
+check("of two namesakes the one in the system's home town wins (Trinity Health, Livonia MI)", r["s"] == "hit" and r["c"]["tenant"] == "trinityhealth"
+      and r["h"] == "https://www.trinity-health.org/")
+r = resolve.resolve(ents["nces:3904702"])
+check("a district: list's web address -> Employment -> SchoolSpring; its own site name", r["s"] == "hit" and r["c"] == {"ats": "schoolspring", "sub": "olentangy"}
+      and r["how"] == "list" and r["n"] == "Olentangy Schools")
+r = resolve.resolve(ents["gov:columbus.gov"])
+check("a city whose jobs are on a system the directory may not read: a miss, not a guess", r["s"] == "miss" and not r.get("c"))
+check("an employer costs a handful of pages at most", resolve.MAX_PAGES <= 10)
+T3 = build.Tenants(os.path.join(TMP, "tenants3.json.gz"))
+rst = {}
+stats = resolve.run(T3, rst, ["OH"], ["ahrq", "cms", "nces"], budget=50, threads=2, log=lambda *a: None)
+check("run: boards added with the employer's name and state, results cached", any(t.get("lnames", {}).get("OhioHealth") == ["OH"] for t in T3.d.values())
+      and rst["resolve"]["ahrq:HSI1"]["s"] == "hit" and stats["ahrq"]["hit"] >= 2)
+n_asked = len(asked_pages)
+resolve.run(T3, rst, ["OH"], ["ahrq", "cms", "nces"], budget=50, threads=2, log=lambda *a: None)
+check("run: nothing is looked up again before its recheck date", len(asked_pages) == n_asked)
+tri = next(t for t in T3.d.values() if t["c"].get("tenant") == "trinityhealth")
+check("the board of a multi-state system is named after its local part in that state only",
+      build.list_name(dict(tri, read=build.today(), places=[[39.96, -83.0, 30, "Columbus, OH", "OH"], [42.3, -83.7, 300, "Ann Arbor, MI", "MI"]]), "OH") == "Mount Carmel Health System"
+      and build.list_name(dict(tri, read=build.today(), places=[[39.96, -83.0, 30, "Columbus, OH", "OH"], [42.3, -83.7, 300, "Ann Arbor, MI", "MI"]])) == "")
+oh = next(t for t in T3.d.values() if t["c"].get("tenant") == "ohiohealth")
+check("best_name: the public list's name comes first (after a pack)", build.best_name(dict(oh, dname="OH Riverside Methodist Hospital")) == "OhioHealth")
+from index_build import seed as seedmod
+sd = seedmod.make(T3.d, "2026-11-12")
+rows = {b["c"].get("tenant") or b["c"].get("sub"): b for b in seedmod.boards(sd)}
+check("the seed carries resolved boards with their names and the employer's state (not read yet)",
+      rows["ohiohealth"]["n"] == "OhioHealth" and rows["ohiohealth"]["st"] == {"OH": 0} and not rows["ohiohealth"]["seen"])
+from index_build import local as localmod
+check("the local build reads a resolved board in your state right after the ones known to hire there",
+      localmod.rank({"c": {}, "seed": [0, 0, {"OH": 0}, False]}, ["OH"]) == (0, 0) and localmod.rank({"c": {}, "seed": [0, 0, {"MI": 0}, False]}, ["OH"])[0] == 1)
+del os.environ["SIFTWELL_LISTS_DIR"]
 
 # USAJOBS: every state, every page, both ends of a list longer than one search pages through
 os.environ["USAJOBS_API_KEY"], os.environ["USAJOBS_EMAIL"] = "test-key", "tester (no address)"

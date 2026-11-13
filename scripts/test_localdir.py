@@ -138,6 +138,27 @@ check("order: a remote-only board with open jobs counts as 'no known state'", lo
 o_r = local.order(L.T.d, keys, [], remote=True)
 check("order (remote-only search): most US-remote jobs first", [L.T.d[k].get("seed_name") for k in o_r[:2]] == ["Remote Co", "Big Co"])
 check("order is deterministic", local.order(L.T.d, list(reversed(keys)), ["OH"]) == o)
+# a board the weekly build found through a public list (a hospital, a school district) and hasn't read yet: the seed
+# carries its name and the employer's state, and the local build reads it right after the boards known to hire there
+from index_build import build as _b
+st_res = dict(state)
+T_res = _b.Tenants(os.path.join(TMP, "res_tenants.json.gz"))
+T_res.d = st_res
+kr = T_res.add_listed({"ats": "workday", "tenant": "ohiohealth", "wd": "wd5", "site": "OhioHealthJobs"}, "res", "OhioHealth", "OH", "ahrq:HSI1")
+kc = T_res.add_listed({"ats": "schoolspring", "sub": "olentangy"}, "res", "Olentangy Schools", "OH", "nces:3904702")
+s_res = seed.make(st_res, TODAY)
+by_res = {systems.key(b["c"]): b for b in seed.boards(s_res)}
+check("seed: a resolved, unread board has its list name and its employer's state (with no jobs)",
+      by_res[kr]["n"] == "OhioHealth" and by_res[kr]["st"] == {"OH": 0} and not by_res[kr]["seen"] and by_res[kc]["n"] == "Olentangy Schools")
+L_res = local.Local(os.path.join(TMP, "buildRes"))
+L_res.merge_seed(s_res)
+o_res = local.order(L_res.T.d, [k for k in L_res.candidates()], ["OH"])
+pos = {k: i for i, k in enumerate(o_res)}
+n_known = sum(1 for k in o_res if local.rank(L_res.T.d[k], {"OH"}) < (0, 0))
+check("order: resolved boards in the person's state come right after the ones known to hire there",
+      sorted([pos[kr], pos[kc]]) == [n_known, n_known + 1] and L_res.T.d[kr].get("seed_name") == "OhioHealth", str((pos[kr], pos[kc], n_known)))
+check("order: ... and not for someone in another state", local.rank(L_res.T.d[kr], {"TX"})[0] == 1)
+
 resting = dict(L.T.d[o[0]], rest_until="2999-01-01")
 check("a resting board (three failures) is not a candidate", not local.resting(L.T.d[o[0]]) and local.resting(resting))
 

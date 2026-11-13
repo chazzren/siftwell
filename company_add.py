@@ -268,11 +268,27 @@ def host_label(c, url=""):
         labs = [x for x in labs if x and x not in _HOST_NOISE and not re.fullmatch(r"wd\d+|[a-z]{2}\d+|\d+", x)]
         if not labs:
             continue
-        lab = re.sub(r"^(careers?|jobs?|external|internal)-|-(careers?|jobs?|external|internal)$", "", labs[0 if shared else -1])
+        lab = tenant_label(labs[0 if shared else -1])
         lab = lab.replace("-", " ").replace("_", " ").strip()
         if len(lab) >= 2 and not looks_like_code(lab):
             return lab.title()[:60]
     return ""
+
+
+_SITE_WORD = re.compile(r"(?i)^[a-z]{0,12}(?:careers?|jobs?|external|internal|hotjobs?|apply|recruiting)[a-z]{0,12}\d*$")
+
+
+def tenant_label(lab):
+    """The employer's part of a job system's host label: "careersapply-pennentertainment" -> "pennentertainment",
+    "jobs-noodles" -> "noodles", "externalhourly-highgate" -> "highgate", "careers2-imagefirst" -> "imagefirst",
+    "acme-careers" -> "acme". A label without such a job-site word is left as it is ("st-joseph")."""
+    lab = str(lab or "")
+    parts = lab.split("-")
+    if len(parts) >= 2 and _SITE_WORD.match(parts[0]) and len("".join(parts[1:])) >= 2:
+        return "-".join(parts[1:])
+    if len(parts) >= 2 and _SITE_WORD.match(parts[-1]) and len("".join(parts[:-1])) >= 2:
+        return "-".join(parts[:-1])
+    return lab
 
 
 def readable_name(name, c, url=""):
@@ -306,7 +322,7 @@ def default_name(c, suggested=None, name=""):
         h = re.sub(r"^https://(www\.)?", "", c.get("base", "")).split("/")[0]
         lab = [x for x in h.split(".")[:-1] if x not in ("jobs", "careers", "career", "www", "co", "com")]
         suggested = (lab[-1] if lab else h).replace("-", " ").title()
-    ident = c.get("token") or c.get("slug") or c.get("sub") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key") or c.get("id") or re.sub(r"^https://|\..*$", "", c.get("base", "")).replace("careers-", "")
+    ident = c.get("token") or c.get("slug") or c.get("sub") or c.get("tenant") or c.get("ns") or c.get("cid") or c.get("key") or c.get("id") or tenant_label(re.sub(r"^https://|\..*$", "", c.get("base", "")))
     # (no commas: an update for named companies takes a comma-separated list)
     out = (name or suggested or str(ident).replace("-", " ").replace("_", " ").title()).replace(",", "").strip()[:60]
     if not name and looks_like_code(out):

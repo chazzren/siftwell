@@ -9,7 +9,11 @@ Steps:
      does nothing else, so the whole list is covered every week or two). Workday: a link that names no career site
      ("/robots.txt", "/en-US") is not a board; the tenant's robots.txt lists every career site it has, and each one
      becomes a board (workday_sites_pass, one GET per tenant every WD_SITES_DAYS). With --lca-file, DOL LCA employer
-     names are tied to tenants by slug (hints only; nothing is probed).
+     names are tied to tenants by slug (hints only; nothing is probed). With --resolve N, big local employers from
+     public lists (AHRQ health systems, CMS hospitals, IPEDS colleges, NCES school districts, .gov cities / counties /
+     states) are tied to their careers sites (resolve.py: home page -> Careers link -> company_add's detection; cached
+     in _state/resolve.json.gz); their boards carry the list's name, used first after a pack's (list_name).
+     A generic-looking Workday site ("Jobs", "Search") is crawler noise only when nothing but a crawl named it.
   2. Read each tenant's public feed (readers.py; robots.txt, pacing, one honest User-Agent) to learn where it hires:
      locations (geocoded offline with geo.py), open jobs, US-remote jobs. A label that is one bare word matching a small
      town ("Green") only counts when the board also names that state properly. Boards known only by a code get their
@@ -130,6 +134,52 @@ class Tenants:
                     t["hints"].append(hint)
         return k
 
+    def add_listed(self, cfg, src, name, state, ident):
+        """A board a public list's employer resolved to (resolve.py): the employer's name as the list (or its own home
+        page) gives it, the state it is in ("lnames": {name: [states]}), and which list entries led here ("lids"), so
+        best_name can use the name where that employer is the board's own (list_name)."""
+        k = self.add(cfg, src, hint=f"state:{state}" if state else None)
+        if k is None:
+            return None
+        with self.lock:
+            t = self.d[k]
+            ln = t.setdefault("lnames", {})
+            sts = ln.setdefault(name[:80], [])
+            if state and state not in sts:
+                sts.append(state)
+            if str(ident).startswith("ahrq:") and name[:80] not in t.setdefault("lsys", []):
+                t["lsys"].append(name[:80])      # (a health system's name, as against one of its hospitals')
+            ids = t.setdefault("lids", [])
+            if ident not in ids:
+                ids.append(ident)
+                del ids[:-12]
+        return k
+
+    def carry(self, old, k):
+        """What an entry dropped as a respelling knew (sources, names, hints) moves to the board under key k."""
+        with self.lock:
+            t = self.d.get(k)
+            if t is None:
+                return
+            for s in old.get("src") or []:
+                if s not in t["src"]:
+                    t["src"].append(s)
+            for f in ("pack_name", "gov_name"):
+                if old.get(f) and not t.get(f):
+                    t[f] = old[f]
+            for h in old.get("hints") or []:
+                if h not in t.setdefault("hints", []):
+                    t["hints"].append(h)
+            for n, sts in (old.get("lnames") or {}).items():
+                cur = t.setdefault("lnames", {}).setdefault(n, [])
+                cur.extend(x for x in sts if x not in cur)
+            for n in old.get("lsys") or []:
+                if n not in t.setdefault("lsys", []):
+                    t["lsys"].append(n)
+            for i in old.get("lids") or []:
+                if i not in t.setdefault("lids", []):
+                    t["lids"].append(i)
+
     def drop(self, k):
         with self.lock:
             self.d.pop(k, None)
@@ -202,25 +252,40 @@ def discover_ct(T, wd_extra):
             log(f"  ct {dom}: +{len(T.d) - n0} new boards" + (f", {len(wd_extra) - w0} Workday hosts to look up" if s.id == "workday" else ""))
 
 
+WD_SITES_V = 2     # 2: a tenant's own list keeps sites named "Jobs" / "Search" / two letters (lists read before are read again)
+
+
 def workday_sites_pass(T, st, extra, budget, probe_budget=0):
     """Workday career sites from each tenant's robots.txt. Entries whose "site" isn't one (a crawler saw /robots.txt or
     a bare language code) are removed; every site a tenant lists becomes a board, spelled the way the tenant spells it;
-    boards of that tenant that it doesn't list are dropped (they aren't public, or are respellings)."""
+    boards of that tenant that it doesn't list are dropped (they aren't public, or are respellings). A generic-looking
+    site ("Jobs") is crawler noise only when nothing but a crawl named it: a pack, the tenant's robots.txt or the
+    employer's own careers page naming it keeps it (systems.trusted). Tenants known only by their host (a link that
+    named no site, a certificate) are remembered in the state ("wd_hosts"), so a rebuild still looks them up."""
     cache = st.setdefault("wd_sites", {})    # "tenant.wd" -> [date, [sites]]
+    if int(st.get("wd_sites_v") or 1) < WD_SITES_V:
+        for v in cache.values():                 # (the old lists left "Jobs"-like sites out: read them again, in turn)
+            v[0] = "2000-01-01"
+        st["wd_sites_v"] = WD_SITES_V
+    bare = st.setdefault("wd_hosts", {})         # "tenant.wd" -> date first seen without a site
     hosts, removed = {}, 0
     for k in list(T.d):
         c = T.d[k]["c"]
         if c.get("ats") != "workday" or c.get("host"):
             continue
         h = f'{str(c.get("tenant", "")).lower()}.{str(c.get("wd", "")).lower()}'
-        if systems.bad_workday_site(c.get("site", "")):
+        trusted = systems.trusted(T.d[k].get("src"))
+        if systems.bad_workday_site(c.get("site", ""), strict=not trusted):
             T.drop(k)
             removed += 1
             hosts.setdefault(h, 0)
+            bare.setdefault(h, today())
         else:
             hosts[h] = 1
     for t, w in extra or ():
-        hosts.setdefault(f"{t}.{w}", 0)
+        bare.setdefault(f"{t}.{w}", today())
+    for h in bare:
+        hosts.setdefault(h, 0)
     todo = [h for h in hosts if h not in cache or _days_since(cache[h][0]) >= WD_SITES_DAYS]
     todo.sort(key=lambda h: (hosts[h], h))       # tenants without a usable site first
     todo = todo[:budget]
@@ -250,20 +315,31 @@ def workday_sites_pass(T, st, extra, budget, probe_budget=0):
         if cc_:
             cache[h] = [today(), [cc_["site"]]]
     listed = {h: v[1] for h, v in cache.items() if v[1]}
+    moved = {}          # (a trusted board spelled differently from the tenant's list: its names go to the listed spelling)
     for k in list(T.d):
         c = T.d[k]["c"]
         if c.get("ats") != "workday" or c.get("host"):
             continue
-        sites = listed.get(f'{str(c.get("tenant", "")).lower()}.{str(c.get("wd", "")).lower()}')
-        if sites and c.get("site") not in sites and "pack" not in T.d[k]["src"]:
-            T.drop(k)
-            respelled += 1
+        h = f'{str(c.get("tenant", "")).lower()}.{str(c.get("wd", "")).lower()}'
+        sites = listed.get(h)
+        if not sites or c.get("site") in sites or "pack" in T.d[k]["src"]:
+            continue
+        canon = next((s for s in sites if s.lower() == str(c.get("site", "")).lower()), None)
+        if canon is None and any(s in ("res", "wdc", "seed") for s in T.d[k]["src"]):
+            continue                    # (a site the employer itself links to, missing from the list: kept)
+        if canon is not None:
+            moved[(h, canon)] = T.d[k]
+        T.drop(k)
+        respelled += 1
     for h, sites in listed.items():
         t, w = h.split(".", 1)
         for s in sites:
             n0 = len(T.d)
-            T.add({"ats": "workday", "tenant": t, "wd": w, "site": s}, "robots")
+            k = T.add({"ats": "workday", "tenant": t, "wd": w, "site": s}, "robots")
             found += len(T.d) - n0
+            old = moved.get((h, s))
+            if old is not None and k in T.d:
+                T.carry(old, k)
     log(f"  Workday sites: {removed} entries that weren't career sites removed; {len(todo)} tenants' robots.txt read "
         f"({failed} unreachable), {found} boards added, {respelled} unlisted or respelled boards dropped")
 
@@ -389,6 +465,7 @@ def clean_name(n):
         return None
     for _ in range(2):
         n = LEGAL.sub("", n).strip(" ,.-")
+    n = names.complete_truncated(n)     # (a ledger's cut-off last word: "Advisory Ser" -> "Advisory Services")
     if n.isupper() and len(re.sub(r"[^A-Z]", "", n)) > 5:
         n = " ".join(w if len(w) <= 3 and not re.search(r"[AEIOU]", w) else w.capitalize() for w in n.split())
     return n[:60] if len(n) >= 2 else None
@@ -415,25 +492,76 @@ def ident_name(c):
     return "" if (company_add.looks_like_code(n) or n.startswith("Employer")) else n
 
 
-def best_name(t, bname=None):
-    """A name people can read, best source first: the starter pack, the posting's employer field, a public employer
-    list, the board page's title, the careers address. "" when only a code is known (the app then describes it)."""
-    import company_add
+def list_name(t, state=None):
+    """The name of the public list's employer this board belongs to (resolve.py), when that is clear: one employer
+    resolved to it (or, of several, the one the board's own address spells: "trinityhealth" -> "Trinity Health").
+    state: the name for that state's file, from the employers in that state ("Mount Carmel Health System" for Trinity
+    Health's board in Ohio). Without a state (or when the board is not read yet), the name is used only if most of
+    the board's jobs are in that employer's states, so a big employer's board isn't named after one of its parts.
+    "" otherwise."""
+    ln = {n: sts for n, sts in (t.get("lnames") or {}).items() if isinstance(sts, list)}
+    if not ln:
+        return ""
+    import names
+    pick = [n for n, sts in ln.items() if state in sts] if state else list(ln)
+    if len(pick) > 1 and state:
+        # a health system and one of its local parts both lead here: in that state, the local part's name (Trinity
+        # Health's board is "Mount Carmel Health System" in Ohio)
+        local = [n for n in pick if n not in (t.get("lsys") or [])]
+        pick = local if len(local) == 1 else pick
+    if len(pick) > 1:
+        sl = set(names.slugs(t["c"]))
+        pick = [n for n in pick if names._norm(n) in sl]
+    if len(pick) != 1:
+        return ""
+    n = pick[0]
+    places = t.get("places") or []
+    if t.get("read") and places:
+        tot = sum(int(p[2] or 0) for p in places) or 1
+        mine = sum(int(p[2] or 0) for p in places if p[4] in ln[n])
+        if not mine or (not state and mine * 2 < tot):
+            return ""
+    return n[:60]
+
+
+def best_name(t, bname=None, state=None):
+    """A name people can read, best source first: the starter pack, the public list's employer it was resolved from
+    (CMS / AHRQ / IPEDS / NCES / .gov: resolve.py; per state when state is given), what the board's postings and page
+    say, the posting's employer field, the board page's title, the careers address. A source whose name is still poor
+    (names.poor: a code, a slug, a site word in front ...) gives way to the next one; when every one is poor, the first
+    is tidied by names.derive's rules (no postings needed). "" when only a code is known (the app then describes it)."""
+    import company_add, names
     c = t["c"]
-    # ("dname": what names.derive made of the board's own postings and page title the last time it was read)
-    # ("seed_name": the name the shared directory last published for this board, when the app builds its own: seed.py)
-    for n in (t.get("pack_name"), t.get("dname"), clean_name(bname if bname is not None else t.get("bname")), (t.get("seed_name") or "")[:60],
-              (t.get("gov_name") or "")[:60], clean_name(t.get("tname")), ident_name(c), company_add.host_label(c, systems.careers_url(c))):
-        n = company_add.readable_name(n or "", {}, "")
+    if t.get("pack_name"):
+        n = company_add.readable_name(t["pack_name"], {}, "")
         if n:
             return n
-    return ""
+    first = ""
+    # ("dname": what names.derive made of the board's own postings and page title the last time it was read)
+    # ("seed_name": the name the shared directory last published for this board, when the app builds its own: seed.py)
+    for n in (list_name(t, state), t.get("dname"), clean_name(bname if bname is not None else t.get("bname")), (t.get("seed_name") or "")[:60],
+              (t.get("gov_name") or "")[:60], clean_name(t.get("tname")), ident_name(c), company_add.host_label(c, systems.careers_url(c))):
+        n = company_add.readable_name(n or "", {}, "")
+        if not n:
+            continue
+        if not names.poor(n, c):
+            return n
+        first = first or n
+    if first:
+        try:
+            d = names.derive(first, c)
+        except Exception:
+            d = None
+        # (a short run-together name is left as it is without postings to check a split against: "Citigroup")
+        if d and not names.poor(d, c) and not (" " not in first and " " in d and len(first) <= 10 and names._norm(d) == names._norm(first)):
+            return d[:60]
+    return first
 
 
 def wants_board_title(t, bname):
     """Should the board page be asked for the employer's name? Only when nothing better is known and the address is a
     code or doesn't read like a name, and not more than once every TNAME_DAYS."""
-    if t.get("pack_name") or clean_name(bname) or t.get("gov_name") or t.get("seed_name"):
+    if t.get("pack_name") or clean_name(bname) or t.get("gov_name") or t.get("seed_name") or list_name(t):
         return False
     if t.get("tname_at") and _days_since(t["tname_at"]) < TNAME_DAYS:
         return False
@@ -448,7 +576,7 @@ def pick_name(t, s):
     s = s or {}
     t.pop("dname", None)
     n = best_name(t, s.get("name"))
-    if t.get("pack_name"):
+    if t.get("pack_name") or list_name(t):
         return n
     try:
         import names
@@ -472,7 +600,7 @@ def read_tenant(t, title_budget=None):
     REST_DAYS) or "skipped" (a system the directory doesn't read). title_budget: a one-item list, the board pages that
     may still be asked for the employer's name (None: never ask)."""
     # (a posting or two are opened only when nothing else names this employer: its text then does, names.derive)
-    named = t.get("pack_name") or t.get("seed_name") or t.get("gov_name") or t.get("tname") or t.get("dname") or ident_name(t["c"])
+    named = t.get("pack_name") or list_name(t) or t.get("seed_name") or t.get("gov_name") or t.get("tname") or t.get("dname") or ident_name(t["c"])
     try:
         s = readers.read(dict(t["c"]), details=0 if named else NAME_DETAILS)
     except readers.Skip:
@@ -574,7 +702,7 @@ def read_all(T, args, deadline, want_states):
 def entry(t, state=None, suffix=""):
     places = [[p[0], p[1], p[2], p[3]] for p in t.get("places") or [] if state is None or p[4] == state]
     places.sort(key=lambda p: -p[2])
-    name = best_name(t)
+    name = best_name(t, state=state)
     if name and suffix:
         m = re.fullmatch(r"board (\d+)", suffix)
         if m:   # a second board with no label of its own: say where it hires ("Hondros (Columbus OH #2)"), not "(board 2)"
@@ -624,10 +752,13 @@ def distinct_boards(live):
                 continue                    # an exact mirror of a site already kept
             seen.add(sig)
             kept.append(k)
+        import names
         for i, k in enumerate(kept):
             c = live[k]["c"]
-            lab = str(c.get("site") or c.get("section") or "").replace("_", " ").strip()
-            out[k] = "" if i == 0 else (lab if lab and not company_add.looks_like_code(lab) else f"board {i + 1}")
+            # (a plain brand or section word from the site's code tells it apart: "Avanade", "Main Event"; a code that
+            # says nothing ("WFMathpe", "JD_Careers", "External") gives the place it hires most: entry())
+            lab = names.plain_suffix(str(c.get("site") or c.get("section") or ""), best_name(live[k]))
+            out[k] = "" if i == 0 else (lab or f"board {i + 1}")
     return out
 
 
@@ -727,6 +858,9 @@ def write(out, T, jobs_by, want_states, stats, t0, prior_manifest, keep_jobs=Fal
     if keep_jobs:       # (a run without the postings step keeps the earlier job snapshots and their sources)
         man["sources"] = dict((prior_manifest or {}).get("sources") or {})
         njobs = sum(int(v.get("jobs") or 0) for v in man["jobs"].values())
+    if any("res" in t.get("src", ()) for t in live.values()):     # (employers found through public lists: resolve.py)
+        from . import resolve
+        man["lists"] = {sid: {"label": v["label"], "terms": v["terms"]} for sid, v in resolve.SOURCES.items()}
     for sid, (label, attr) in postings.SOURCES.items():
         if any(j["src"] == sid for js in jobs_by.values() for j in js):
             man["sources"][sid] = {"label": label, "attribution": attr}
@@ -753,6 +887,11 @@ def main(argv=None):
     ap.add_argument("--wdc", type=int, default=4000, help="Web Data Commons domains to check this run, at most")
     ap.add_argument("--wdc-minutes", type=float, default=45, help="time box for the Web Data Commons pass")
     ap.add_argument("--titles", type=int, default=4000, help="board pages asked for the employer's name this run, at most")
+    ap.add_argument("--resolve", type=int, default=0, help="public-list employers (hospitals, colleges, school districts, "
+                    "cities and counties) to look up this run, at most (resolve.py; 0 = skip)")
+    ap.add_argument("--resolve-minutes", type=float, default=60, help="time box for looking up public-list employers")
+    ap.add_argument("--resolve-states", default="", help="look up only employers in these states (default: --states)")
+    ap.add_argument("--resolve-lists", default="", help="comma-separated lists to use: cms,ipeds,nces,dotgov (default: all)")
     ap.add_argument("--lca-file", default=os.environ.get("DOL_LCA_FILE") or os.environ.get("DOL_LCA_URL") or "")
     ap.add_argument("--no-cc", action="store_true")
     ap.add_argument("--no-ct", action="store_true")
@@ -799,12 +938,29 @@ def main(argv=None):
         T.add(systems.parse(u), "hn")
     if not args.no_names and args.lca_file:
         discover_names(T, gov.lca(args.lca_file, set(want), log=log)[:5000])
+    res_stats = None
+    if args.resolve:
+        from . import resolve
+        rpath = os.path.join(out, "_state", "resolve.json.gz")
+        rst = load_json_gz(rpath, {})
+        rstates = [s.strip().upper() for s in (args.resolve_states or "").split(",") if s.strip()] or \
+            (want if args.states else None)
+        lists = [s.strip() for s in args.resolve_lists.split(",") if s.strip()] or None
+        log(f"public lists: looking up up to {args.resolve} employers for {args.resolve_minutes:g} minutes")
+        def save():
+            save_json_gz(rpath, rst)
+            T.save()
+        res_stats = resolve.run(T, rst, rstates, lists, args.resolve, time.time() + args.resolve_minutes * 60, save=save)
+        save_json_gz(rpath, rst)
+        T.save()
     if not args.no_wdc:
         discover_wdc(T, st, args.wdc, time.time() + args.wdc_minutes * 60)
         save_json_gz(state_path, st)
     log(f"discovery: {len(T.d)} boards known; new this run by source: {T.new}")
     T.save()
     stats = {"discovered_new": T.new}
+    if res_stats:
+        stats["public_lists"] = res_stats
     if not args.no_read:
         deadline = t0 + args.minutes * 60
         stats["read"] = read_all(T, args, deadline, set(want))

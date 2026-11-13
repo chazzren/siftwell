@@ -29,6 +29,7 @@ _host_locks = {}
 _next_ok = {}
 _robots = {}
 _robots_lock = threading.Lock()
+_last = threading.local()        # (the address the last request of this thread ended up at: get_page)
 
 
 def user_agent():
@@ -63,6 +64,7 @@ def _raw(url, data=None, headers=None, timeout=40, cap=60_000_000, local_ok=Fals
     req = urllib.request.Request(url, data=data, headers=hdr)
     opener = urllib.request.urlopen if local_ok else netsafe.urlopen
     with opener(req, timeout=timeout) as r:
+        _last.url = r.geturl() if hasattr(r, "geturl") else url
         raw = r.read(cap)
         if not rng and (r.headers.get("Content-Encoding") == "gzip"):
             raw = gzip.GzipFile(fileobj=io.BytesIO(raw)).read(cap * 4)
@@ -149,6 +151,13 @@ def get_json(url, data=None, headers=None, **kw):
 
 def get_text(url, **kw):
     return get(url, **kw).decode("utf-8", "replace")
+
+
+def get_page(url, **kw):
+    """(text, the address it ended up at after redirects) of a web page."""
+    _last.url = url
+    text = get(url, **kw).decode("utf-8", "replace")
+    return text, (getattr(_last, "url", None) or url)
 
 
 # ---------------------------------------------------------------- polite by design: pacing per provider

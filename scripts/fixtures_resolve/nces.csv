@@ -1,0 +1,5 @@
+SCHOOL_YEAR,ST,LEA_NAME,LEAID,LCITY,WEBSITE,SY_STATUS,LEA_TYPE,OPERATIONAL_SCHOOLS
+2023-2024,OH,Olentangy Local,3904702,Lewis Center,http://www.olentangy.k12.oh.us/,1,1,28
+2023-2024,OH,Columbus City Schools District,3904378,Columbus,http://www.ccsoh.us/,1,1,116
+2023-2024,OH,One School Charter,3999999,Columbus,http://charter.example/,1,7,1
+2023-2024,OH,Closed Local,3900001,Nowhere,http://closed.example/,2,1,4

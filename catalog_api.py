@@ -147,14 +147,21 @@ def handle_get(h, path, pid):
             facts = {}
         cos = []
         watch, names = people.company_sets(pid), {p["id"]: p["name"] for p in people.load_index()}
-        for c in catalog.companies():
+        allc = catalog.companies()
+        try:        # (one employer's boards share a group: "group" key, "group_name" the one name to show for them)
+            import names as _names
+            grp = _names.groups(allc)
+        except Exception:
+            grp = {}
+        for c in allc:
             f = c["_fetch"]
             status = "paused" if c["_paused"] else (f["status"] or "new")
             cos.append({"name": c["name"], "ats": c["ats"], "mine": bool(set(c.get("sets") or []) & watch), "watchers": _watchers(c.get("sets") or [], names), "paused": c["_paused"],
                         "status": status, "fetch_status": f["status"], "reason": plain_reason(f["status"], f["error"]), "last": f["at"], "open": f["open"] or 0,
                         "abroad": bool(f.get("abroad")), "foreign": f.get("foreign") or 0,
                         "raw": f["raw"], "secs": f["secs"], "sector": c.get("sector") or "", "added_by": c.get("added_by"),
-                        "facts": facts.get(c["name"])})
+                        "facts": facts.get(c["name"]), "group": (grp.get(c["name"]) or ("", ""))[0] or None,
+                        "group_name": (grp.get(c["name"]) or ("", c["name"]))[1]})
         return h._send(200, {"companies": cos, "lists": lists(pid), "current": pid, "stats": catalog.stats(),
                              "facts_job": facts_status()})
     if path == "/api/catalog/facts":

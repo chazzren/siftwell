@@ -1,0 +1,8 @@
+compendium_hospital_id,ccn,hospital_name,hospital_city,hospital_state,health_sys_id,health_sys_name,hos_beds
+C1,360002,Riverside Methodist Hospital,Columbus,OH,HSI1,Ohiohealth,1000
+C2,360003,Grant Medical Center,Columbus,OH,HSI1,Ohiohealth,500
+C3,360001,Mount Carmel East,Columbus,OH,HSI2,Trinity Health,600
+C4,230001,Saint Joseph Mercy,Ann Arbor,MI,HSI2,Trinity Health,500
+C5,390001,Mercy Fitzgerald,Darby,PA,HSI2,Trinity Health,200
+C6,360010,Kettering Health Main Campus,Kettering,OH,HSI3,Kettering Health,700
+C7,360011,Kettering Health Dayton,Dayton,OH,HSI3,Kettering Health,500

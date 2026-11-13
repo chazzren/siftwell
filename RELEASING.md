@@ -47,7 +47,7 @@ If a run fails after "Push commit and tag" (rare, for example a network error wh
 
 ## The seed list for "Build my own directory"
 
-`assets/directory/seed.json.gz` (about 0.9 MB) lists every job site the directory builder knows: job system, its settings, the last-known employer name and the states it was last seen hiring in (hints only; the app reads each site itself). Three ways it gets refreshed:
+`assets/directory/seed.json.gz` (about 0.9 MB) lists every job site the directory builder knows: job system, its settings, the last-known employer name and the states it was last seen hiring in (hints only; the app reads each site itself). That includes the careers sites the weekly build found for big local employers from public lists (hospitals, colleges, school districts, governments: `index_build/resolve.py`), with the list's name and, before they are first read, the employer's state; nothing changes in how the seed is refreshed. Three ways it gets refreshed:
 
 - **By a release**, automatically (see step 6 above): `scripts/refresh_seed.py`.
 - **By hand from the published directory:** `python scripts/refresh_seed.py` (add `--strict` to get exit code 1 when it couldn't be refreshed), then commit the file.

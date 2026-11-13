@@ -141,6 +141,8 @@ def rank(t, states, remote=False):
         return (0, -near)
     if resting(t):
         return (4, 0)
+    if not seen:        # (never read: a public list's employer in one of these states comes right after the known ones)
+        return (0, 0) if any(s in st for s in states) else (1, 0)
     if not st:
         return (1, -jobs) if (jobs > 0 or not seen) else (3, 0)
     return (2, -jobs)

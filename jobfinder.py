@@ -1706,11 +1706,12 @@ def write_person(pid, jobs, summaries, prof, st, ai_status, pv_status):
     jobs.sort(key=board_order)
     try:        # two job boards of one employer ("McKesson", "McKesson (2)") are shown and filtered under one name
         import catalog, names
-        gm = names.group_map(catalog.companies())
+        gm = names.groups(catalog.companies())
         for j in jobs:
-            g = gm.get(j["company"]) or names.group_name(j["company"])
+            gk, g = gm.get(j["company"]) or ("g:" + names._norm(names.group_name(j["company"])), names.group_name(j["company"]))
             if g and g != j["company"]:
                 j["co"] = g
+            j["cog"] = gk       # (the employer's group key: boards with the same one are one employer, names.groups)
     except Exception as e:
         print(f"(company names not grouped: {type(e).__name__}: {e})", flush=True)
     # titles nothing on the person's list names: kept apart ("N hidden because their titles aren't on your list · Show")

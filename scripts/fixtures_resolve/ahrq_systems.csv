@@ -1,0 +1,4 @@
+health_sys_id,health_sys_name,health_sys_city,health_sys_state,hosp_cnt,sys_beds
+HSI1,Ohiohealth,Columbus,OH,2,1500
+HSI2,Trinity Health,Livonia,MI,3,14000
+HSI3,Kettering Health,Kettering,OH,2,1200

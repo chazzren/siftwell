@@ -2,7 +2,8 @@
 
 "Build my own directory" (local.py) starts from it instead of discovering job boards from scratch: for each board the
 job system and its settings (what a reader needs), the name the shared directory last published for it, and where it
-was last seen hiring (state -> open jobs; US-remote jobs). Those last two are HINTS ONLY: they decide the order the
+was last seen hiring (state -> open jobs; US-remote jobs; for a board found through a public list of employers and not
+read yet, that employer's state with 0 jobs). Those last two are HINTS ONLY: they decide the order the
 app reads boards in (the ones last seen near the person first) and give a board a readable name before its own read
 has one. Nothing from the seed is shown as a fact about an employer; the app's own read replaces it.
 
@@ -54,8 +55,12 @@ def make(tenants, built=""):
                 st[p[4]] = st.get(p[4], 0) + int(p[2])
             except (IndexError, TypeError, ValueError):
                 continue
+        if not st:      # (a board not read yet: the state a public list's employer is in, as a hint with no jobs)
+            for h in t.get("hints") or []:
+                if h.startswith("state:") and len(h) == 8:
+                    st.setdefault(h[6:], 0)
         top = sorted(st.items(), key=lambda x: (-x[1], x[0]))[:STATES_MAX]
-        name = build.best_name(t) if (t.get("read") or t.get("pack_name")) else ""
+        name = build.best_name(t) if (t.get("read") or t.get("pack_name") or t.get("lnames")) else ""
         row = [c[f] for f in fields] + [name, int(t.get("jobs") or 0) if t.get("read") else -1, int(t.get("remote") or 0),
                                          " ".join(f"{s}{n}" for s, n in top)]
         groups.setdefault((ats, fields), []).append(row)

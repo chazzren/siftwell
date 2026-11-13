@@ -186,7 +186,7 @@ got = N.learn("Schneider (taleo)", log=quiet)
 eq("learn: 'Schneider (taleo)' next to 'Schneider' -> a plain place, never the system", got, "Schneider (Green Bay)")
 check("...its listings keep their ids", ids(got) == before and len(before) == 3 and cfg_of(got).get("idp") == "Schneider (taleo)", str(ids(got)))
 eq("...running it again changes nothing", [N.learn(got, log=quiet), N.learn(got, log=quiet), N.learn("Schneider", log=quiet)], [got, got, "Schneider"])
-check("...and both are settled", cfg_of(got).get("nm") == 1 and cfg_of("Schneider").get("nm") == 1)
+check("...and both are settled", cfg_of(got).get("nm") == 2 and cfg_of("Schneider").get("nm") == 2)
 
 company("Accenture (AccentureCareers)", **ACC)
 store("Accenture (AccentureCareers)", jobs("a"))
@@ -245,6 +245,47 @@ eq("a name the person typed is never renamed", [N.learn("Zed Typed (Ohio Team)",
 company("Settled (taleo)", nm=1, **TALEO("settled.taleo.net", "3"))
 store("Settled (taleo)", jobs("x"))
 eq("a settled name still loses the job system an older version put in brackets", N.learn("Settled (taleo)", log=quiet), "Settled")
+
+# ------------------------------------------------------------------ 7. names still poor after a real fetch (re-test findings)
+UKGC = lambda t: {"ats": "ukg", "host": "recruiting.ultipro.com", "tenant": t, "board": "3a2849cd-0da6-4a57-813a-80b366fb0172"}
+for n, c in (("Bjakcareer", {"ats": "workable", "token": "bjakcareer"}), ("Craneww", UKGC("CRA1009CRWL")), ("Lbrands", TALEO("lbrands.taleo.net", "x")),
+             ("Lmhealth", UKGC("LIC1000LMHS")), ("Homepage", {"ats": "recruitee", "token": "eworgmbh"}), ("ICR United States USA", {}),
+             ("MCK McKesson", WD("mckesson", "External_Careers")), ("Rbc", WD("rbc", "x")), ("Hpe", WD("hpe", "x"))):
+    check(f"poor: {n!r}", bool(N.poor(n, c)), N.poor(n, c))
+eq("a country tacked on comes off; one plain USA stays", [N.clean_display(x) for x in ("ICR United States USA", "Acme Corp, United States", "Comfort Systems USA", "T-Mobile USA")],
+   ["ICR", "Acme Corp", "Comfort Systems USA", "T-Mobile USA"])
+eq("a ledger's cut-off last word is finished; short names are left alone", [N.complete_truncated(x) for x in
+   ("PricewaterhouseCoopers Advisory Ser", "CenterWell Certified Healt", "Nationwide Mutual Insurance Comp", "Acme Home", "The Ohio State University")],
+   ["PricewaterhouseCoopers Advisory Services", "CenterWell Certified Health", "Nationwide Mutual Insurance Company", "Acme Home", "The Ohio State University"])
+eq("a ledger code that repeats the name's start comes off ('MCK McKesson' at mckesson)", N.derive("MCK McKesson", WD("mckesson", "External_Careers")), "McKesson")
+check("...a real code-led name the address starts with stays ('C5MI Insight' at c5mi)", not N.poor("C5MI Insight", WD("c5mi", "x")))
+eq("the board's own short address is written as initials", [N.derive("Rbc", WD("rbc", "x")), N.derive("Hpe", WD("hpe", "x"))], ["RBC", "HPE"])
+check("...never a word-like one, nor without its address", not N.poor("Gap", WD("gap", "x")) and not N.poor("Hpe") and not N.poor("Nike", WD("nike", "x")))
+eq("a job-site word run into the address comes off when nothing else is known", N.derive("Bjakcareer", {"ats": "workable", "token": "bjakcareer"}), "Bjak")
+CRW = ["Warehouse Associate\nCrane Worldwide Logistics is hiring. Crane Worldwide Logistics is an equal opportunity employer.",
+       "Driver\nAbout Crane Worldwide Logistics: we move freight. Crane Worldwide Logistics offers benefits.", "Clerk\nJoin Crane Worldwide Logistics today."]
+eq("'Craneww' -> the name its postings use (UKG's code starts with it)", N.derive("Craneww", UKGC("CRA1009CRWL"), CRW), "Crane Worldwide Logistics")
+LMH = ["RN\nLicking Memorial Health Systems is an equal opportunity employer.", "LPN\nAbout Licking Memorial Health Systems: care close to home.",
+       "Tech\nJoin Licking Memorial Health Systems today."]
+eq("'Lmhealth' -> 'Licking Memorial Health Systems'", N.derive("Lmhealth", UKGC("LIC1000LMHS"), LMH), "Licking Memorial Health Systems")
+eq("'Lbrands' -> 'L Brands' once its postings spell it", N.derive("Lbrands", TALEO("lbrands.taleo.net", "x"), LB), "L Brands")
+import company_add
+eq("a job-site word in front of an iCIMS address is not the employer's", [company_add.tenant_label(x) for x in
+   ("careersapply-pennentertainment", "jobs-noodles", "externalhourly-highgate", "careers2-imagefirst", "storecareers-gpminvestments", "st-joseph", "fieldstone-homes")],
+   ["pennentertainment", "noodles", "highgate", "imagefirst", "gpminvestments", "st-joseph", "fieldstone-homes"])
+eq("...so the name made from it is the employer's", company_add.default_name({"ats": "icims", "base": "https://jobs-noodles.icims.com"}), "Noodles")
+GC = [dict(WD("abbott", "abbottcareers"), name="Abbott"), dict(WD("abbott", "abbottcareers2"), name="Abbott Laboratories"),
+      {"name": "MedStar Health", "ats": "jibe", "base": "https://careers.medstarhealth.org"}, {"name": "MedStar", "ats": "jsonld", "list_url": "https://jobs.medstarhealth.org/x"},
+      {"name": "Express", "ats": "icims", "base": "https://careers-express.icims.com"}, {"name": "Express (2)", "ats": "taleo", "host": "express.taleo.net", "section": "2"},
+      {"name": "Express Wash Concepts", "ats": "workday", "tenant": "expresswashconcepts", "site": "x"},
+      {"name": "Acme Greenhouse", "ats": "greenhouse", "token": "acme"}, {"name": "Other Lever", "ats": "lever", "token": "other"}]
+gk = N.group_keys(GC)
+check("group key: one employer's boards share one (same name, same account, same employer domain)",
+      gk["Abbott"] == gk["Abbott Laboratories"] == "g:abbott" and gk["MedStar Health"] == gk["MedStar"] and gk["Express"] == gk["Express (2)"], str(gk))
+check("...others keep their own, and boards on a job system's shared host are never joined by host", gk["Express Wash Concepts"] != gk["Express"]
+      and gk["Acme Greenhouse"] != gk["Other Lever"])
+check("...the key is the same however the list is ordered", N.group_keys(list(reversed(GC))) == gk)
+eq("...and group_map shows the one name", N.group_map(GC)["MedStar"], "MedStar Health")
 
 allnames = [c["name"] for c in catalog.companies()]
 bad = [n for n in allnames if N.poor(n, cfg_of(n)) in ("suffix", "board-n", "slogan", "generic", "code")
