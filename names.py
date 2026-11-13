@@ -201,6 +201,8 @@ def _bad_suffix(suf, base="", cfg=None, strict=False):
         return True
     if re.fullmatch(r"\d{1,3}", suf.strip()):
         return False                                # "(2)": Siftwell's own last resort
+    if re.fullmatch(r"[\d\- ]{4,}", suf.strip()):
+        return True                                 # "Wawa Inc. (210515330)": a ledger number
     if re.fullmatch(r"(?i)board \d+", suf.strip()) or ns in SYSTEMS or ns == _norm(cfg.get("ats")):
         return True
     toks = suf.split()
@@ -385,16 +387,19 @@ def complete_truncated(n):
     """A legal-entity name a ledger cut off in the middle of its last word ("PricewaterhouseCoopers Advisory Ser",
     "CenterWell Certified Healt"): the last word finished when only business words start that way ("Services",
     "Health"). Only for long names (cut-off fields are long; "Acme Home" is left alone)."""
+    orig = n
     n = re.sub(r"\s+", " ", str(n or "")).strip(" ,.")
     m = re.match(r"^(.+\S)\s+([A-Za-z]{3,})$", n)
     if not m or len(n) < 24 or len(m.group(1).split()) < 2:
-        return n
+        return orig
     w = m.group(2).lower()
+    if w in ("inc", "corp", "ltd", "llc", "llp", "pllc", "plc", "co", "lp"):
+        return orig
     if w in _TRUNC_WORDS or w in _WHOLE_WORDS or w + "s" in _TRUNC_WORDS or w + "es" in _TRUNC_WORDS:   # ("Health System")
-        return n
+        return orig
     comp = [x for x in _TRUNC_WORDS if x.startswith(w) and len(x) > len(w)]
     if not comp:
-        return n
+        return orig
     c = comp[0] + "s" if comp[0] + "s" in comp else comp[0]     # ("Ser" -> "Services": a ledger's entity names are plural)
     return f"{m.group(1)} {c.upper() if m.group(2).isupper() else c.capitalize()}"
 
@@ -415,7 +420,8 @@ def _short_code(n, cfg):
         return False
     if len(low) == 4:
         return _unsayable(low)
-    return len(low) == 2 or not re.fullmatch(r"[bcdfghjklmnpqrstvwxz][aeiou][bcdfghjklmnpqrstvwxz]", low)
+    # (three letters: initials unless a word-like one: "Gap", "Box"; "Aon" with two vowels)
+    return len(low) == 2 or not (re.fullmatch(r"[bcdfghjklmnpqrstvwxz][aeiou][bcdfghjklmnpqrstvwxz]", low) or len(re.findall(r"[aeiou]", low)) >= 2)
 
 
 def _lead_code(toks, texts=None):
