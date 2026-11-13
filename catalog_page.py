@@ -10,7 +10,7 @@ Sections:
                                (directory.ADD_HTML / ADD_SCRIPT: directory.preview count chooser + undo), find with Claude
                                (employer_finder.py; #find opens this section at that part)
   Job listings (#listings)     server-side pages
-  Activity (#runs)             Find new jobs now, each person's ratings (opens the board's Re-rate panel; #rating lands
+  Activity (#runs)             Find new jobs now, each person's ratings (opens the board's Rate jobs panel; #rating lands
                                here) and the history. The daily schedule is set only in Settings > Finding new jobs.
   Share (#share)               catalog_share.py
 Data comes from /api/catalog/* (catalog_api.py) and /api/directory*; each section loads when first shown."""
@@ -87,7 +87,7 @@ __FIND__""",
   <div class="srow"><div class="slab"><span>Find new jobs automatically</span><small id="auLine">Checking…</small></div><div class="sctl"><a class="btn sm" href="/settings#updates">Change in Settings</a></div></div>
 </div></section>
 <section class="sgsec"><h3 class="sgtitle">Ratings</h3>
-<p class="sfoot" style="margin:0 14px 8px">For each person: how many job listings pass their search, and how many Claude has rated. Rating happens on the board's Re-rate panel.</p>
+<p class="sfoot" style="margin:0 14px 8px">For each person: how many job listings pass their search, and how many Claude has rated. Rating happens on the board, with Rate jobs.</p>
 <div id="rateCards"><p class="note">Loading…</p></div></section>
 <section class="sgsec"><h3 class="sgtitle">History</h3><div class="clist" id="runRows"><p class="note">Loading…</p></div></section>""",
 }
@@ -173,7 +173,7 @@ def render(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + settings_page.CSS + CSS + "</head><body>" + body +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") + ";window.__ME__=" + json.dumps({"id": pid, "name": people.name(pid)}).replace("</", "<\\/") +
-            ";</script>\n" + report.CONFIRM_SCRIPT + settings_page.ASK_SCRIPT + SCRIPT.replace("/*__THEME__*/", report.THEME_JS)
+            ";</script>\n" + SCRIPT.replace("/*__THEME__*/", report.THEME_JS)
             .replace("/*__ALIASES__*/{}", json.dumps(ALIASES)) + directory.ADD_SCRIPT + report.DOWN_SCRIPT + "</body></html>")
 
 
@@ -282,7 +282,8 @@ const phone = () => matchMedia("(max-width:720px)").matches;
 const n = x => (x || 0).toLocaleString();
 const pl = (k, one, many) => `${n(k)} ${k === 1 ? one : many}`;
 const ME = window.__ME__ || {};
-const ask = o => window.siftAsk(o);   // {title, text, ok, danger} -> Promise<bool> (settings_page.ASK_SCRIPT)
+const MINE = new URLSearchParams(location.search).get("mine") === "1";
+const ask = o => window.appConfirm(o);   // {title, text, ok, danger} -> Promise<bool> (report.CONFIRM_JS, in the header)
 let NAMES = {};                       // profile id -> name, for what people read (history, ratings)
 const who = id => NAMES[id] || id;
 let PREFS = window.__PREFS__ || {};
@@ -402,7 +403,9 @@ function loadCompanies(){
     COS = d.companies; LISTS = d.lists; FJ = d.facts_job || FJ;
     factsNote(); if (FJ.running) pollFacts();
     if (!$("addList").options.length) fillListSelect($("addList"), "own-" + ME.id);
-    if (!loaded.coDefault) { loaded.coDefault = true; if (!COS.some(c => c.mine)) $("coListF").value = ""; }   // (nothing of their own yet: show everyone's)
+    // #companies opens on Your employers (the board links /catalog?mine=1#companies); with nothing of their own yet and
+    // no ?mine=1, everyone's are shown instead of an empty list
+    if (!loaded.coDefault) { loaded.coDefault = true; $("coListF").value = MINE || COS.some(c => c.mine) ? "mine" : ""; }
     const af = $("coAts"), ca = af.value, atsList = [...new Set(COS.map(c => c.ats))].sort((a, b) => atsName(a).localeCompare(atsName(b)));
     af.innerHTML = `<option value="">Any way of listing jobs</option>` + atsList.map(a => `<option value="${esc(a)}">${esc(atsName(a))}</option>`).join("");
     af.value = ca;
@@ -559,7 +562,7 @@ $("lsPrev").addEventListener("click", () => { lsPage--; loadListings().then(() =
 $("lsNext").addEventListener("click", () => { lsPage++; loadListings().then(() => $("lsCount").scrollIntoView({block: "nearest"})); });
 
 // ---- Runs & updates
-const KIND = {fetch: "Find new jobs", recompute: "Boards brought up to date", rerate: "Re-rate", rescore: "Listings read again", migrate: "Employers list set up", find: "Find employers with Claude"};
+const KIND = {fetch: "Find new jobs", recompute: "Boards brought up to date", rerate: "Rate jobs", rescore: "Listings read again", migrate: "Employers list set up", find: "Find employers with Claude"};
 const RUNST = {ok: "Done", running: "Running", stopped: "Stopped", partial: "Partly done", error: "Problem", budget: "Stopped at the budget"};
 function runRow(r){
   const d = r.details || {};
@@ -618,11 +621,11 @@ function loadRating(){
       const stats = s ? [["Pass their search", s.passing], ["Rated by Claude", s.rated], ["Got a careful look or best judgment", s.deep], ["Waiting for a rating", s.unrated], ["Need a fresh rating", s.stale]]
         .map(([l, v]) => `<div><b>${n(v)}</b><span>${esc(l)}</span></div>`).join("") : "";
       const tiers = s ? `Quick ${n(s.haiku)} · careful ${n(s.sonnet)} · best ${n(s.opus)}` + (s.unmet ? ` · ${n(s.unmet)} skipped (requirements not met)` : "") : "";
-      const live = r.running ? `<div class="srow"><span class="note">${esc(r.label || "Re-rating")}${r.total ? ` · ${n(r.done)} of ${n(r.total)}${r.tier ? " (" + esc(r.tier) + ")" : ""}` : ""}…</span></div>` : "";
+      const live = r.running ? `<div class="srow"><span class="note">${esc(r.label || "Rating jobs")}${r.total ? ` · ${n(r.done)} of ${n(r.total)}${r.tier ? " (" + esc(r.tier) + ")" : ""}` : ""}…</span></div>` : "";
       return `<section class="sgsec rcard"><h3 class="sgtitle">${esc(p.name)}${p.id === d.current ? " (viewing now)" : ""}</h3><div class="sgroup">
         ${s ? `<div class="rgrid">${stats}</div>` : `<div class="srow"><span class="note">${p.profile ? "No board yet." : "No resume yet, so Claude can't rate jobs for " + esc(p.name) + "."}</span></div>`}
         ${s ? `<div class="srow"><small class="note">${esc(tiers)}${s.generated ? " · board built " + esc(when(s.generated)) : ""}</small></div>` : ""}${live}
-        <div class="srow"><span class="note">The Re-rate panel lets you choose how carefully Claude rates.</span><button class="btn sm" type="button" data-rr="${esc(p.id)}"${p.profile ? "" : " disabled"}>Open Re-rate for ${esc(p.name)}</button></div>
+        <div class="srow"><span class="note">Rate jobs lets you choose how carefully Claude rates.</span><button class="btn sm" type="button" data-rr="${esc(p.id)}"${p.profile ? "" : " disabled"}>Rate jobs for ${esc(p.name)}</button></div>
       </div></section>`;
     }).join("");
   }).catch(err => { $("rateCards").innerHTML = `<p class="note">${esc(errText(err))}</p>`; });
@@ -836,14 +839,14 @@ $("imBtn").addEventListener("click", () => {
 
 /*__THEME__*/
 applyTheme();
-// ---- header: Find new jobs / Re-rate run on the board, which has the confirm and progress panel
+// ---- header: Find new jobs / Rate jobs run on the board, which has the confirm and progress panel
 const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
 $("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
 $("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
 $("updateBtn").title = "Find new jobs (opens the board): check your employers for new openings";
-$("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Claude re-rates your jobs, no new listings";
+$("rerateBtn").title = "Rate jobs (opens the board's Rate jobs panel): choose how Claude rates your jobs, no new listings";
 if ($("resumeBtn") && $("resumeBtn").tagName === "BUTTON") $("resumeBtn").addEventListener("click", () => toBoard(["jb.openResume", "1"]));
-fetch("/api/rerate").then(r => r.json()).then(s => { if (s.running) { $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Re-rating your best jobs now…"; } }).catch(() => {});
+fetch("/api/rerate").then(r => r.json()).then(s => { if (s.running) { $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Rating your jobs now…"; } }).catch(() => {});
 fetch("/api/setup-status").then(r => r.json()).then(s => {
   const k = s && !s.complete && s.missing ? s.missing.length : 0, b = $("gsBadge");
   if (b) { b.hidden = !k; b.textContent = k || ""; }

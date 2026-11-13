@@ -190,8 +190,7 @@ dialog.sheet::backdrop{background:rgba(0,0,0,.45)}
 .psgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px 12px;margin:8px 0}
 .psgrid label{display:flex;flex-direction:column;gap:3px;font-size:var(--fs-sm);color:var(--muted)}
 .psgrid label.chk{flex-direction:row;align-items:center}
-.psgrid input[type=text],.psgrid input[type=number],.psgrid select,.psgrid textarea,#newPersonName{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px;font:inherit;color:var(--ink);min-width:0}
-#newPersonName{flex:1 1 200px}
+.psgrid input[type=text],.psgrid input[type=number],.psgrid select,.psgrid textarea{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px;font:inherit;color:var(--ink);min-width:0}
 .countrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .factlist{display:flex;flex-direction:column;gap:6px;font-size:var(--fs-sm)}
 .fact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;padding:6px 0;border-top:1px solid var(--line)}
@@ -300,8 +299,7 @@ nav.tabs a[aria-current="page"]{background:none;color:var(--ink);border-bottom-c
   .frow select{flex:1 1 auto}
   .fgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .fgrid .field:first-child,.fgrid .field:last-child{grid-column:1/-1}
-  .msgrid .field:first-child,.fview .field:first-child{grid-column:auto}
-  .msgrid .field.wide{grid-column:1/-1}
+  .fview .field:first-child{grid-column:auto}
   nav.tabs{gap:16px;overflow-x:auto;scrollbar-width:none}
   nav.tabs::-webkit-scrollbar{display:none}
 }
@@ -533,8 +531,6 @@ dialog.appdlg::backdrop{background:rgba(0,0,0,.45)}
 .mshead h3{margin:0;font-size:var(--fs-md);font-weight:700;color:var(--ink)}
 .mssub{margin:2px 0 0;color:var(--muted);font-size:var(--fs-sm)}
 .mssum{margin:0;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
-.msedit summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:var(--fs-sm);width:max-content}
-.msedit[open] .msgrid{margin-top:10px}
 .mscard .field input,.mscard .field select{background:var(--surface)}
 .mscard .fhint{margin:0}
 .fgsub{text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted)}
@@ -814,11 +810,6 @@ BODY = """<div class="wrap">
     <div class="qfoot" id="qFoot"><button class="btn primary" type="button" id="qGo">Save answers and tailor</button><button class="btn" type="button" id="qSkip">Skip, tailor now</button></div>
   </form>
 </dialog>
-<div class="panel" id="addPersonPanel" hidden>
-  <strong>Add a person</strong>
-  <p class="help">Each person gets their own resume, answers, saved jobs, tailored resumes and settings. Next comes a short setup: resume, where, pay, level and what you're aiming for.</p>
-  <form class="row" id="addPersonForm"><input type="text" id="newPersonName" placeholder="Name" aria-label="Name" autocomplete="off"><button class="btn primary" type="submit">Continue to setup</button><button class="btn" type="button" id="addPersonCancel">Cancel</button></form>
-  <div class="note" id="addPersonMsg"></div>
 </div>
 
 <nav class="tabs" aria-label="Your jobs"><a href="#jobs" id="tab-jobs">Jobs</a><a href="#saved" id="tab-saved">Saved</a><a href="#applied" id="tab-applied">Applied</a><a href="#tailored" id="tab-tailored">Resumes</a><a href="#pivot" id="tab-pivot" hidden>Target</a><a class="tabext" id="tab-employers" href="/catalog?mine=1#companies">Your employers →</a></nav>
@@ -839,24 +830,6 @@ BODY = """<div class="wrap">
       <section class="mscard" id="msWrap" aria-labelledby="msTitle" hidden>
         <div class="mshead"><div><h3 id="msTitle">Your search</h3><p class="mssub">Saved to your profile · changes what reaches your board</p></div><a class="btn sm" id="msEditLink" href="/profile#search">Edit search settings</a></div>
         <p class="mssum" id="msSum"></p>
-        <details class="msedit" id="msEdit"><summary>Edit here</summary>
-        <div class="fgrid msgrid" id="msGrid">
-        <label class="field"><span class="flabel">Home ZIP or City, ST</span><input type="text" id="msZip" data-ms="home_zip" placeholder="ZIP code or City, ST" autocomplete="postal-code"></label>
-        <label class="field"><span class="flabel">Search radius</span><select id="msRadius" data-ms="radius_miles">
-          <option value="10">10 miles</option><option value="25">25 miles</option><option value="35">35 miles</option><option value="50">50 miles</option><option value="75">75 miles</option></select></label>
-        <div class="field wide"><span class="flabel" id="msWpLbl">Ways of working</span>
-          <div class="checks" role="group" aria-labelledby="msWpLbl"><label class="chk"><input type="checkbox" data-mswp="onsite"> On-site</label>
-          <label class="chk"><input type="checkbox" data-mswp="hybrid"> Hybrid</label>
-          <label class="chk"><input type="checkbox" data-mswp="remote"> Remote</label></div></div>
-        <div class="field wide"><span class="flabel">Nationwide</span>
-          <div class="checks"><label class="chk"><input type="checkbox" id="msRemoteUs" data-ms="remote_us"> Remote jobs anywhere in the US</label></div></div>
-        <label class="field"><span class="flabel">Travel limit</span><select id="msTravel" data-ms="travel_max">
-          <option value="none">None</option><option value="light">Light (under 10%)</option><option value="moderate">Some (up to 25%)</option><option value="any">Any</option></select></label>
-        <label class="field"><span class="flabel">Lowest base ($)</span><input type="number" inputmode="numeric" step="5000" min="0" id="msFloor" data-ms="salary_floor" placeholder="No floor"></label>
-        <label class="field wide"><span class="flabel">Your level</span><select id="msLevel" data-ms="seniority_mine">
-          <option value="">Any level</option><option value="1">Entry level</option><option value="2">Mid-level</option><option value="3">Senior</option><option value="4">Lead / Manager</option><option value="5">Principal / Sr. Manager</option><option value="6">Director</option><option value="7">VP / Executive</option></select></label>
-        </div>
-        </details>
         <p class="fhint" id="msState" role="status" aria-live="polite"></p>
       </section>
       <div class="fgroup first">Narrow the list <span class="fgsub">· only this view, nothing is saved</span></div>
@@ -1048,12 +1021,10 @@ $("count").addEventListener("click", e => {
   if (id === "lvlShow") { lvlShown = true; shown = 100; render(); }
   if (id === "hidShow") { $("st").value = "hidden"; shown = 100; render(); }
 });
-// ---- Your search (the card at the top of the Filters panel): this profile's saved search settings, the same ones /setup asks for.
+// ---- Your search (the card at the top of the Filters panel): this profile's saved search settings, shown as one line
+// with "Edit search settings" -> My profile > Job search (profile_page.py), the one place they are edited.
 // They decide which jobs reach the board: home ZIP / radius / ways of working / remote anywhere / pay floor are applied
 // when the board is built (jobfinder.select_for_person); level and travel limit are applied here (mySearchOk).
-// Each change saves through POST /api/person/settings, like My profile used to: the server re-checks this board (and
-// queues the automatic quick check of new jobs), and the page reloads itself once the rebuilt board is ready.
-// None of these reset Claude's ratings (the pay floor only matters to the Target tab's ratings).
 let MYS = null, msBase, msTimer = null;
 const msNow = () => MYS || {seniority_band: (D.seniority && D.seniority.band) || [1, 7], travel_max: D.travel_max || "any"};
 function mySearchOk(j){
@@ -1063,16 +1034,6 @@ function mySearchOk(j){
   if (tm === "light" && !["", "none", "light"].includes(t)) return false;
   if (tm === "none" && !["", "none"].includes(t)) return false;
   return true;
-}
-function msFill(){
-  if (!MYS) return;
-  document.querySelectorAll("[data-ms]").forEach(el => {
-    const k = el.dataset.ms, v = MYS[k];
-    if (el.type === "checkbox") { el.checked = !!v; return; }
-    if (el.tagName === "SELECT" && v != null && ![...el.options].some(o => o.value === String(v))) el.add(new Option(k === "radius_miles" ? `${v} miles` : String(v), String(v)));
-    if (document.activeElement !== el) el.value = v == null || (k === "salary_floor" && !v) ? "" : String(v);  // (no floor shows as blank)
-  });
-  document.querySelectorAll("[data-mswp]").forEach(el => el.checked = (MYS.workplaces || []).includes(el.dataset.mswp));
 }
 function msSay(t, err){ $("msState").textContent = t; $("msState").classList.toggle("err", !!err); }
 // The card's one-line summary: "43215 · 35 mi · on-site, hybrid · remote anywhere in the US · $60k+ · any level"
@@ -1088,7 +1049,7 @@ function msSummary(){
 }
 function msLoaded(st){
   if (!SERVED || !st) return;
-  MYS = st; $("msWrap").hidden = false; msFill(); msSummary();
+  MYS = st; $("msWrap").hidden = false; msSummary();
 }
 const msBoard = () => fetch("/api/profile/board" + pq()).then(r => r.json());
 if (SERVED) msBoard().then(b => { if (msBase === undefined) msBase = b.board_at || null; }).catch(() => {});
@@ -1102,32 +1063,6 @@ function msAwaitBoard(){
   }).catch(() => { msTimer = setTimeout(tick, 4000); });
   msTimer = setTimeout(tick, 1500);
 }
-function msSave(settings){
-  msSay("Saving…");
-  fetch("/api/person/settings", {method: "POST", headers: H, body: JSON.stringify({person: PID, settings})})
-    .then(r => r.json().then(d => ({ok: r.ok, d})))
-    .then(({ok, d}) => {
-      if (!ok) { msFill(); msSay(d.error || "Couldn't save that.", true); return; }
-      MYS = Object.assign({}, MYS, d.settings); msFill(); msSummary();
-      if (d.area_changed) { try { sessionStorage.setItem("jb.area", "1"); } catch(e) {} if (typeof areaOffer === "function") areaOffer(); }
-      D.salary_floor = MYS.salary_floor || 0;
-      shown = 100; render();
-      msSay("Saved. Re-checking your board…"); msAwaitBoard();
-    }).catch(() => { msFill(); msSay("Couldn't reach Siftwell, so that wasn't saved.", true); });
-}
-$("msGrid").addEventListener("change", async e => {
-  const el = e.target;
-  if (el.dataset.mswp) {
-    const wps = [...document.querySelectorAll("[data-mswp]")].filter(x => x.checked).map(x => x.dataset.mswp);
-    if (!wps.length) { el.checked = true; msSay("Pick at least one way of working.", true); return; }
-    msSave({workplaces: wps}); return;
-  }
-  // The older built-in area (no home ZIP yet): a ZIP changes which jobs count as near you, so say so before saving.
-  if (el.dataset.ms === "home_zip" && el.value.trim() && MYS && !String(MYS.home_zip || "").trim() && !((MYS.workplaces || []).length === 1 && MYS.workplaces[0] === "remote") && jobs.length
-      && !await appConfirm({title: "Set your home ZIP?", ok: "Set my home ZIP", text: "This changes which jobs count as near you. Until now Siftwell has used its built-in Washington, DC area list for this profile; with a ZIP it keeps jobs within your search radius of that place instead, so some jobs will be added to your board and some removed.\n\n(If you only want more employers near you, Settings, then Employer directory lets you pick an area for that without changing your job filter.)"})) { msFill(); el.value = ""; return; }
-  if (el.dataset.ms) msSave({[el.dataset.ms]: el.type === "checkbox" ? el.checked : el.value});
-});
-
 // Pay is stored per year so every job compares on one scale (hourly pay at 2,080 hours a year); a job that states
 // hourly, weekly or monthly pay is shown the way its posting states it ("$36.90/hr").
 const PAYU = {hour: "/hr", day: "/day", week: "/wk", month: "/mo"};
@@ -1176,7 +1111,7 @@ function payBar(j){
     ${note}</div>`;
 }
 
-const LVN = {1: "Entry level", 2: "Mid-level", 3: "Senior", 4: "Lead / Manager", 5: "Principal / Sr. Manager", 6: "Director", 7: "VP / Executive"};
+const LVN = {1: "Entry", 2: "Experienced", 3: "Senior", 4: "Supervisor / Manager", 5: "Senior manager", 6: "Director", 7: "Executive"};   // (setup_flow.LEVEL_LABELS)
 function levelChip(j){
   if (j.level == null) return "";
   return `<span class="chip" title="${j.level_src === "years" ? "Level estimated from years of experience required" : "Level from job title"}">${LVN[j.level]}${j.level_src === "years" ? " (by years)" : ""}</span>`;
@@ -1928,7 +1863,7 @@ if (SERVED && !jobs.length) (function(){
     else if (pvOk && pvNew) fixes.push(`<b>${n(pvNew)} more employers</b> ${d.remote_only ? "that hire remotely" : `within ${d.radius} miles of ${esc(d.label)}`} are in Siftwell’s free employer directory. ${dirChooser(PV, "sc")} <button type="button" class="btn sm primary" id="scDir">Add them</button><span class="dmsg" id="scDirMsg" role="status"></span>`);
     if (p.titles === false) fixes.push(`<a href="/profile#search">Tell Siftwell what work you do</a>: with your job title it can pick out the jobs that are relevant to you.`);
     else fixes.push(`<a href="/profile#search">Add more job titles</a> (My profile, then Job search): only jobs with a title like yours are kept.`);
-    fixes.push(`<a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (Filters, then Your search). Siftwell then offers the employers in the wider area.`);
+    fixes.push(`<a href="#filters">Widen your search</a>: a bigger radius, allow remote work, or a lower pay floor (<a href="/profile#search">My profile, Job search</a>). Siftwell then offers the employers in the wider area.`);
     fixes.push(`<a href="/catalog#find">Find more employers with Claude</a>: Claude looks up employers in your area${p.claude ? "" : " (needs Claude)"}, and you add the ones Siftwell can read.`);
     fixes.push(`<a href="/catalog#companies">Add an employer by its careers link</a>.`);
     show(`<h2 id="scTitle">${p.companies ? "No jobs matched your search" : "There are no employers to check yet"}</h2>
@@ -2084,7 +2019,6 @@ window.addEventListener("hashchange", route); route();
 // Home: back to the Jobs tab with the detail sheet and side panels closed, keeping search and filters.
 $("homeBtn").addEventListener("click", e => {
   e.preventDefault();
-  $("addPersonPanel").hidden = true;
   const onJobs = !location.hash || location.hash === "#jobs";
   if (history.state && history.state.sheet) history.replaceState(null, "", onJobs ? location.pathname + location.hash : "#jobs");  // drop the phone sheet's history entry
   else if (!onJobs) history.pushState(null, "", "#jobs");
@@ -2202,17 +2136,9 @@ if (SERVED) {
     $("amenu").hidden = true;
     const v = b.dataset.person; if (!v) return;
     if (v === "__manage") { location.href = "/settings#profiles"; return; }
-    if (v === "__add") { $("addPersonPanel").hidden = false; $("newPersonName").focus(); scrollTo(0, 0); return; }
+    if (v === "__add") { location.href = "/people/new"; return; }   // the one Add a person form (welcome_page.py)
     if (v === curPerson) return;
     fetch("/api/person", {method: "POST", headers: H, body: JSON.stringify({id: v})}).then(() => { location.hash = ""; location.reload(); });
-  });
-  $("addPersonCancel").addEventListener("click", () => { $("addPersonPanel").hidden = true; });
-  $("addPersonForm").addEventListener("submit", e => {
-    e.preventDefault();
-    fetch("/api/people/add", {method: "POST", headers: H, body: JSON.stringify({name: $("newPersonName").value})}).then(r => r.json().then(d => ({ok: r.ok, d}))).then(({ok, d}) => {
-      if (!ok) { $("addPersonMsg").textContent = d.error || "Couldn't create it."; return; }
-      location.href = "/setup";
-    });
   });
   // ---- questions before tailoring, and the answer bank
   const slugify = id => id.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
@@ -2473,7 +2399,7 @@ if (SERVED) {
       } else if (pg.active && pg.kind !== "idle") {  // something else holds things up (Claude finding employers, a job from before a restart)
         bgShown = true; $("progress").hidden = false;
         $("progTitle").textContent = pg.line;
-        $("progNote").textContent = pg.kind === "dirbuild" ? "Siftwell is reading employers’ public job pages on this computer (no Claude). You can keep using it; pause the build in Settings, under Employer directory." : "";
+        $("progNote").textContent = pg.kind === "dirbuild" ? "Siftwell is reading employers’ public job pages on this computer (no Claude). You can keep using it; pause the build in Settings, under Advanced, Employer directory." : "";
         $("progBar").style.width = (pg.kind === "dirbuild" && pg.frac != null ? Math.max(1, Math.round(100 * pg.frac)) : 4) + "%"; $("progLog").textContent = "";
         setTimeout(poll, 5000);
       } else if (bgShown && !wasRunning) {
@@ -2740,7 +2666,7 @@ if (SERVED) {
   try {
     const r = sessionStorage.getItem("jb.run"); sessionStorage.removeItem("jb.run");
     if (r === "update" || r === "rerate") setTimeout(() => $(r + "Btn").click(), 300);
-    else if (r === "addPerson") { $("addPersonPanel").hidden = false; $("newPersonName").focus(); }
+    else if (r === "addPerson") location.href = "/people/new";
   } catch(e) {}
 }
 })();

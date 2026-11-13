@@ -9,7 +9,7 @@ drill-down: the list alone, then one category with a "‹ Settings" back control
 Every control auto-saves on change through POST /api/prefs (people.save_prefs merges partial updates).
 Saved search settings (where, pay, level, dealbreakers) are not here: they live on My profile > Job search.
 It reuses the board's styles (report.HEAD) and header icon row (report.TOOLS). Add a person opens /people/new (the
-same form as the welcome page, welcome_page.py). Update / Re-rate hand off to the board: they set sessionStorage "jb.run" and go to /#jobs, where report.py's script picks the request up
+same form as the welcome page, welcome_page.py). Find new jobs / Rate jobs hand off to the board: they set sessionStorage "jb.run" and go to /#jobs, where report.py's script picks the request up
 and runs it with its usual confirm and progress UI. My profile is its own page (profile_page.py), which shares this
 page's layout CSS, pane helpers and script pieces (fill_script)."""
 import html
@@ -72,7 +72,7 @@ CATEGORIES = [
     ]),
     ("claude", "Ratings & Claude", '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', [
         ("How much Claude rates in one run", "A run is one automatic rating after Find new jobs, one scheduled night (its Find new jobs and "
-         "the re-rate after it count as one run together), or one press of Rate more or Re-rate. The limits are per run and the same "
+         "the rating after it count as one run together), or one press of Rate jobs. The limits are per run and the same "
          "for all of them; they don't grow with the number of jobs in your area. Jobs over a limit keep a — for Match until the next run. The three kinds of rating have the same names everywhere in Siftwell, each with the Claude model it uses: Quick check (Haiku), "
          "Careful look (Sonnet) and Best judgment (Opus). Applies from the next run.", [
             ("number", "claude.haiku_per_night", "Quick checks per run", "New jobs that get a quick check (Haiku), the ones most relevant to your work first. 0 to 500."),
@@ -82,7 +82,7 @@ CATEGORIES = [
         ]),
         ("Automatic rating", "", [
             ("toggle", "claude.auto_rate", "Rate new jobs when Siftwell finds them", ""),
-            ("toggle", "claude.auto_rerate", "Re-rate overnight when my info changes", ""),
+            ("toggle", "claude.auto_rerate", "Rate jobs again overnight when my info changes", "Within the same limits per run as above."),
         ]),
         ("Company facts", "Each time Siftwell finds new jobs, Claude (Haiku, with web search) looks up facts such as size, funding, "
          "layoffs and Glassdoor rating for a few companies that are on someone's board, the ones with the best-ranked jobs "
@@ -93,7 +93,7 @@ CATEGORIES = [
     ]),
     ("display", "Display", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>', [
         ("Board", "", [
-            ("select", "display.start_tab", "Start on", [("jobs", "Jobs"), ("pivot", "Target"), ("saved", "Saved"), ("applied", "Applied"), ("tailored", "Resumes"), ("companies", "Employers")], "The tab your board opens on."),
+            ("select", "display.start_tab", "Start on", [("jobs", "Jobs"), ("saved", "Saved"), ("applied", "Applied"), ("tailored", "Resumes"), ("pivot", "Target")], "The tab your board opens on (Target only when you have one)."),
             ("select", "display.sort", "Default sort", [("score", "Best bets (good job and good fit)"), ("relevant", "Most relevant to my work"), ("appeal", "Most appealing (pay, place, level)"), ("odds", "Best fit (Claude’s Match)"), ("odds_later", "Best fit with my resume as it is"), ("pay", "Highest pay"), ("gd", "Best employee reviews"), ("new", "Newest")], ""),
             # (shown only when clearances matter to this profile: setup_flow.clearance_relevant; the same setting is under My profile > Job search > Dealbreakers)
             ("select", "display.clearance", "Jobs that need a security clearance", [("all", "Show them all"), ("none", "Hide every one"), ("secret", "Up to Secret"), ("nopoly", "Anything but a polygraph")], "Shown because your profile or your board has clearance jobs."),
@@ -232,7 +232,7 @@ def render_settings_html(pid=None) -> str:
             ';if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;})();</script>' +
             head + CSS + getting_started.CSS + backup.CSS + appupdate.CSS + "</head><body>" + body + '<script src="/assets/vendor/qrcode.js"></script>\n' +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") +
-            ";</script>\n" + report.CONFIRM_SCRIPT + ASK_SCRIPT + report.DOWN_SCRIPT + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + autoupdate.SCRIPT + appupdate.BANNER_SCRIPT + appupdate.PANE_SCRIPT + directory.SOURCE_SCRIPT + "</body></html>")
+            ";</script>\n" + report.DOWN_SCRIPT + fill_script(SCRIPT).replace("/*__CHECKLIST__*/", getting_started.CHECKLIST_JS) + backup.SCRIPT + autoupdate.SCRIPT + appupdate.BANNER_SCRIPT + appupdate.PANE_SCRIPT + directory.SOURCE_SCRIPT + "</body></html>")
 
 
 CSS = """<style>
@@ -290,9 +290,6 @@ CSS = """<style>
 .sreset{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
 .sreset .note{color:var(--muted);font-size:12.5px}
 .sreset [data-reset][data-armed="1"]{color:var(--bad)}
-/* fallback until report.HEAD has the shared danger button; :where() keeps it weaker than that one */
-:where(.btn.danger){color:var(--bad);border-color:var(--bad)}
-:where(.btn.danger:hover){background:var(--bad-soft)}
 @media (max-width:720px){
   .slayout{display:block}
   .slayout.atList .spanes,.slayout:not(.atList) .snav{display:none}
@@ -329,26 +326,13 @@ __TOOLS__  </div>
 </div>
 """
 
-# ---- ASK_SCRIPT: window.siftAsk({title, text, ok, danger}) -> Promise<bool>, the yes/no question every destructive action on
-# Settings, My profile, Employers and setup asks, in the app's own dialog (report.CONFIRM_SCRIPT's appConfirm, which must
-# be on the page first). danger: the yes button is drawn in the danger style (.btn.danger). This is the one place that
-# knows how appConfirm is called.
-ASK_SCRIPT = """<script>window.siftAsk = function(o){
-  var msg = o.title + (o.text ? "\\n\\n" + o.text : "");
-  if (!window.appConfirm) return Promise.resolve(window.confirm(msg));
-  var p = window.appConfirm(msg, o.ok);
-  if (o.danger) { var ds = document.querySelectorAll("dialog"), d = ds[ds.length - 1], y = d && d.querySelector(".btn.primary"); if (y) { y.classList.remove("primary"); y.classList.add("danger"); } }
-  return p;
-};</script>
-"""
-
 # ---- Script pieces shared by /settings and /profile (profile_page.py): both are two-pane pages under the same header.
 # Each is spliced into the page script at its /*__NAME__*/ marker by fill_script().
 PRELUDE_JS = r"""const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 const phone = () => matchMedia("(max-width:720px)").matches;
-const ask = o => window.siftAsk(o);   // {title, text, ok, danger} -> Promise<bool> (ASK_SCRIPT)
+const ask = o => window.appConfirm(o);   // {title, text, ok, danger} -> Promise<bool>: the app's one dialog (report.CONFIRM_JS, in the header)
 let PREFS = window.__PREFS__ || {};
 function applyTheme(){
   const t = PREFS["display.theme"];
@@ -390,14 +374,14 @@ document.querySelector(".spanes").addEventListener("click", e => {
   scrollTo(0, 0);
 });"""
 
-# Header icon row behaviour. Update / Re-rate run on the board (it has the confirm and progress panel); the page may define
+# Header behaviour. Find new jobs / Rate jobs run on the board (it has the confirm and progress panel); the page may define
 # onPeople() to react once the household list has loaded.
-HEADER_JS = r"""// ---- header: Find new jobs / Re-rate run on the board, which has the confirm and progress panel
+HEADER_JS = r"""// ---- header: Find new jobs / Rate jobs run on the board, which has the confirm and progress panel
 const toBoard = run => { try { if (run) sessionStorage.setItem(run[0], run[1]); } catch(e) {} location.href = "/#jobs"; };
 $("updateBtn").addEventListener("click", () => toBoard(["jb.run", "update"]));
 $("rerateBtn").addEventListener("click", () => toBoard(["jb.run", "rerate"]));
 $("updateBtn").title = "Find new jobs (opens the board): check your employers for new openings";
-$("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Claude re-rates your jobs, no new listings";
+$("rerateBtn").title = "Rate jobs (opens the board's Rate jobs panel): choose how Claude rates your jobs, no new listings";
 // The ONE plain progress line (first_search.progress), the same words as on the board: a slim bar under the header
 // while anything is checking employers, nothing otherwise.
 (function watch(){
@@ -415,7 +399,7 @@ $("rerateBtn").title = "Re-rate (opens the board's Re-rate panel): choose how Cl
 })();
 fetch("/api/rerate").then(r => r.json()).then(s => {
   if (!s.running) return;
-  $("rerateBtn").disabled = true; $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Re-rating your best jobs now…";
+  $("rerateBtn").disabled = true; $("rerateBtn").classList.add("busy"); $("rerateBtn").title = "Rating your jobs now…";
 }).catch(() => {});
 // ---- profile menu
 let curPerson = "", PEOPLE = [];
@@ -508,7 +492,7 @@ document.querySelectorAll("[data-reset]").forEach(b => {
     const r = s.result || {}, bd = r.board || {};
     const st = Object.values(bd).reduce((a, c) => a + (c.stamped || 0), 0);
     const left = Object.values(bd).reduce((a, c) => a + (c.left_alone || 0) + (c.dirty || 0), 0);
-    let txt = `Marked ${n(st)} board rating${st === 1 ? "" : "s"} as up to date` + (left ? ` (${n(left)} left to re-rate because your info changed)` : "");
+    let txt = `Marked ${n(st)} board rating${st === 1 ? "" : "s"} as up to date` + (left ? ` (${n(left)} left to rate again because your info changed)` : "");
     if (r.target) txt += `; Target tab: ${n(r.target.stamped)} marked` + (r.target.left_alone ? `, ${n(r.target.left_alone)} left` : "");
     msg.textContent = txt + "." + (s.error ? " " + s.error + "." : "");
   };

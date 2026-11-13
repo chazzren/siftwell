@@ -18,8 +18,8 @@ def render_setup_html() -> str:
     boot = {"levels": {str(k): v for k, v in setup_flow._levels().items()},
             "radii": setup_flow.RADII, "industries": setup_flow.INDUSTRY_IDEAS, "steps": setup_flow.STEPS}
     boot["claude_ready"] = claude_cli.claude_ready()
-    import report, settings_page
-    return (PAGE.replace("</body>", report.CONFIRM_SCRIPT + settings_page.ASK_SCRIPT + report.DOWN_SCRIPT + "</body>").replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
+    import report
+    return (PAGE.replace("</body>", report.CONFIRM_SCRIPT + report.DOWN_SCRIPT + "</body>").replace("__BOOT__", json.dumps(boot).replace("</", "<\\/"))
             .replace("/*__MANUAL_CSS__*/", manual_profile.CSS + connect_claude.CSS)
             .replace("/*__MANUAL_JS__*/", manual_profile.JS + connect_claude.JS))
 
@@ -1191,7 +1191,7 @@ SCREENS.board = {
       $("ldBuild").disabled = true; $("ldBuildMsg").textContent = "Starting…";
       try {
         try { await api("POST", "/api/localdir/start", {add: "all"}); }
-        catch(e) { if (!/metered/i.test(e.message || "") || !await window.siftAsk({title: "Build anyway?", text: e.message, ok: "Build anyway"})) throw e; await api("POST", "/api/localdir/start", {add: "all", metered_ok: true}); }
+        catch(e) { if (!/metered/i.test(e.message || "") || !await window.appConfirm({title: "Build anyway?", text: e.message, ok: "Build anyway"})) throw e; await api("POST", "/api/localdir/start", {add: "all", metered_ok: true}); }
         const s = await api("GET", "/api/search");
         if (cur === "board" && this.view === "summary") { this.plan = s.plan; this.pv = null; this.summary(); say("Siftwell is building your directory."); }
       } catch(e) { $("ldBuild").disabled = false; $("ldBuildMsg").textContent = e.message || "That didn’t work."; }

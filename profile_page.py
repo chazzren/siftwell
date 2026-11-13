@@ -230,7 +230,7 @@ def render_profile_html(pid=None) -> str:
             head + settings_page.CSS + CSS + "<style>" + manual_profile.CSS + "</style></head><body>" + body +
             "<script>window.__PREFS__=" + json.dumps(p).replace("</", "<\\/") + ";window.__PS__=" + json.dumps(data).replace("</", "<\\/") +
             ";window.__CLAUDE__=" + json.dumps({"ready": claude_cli.claude_ready()}) +
-            ";</script>\n" + report.CONFIRM_SCRIPT + settings_page.fill_script(SCRIPT).replace("/*__MANUAL__*/", manual_profile.JS) + "</body></html>")
+            ";</script>\n" + settings_page.fill_script(SCRIPT).replace("/*__MANUAL__*/", manual_profile.JS) + "</body></html>")
 
 
 CSS = """<style>
@@ -555,7 +555,17 @@ const fillSettings = () => {
   const w = $("tgScopeWrap"); if (w && $("ps-target_scope").value === "ai") w.hidden = false;
 };
 function psSay(t, bad){ const m = $("psState"); if (!m) return; m.textContent = t || ""; m.style.color = bad ? "var(--bad)" : ""; }
+// Target pay and the dealbreakers reach Claude through the goals' "Setup answers" line (server.py rewrites it), so a change
+// makes ratings out of date. Once per visit, while there are ratings to lose, say so before saving. Out-of-date ratings
+// are redone only by Rate jobs or the overnight run (ai_score.RUN_LIMITS per run), never all at once.
+const GOALS_KEYS = ["salary_target", "skip_employers", "skip_industries"];
+let goalsOk = false;
 function savePS(el, settings){
+  if (!goalsOk && CL.ready && BOARD && BOARD.rated > 0 && Object.keys(settings).some(k => GOALS_KEYS.includes(k))) {
+    return ask({title: "Change what Claude weighs?", ok: "Save the change",
+                text: "Target pay and dealbreakers are part of your goals for Claude. After this change, jobs Claude has already rated count as out of date.\n\nThey are rated again only within the usual limits per run (when you press Rate jobs, or overnight if that is on in Settings), never all at once. New jobs still get their quick check."})
+      .then(yes => { if (!yes) { fillSettings(); return; } goalsOk = true; return savePS(el, settings); });
+  }
   saveState(el, "Saving…");
   const inSearch = !!el.closest('[data-cat="search"]');
   if (inSearch) psSay("Saving…");

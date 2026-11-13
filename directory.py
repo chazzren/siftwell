@@ -1397,7 +1397,7 @@ const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 const day = s => { try { return new Date(s).toLocaleDateString(); } catch(e) { return s; } };
 const n = x => Number(x || 0).toLocaleString();
 const post = (url, body) => fetch(url, {method: "POST", headers: H, body: JSON.stringify(body || {})}).then(r => r.json().then(d => ({ok: r.ok, d})));
-const ask = o => window.siftAsk ? window.siftAsk(o) : Promise.resolve(confirm(o.title + (o.text ? "\n\n" + o.text : "")));   // (settings_page.ASK_SCRIPT)
+const ask = o => window.appConfirm(o);   // the app's one dialog (report.CONFIRM_JS: in the header of Settings and Employers)
 // The default choice: all of them when there are fewer than about 150, else the 100 with the most openings near the person.
 function defaultOption(o){ const all = o[o.length - 1]; return all.employers < 150 ? all : (o.find(x => x.limit === 100) || o[0]); }
 let PV = null;
@@ -1501,7 +1501,7 @@ const H = {"Content-Type": "application/json", "X-Jobboard": "1"};
 const day = s => { try { return new Date(s).toLocaleDateString(); } catch(e) { return s; } };
 const n = x => Number(x || 0).toLocaleString();
 const post = (url, body) => fetch(url, {method: "POST", headers: H, body: JSON.stringify(body || {})}).then(r => r.json().then(d => ({ok: r.ok, d})));
-const ask = o => window.siftAsk ? window.siftAsk(o) : Promise.resolve(confirm(o.title + (o.text ? "\n\n" + o.text : "")));   // (settings_page.ASK_SCRIPT)
+const ask = o => window.appConfirm(o);   // the app's one dialog (report.CONFIRM_JS: in the header of Settings and Employers)
 // ---- Where my directory comes from + Build my own directory (localdir.py). One status call drives both rows.
 let LD = null, ldTimer = null;
 const SRC_NOTE = {
