@@ -1,0 +1,666 @@
+{
+ "built": "2026-11-26T21:31:36+00:00",
+ "jobs": {
+  "AK": {
+   "bytes": 4772,
+   "jobs": 254,
+   "sha256": "63ec055e1a4349c5b97cd599abf79dcf2d538ed96c3e0caea771f96050dee45d"
+  },
+  "AL": {
+   "bytes": 3633,
+   "jobs": 122,
+   "sha256": "d4cf21810b0b729715337ecfb8f15ac24a4c0b7693c0c79fc998a818bd5b9ef8"
+  },
+  "AR": {
+   "bytes": 22550,
+   "jobs": 822,
+   "sha256": "2dfe4b9abe75b94c4d78d81ba8901b61c44c32e36d9f046c1f0ab25546d6886e"
+  },
+  "AZ": {
+   "bytes": 64257,
+   "jobs": 2435,
+   "sha256": "b73e3775bbf253771bf11f7b0e5806178723e8f23ce9128f0e55917d81172e07"
+  },
+  "CA": {
+   "bytes": 31414,
+   "jobs": 1209,
+   "sha256": "56f7d46eddce8f1e07b3140c66112baac620ce2c93270eb36c42ded714758d01"
+  },
+  "CO": {
+   "bytes": 20334,
+   "jobs": 802,
+   "sha256": "4f6a4a0e09c82bb06b25034b1d0f4835d39e10743eecec3288abb3ec05c79464"
+  },
+  "CT": {
+   "bytes": 9530,
+   "jobs": 378,
+   "sha256": "337578805145c55c863257797ef33579671679c8ee03ea794352136ec58aeadc"
+  },
+  "DC": {
+   "bytes": 1424,
+   "jobs": 37,
+   "sha256": "5a25ba05f80bbfdd861f97878b372f27528f0dc74ca6537206b4db31a500f03d"
+  },
+  "DE": {
+   "bytes": 417,
+   "jobs": 7,
+   "sha256": "ba70e4b405c9794a3c21078cb7c675a872f728cb38867ce33cd68e4f94138909"
+  },
+  "FL": {
+   "bytes": 108856,
+   "jobs": 5112,
+   "sha256": "1341fce206354b07389db0347243554de6291f2340ffb3486edb2ca35d4d4980"
+  },
+  "GA": {
+   "bytes": 51008,
+   "jobs": 2236,
+   "sha256": "32b8bbf9e57280c6bceafe64dfb5fa19e4e1d40882b094f815579521c182ecd7"
+  },
+  "HI": {
+   "bytes": 338,
+   "jobs": 2,
+   "sha256": "be88a1f07a23e6cfc488c3f0f42eb6572baf188c6f168b9c905e200c9371c702"
+  },
+  "IA": {
+   "bytes": 86669,
+   "jobs": 3545,
+   "sha256": "6a90c19004840a7dcca754fb64c1954183e4acfcbf1faaf87642a91446d7269e"
+  },
+  "ID": {
+   "bytes": 2660,
+   "jobs": 81,
+   "sha256": "1ba1b91880957ce0803c406d2c0c5c48db76427859644809179d2bca1ffbd49d"
+  },
+  "IL": {
+   "bytes": 21118,
+   "jobs": 879,
+   "sha256": "86c8833c1084093865dd1d539851aa69f174e7d6db21e3ff197e0ac6afff9171"
+  },
+  "IN": {
+   "bytes": 28803,
+   "jobs": 1160,
+   "sha256": "f1e742cd53a61bab2028b6c8b3201a29417a6af7548c1de2aa04148d0fb338f0"
+  },
+  "KS": {
+   "bytes": 23345,
+   "jobs": 871,
+   "sha256": "4da30bc218e36d0e91417f03552dbbbb155f1318db6b2771e5a51704a35dbddd"
+  },
+  "KY": {
+   "bytes": 61742,
+   "jobs": 2211,
+   "sha256": "7c70f067af81de81aa95ffbae6e474935a761c9926de8164874ee762f0afa9d0"
+  },
+  "LA": {
+   "bytes": 22280,
+   "jobs": 850,
+   "sha256": "aaa5dc34ed3cd2e7205cedb9867a5e7a5fbbb7dcd3f8f31d165acf06cd93fbcf"
+  },
+  "MA": {
+   "bytes": 179712,
+   "jobs": 5616,
+   "sha256": "544de17e17bc646e1fad11b68623c526164ad17292165b28152286c4f8af90cb"
+  },
+  "MD": {
+   "bytes": 15806,
+   "jobs": 658,
+   "sha256": "b7d241735c30fc64cd5ee5c7a3fb493962d89a8efb6817d6a00364899d488b64"
+  },
+  "ME": {
+   "bytes": 10778,
+   "jobs": 410,
+   "sha256": "e154ba5f3035149bfe1c8ec6ef4a2fcb9c59b41880aa46990c412432709f548e"
+  },
+  "MI": {
+   "bytes": 45241,
+   "jobs": 1544,
+   "sha256": "f35308df1ddcf260e2c6388fcd819df71bb81c1b6679ecc1a0a12bfc7552c05a"
+  },
+  "MN": {
+   "bytes": 11769,
+   "jobs": 435,
+   "sha256": "ac045511a48a2b7afdec00655450b0656a7e7f0fba698cd517d1657e8f02f154"
+  },
+  "MO": {
+   "bytes": 62066,
+   "jobs": 2195,
+   "sha256": "7f1eab7a205f1c545c371d0007eb2f78df5dfa086de73a50823a51ccf56ab928"
+  },
+  "MS": {
+   "bytes": 9035,
+   "jobs": 349,
+   "sha256": "23c6581f5f23c8eba19a7cc1f41b4c8795aaa3b19b25369dd96aae1c3b5215f9"
+  },
+  "MT": {
+   "bytes": 4149,
+   "jobs": 151,
+   "sha256": "4c79ba323ae7af182021c78b1549f95c38d621ff7b0e1166d64faf37b765332f"
+  },
+  "NC": {
+   "bytes": 188410,
+   "jobs": 6484,
+   "sha256": "2ead40a1e0b16b84c4f923f7a73d7e05c9a245e5cdb7b324ae261fdcc48c9101"
+  },
+  "ND": {
+   "bytes": 2256,
+   "jobs": 82,
+   "sha256": "33fe275d79b53d084490795d23845e2db03adf0c1d0b8faba8d71c94f0353b12"
+  },
+  "NE": {
+   "bytes": 22650,
+   "jobs": 883,
+   "sha256": "3f6797e744428bbd6041aae4b4cd06311339210471c469f389259fbf5eefe5d7"
+  },
+  "NH": {
+   "bytes": 22287,
+   "jobs": 885,
+   "sha256": "87a3b5deb63038997ad602179843f2583387eb2d2f358da9fe464b18fe24bbc0"
+  },
+  "NJ": {
+   "bytes": 12776,
+   "jobs": 483,
+   "sha256": "1c067eeba1e445475514e91e3b9386d8983f51f3cf0c054b13fb059306448f30"
+  },
+  "NM": {
+   "bytes": 15563,
+   "jobs": 586,
+   "sha256": "25b02a2c9f82251df3aaacc96cfc9d57399137d62c56180971dbfc22fee6c6a0"
+  },
+  "NV": {
+   "bytes": 32082,
+   "jobs": 1777,
+   "sha256": "b9ce826e8d07e402e0e632b5e76f4be03e8c620e368d329a27e7a1afd03d7056"
+  },
+  "NY": {
+   "bytes": 12414,
+   "jobs": 499,
+   "sha256": "c3017fa0b0061a5bdd697ae53462aec46e198f02780ed8f0716686644e43763b"
+  },
+  "OH": {
+   "bytes": 89600,
+   "jobs": 4295,
+   "sha256": "ca249403c98337fb5b91ede08206f9a6d070b385a67d3ab753b300b0ab343647"
+  },
+  "OK": {
+   "bytes": 20220,
+   "jobs": 783,
+   "sha256": "83854206d19d49e105ba13143225267ae2e1c983533da7573159a6190fd97c82"
+  },
+  "OR": {
+   "bytes": 37784,
+   "jobs": 1154,
+   "sha256": "27ccc8b7fabd433e0d445e3136f9ad7d315183d9d545eb0753ea1a1077be7b26"
+  },
+  "PA": {
+   "bytes": 45595,
+   "jobs": 1588,
+   "sha256": "f99b4f3d5592881a031d0f8e255bd0ad703ece59ae6b42f7f6ed3d07b5122a09"
+  },
+  "RI": {
+   "bytes": 17099,
+   "jobs": 629,
+   "sha256": "6595c61cfb17a442d5a4b928828dc616f576e96e0ef04689974c2bd680f9f448"
+  },
+  "SC": {
+   "bytes": 56509,
+   "jobs": 2844,
+   "sha256": "b66b9a4eefcf61ad5f6f931652dd33e5b4f8c2779931e7857680ab3081b31095"
+  },
+  "SD": {
+   "bytes": 8811,
+   "jobs": 292,
+   "sha256": "e26aca6e95777beb788472ee52e2c979bd0c9b3947977ed54a98095cc0ce2f3e"
+  },
+  "TN": {
+   "bytes": 9163,
+   "jobs": 336,
+   "sha256": "4b5716022fa749e735ad270d2e8d1bb1cda2cc13d2d2774ab480847f72edcb1a"
+  },
+  "TX": {
+   "bytes": 248676,
+   "jobs": 8407,
+   "sha256": "3679d20f0b3a0252542500e46cbd419231cff4e2fc7336db98a1f13372176d30"
+  },
+  "UT": {
+   "bytes": 6228,
+   "jobs": 219,
+   "sha256": "cb34f02059e73151af0ee5b0bd99caa9464b0c7e74c4030d0f5ab02d219c14cc"
+  },
+  "VA": {
+   "bytes": 106758,
+   "jobs": 3681,
+   "sha256": "1648f23ccc46e50f664dd1b95fee831f378e2aee9d83ee2bcb3eafbaa4c1a61a"
+  },
+  "VT": {
+   "bytes": 21799,
+   "jobs": 800,
+   "sha256": "5ffd98dc172f5e709c3807f67f3afdad2adca67f750f9fcd0d4848372ff7e5d7"
+  },
+  "WA": {
+   "bytes": 34783,
+   "jobs": 1224,
+   "sha256": "88d492837386ee0976a364f797e288e28e64aec10b4255c8aa897c8aa9046801"
+  },
+  "WI": {
+   "bytes": 800,
+   "jobs": 14,
+   "sha256": "4da825bc1e36176892ba0debc79ff9cc6a78b08a26d2a7c188c761d31cee9288"
+  },
+  "WV": {
+   "bytes": 4567,
+   "jobs": 184,
+   "sha256": "1294300bf8289914d96adf460121fd79074bed914c491467d5bb364da721e52f"
+  },
+  "WY": {
+   "bytes": 6377,
+   "jobs": 263,
+   "sha256": "9594a6963ae03464a035596627515d37fe793a69ff5781e80651767dbd749041"
+  },
+  "remote": {
+   "bytes": 4169,
+   "jobs": 120,
+   "sha256": "e074f81404143196f7ba55c3ee2474aecacc26d9e8c14b82065f7c214a4185e7"
+  }
+ },
+ "lists": {
+  "ahrq": {
+   "label": "Health systems (AHRQ Compendium of U.S. Health Systems)",
+   "terms": "U.S. federal government data (Agency for Healthcare Research and Quality), free to use with attribution; only system names, places and bed counts are used"
+  },
+  "cms": {
+   "label": "Hospitals (CMS Hospital General Information)",
+   "terms": "U.S. federal government data (Centers for Medicare & Medicaid Services), public domain"
+  },
+  "dotgov": {
+   "label": "Cities, counties and states (CISA .gov domain list)",
+   "terms": "U.S. federal government data (CISA), public domain (CC0)"
+  },
+  "ipeds": {
+   "label": "Colleges and universities (IPEDS, NCES)",
+   "terms": "U.S. federal government data (National Center for Education Statistics), public domain"
+  },
+  "nces": {
+   "label": "School districts (NCES Common Core of Data)",
+   "terms": "U.S. federal government data (National Center for Education Statistics), public domain"
+  }
+ },
+ "seed": {
+  "boards": 51228,
+  "bytes": 1131645,
+  "sha256": "3f134d107f1c0521751e97ab6d0cd7c69d567a713602b2755b7a289edfa05a00"
+ },
+ "sources": {
+  "hn": {
+   "attribution": {
+    "link": "https://news.ycombinator.com/",
+    "name": "Hacker News",
+    "note": "From the monthly Ask HN: Who is hiring? thread. Each job links to the original comment."
+   },
+   "label": "Hacker News: Who is hiring"
+  },
+  "schoolspring": {
+   "attribution": {
+    "link": "https://www.schoolspring.com/",
+    "name": "SchoolSpring",
+    "note": "From SchoolSpring's public job search. Apply through the original posting."
+   },
+   "label": "School jobs (SchoolSpring)"
+  }
+ },
+ "states": {
+  "AK": {
+   "bytes": 17437,
+   "employers": 326,
+   "sha256": "ab46c9b4957760bd97ea589ccd0b8ef8ceaa6089c3f2dd2d5a2a2aa2b9bf3ffd"
+  },
+  "AL": {
+   "bytes": 78449,
+   "employers": 1379,
+   "sha256": "9dc66e78f73d9e93e73ee9e2b692b76de0e8b68727f3d998c9958d200ebe6b4c"
+  },
+  "AR": {
+   "bytes": 49397,
+   "employers": 881,
+   "sha256": "1333faff0e724ef9ef7557f48902d0f7c99ba336758368cfd256e5f70c002fd6"
+  },
+  "AZ": {
+   "bytes": 120057,
+   "employers": 2329,
+   "sha256": "08e263180eee244e27098ed21eada0e02aa004455957913d9f9e8400d220ed95"
+  },
+  "CA": {
+   "bytes": 426947,
+   "employers": 6501,
+   "sha256": "82c884149194310a514c67994d921443d23149d5611f93c6e43176be3396e21a"
+  },
+  "CO": {
+   "bytes": 133637,
+   "employers": 2581,
+   "sha256": "99c4236fd41a6888e158c998b724a7b6c7bf030d10ee365492d0489314128fd1"
+  },
+  "CT": {
+   "bytes": 69499,
+   "employers": 1221,
+   "sha256": "ffe33b3777d26b7db4612993c72419f656ccffc97abce4fffaf1a7242854d7ac"
+  },
+  "DC": {
+   "bytes": 69568,
+   "employers": 1780,
+   "sha256": "9590b546622ea8f7b46f3709c8856b5495c6e2223eb48de4f1962a7ee2ce900f"
+  },
+  "DE": {
+   "bytes": 26397,
+   "employers": 529,
+   "sha256": "9921dffd61ac2d44a29dca98c2b687ed8665c0e87e1133c7e726b031600799d5"
+  },
+  "FL": {
+   "bytes": 261847,
+   "employers": 3762,
+   "sha256": "11c9dbb64cbb75f82c9172a3c07633bd69617801318e03b2c97262109c8aff6d"
+  },
+  "GA": {
+   "bytes": 173060,
+   "employers": 2983,
+   "sha256": "b7278070e19fe1ba4d3da92cebf301ec942a3ff173cd89db69aeed4250d60597"
+  },
+  "HI": {
+   "bytes": 22807,
+   "employers": 441,
+   "sha256": "936fc2fc37a3168afaa2647a9aa9627013296f4f64e2bd54223c85cd8dd543bc"
+  },
+  "IA": {
+   "bytes": 62451,
+   "employers": 1048,
+   "sha256": "0edba924f94b73dc7fe9b562534ab048e39995f35611780f115f1df9f0e67454"
+  },
+  "ID": {
+   "bytes": 38355,
+   "employers": 753,
+   "sha256": "d30b1ef7c7cd971b805d0167d62bbb1f389aeb67f6a5859b815f6f63f49c4ee3"
+  },
+  "IL": {
+   "bytes": 213101,
+   "employers": 3521,
+   "sha256": "e5dc503f362ba1e3c96ae7c8dd09814b25530d262c4b76aba50534f6bd8c43e6"
+  },
+  "IN": {
+   "bytes": 120202,
+   "employers": 1995,
+   "sha256": "e39d19404f53a5de808c7cd4848eb0e06a9fe66ce9aa97bcff3775338d4b2c81"
+  },
+  "KS": {
+   "bytes": 60868,
+   "employers": 1126,
+   "sha256": "e3cb36ffb3db47a8c9d711ad7677befbd9b7ec75dec71e0c409463dc76844845"
+  },
+  "KY": {
+   "bytes": 72330,
+   "employers": 1279,
+   "sha256": "17c34b906dc18561ebb7ec82b3a05004c5ddf62c415977a9fb7c9bdf0d7743c5"
+  },
+  "LA": {
+   "bytes": 66689,
+   "employers": 1145,
+   "sha256": "4f34eaa042b64d496de2060e3ec267a7fbdca1214179fb07f9da13b2885a53a4"
+  },
+  "MA": {
+   "bytes": 157031,
+   "employers": 2810,
+   "sha256": "80e5185a75b882e33582a8fb330394426385564eeac6bb824920f785e4a51f42"
+  },
+  "MD": {
+   "bytes": 117034,
+   "employers": 1931,
+   "sha256": "e092d39cc3ff055a9ce4c608a8e71648e01f482d8ac013915fb13f18d51b3c91"
+  },
+  "ME": {
+   "bytes": 31318,
+   "employers": 555,
+   "sha256": "b671624e9c44a8aab2ff21e68e6eae29c19faff1faf695ec4e66af9348f2b29e"
+  },
+  "MI": {
+   "bytes": 134749,
+   "employers": 2077,
+   "sha256": "2572871563e644c2f30c17c2a73a1af777734198c7d1375f5e2bff414fea686d"
+  },
+  "MN": {
+   "bytes": 111827,
+   "employers": 1815,
+   "sha256": "0fb8a8ba810699cb1d24973fc0fd0b3ae7df925ba7c76d0a329ed04432ac742e"
+  },
+  "MO": {
+   "bytes": 108386,
+   "employers": 1897,
+   "sha256": "3148c84107c7e193ff27724775bed738a9b0c09a79be84af883af3a3986866eb"
+  },
+  "MS": {
+   "bytes": 42496,
+   "employers": 728,
+   "sha256": "b56a9a764dd4bc3b85cc3e61c1d494c7a0020ff8c917e36ff75a6296190ad83f"
+  },
+  "MT": {
+   "bytes": 24105,
+   "employers": 448,
+   "sha256": "0903eb4ec2d5b7a3df2ea81e9e733f68a1d265994b54618cf8e751f715efd280"
+  },
+  "NC": {
+   "bytes": 171397,
+   "employers": 2810,
+   "sha256": "ad5158b67729f2eb6da21f217e8bba83235c3777b9afa05599d21304f42f4b4b"
+  },
+  "ND": {
+   "bytes": 23253,
+   "employers": 431,
+   "sha256": "a23d2628b24939feb721498cf973bc5d0311c8fa3ae2b6a817860a4e4785ea02"
+  },
+  "NE": {
+   "bytes": 44324,
+   "employers": 841,
+   "sha256": "8a88abdedee65329833327d11ac93505916a21f60f605585965ecf7addaade92"
+  },
+  "NH": {
+   "bytes": 38983,
+   "employers": 699,
+   "sha256": "5486eb6d59839e95ae1e29495f32ae03007fd386a97e97f517c641f661a756f6"
+  },
+  "NJ": {
+   "bytes": 141745,
+   "employers": 2113,
+   "sha256": "38c25cd5c1fea470550a59beb21c1d5b784f393b3cc4faea231e759c0a93a184"
+  },
+  "NM": {
+   "bytes": 40098,
+   "employers": 801,
+   "sha256": "d580281f6955c1b44b73366c84ee65040d8bdc5fd4ed9fba6018eb556faffce2"
+  },
+  "NV": {
+   "bytes": 58535,
+   "employers": 1267,
+   "sha256": "b2f48ff07d838fc42fd6aa3e7f38b86e6df4f5d11823481211568c6b251462a7"
+  },
+  "NY": {
+   "bytes": 277217,
+   "employers": 5110,
+   "sha256": "04cd5609dc1e238a545c9ab6f43b7ff0c31018d8c39e62fbbf83f8a4700db88a"
+  },
+  "OH": {
+   "bytes": 184474,
+   "employers": 2783,
+   "sha256": "39c2c33da1d90e0fc3b47acdc700adacc09742f0bd087dfc5fa573ae2c481e96"
+  },
+  "OK": {
+   "bytes": 62574,
+   "employers": 1164,
+   "sha256": "5b1f22cab1740272a5c40108eff437f8734b55e7d9a33587d19502bcaaa3c13e"
+  },
+  "OR": {
+   "bytes": 72594,
+   "employers": 1375,
+   "sha256": "e42974d4bdf3ece50183bef85d86ee02692fcafe7248e4fe1d1b2e375918fb33"
+  },
+  "PA": {
+   "bytes": 210860,
+   "employers": 2956,
+   "sha256": "b4fa412e3e190eafca938f29e5dc83147b9672065c5e532dbaab78a611443227"
+  },
+  "PR": {
+   "bytes": 9086,
+   "employers": 180,
+   "sha256": "9dc385a73d41acb60a289a9fb793dc4fe8a82114be1ab9e247cf116ff2689e4b"
+  },
+  "RI": {
+   "bytes": 25345,
+   "employers": 513,
+   "sha256": "9ac6721706948e1562a942ccaed5eefaf44e7ff3b8017d5fa0fbfccae8167eab"
+  },
+  "SC": {
+   "bytes": 89426,
+   "employers": 1560,
+   "sha256": "08232d6290ebf1562f8f742ffb9cb3462a32ea3450dcf040d0b84ac28cd7c878"
+  },
+  "SD": {
+   "bytes": 21161,
+   "employers": 386,
+   "sha256": "0a0a6977a1156117f79aa8176ad481e6c20e62ae6ec5c3d8102115b681138259"
+  },
+  "TN": {
+   "bytes": 121371,
+   "employers": 2182,
+   "sha256": "8bc4cf9dca60499527050391b4399fcc7037a15c8c10d536ecf4e2a3fab284b6"
+  },
+  "TX": {
+   "bytes": 371571,
+   "employers": 5552,
+   "sha256": "6d646582d088f249ca3b0c8b636d29cf852d8815a1f2b00312aed3ecae417783"
+  },
+  "UT": {
+   "bytes": 63353,
+   "employers": 1276,
+   "sha256": "16185f2a3c9c9d02c47cee851fa75512cff89aae3865ff84c19b4d4ecf13fa43"
+  },
+  "VA": {
+   "bytes": 166323,
+   "employers": 2711,
+   "sha256": "caba61b02feeb8da4f3440a76a83905f5d0c394d5dbcb8cd4275a41b61c643e8"
+  },
+  "VT": {
+   "bytes": 21194,
+   "employers": 375,
+   "sha256": "ae24f7df4d27c16739e1f59fab8c72cf75cd12c30ae8abc507fb5155ca14567d"
+  },
+  "WA": {
+   "bytes": 126323,
+   "employers": 2374,
+   "sha256": "724d001f92f68bea275566769151ccbfb1a4d3fe1b66f137137b937de9bdcdc5"
+  },
+  "WI": {
+   "bytes": 104401,
+   "employers": 1631,
+   "sha256": "793e88dc3dda3e09247d80f2d596c040c6951c26b2e63604f82ced9a1bc85abf"
+  },
+  "WV": {
+   "bytes": 28893,
+   "employers": 511,
+   "sha256": "ba91cd2927d98961f8cc62ef8daae8e1699e21e69f74254fe3c40c81e6de5640"
+  },
+  "WY": {
+   "bytes": 16307,
+   "employers": 315,
+   "sha256": "645e3db38a59ef025f0225336e0237284ba19816b4d3b4ede2537f9df01623c2"
+  },
+  "remote": {
+   "bytes": 126530,
+   "employers": 5000,
+   "sha256": "4ecb8da884bb74876762458e186e591e57a4b9a3e7823769bdcedec555dcce4f"
+  }
+ },
+ "stats": {
+  "boards_known": 51261,
+  "discovered_new": {
+   "res": 212,
+   "wdc": 877
+  },
+  "employers": 31026,
+  "http": {
+   "all_requests": 65609,
+   "bytes": 1697107370,
+   "errors": 7803,
+   "plain": 944057453,
+   "requests": 15237,
+   "rests": 288,
+   "robots_blocked": 13898,
+   "wire": 944057453
+  },
+  "public_lists": {
+   "ahrq": {
+    "checked": 0,
+    "employers": 639,
+    "hit": 0,
+    "home": 0,
+    "known_hits": 169,
+    "looked_up_total": 636,
+    "resolved_total": 169,
+    "systems": {}
+   },
+   "cms": {
+    "checked": 0,
+    "employers": 4097,
+    "hit": 0,
+    "home": 0,
+    "known_hits": 0,
+    "looked_up_total": 0,
+    "resolved_total": 0,
+    "systems": {}
+   },
+   "dotgov": {
+    "checked": 0,
+    "employers": 9830,
+    "hit": 0,
+    "home": 0,
+    "known_hits": 0,
+    "looked_up_total": 0,
+    "resolved_total": 0,
+    "systems": {}
+   },
+   "ipeds": {
+    "checked": 192,
+    "employers": 2458,
+    "hit": 48,
+    "home": 179,
+    "known_hits": 69,
+    "looked_up_total": 466,
+    "resolved_total": 117,
+    "systems": {
+     "adp": 2,
+     "greenhouse": 1,
+     "icims": 2,
+     "jsonld": 8,
+     "oracle": 3,
+     "saashr": 2,
+     "smartrecruiters": 1,
+     "taleo": 1,
+     "workday": 28
+    }
+   },
+   "nces": {
+    "checked": 1053,
+    "employers": 11228,
+    "hit": 246,
+    "home": 800,
+    "known_hits": 1382,
+    "looked_up_total": 5999,
+    "resolved_total": 1628,
+    "systems": {
+     "adp": 2,
+     "applitrack": 178,
+     "jsonld": 2,
+     "paycom": 1,
+     "schoolspring": 62,
+     "workday": 1
+    }
+   }
+  },
+  "run_minutes": 278.7
+ },
+ "v": 1
+}
